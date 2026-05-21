@@ -1,11 +1,31 @@
 # costguard
 
-A Rust-native pre-execution cost and performance analyzer for dbt and warehouse SQL.
+Costguard is a PR-first check for catching expensive dbt and warehouse SQL before it merges.
+
+Runs locally as a fast Rust CLI. No warehouse credentials required.
 
 ## Why
 
-Analytics engineers often discover expensive SQL only after CI or warehouse execution.
-`costguard` catches common cost and performance risks locally before warehouse work runs.
+Analytics teams usually introduce warehouse cost and performance risks through normal PRs:
+unsafe incremental models, repeated JSON parsing, unbounded joins, blind `SELECT DISTINCT`,
+missing partition predicates, expensive regex, direct raw-source usage, and row-wise Python logic.
+
+Costguard is designed around this workflow:
+
+```text
+PR opened -> changed SQL/dbt files scanned -> cost/perf risks annotated -> fail on high-risk findings -> merge safer analytics code
+```
+
+Think of the CLI as the engine. The primary product workflow is automated PR review.
+
+```text
+Costguard CLI = engine
+Costguard GitHub Action = primary product workflow
+Costguard pre-commit = secondary workflow
+Costguard local scan = developer/debug workflow
+```
+
+The current MVP ships the CLI engine first; a GitHub Action should be the primary packaged workflow.
 
 ## Install
 
@@ -16,18 +36,30 @@ cargo install --path crates/costguard-cli
 ## Usage
 
 ```bash
+costguard pr --base origin/main --warehouse snowflake --fail-on high
 costguard scan models/ --warehouse snowflake
 costguard scan models/ --warehouse bigquery --format json
 costguard explain models/marts/fct_orders.sql
-costguard pr --base main
 costguard rules
 ```
+
+The MVP fails builds by risk severity, not estimated dollars:
+
+```bash
+costguard pr --base origin/main --warehouse snowflake --fail-on high
+```
+
+Dollar-cost estimates can be added later as enrichment once warehouse metadata, history,
+pricing, and execution-plan signals are available.
 
 ## Real-world Stress Testing
 
 The first planned public-real stress target is Dune Spellbook. See
 [`docs/design/spellbook-stress-test.md`](docs/design/spellbook-stress-test.md)
 for the command set, metrics, and benchmark tiers.
+
+See [`docs/design/pr-check-primary-workflow.md`](docs/design/pr-check-primary-workflow.md)
+for the product workflow priority.
 
 ## Configuration
 
