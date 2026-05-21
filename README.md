@@ -23,6 +23,12 @@ costguard pr --base main
 costguard rules
 ```
 
+## Real-world Stress Testing
+
+The first planned public-real stress target is Dune Spellbook. See
+[`docs/design/spellbook-stress-test.md`](docs/design/spellbook-stress-test.md)
+for the command set, metrics, and benchmark tiers.
+
 ## Configuration
 
 `costguard.toml` is optional. CLI flags override file settings.
