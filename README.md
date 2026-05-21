@@ -80,9 +80,22 @@ GitHub-hosted runners require org Actions billing to be enabled for private repo
 
 ## Real-world Stress Testing
 
-The first planned public-real stress target is Dune Spellbook. See
-[`docs/design/spellbook-stress-test.md`](docs/design/spellbook-stress-test.md)
-for the command set, metrics, and benchmark tiers.
+Costguard ships a benchmark harness for realistic dbt project analysis. See
+[`docs/design/benchmark-calibration.md`](docs/design/benchmark-calibration.md)
+for the full calibration loop.
+
+| Tier | Target | How to run |
+| --- | --- | --- |
+| 0 smoke | jaffle-shop | `python3 scripts/benchmark_external_repo.py --repo jaffle-shop` |
+| 1 vendored | real-world snippets | `python3 scripts/benchmark_external_repo.py --all-vendored` |
+| 2 stress | spellbook | `python3 scripts/benchmark_external_repo.py --repo spellbook` |
+| 3 scale | synthetic 1k/5k/10k | `scripts/generate_synthetic_dbt.py` |
+
+Vendored offline fixtures live in [`tests/fixtures/real_world/`](tests/fixtures/real_world/).
+Baselines are in [`tests/benchmarks/baselines/`](tests/benchmarks/baselines/).
+
+Run the **benchmark** GitHub Actions workflow manually for jaffle-shop or Spellbook clones.
+Spellbook details: [`docs/design/spellbook-stress-test.md`](docs/design/spellbook-stress-test.md).
 
 For local scale checks without network access, generate a synthetic dbt-style project:
 

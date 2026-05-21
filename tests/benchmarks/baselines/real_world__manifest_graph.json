@@ -1,0 +1,27 @@
+{
+  "expect_rules": [],
+  "forbid_rules": [
+    "SQLCOST005"
+  ],
+  "kind": "vendored",
+  "metrics": {
+    "counts": {
+      "manifest": 1,
+      "other": 0,
+      "python": 0,
+      "sql": 3,
+      "yaml": 1
+    },
+    "diagnostics_by_rule": {},
+    "diagnostics_by_severity": {},
+    "sql_parse_failures": 0,
+    "sql_parse_total": 3
+  },
+  "target": "real_world/manifest_graph",
+  "thresholds": {
+    "exact_diagnostics_by_rule": {},
+    "max_sql_parse_failures": 0
+  },
+  "version": 1,
+  "warehouse": "generic"
+}

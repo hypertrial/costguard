@@ -50,6 +50,7 @@ fn scan_json_outputs_diagnostics_array() {
     assert_eq!(output.status.code(), Some(1));
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("\"diagnostics\""));
+    assert!(stdout.contains("\"metrics\""));
     assert!(stdout.contains("\"rule_id\""));
 }
 

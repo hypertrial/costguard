@@ -1,0 +1,49 @@
+{
+  "nodes": {
+    "model.realworld.stg_events": {
+      "resource_type": "model",
+      "name": "stg_events",
+      "original_file_path": "models/staging/stg_events.sql",
+      "config": { "materialized": "view" },
+      "refs": [],
+      "sources": [["raw", "events"]],
+      "depends_on": { "nodes": ["source.realworld.raw.events"] },
+      "columns": { "id": {} },
+      "tags": []
+    },
+    "model.realworld.fct_events": {
+      "resource_type": "model",
+      "name": "fct_events",
+      "original_file_path": "models/marts/fct_events.sql",
+      "config": { "materialized": "table" },
+      "refs": [["stg_events"]],
+      "sources": [],
+      "depends_on": { "nodes": ["model.realworld.stg_events"] },
+      "columns": { "id": {} },
+      "tags": []
+    },
+    "model.realworld.fct_daily": {
+      "resource_type": "model",
+      "name": "fct_daily",
+      "original_file_path": "models/marts/fct_daily.sql",
+      "config": { "materialized": "table" },
+      "refs": [["fct_events"]],
+      "sources": [],
+      "depends_on": { "nodes": ["model.realworld.fct_events"] },
+      "columns": { "event_date": {} },
+      "tags": []
+    }
+  },
+  "sources": {
+    "source.realworld.raw.events": {
+      "source_name": "raw",
+      "name": "events"
+    }
+  },
+  "exposures": {
+    "exposure.realworld.events_dashboard": {
+      "name": "events_dashboard",
+      "depends_on": { "nodes": ["model.realworld.fct_daily"] }
+    }
+  }
+}

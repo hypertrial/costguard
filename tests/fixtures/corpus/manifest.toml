@@ -27,3 +27,15 @@ name = "repeated_json"
 path = "repeated_json"
 expect_rules = ["SQLCOST002"]
 forbid_rules = ["SQLCOST005"]
+
+[[case]]
+name = "macro_heavy"
+path = "macro_heavy"
+expect_rules = ["SQLCOST011"]
+forbid_rules = ["SQLCOST005"]
+
+[[case]]
+name = "manifest_graph"
+path = "manifest_graph"
+expect_rules = []
+forbid_rules = ["SQLCOST005"]

@@ -1,0 +1,11 @@
+version: 2
+
+sources:
+  - name: dex
+    tables:
+      - name: trades
+
+models:
+  - name: dex_trades_macro
+    config:
+      tags: [macro_heavy]

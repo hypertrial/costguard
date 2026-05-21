@@ -1,0 +1,89 @@
+name: benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Benchmark target to run
+        required: true
+        default: vendored
+        type: choice
+        options:
+          - vendored
+          - jaffle-shop
+          - spellbook
+          - all
+
+jobs:
+  vendored:
+    if: ${{ inputs.target == 'vendored' || inputs.target == 'all' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      - run: cargo test -p costguard-core --test benchmark vendored_baselines_match
+      - run: python3 scripts/benchmark_external_repo.py --all-vendored
+
+  jaffle-shop:
+    if: ${{ inputs.target == 'jaffle-shop' || inputs.target == 'all' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/costguard/benchmarks
+          key: costguard-jaffle-shop-${{ hashFiles('tests/benchmarks/repos.toml') }}
+      - run: python3 scripts/benchmark_external_repo.py --repo jaffle-shop --cache ~/.cache/costguard/benchmarks
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-jaffle-shop
+          path: tests/benchmarks/reports/external__jaffle-shop.json
+
+  spellbook:
+    if: ${{ inputs.target == 'spellbook' || inputs.target == 'all' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/costguard/benchmarks
+          key: costguard-spellbook-${{ hashFiles('tests/benchmarks/repos.toml') }}
+      - run: python3 scripts/benchmark_external_repo.py --repo spellbook --cache ~/.cache/costguard/benchmarks
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-spellbook
+          path: tests/benchmarks/reports/external__spellbook.json

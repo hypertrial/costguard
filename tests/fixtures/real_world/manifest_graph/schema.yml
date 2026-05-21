@@ -1,0 +1,17 @@
+version: 2
+
+sources:
+  - name: raw
+    tables:
+      - name: events
+
+exposures:
+  - name: events_dashboard
+    type: dashboard
+    depends_on:
+      - ref('fct_daily')
+
+models:
+  - name: stg_events
+  - name: fct_events
+  - name: fct_daily

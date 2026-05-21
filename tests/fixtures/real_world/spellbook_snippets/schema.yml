@@ -1,0 +1,11 @@
+version: 2
+
+sources:
+  - name: dex
+    tables:
+      - name: trades
+
+models:
+  - name: dex_trades
+    config:
+      tags: [spellbook_snippet]

@@ -1,0 +1,36 @@
+{
+  "expect_rules": [],
+  "forbid_rules": [],
+  "kind": "vendored",
+  "metrics": {
+    "counts": {
+      "manifest": 0,
+      "other": 0,
+      "python": 0,
+      "sql": 1,
+      "yaml": 1
+    },
+    "diagnostics_by_rule": {
+      "SQLCOST002": 1,
+      "SQLCOST005": 1,
+      "SQLCOST011": 1
+    },
+    "diagnostics_by_severity": {
+      "high": 1,
+      "med": 2
+    },
+    "sql_parse_failures": 1,
+    "sql_parse_total": 1
+  },
+  "target": "real_world/spellbook_snippets",
+  "thresholds": {
+    "exact_diagnostics_by_rule": {
+      "SQLCOST002": 1,
+      "SQLCOST005": 1,
+      "SQLCOST011": 1
+    },
+    "max_sql_parse_failures": 1
+  },
+  "version": 1,
+  "warehouse": "generic"
+}

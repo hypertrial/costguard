@@ -1,0 +1,36 @@
+{
+  "expect_rules": [],
+  "forbid_rules": [
+    "SQLCOST005"
+  ],
+  "kind": "vendored",
+  "metrics": {
+    "counts": {
+      "manifest": 0,
+      "other": 0,
+      "python": 0,
+      "sql": 2,
+      "yaml": 1
+    },
+    "diagnostics_by_rule": {
+      "SQLCOST001": 1,
+      "SQLCOST014": 1
+    },
+    "diagnostics_by_severity": {
+      "low": 1,
+      "med": 1
+    },
+    "sql_parse_failures": 0,
+    "sql_parse_total": 2
+  },
+  "target": "real_world/jaffle_snippets",
+  "thresholds": {
+    "exact_diagnostics_by_rule": {
+      "SQLCOST001": 1,
+      "SQLCOST014": 1
+    },
+    "max_sql_parse_failures": 0
+  },
+  "version": 1,
+  "warehouse": "generic"
+}

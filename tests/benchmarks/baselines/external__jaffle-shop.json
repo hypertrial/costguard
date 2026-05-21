@@ -1,0 +1,41 @@
+{
+  "commit": "7be2c5838dbdeca8e915d4e46db70e910753d7f6",
+  "kind": "external",
+  "metrics": {
+    "counts": {
+      "manifest": 3,
+      "other": 0,
+      "python": 4,
+      "sql": 33,
+      "yaml": 35
+    },
+    "diagnostics_by_rule": {
+      "SQLCOST001": 24,
+      "SQLCOST002": 3,
+      "SQLCOST003": 1,
+      "SQLCOST005": 2,
+      "SQLCOST007": 2,
+      "SQLCOST008": 1,
+      "SQLCOST009": 1,
+      "SQLCOST010": 1,
+      "SQLCOST011": 7,
+      "SQLCOST012": 1,
+      "SQLCOST013": 1,
+      "SQLCOST014": 11,
+      "SQLCOST015": 2
+    },
+    "diagnostics_by_severity": {
+      "high": 6,
+      "low": 14,
+      "med": 37
+    },
+    "sql_parse_failures": 10,
+    "sql_parse_total": 33
+  },
+  "target": "external/jaffle-shop",
+  "thresholds": {
+    "max_parse_failure_delta": 50
+  },
+  "version": 1,
+  "warehouse": "generic"
+}

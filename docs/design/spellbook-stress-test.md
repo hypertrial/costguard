@@ -1,8 +1,25 @@
 # Dune Spellbook Stress Test Plan
 
-Dune Spellbook (`duneanalytics/spellbook`) should be the first public-real stress test for `costguard`.
+Dune Spellbook (`duneanalytics/spellbook`) is the primary public-real stress test for `costguard`.
 
 Primary repo: <https://github.com/duneanalytics/spellbook>
+
+## Automated benchmark harness
+
+Use the repo benchmark script instead of ad-hoc clone commands when possible:
+
+```bash
+python3 scripts/benchmark_external_repo.py --repo spellbook
+python3 scripts/benchmark_external_repo.py --repo jaffle-shop
+python3 scripts/benchmark_external_repo.py --all-vendored
+```
+
+Pinned commits and scan paths are defined in
+[`tests/benchmarks/repos.toml`](../../tests/benchmarks/repos.toml).
+Baselines live in [`tests/benchmarks/baselines/`](../../tests/benchmarks/baselines/).
+See [`benchmark-calibration.md`](benchmark-calibration.md) for the triage loop.
+
+GitHub Actions: run the **benchmark** workflow (`workflow_dispatch`) with target `spellbook`.
 
 Why Spellbook:
 
@@ -37,7 +54,6 @@ Later, if project-directory workflows need targeted checks:
 
 ```bash
 costguard scan dbt_subprojects/dex --warehouse generic
-costguard scan dbt_subprojects/nft --warehouse generic
 costguard scan dbt_subprojects/solana --warehouse generic
 costguard scan dbt_subprojects/tokens --warehouse generic
 ```

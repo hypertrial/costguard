@@ -1,0 +1,38 @@
+{
+  "commit": "60f3b3fded8bae7d55780e7f8e6b15b1249d16a6",
+  "kind": "external",
+  "metrics": {
+    "counts": {
+      "manifest": 0,
+      "other": 0,
+      "python": 19,
+      "sql": 8493,
+      "yaml": 2591
+    },
+    "diagnostics_by_rule": {
+      "SQLCOST002": 402,
+      "SQLCOST003": 20,
+      "SQLCOST004": 5005,
+      "SQLCOST005": 1719,
+      "SQLCOST006": 516,
+      "SQLCOST008": 826,
+      "SQLCOST012": 1868,
+      "SQLCOST013": 168,
+      "SQLCOST014": 1338,
+      "SQLCOST015": 858
+    },
+    "diagnostics_by_severity": {
+      "high": 8592,
+      "low": 1338,
+      "med": 2790
+    },
+    "sql_parse_failures": 8221,
+    "sql_parse_total": 8493
+  },
+  "target": "external/spellbook",
+  "thresholds": {
+    "max_parse_failure_delta": 50
+  },
+  "version": 1,
+  "warehouse": "generic"
+}

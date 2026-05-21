@@ -1,0 +1,15 @@
+[[repo]]
+name = "jaffle-shop"
+url = "https://github.com/dbt-labs/jaffle-shop.git"
+commit = "7be2c5838dbdeca8e915d4e46db70e910753d7f6"
+warehouse = "generic"
+scan_paths = ["."]
+fail_on = "critical"
+
+[[repo]]
+name = "spellbook"
+url = "https://github.com/duneanalytics/spellbook.git"
+commit = "60f3b3fded8bae7d55780e7f8e6b15b1249d16a6"
+warehouse = "generic"
+scan_paths = [".", "dbt_subprojects/dex", "dbt_subprojects/solana", "dbt_subprojects/tokens"]
+fail_on = "critical"

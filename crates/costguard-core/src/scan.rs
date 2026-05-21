@@ -1,6 +1,6 @@
 use crate::config::ScanConfig;
 use crate::dbt_graph::enrich_pr_summary;
-use crate::{PrSummary, Project, ScanResult};
+use crate::{PrSummary, Project, ScanMetrics, ScanResult};
 use anyhow::{Context, Result};
 use costguard_dbt::{
     extract_sql_features, merge_yaml_project, parse_manifest, parse_yaml_project, DbtModel,
@@ -11,7 +11,7 @@ use costguard_platform::Platform;
 use costguard_rules::{ProjectIndexes, RuleMetadata, RuleRegistry};
 use costguard_scanner::{discover, read_existing_paths, FileKind, ProjectFile, ScanCounts};
 use costguard_sql::{analyze_sql, SqlDocument};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
 pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
@@ -100,9 +100,11 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
     });
 
     let pr_summary = pr_summary.map(|summary| enrich_pr_summary(summary, &project));
+    let metrics = build_scan_metrics(&context_sql_documents, &diagnostics, counts);
     Ok(ScanResult {
         diagnostics,
-        counts,
+        counts: metrics.counts.clone(),
+        metrics,
         pr_summary,
     })
 }
@@ -244,6 +246,32 @@ fn analyze_sql_documents(files: &[ProjectFile], platform: Platform) -> Vec<SqlDo
         .filter(|file| matches!(file.kind, FileKind::Sql | FileKind::DbtSqlModel))
         .map(|file| analyze_sql(file.path.clone(), &file.text, platform, &file.line_index))
         .collect()
+}
+
+fn build_scan_metrics(
+    sql_documents: &[SqlDocument],
+    diagnostics: &[costguard_diagnostics::Diagnostic],
+    counts: ScanCounts,
+) -> ScanMetrics {
+    let sql_parse_total = sql_documents.len();
+    let sql_parse_failures = sql_documents.iter().filter(|doc| !doc.parsed).count();
+    let mut diagnostics_by_rule = BTreeMap::new();
+    let mut diagnostics_by_severity = BTreeMap::new();
+    for diagnostic in diagnostics {
+        *diagnostics_by_rule
+            .entry(diagnostic.rule_id.clone())
+            .or_default() += 1;
+        *diagnostics_by_severity
+            .entry(diagnostic.severity.label().to_ascii_lowercase())
+            .or_default() += 1;
+    }
+    ScanMetrics {
+        counts,
+        sql_parse_total,
+        sql_parse_failures,
+        diagnostics_by_rule,
+        diagnostics_by_severity,
+    }
 }
 
 fn dbt_models_by_path(project: &Project) -> HashMap<PathBuf, &DbtModel> {

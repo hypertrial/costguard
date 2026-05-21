@@ -23,6 +23,7 @@ use costguard_dbt::DbtProject;
 use costguard_diagnostics::Diagnostic;
 use costguard_scanner::{ProjectFile, ScanCounts};
 use serde::Serialize;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
@@ -32,10 +33,20 @@ pub struct Project {
     pub dbt: Option<DbtProject>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct ScanMetrics {
+    pub counts: ScanCounts,
+    pub sql_parse_total: usize,
+    pub sql_parse_failures: usize,
+    pub diagnostics_by_rule: BTreeMap<String, usize>,
+    pub diagnostics_by_severity: BTreeMap<String, usize>,
+}
+
 #[derive(Debug, Clone)]
 pub struct ScanResult {
     pub diagnostics: Vec<Diagnostic>,
     pub counts: ScanCounts,
+    pub metrics: ScanMetrics,
     pub pr_summary: Option<PrSummary>,
 }
 

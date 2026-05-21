@@ -5,6 +5,7 @@ use serde::Serialize;
 
 #[derive(Debug, Serialize)]
 struct JsonOutput<'a> {
+    metrics: &'a costguard_core::ScanMetrics,
     diagnostics: &'a [Diagnostic],
     #[serde(skip_serializing_if = "Option::is_none")]
     pr_summary: Option<&'a PrSummary>,
@@ -14,6 +15,7 @@ pub fn render(result: &ScanResult, format: OutputFormat) -> Result<String> {
     match format {
         OutputFormat::Text => Ok(render_text(result)),
         OutputFormat::Json => Ok(serde_json::to_string_pretty(&JsonOutput {
+            metrics: &result.metrics,
             diagnostics: &result.diagnostics,
             pr_summary: result.pr_summary.as_ref(),
         })?),
@@ -257,9 +259,10 @@ fn escape_markdown(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use costguard_core::ScanResult;
+    use costguard_core::{ScanMetrics, ScanResult};
     use costguard_diagnostics::{Confidence, Diagnostic, Severity};
     use costguard_scanner::ScanCounts;
+    use std::collections::BTreeMap;
     use std::path::PathBuf;
 
     fn sample_result(high: bool) -> ScanResult {
@@ -283,6 +286,13 @@ mod tests {
         ScanResult {
             diagnostics,
             counts: ScanCounts::default(),
+            metrics: ScanMetrics {
+                counts: ScanCounts::default(),
+                sql_parse_total: 0,
+                sql_parse_failures: 0,
+                diagnostics_by_rule: BTreeMap::new(),
+                diagnostics_by_severity: BTreeMap::new(),
+            },
             pr_summary: Some(PrSummary {
                 changed_models: vec!["a".into()],
                 affected_downstream: vec!["b".into()],
@@ -332,5 +342,27 @@ mod tests {
     fn render_markdown_pass_header_when_no_high_findings() {
         let rendered = render_markdown(&sample_result(false));
         assert!(rendered.contains("# Costguard passed"));
+    }
+
+    #[test]
+    fn json_output_includes_metrics() {
+        let mut result = sample_result(true);
+        result.metrics.sql_parse_total = 3;
+        result.metrics.sql_parse_failures = 1;
+        result
+            .metrics
+            .diagnostics_by_rule
+            .insert("SQLCOST005".into(), 1);
+        result
+            .metrics
+            .diagnostics_by_severity
+            .insert("high".into(), 1);
+
+        let rendered = render(&result, OutputFormat::Json).expect("json render");
+        let value: serde_json::Value = serde_json::from_str(&rendered).expect("parse json");
+        assert_eq!(value["metrics"]["sql_parse_total"], 3);
+        assert_eq!(value["metrics"]["sql_parse_failures"], 1);
+        assert_eq!(value["metrics"]["diagnostics_by_rule"]["SQLCOST005"], 1);
+        assert_eq!(value["diagnostics"].as_array().unwrap().len(), 1);
     }
 }

@@ -25,7 +25,7 @@ pub struct ProjectFile {
     pub line_index: LineIndex,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ScanCounts {
     pub sql: usize,
     pub yaml: usize,
