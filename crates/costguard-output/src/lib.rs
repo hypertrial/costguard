@@ -1,11 +1,13 @@
 use anyhow::Result;
-use costguard_core::{OutputFormat, ScanResult};
-use costguard_diagnostics::Diagnostic;
+use costguard_core::{OutputFormat, PrSummary, ScanResult};
+use costguard_diagnostics::{Diagnostic, Severity};
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
 struct JsonOutput<'a> {
     diagnostics: &'a [Diagnostic],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pr_summary: Option<&'a PrSummary>,
 }
 
 pub fn render(result: &ScanResult, format: OutputFormat) -> Result<String> {
@@ -13,7 +15,10 @@ pub fn render(result: &ScanResult, format: OutputFormat) -> Result<String> {
         OutputFormat::Text => Ok(render_text(result)),
         OutputFormat::Json => Ok(serde_json::to_string_pretty(&JsonOutput {
             diagnostics: &result.diagnostics,
+            pr_summary: result.pr_summary.as_ref(),
         })?),
+        OutputFormat::Github => Ok(render_github(result)),
+        OutputFormat::Markdown => Ok(render_markdown(result)),
     }
 }
 
@@ -23,7 +28,7 @@ pub fn render_rules(
 ) -> Result<String> {
     match format {
         OutputFormat::Json => Ok(serde_json::to_string_pretty(rules)?),
-        OutputFormat::Text => {
+        OutputFormat::Text | OutputFormat::Github => {
             let mut output = String::new();
             for rule in rules {
                 output.push_str(&format!(
@@ -32,6 +37,18 @@ pub fn render_rules(
                     rule.id,
                     rule.name,
                     rule.description
+                ));
+            }
+            Ok(output)
+        }
+        OutputFormat::Markdown => {
+            let mut output = String::from("| Severity | Rule | Name |\n| --- | --- | --- |\n");
+            for rule in rules {
+                output.push_str(&format!(
+                    "| {} | `{}` | {} |\n",
+                    rule.severity.label(),
+                    rule.id,
+                    escape_markdown(rule.name)
                 ));
             }
             Ok(output)
@@ -60,6 +77,12 @@ fn render_text(result: &ScanResult) -> String {
             output.push_str("\nAffected downstream:\n");
             for node in &summary.affected_downstream {
                 output.push_str(&format!("  - {node}\n"));
+            }
+        }
+        if !summary.affected_exposures.is_empty() {
+            output.push_str("\nAffected exposures:\n");
+            for exposure in &summary.affected_exposures {
+                output.push_str(&format!("  - exposure: {exposure}\n"));
             }
         }
         if let Some(command) = &summary.recommended_dbt_command {
@@ -95,4 +118,138 @@ fn render_text(result: &ScanResult) -> String {
         output.push('\n');
     }
     output
+}
+
+fn render_github(result: &ScanResult) -> String {
+    let mut output = String::new();
+    for diagnostic in &result.diagnostics {
+        let level = match diagnostic.severity {
+            Severity::Critical | Severity::High => "error",
+            Severity::Medium => "warning",
+            Severity::Low | Severity::Info => "notice",
+        };
+        output.push_str(&format!(
+            "::{level} file={},line={},col={},title={} {}::{}\n",
+            escape_github_property(&diagnostic.path.display().to_string()),
+            diagnostic.line,
+            diagnostic.column,
+            escape_github_property(&diagnostic.rule_id),
+            escape_github_property(diagnostic.severity.label()),
+            escape_github_message(&diagnostic.message)
+        ));
+    }
+    if let Some(summary) = &result.pr_summary {
+        output.push_str(&format!(
+            "::notice title=Costguard PR Summary::{}\n",
+            escape_github_message(&summary_sentence(summary))
+        ));
+    }
+    output
+}
+
+fn render_markdown(result: &ScanResult) -> String {
+    let mut output = String::new();
+    let high_count = result
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.severity >= Severity::High)
+        .count();
+    if high_count > 0 {
+        output.push_str(&format!(
+            "# Costguard failed this PR\n\n{high_count} high-risk cost finding"
+        ));
+        if high_count != 1 {
+            output.push('s');
+        }
+        output.push_str(".\n\n");
+    } else {
+        output.push_str("# Costguard passed\n\nNo high-risk cost findings.\n\n");
+    }
+
+    if let Some(summary) = &result.pr_summary {
+        output.push_str("## PR Impact\n\n");
+        markdown_list(&mut output, "Changed dbt models", &summary.changed_models);
+        markdown_list(
+            &mut output,
+            "Affected downstream",
+            &summary.affected_downstream,
+        );
+        markdown_list(
+            &mut output,
+            "Affected exposures",
+            &summary.affected_exposures,
+        );
+        if let Some(command) = &summary.recommended_dbt_command {
+            output.push_str(&format!(
+                "Recommended dbt command:\n\n```bash\n{command}\n```\n\n"
+            ));
+        }
+    }
+
+    if !result.diagnostics.is_empty() {
+        output.push_str("## Diagnostics\n\n");
+        for diagnostic in &result.diagnostics {
+            output.push_str(&format!(
+                "1. `{}` {}:{}:{}\n   {}\n",
+                diagnostic.rule_id,
+                diagnostic.path.display(),
+                diagnostic.line,
+                diagnostic.column,
+                escape_markdown(&diagnostic.message)
+            ));
+            if let Some(risk) = &diagnostic.risk {
+                output.push_str(&format!("   Risk: {}\n", escape_markdown(risk)));
+            }
+            if let Some(suggestion) = &diagnostic.suggestion {
+                output.push_str(&format!("   Suggestion: {}\n", escape_markdown(suggestion)));
+            }
+            output.push('\n');
+        }
+        output.push_str(
+            "Suppress only intentional exceptions with `-- costguard: disable-next-line=RULE`.\n",
+        );
+    }
+
+    output
+}
+
+fn markdown_list(output: &mut String, title: &str, items: &[String]) {
+    if items.is_empty() {
+        return;
+    }
+    output.push_str(&format!("{title}:\n"));
+    for item in items {
+        output.push_str(&format!("- {}\n", escape_markdown(item)));
+    }
+    output.push('\n');
+}
+
+fn summary_sentence(summary: &PrSummary) -> String {
+    format!(
+        "{} changed file(s), {} changed model(s), {} downstream node(s), {} exposure(s)",
+        summary.changed_files.len(),
+        summary.changed_models.len(),
+        summary.affected_downstream.len(),
+        summary.affected_exposures.len()
+    )
+}
+
+fn escape_github_property(value: &str) -> String {
+    value
+        .replace('%', "%25")
+        .replace('\r', "%0D")
+        .replace('\n', "%0A")
+        .replace(',', "%2C")
+        .replace(':', "%3A")
+}
+
+fn escape_github_message(value: &str) -> String {
+    value
+        .replace('%', "%25")
+        .replace('\r', "%0D")
+        .replace('\n', "%0A")
+}
+
+fn escape_markdown(value: &str) -> String {
+    value.replace('|', "\\|")
 }

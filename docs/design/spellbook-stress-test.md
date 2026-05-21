@@ -24,6 +24,15 @@ costguard scan dbt_subprojects --warehouse generic
 costguard scan . --warehouse generic --fail-on high
 ```
 
+PR-first output smoke checks after cloning:
+
+```bash
+costguard pr --base origin/main --warehouse generic --fail-on high --format github
+costguard pr --base origin/main --warehouse generic --fail-on high --format markdown
+```
+
+These commands should be run manually or in an explicit benchmark job, not in normal CI.
+
 Later, if project-directory workflows need targeted checks:
 
 ```bash
@@ -57,6 +66,20 @@ tier_4_scale:   synthetic 1k/5k/10k model generated repos
 ```
 
 Use Spellbook as the primary public-real stress test before expanding to the broader public dbt corpus.
+
+Synthetic scale harness:
+
+```bash
+python3 scripts/generate_synthetic_dbt.py /tmp/costguard-synthetic-1k --models 1000
+costguard scan /tmp/costguard-synthetic-1k --warehouse generic --fail-on critical
+
+python3 scripts/generate_synthetic_dbt.py /tmp/costguard-synthetic-5k --models 5000
+costguard scan /tmp/costguard-synthetic-5k --warehouse generic --fail-on critical
+```
+
+Use the synthetic harness to measure regex caching, project-level indexes, runtime, and peak
+memory without requiring network access. Keep Spellbook as the real-world false-positive and
+dbt/Jinja robustness benchmark.
 
 Secondary repos to add after Spellbook:
 

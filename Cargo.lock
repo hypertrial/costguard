@@ -188,6 +188,7 @@ name = "costguard-git"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "tempfile",
 ]
 
 [[package]]

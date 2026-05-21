@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -120,48 +121,25 @@ pub fn analyze_sql(
 }
 
 pub fn strip_jinja(text: &str) -> String {
-    let block_re = Regex::new(r#"(?s)\{[%#].*?[%#]\}"#).expect("valid regex");
-    let expr_re = Regex::new(r#"(?s)\{\{.*?\}\}"#).expect("valid regex");
-    let without_blocks = block_re.replace_all(text, " ");
-    expr_re
+    let without_blocks = jinja_block_regex().replace_all(text, " ");
+    jinja_expr_regex()
         .replace_all(&without_blocks, " __jinja__ ")
         .to_string()
 }
 
 fn extract_features(text: &str, line_index: &costguard_diagnostics::LineIndex) -> SqlFeatures {
     let mut features = SqlFeatures::default();
-    features.select_stars = matches_as_features(
-        text,
-        line_index,
-        r#"(?i)\bselect\s+(?:distinct\s+)?(?:[\w"]+\.)?\*"#,
-        normalize,
-    );
+    features.select_stars = matches_as_features(text, line_index, select_star_regex(), normalize);
     features.order_by_clauses =
-        matches_as_features(text, line_index, r#"(?i)\border\s+by\b"#, |_| {
-            "order by".into()
-        });
-    features.distincts =
-        matches_as_features(text, line_index, r#"(?i)\bselect\s+distinct\b"#, |_| {
-            "select distinct".into()
-        });
-    features.json_extractions = matches_as_features(
-        text,
-        line_index,
-        r#"(?i)\b(json_extract(?:_scalar)?|json_value|json_query|parse_json|get_path)\s*\([^)]*\)|\b\w+\s*:\s*["']?[A-Za-z_][\w]*["']?"#,
-        normalize_json_key,
-    );
-    features.regex_calls = matches_as_features(
-        text,
-        line_index,
-        r#"(?i)\b(regexp_extract|regexp_replace|regexp_substr|regexp_contains|rlike|regexp_like)\b\s*(?:\([^)]*\))?"#,
-        normalize,
-    );
-    features.normalization_calls = matches_as_features(
-        text,
-        line_index,
-        r#"(?i)\b(?:lower|upper)\s*\(\s*trim\s*\([^)]*\)\s*\)"#,
-        normalize,
-    );
+        matches_as_features(text, line_index, order_by_regex(), |_| "order by".into());
+    features.distincts = matches_as_features(text, line_index, distinct_regex(), |_| {
+        "select distinct".into()
+    });
+    features.json_extractions =
+        matches_as_features(text, line_index, json_regex(), normalize_json_key);
+    features.regex_calls = matches_as_features(text, line_index, regex_call_regex(), normalize);
+    features.normalization_calls =
+        matches_as_features(text, line_index, normalization_regex(), normalize);
     features.window_functions = extract_windows(text, line_index);
     features.joins = extract_joins(text, line_index);
     features.ctes = extract_ctes(text, line_index);
@@ -172,13 +150,12 @@ fn extract_features(text: &str, line_index: &costguard_diagnostics::LineIndex) -
 fn matches_as_features<F>(
     text: &str,
     line_index: &costguard_diagnostics::LineIndex,
-    pattern: &str,
+    regex: &Regex,
     key_fn: F,
 ) -> Vec<ExpressionFeature>
 where
     F: Fn(&str) -> String,
 {
-    let regex = Regex::new(pattern).expect("valid feature regex");
     regex
         .find_iter(text)
         .map(|matched| {
@@ -196,8 +173,7 @@ fn extract_windows(
     text: &str,
     line_index: &costguard_diagnostics::LineIndex,
 ) -> Vec<WindowFeature> {
-    let regex = Regex::new(r#"(?is)\bover\s*\((?P<body>[^)]*)\)"#).expect("valid regex");
-    regex
+    window_regex()
         .captures_iter(text)
         .filter_map(|capture| {
             let matched = capture.get(0)?;
@@ -213,9 +189,7 @@ fn extract_windows(
 
 fn extract_joins(text: &str, line_index: &costguard_diagnostics::LineIndex) -> Vec<JoinFeature> {
     let mut joins = Vec::new();
-    let join_re =
-        Regex::new(r#"(?is)\b(?:(left|right|full|inner|cross)\s+)?join\b"#).expect("valid regex");
-    for capture in join_re.captures_iter(text) {
+    for capture in join_regex().captures_iter(text) {
         let Some(matched) = capture.get(0) else {
             continue;
         };
@@ -249,9 +223,8 @@ fn extract_joins(text: &str, line_index: &costguard_diagnostics::LineIndex) -> V
         });
     }
 
-    let comma_re = Regex::new(r#"(?is)\bfrom\s+[^;\n]+,\s*[^;\n]+"#).expect("valid regex");
     joins.extend(
-        comma_re
+        comma_join_regex()
             .find_iter(text)
             .filter(|matched| !matched.as_str().to_ascii_lowercase().contains("source("))
             .map(|matched| JoinFeature {
@@ -289,8 +262,7 @@ fn find_join_clause_end(text: &str) -> Option<usize> {
 }
 
 fn extract_on_predicate(after: &str) -> Option<String> {
-    let on_re = Regex::new(r#"(?is)\bon\b\s*(?P<predicate>.*)"#).expect("valid regex");
-    let predicate = on_re.name(after, "predicate")?;
+    let predicate = on_regex().name(after, "predicate")?;
     Some(predicate.as_str().trim().to_string())
 }
 
@@ -305,19 +277,15 @@ impl RegexName for Regex {
 }
 
 fn has_equality_predicate(predicate: &str) -> bool {
-    let equality_re = Regex::new(r#"(?i)[\w.)"]+\s*=\s*[\w("]"#).expect("valid regex");
-    equality_re.is_match(predicate) && !predicate.contains("!=") && !predicate.contains("<>")
+    equality_regex().is_match(predicate) && !predicate.contains("!=") && !predicate.contains("<>")
 }
 
 fn function_on_both_sides(predicate: &str) -> bool {
-    let regex = Regex::new(r#"(?i)\bon\s+([a-z_][\w]*)\s*\([^=]+=\s*([a-z_][\w]*)\s*\("#)
-        .expect("valid regex");
-    regex.is_match(predicate)
+    function_both_sides_regex().is_match(predicate)
 }
 
 fn extract_ctes(text: &str, line_index: &costguard_diagnostics::LineIndex) -> Vec<CteFeature> {
-    let regex = Regex::new(r#"(?is)(?:with|,)\s+([a-z_][\w]*)\s+as\s*\("#).expect("valid regex");
-    regex
+    cte_regex()
         .captures_iter(text)
         .filter_map(|capture| {
             let matched = capture.get(1)?;
@@ -365,6 +333,94 @@ fn normalize_json_key(raw: &str) -> String {
         return first_arg.trim().to_string();
     }
     lowered
+}
+
+fn cached_regex(slot: &'static OnceLock<Regex>, pattern: &str) -> &'static Regex {
+    slot.get_or_init(|| Regex::new(pattern).expect("valid regex"))
+}
+
+fn jinja_block_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    cached_regex(&RE, r#"(?s)\{[%#].*?[%#]\}"#)
+}
+
+fn jinja_expr_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    cached_regex(&RE, r#"(?s)\{\{.*?\}\}"#)
+}
+
+fn select_star_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    cached_regex(&RE, r#"(?i)\bselect\s+(?:distinct\s+)?(?:[\w"]+\.)?\*"#)
+}
+
+fn order_by_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    cached_regex(&RE, r#"(?i)\border\s+by\b"#)
+}
+
+fn distinct_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    cached_regex(&RE, r#"(?i)\bselect\s+distinct\b"#)
+}
+
+fn json_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    cached_regex(
+        &RE,
+        r#"(?i)\b(json_extract(?:_scalar)?|json_value|json_query|parse_json|get_path)\s*\([^)]*\)|\b\w+\s*:\s*["']?[A-Za-z_][\w]*["']?"#,
+    )
+}
+
+fn regex_call_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    cached_regex(
+        &RE,
+        r#"(?i)\b(regexp_extract|regexp_replace|regexp_substr|regexp_contains|rlike|regexp_like)\b\s*(?:\([^)]*\))?"#,
+    )
+}
+
+fn normalization_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    cached_regex(&RE, r#"(?i)\b(?:lower|upper)\s*\(\s*trim\s*\([^)]*\)\s*\)"#)
+}
+
+fn window_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    cached_regex(&RE, r#"(?is)\bover\s*\((?P<body>[^)]*)\)"#)
+}
+
+fn join_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    cached_regex(&RE, r#"(?is)\b(?:(left|right|full|inner|cross)\s+)?join\b"#)
+}
+
+fn comma_join_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    cached_regex(&RE, r#"(?is)\bfrom\s+[^;\n]+,\s*[^;\n]+"#)
+}
+
+fn on_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    cached_regex(&RE, r#"(?is)\bon\b\s*(?P<predicate>.*)"#)
+}
+
+fn equality_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    cached_regex(&RE, r#"(?i)[\w.)"]+\s*=\s*[\w("]"#)
+}
+
+fn function_both_sides_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    cached_regex(
+        &RE,
+        r#"(?i)\bon\s+([a-z_][\w]*)\s*\([^=]+=\s*([a-z_][\w]*)\s*\("#,
+    )
+}
+
+fn cte_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    cached_regex(&RE, r#"(?is)(?:with|,)\s+([a-z_][\w]*)\s+as\s*\("#)
 }
 
 #[cfg(test)]

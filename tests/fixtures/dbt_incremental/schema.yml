@@ -7,10 +7,17 @@ sources:
 
 models:
   - name: stg_events
+    tags: [staging]
+    tests:
+      - unique:
+          column_name: id
     columns:
       - name: id
         tests:
           - not_null
   - name: fct_sessions
+    tags: [mart, costguard_fixture]
     columns:
       - name: id
+        tests:
+          - not_null

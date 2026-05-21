@@ -37,6 +37,19 @@ The MVP should optimize this command:
 costguard pr --base origin/main --warehouse snowflake --fail-on high
 ```
 
+CI-oriented output formats:
+
+```bash
+costguard pr --base origin/main --warehouse snowflake --fail-on high --format github
+costguard pr --base origin/main --warehouse snowflake --fail-on high --format markdown
+costguard pr --base origin/main --warehouse snowflake --fail-on high --format json
+```
+
+`github` emits annotation commands. `markdown` emits a PR-summary-oriented report.
+`json` preserves the `diagnostics` array and includes `pr_summary` when PR mode is used.
+PR mode should scan changed files first, then use manifest/YAML/SQL graph context only for
+blast-radius summaries and rule context.
+
 Expected PR output should include:
 
 - pass/fail status

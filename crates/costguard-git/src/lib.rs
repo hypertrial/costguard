@@ -51,3 +51,55 @@ fn parse_paths(bytes: &[u8]) -> Vec<PathBuf> {
         .map(PathBuf::from)
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn changed_files_covers_committed_staged_unstaged_and_untracked_paths() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let root = tempdir.path();
+        fs::create_dir_all(root.join("models")).expect("create models");
+        fs::write(root.join("models/base.sql"), "select 1\n").expect("write base");
+
+        git(root, &["init"]);
+        git(root, &["checkout", "-b", "main"]);
+        git(root, &["config", "user.email", "costguard@example.com"]);
+        git(root, &["config", "user.name", "Costguard Test"]);
+        git(root, &["add", "."]);
+        git(root, &["commit", "-m", "initial"]);
+        git(root, &["checkout", "-b", "feature"]);
+
+        fs::write(root.join("models/committed.sql"), "select 2\n").expect("write committed");
+        git(root, &["add", "."]);
+        git(root, &["commit", "-m", "committed change"]);
+
+        fs::write(root.join("models/staged.sql"), "select 3\n").expect("write staged");
+        git(root, &["add", "models/staged.sql"]);
+        fs::write(root.join("models/base.sql"), "select 4\n").expect("write unstaged");
+        fs::write(root.join("models/untracked.sql"), "select 5\n").expect("write untracked");
+
+        let changed = changed_files(root, "main").expect("changed files");
+        assert!(changed.contains(&PathBuf::from("models/committed.sql")));
+        assert!(changed.contains(&PathBuf::from("models/staged.sql")));
+        assert!(changed.contains(&PathBuf::from("models/base.sql")));
+        assert!(changed.contains(&PathBuf::from("models/untracked.sql")));
+    }
+
+    fn git(root: &Path, args: &[&str]) {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(root)
+            .output()
+            .expect("run git");
+        assert!(
+            output.status.success(),
+            "git {} failed\nstdout:\n{}\nstderr:\n{}",
+            args.join(" "),
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}

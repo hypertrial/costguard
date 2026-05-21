@@ -39,6 +39,8 @@ cargo install --path crates/costguard-cli
 costguard pr --base origin/main --warehouse snowflake --fail-on high
 costguard scan models/ --warehouse snowflake
 costguard scan models/ --warehouse bigquery --format json
+costguard scan models/ --format github
+costguard scan models/ --format markdown
 costguard explain models/marts/fct_orders.sql
 costguard rules
 ```
@@ -52,11 +54,22 @@ costguard pr --base origin/main --warehouse snowflake --fail-on high
 Dollar-cost estimates can be added later as enrichment once warehouse metadata, history,
 pricing, and execution-plan signals are available.
 
+For CI, `--format github` emits GitHub annotation commands and `--format markdown`
+emits a PR-summary-oriented report. `costguard pr` scans changed files first, while still
+loading dbt manifest/YAML/SQL graph context for downstream blast-radius summaries.
+
 ## Real-world Stress Testing
 
 The first planned public-real stress target is Dune Spellbook. See
 [`docs/design/spellbook-stress-test.md`](docs/design/spellbook-stress-test.md)
 for the command set, metrics, and benchmark tiers.
+
+For local scale checks without network access, generate a synthetic dbt-style project:
+
+```bash
+python3 scripts/generate_synthetic_dbt.py /tmp/costguard-synthetic --models 1000
+costguard scan /tmp/costguard-synthetic --warehouse generic --fail-on critical
+```
 
 See [`docs/design/pr-check-primary-workflow.md`](docs/design/pr-check-primary-workflow.md)
 for the product workflow priority.

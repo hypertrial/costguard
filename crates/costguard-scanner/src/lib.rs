@@ -105,6 +105,43 @@ pub fn discover(root: &Path, requested_paths: &[PathBuf]) -> Result<Vec<ProjectF
         .collect()
 }
 
+pub fn read_existing_paths(root: &Path, requested_paths: &[PathBuf]) -> Result<Vec<ProjectFile>> {
+    let mut paths = requested_paths
+        .iter()
+        .map(|path| {
+            if path.is_absolute() {
+                path.clone()
+            } else {
+                root.join(path)
+            }
+        })
+        .filter(|path| path.is_file())
+        .filter_map(|path| {
+            let kind = classify(&path, root);
+            (kind != FileKind::Other).then_some((path, kind))
+        })
+        .collect::<Vec<_>>();
+    paths.sort_by(|left, right| left.0.cmp(&right.0));
+    paths.dedup_by(|left, right| left.0 == right.0);
+
+    paths
+        .into_par_iter()
+        .map(|(path, kind)| {
+            let text = std::fs::read_to_string(&path)
+                .with_context(|| format!("failed to read {}", path.display()))?;
+            let root_relative_path = path.strip_prefix(root).unwrap_or(&path).to_path_buf();
+            let line_index = LineIndex::new(&text);
+            Ok(ProjectFile {
+                path,
+                root_relative_path,
+                kind,
+                text,
+                line_index,
+            })
+        })
+        .collect()
+}
+
 pub fn classify(path: &Path, root: &Path) -> FileKind {
     let file_name = path
         .file_name()

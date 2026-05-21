@@ -55,6 +55,98 @@ fn scan_json_outputs_diagnostics_array() {
 }
 
 #[test]
+fn scan_github_outputs_annotations() {
+    let output = Command::new(bin())
+        .arg("scan")
+        .arg(fixture("dbt_incremental"))
+        .arg("--format")
+        .arg("github")
+        .output()
+        .expect("run costguard");
+    assert_eq!(output.status.code(), Some(1));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("::error file="), "{stdout}");
+    assert!(stdout.contains("title=SQLCOST"), "{stdout}");
+}
+
+#[test]
+fn scan_markdown_outputs_pr_summary_shape() {
+    let output = Command::new(bin())
+        .arg("scan")
+        .arg(fixture("dbt_incremental"))
+        .arg("--format")
+        .arg("markdown")
+        .output()
+        .expect("run costguard");
+    assert_eq!(output.status.code(), Some(1));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("# Costguard failed this PR"), "{stdout}");
+    assert!(stdout.contains("## Diagnostics"), "{stdout}");
+    assert!(stdout.contains("SQLCOST005"), "{stdout}");
+}
+
+#[test]
+fn pr_mode_scans_changed_files_but_uses_transitive_context() {
+    let tempdir = tempfile::tempdir().expect("tempdir");
+    let root = tempdir.path();
+    fs::create_dir_all(root.join("models/marts")).expect("create models");
+    fs::write(root.join("models/marts/a.sql"), "select 1 as id\n").expect("write a");
+    fs::write(
+        root.join("models/marts/b.sql"),
+        "select id from {{ ref('a') }}\n",
+    )
+    .expect("write b");
+    fs::write(
+        root.join("models/marts/c.sql"),
+        "select id from {{ ref('b') }}\n",
+    )
+    .expect("write c");
+    fs::write(
+        root.join("models/marts/unchanged_risky.sql"),
+        "select * from {{ ref('a') }}\n",
+    )
+    .expect("write risky");
+    fs::write(
+        root.join("schema.yml"),
+        "version: 2\nexposures:\n  - name: dashboard\n    depends_on:\n      - ref('c')\n",
+    )
+    .expect("write schema");
+
+    git(root, &["init"]);
+    git(root, &["config", "user.email", "costguard@example.com"]);
+    git(root, &["config", "user.name", "Costguard Test"]);
+    git(root, &["add", "."]);
+    git(root, &["commit", "-m", "initial"]);
+    fs::write(root.join("models/marts/a.sql"), "select 2 as id\n").expect("modify a");
+
+    let output = Command::new(bin())
+        .arg("pr")
+        .arg("--base")
+        .arg("HEAD")
+        .arg("--format")
+        .arg("json")
+        .arg("--fail-on")
+        .arg("critical")
+        .current_dir(root)
+        .output()
+        .expect("run costguard");
+    assert_eq!(output.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("\"pr_summary\""), "{stdout}");
+    assert!(
+        stdout.contains("\"changed_models\": [\n      \"a\"\n    ]"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("\"b\""), "{stdout}");
+    assert!(stdout.contains("\"c\""), "{stdout}");
+    assert!(stdout.contains("\"dashboard\""), "{stdout}");
+    assert!(
+        !stdout.contains("SQLCOST001"),
+        "unchanged files should not emit diagnostics:\n{stdout}"
+    );
+}
+
+#[test]
 fn rules_command_lists_rules() {
     let output = Command::new(bin())
         .arg("rules")
@@ -144,4 +236,19 @@ fn scan_config_ignore_excludes_paths() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(!stdout.contains("SQLCOST002"), "{stdout}");
     assert!(stdout.contains("SQLCOST001"), "{stdout}");
+}
+
+fn git(root: &std::path::Path, args: &[&str]) {
+    let output = Command::new("git")
+        .args(args)
+        .current_dir(root)
+        .output()
+        .expect("run git");
+    assert!(
+        output.status.success(),
+        "git {} failed\nstdout:\n{}\nstderr:\n{}",
+        args.join(" "),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
 }

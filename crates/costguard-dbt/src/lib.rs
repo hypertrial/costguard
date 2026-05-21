@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DbtSqlFeatures {
@@ -45,6 +46,7 @@ pub struct DbtGraph {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DbtModel {
+    pub node_id: Option<String>,
     pub name: String,
     pub path: Option<PathBuf>,
     pub materialized: Option<String>,
@@ -65,6 +67,7 @@ pub struct DbtSource {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DbtExposure {
     pub name: String,
+    pub depends_on: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -82,24 +85,20 @@ pub struct DbtTest {
 pub fn extract_sql_features(text: &str) -> DbtSqlFeatures {
     let mut features = DbtSqlFeatures::default();
 
-    let ref_re = Regex::new(r#"ref\s*\(\s*['"]([^'"]+)['"]\s*\)"#).expect("valid regex");
-    for capture in ref_re.captures_iter(text) {
+    for capture in ref_regex().captures_iter(text) {
         features.refs.push(DbtRef {
             name: capture[1].to_string(),
         });
     }
 
-    let source_re = Regex::new(r#"source\s*\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*\)"#)
-        .expect("valid regex");
-    for capture in source_re.captures_iter(text) {
+    for capture in source_regex().captures_iter(text) {
         features.sources.push(DbtSourceRef {
             source_name: capture[1].to_string(),
             table_name: capture[2].to_string(),
         });
     }
 
-    let config_re = Regex::new(r#"config\s*\((?s:.*?)\)"#).expect("valid regex");
-    if let Some(capture) = config_re.find(text) {
+    if let Some(capture) = config_regex().find(text) {
         let body = capture.as_str();
         features.config.materialized = extract_config_value(body, "materialized");
         features.config.unique_key = extract_config_value(body, "unique_key");
@@ -115,6 +114,24 @@ fn extract_config_value(body: &str, key: &str) -> Option<String> {
     regex
         .captures(body)
         .and_then(|capture| capture.get(1).map(|value| value.as_str().to_string()))
+}
+
+fn ref_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r#"ref\s*\(\s*['"]([^'"]+)['"]\s*\)"#).expect("valid regex"))
+}
+
+fn source_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(r#"source\s*\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*\)"#)
+            .expect("valid regex")
+    })
+}
+
+fn config_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r#"config\s*\((?s:.*?)\)"#).expect("valid regex"))
 }
 
 pub fn parse_manifest(path: &Path) -> Result<DbtProject> {
@@ -211,6 +228,7 @@ pub fn parse_manifest_text(text: &str) -> Result<DbtProject> {
             project.models.insert(
                 name.clone(),
                 DbtModel {
+                    node_id: Some(node_id.clone()),
                     name,
                     path,
                     materialized,
@@ -220,6 +238,30 @@ pub fn parse_manifest_text(text: &str) -> Result<DbtProject> {
                     tests: Vec::new(),
                     refs,
                     sources,
+                },
+            );
+        }
+    }
+
+    if let Some(exposures) = manifest.get("exposures").and_then(Value::as_object) {
+        for exposure in exposures.values() {
+            let Some(name) = exposure.get("name").and_then(Value::as_str) else {
+                continue;
+            };
+            let depends_on = exposure
+                .get("depends_on")
+                .and_then(|depends| depends.get("nodes"))
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect();
+            project.exposures.insert(
+                name.to_string(),
+                DbtExposure {
+                    name: name.to_string(),
+                    depends_on,
                 },
             );
         }
@@ -285,6 +327,190 @@ pub fn parse_yaml_models(text: &str) -> Vec<DbtModel> {
         .collect()
 }
 
+pub fn parse_yaml_project(text: &str) -> DbtProject {
+    let Ok(value) = serde_yaml::from_str::<Value>(text) else {
+        return DbtProject::default();
+    };
+    let mut project = DbtProject::default();
+
+    if let Some(models) = value.get("models").and_then(Value::as_array) {
+        for model in models {
+            let Some(name) = model.get("name").and_then(Value::as_str) else {
+                continue;
+            };
+            let tags = string_or_string_array(model.get("tags"));
+            let tests = parse_tests(model.get("tests"));
+            let columns = model
+                .get("columns")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(parse_column)
+                .collect();
+            project.models.insert(
+                name.to_string(),
+                DbtModel {
+                    name: name.to_string(),
+                    tags,
+                    tests,
+                    columns,
+                    ..DbtModel::default()
+                },
+            );
+        }
+    }
+
+    if let Some(sources) = value.get("sources").and_then(Value::as_array) {
+        for source in sources {
+            let Some(name) = source.get("name").and_then(Value::as_str) else {
+                continue;
+            };
+            let tables = source
+                .get("tables")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|table| table.get("name").and_then(Value::as_str))
+                .map(str::to_string)
+                .collect();
+            project.sources.insert(
+                name.to_string(),
+                DbtSource {
+                    name: name.to_string(),
+                    tables,
+                },
+            );
+        }
+    }
+
+    if let Some(exposures) = value.get("exposures").and_then(Value::as_array) {
+        for exposure in exposures {
+            let Some(name) = exposure.get("name").and_then(Value::as_str) else {
+                continue;
+            };
+            let depends_on = exposure
+                .get("depends_on")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect();
+            project.exposures.insert(
+                name.to_string(),
+                DbtExposure {
+                    name: name.to_string(),
+                    depends_on,
+                },
+            );
+        }
+    }
+
+    project
+}
+
+pub fn merge_yaml_project(target: &mut DbtProject, yaml: DbtProject) {
+    for (name, yaml_model) in yaml.models {
+        let model = target
+            .models
+            .entry(name.clone())
+            .or_insert_with(|| DbtModel {
+                name,
+                ..DbtModel::default()
+            });
+        if model.tags.is_empty() {
+            model.tags = yaml_model.tags;
+        } else {
+            for tag in yaml_model.tags {
+                if !model.tags.contains(&tag) {
+                    model.tags.push(tag);
+                }
+            }
+        }
+        merge_columns(&mut model.columns, yaml_model.columns);
+        merge_tests(&mut model.tests, yaml_model.tests);
+    }
+    for (name, yaml_source) in yaml.sources {
+        let source = target
+            .sources
+            .entry(name.clone())
+            .or_insert_with(|| DbtSource {
+                name,
+                tables: Vec::new(),
+            });
+        for table in yaml_source.tables {
+            if !source.tables.contains(&table) {
+                source.tables.push(table);
+            }
+        }
+    }
+    for (name, exposure) in yaml.exposures {
+        target.exposures.entry(name).or_insert(exposure);
+    }
+}
+
+fn merge_columns(target: &mut Vec<DbtColumn>, yaml_columns: Vec<DbtColumn>) {
+    for yaml_column in yaml_columns {
+        if let Some(column) = target
+            .iter_mut()
+            .find(|column| column.name == yaml_column.name)
+        {
+            merge_tests(&mut column.tests, yaml_column.tests);
+        } else {
+            target.push(yaml_column);
+        }
+    }
+}
+
+fn merge_tests(target: &mut Vec<DbtTest>, yaml_tests: Vec<DbtTest>) {
+    for test in yaml_tests {
+        if !target
+            .iter()
+            .any(|existing| existing.name == test.name && existing.args == test.args)
+        {
+            target.push(test);
+        }
+    }
+}
+
+fn parse_column(value: &Value) -> Option<DbtColumn> {
+    Some(DbtColumn {
+        name: value.get("name")?.as_str()?.to_string(),
+        tests: parse_tests(value.get("tests")),
+    })
+}
+
+fn parse_tests(value: Option<&Value>) -> Vec<DbtTest> {
+    value
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|test| match test {
+            Value::String(name) => Some(DbtTest {
+                name: name.clone(),
+                args: Value::Null,
+            }),
+            Value::Object(map) => map.iter().next().map(|(name, args)| DbtTest {
+                name: name.clone(),
+                args: args.clone(),
+            }),
+            _ => None,
+        })
+        .collect()
+}
+
+fn string_or_string_array(value: Option<&Value>) -> Vec<String> {
+    match value {
+        Some(Value::String(tag)) => vec![tag.clone()],
+        Some(Value::Array(tags)) => tags
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::to_string)
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -297,5 +523,81 @@ mod tests {
         assert_eq!(features.config.materialized.as_deref(), Some("incremental"));
         assert_eq!(features.config.unique_key.as_deref(), Some("id"));
         assert!(features.uses_is_incremental);
+    }
+
+    #[test]
+    fn parses_yaml_models_sources_and_exposures() {
+        let yaml = r#"
+models:
+  - name: fct_sessions
+    tags: [mart, critical]
+    tests:
+      - unique:
+          column_name: id
+    columns:
+      - name: id
+        tests:
+          - not_null
+sources:
+  - name: raw
+    tables:
+      - name: events
+exposures:
+  - name: dashboard
+    depends_on:
+      - ref('fct_sessions')
+"#;
+        let project = parse_yaml_project(yaml);
+        let model = project.models.get("fct_sessions").unwrap();
+        assert_eq!(model.tags, vec!["mart", "critical"]);
+        assert_eq!(model.columns[0].tests[0].name, "not_null");
+        assert_eq!(project.sources["raw"].tables, vec!["events"]);
+        assert_eq!(
+            project.exposures["dashboard"].depends_on[0],
+            "ref('fct_sessions')"
+        );
+    }
+
+    #[test]
+    fn yaml_merge_enriches_manifest_columns_and_tests() {
+        let mut target = DbtProject::default();
+        target.models.insert(
+            "fct_sessions".into(),
+            DbtModel {
+                node_id: Some("model.pkg.fct_sessions".into()),
+                name: "fct_sessions".into(),
+                materialized: Some("incremental".into()),
+                columns: vec![DbtColumn {
+                    name: "id".into(),
+                    tests: Vec::new(),
+                }],
+                ..DbtModel::default()
+            },
+        );
+        let yaml = parse_yaml_project(
+            r#"
+models:
+  - name: fct_sessions
+    tags: [critical]
+    tests:
+      - unique:
+          column_name: id
+    columns:
+      - name: id
+        tests:
+          - not_null
+      - name: session_id
+        tests:
+          - not_null
+"#,
+        );
+
+        merge_yaml_project(&mut target, yaml);
+        let model = target.models.get("fct_sessions").unwrap();
+        assert_eq!(model.materialized.as_deref(), Some("incremental"));
+        assert_eq!(model.tags, vec!["critical"]);
+        assert_eq!(model.tests[0].name, "unique");
+        assert_eq!(model.columns.len(), 2);
+        assert_eq!(model.columns[0].tests[0].name, "not_null");
     }
 }

@@ -80,6 +80,8 @@ struct RulesArgs {
 enum FormatArg {
     Text,
     Json,
+    Github,
+    Markdown,
 }
 
 impl From<FormatArg> for OutputFormat {
@@ -87,6 +89,8 @@ impl From<FormatArg> for OutputFormat {
         match value {
             FormatArg::Text => OutputFormat::Text,
             FormatArg::Json => OutputFormat::Json,
+            FormatArg::Github => OutputFormat::Github,
+            FormatArg::Markdown => OutputFormat::Markdown,
         }
     }
 }

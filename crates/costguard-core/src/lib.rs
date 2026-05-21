@@ -1,8 +1,11 @@
 use anyhow::{Context, Result};
-use costguard_dbt::{parse_manifest, DbtModel, DbtProject};
+use costguard_dbt::{
+    extract_sql_features, merge_yaml_project, parse_manifest, parse_yaml_project, DbtModel,
+    DbtProject,
+};
 use costguard_diagnostics::{apply_suppressions, Diagnostic, Severity};
-use costguard_rules::{RuleOverrides, RuleRegistry, Warehouse};
-use costguard_scanner::{discover, FileKind, ProjectFile, ScanCounts};
+use costguard_rules::{ProjectIndexes, RuleOverrides, RuleRegistry, Warehouse};
+use costguard_scanner::{discover, read_existing_paths, FileKind, ProjectFile, ScanCounts};
 use costguard_sql::{analyze_sql, SqlDialect, SqlDocument};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -24,6 +27,8 @@ pub enum OutputFormat {
     #[default]
     Text,
     Json,
+    Github,
+    Markdown,
 }
 
 impl FromStr for OutputFormat {
@@ -33,6 +38,8 @@ impl FromStr for OutputFormat {
         match value.trim().to_ascii_lowercase().as_str() {
             "text" => Ok(Self::Text),
             "json" => Ok(Self::Json),
+            "github" => Ok(Self::Github),
+            "markdown" | "md" => Ok(Self::Markdown),
             other => Err(format!("unknown output format '{other}'")),
         }
     }
@@ -101,6 +108,7 @@ pub struct PrSummary {
     pub changed_files: Vec<PathBuf>,
     pub changed_models: Vec<String>,
     pub affected_downstream: Vec<String>,
+    pub affected_exposures: Vec<String>,
     pub recommended_dbt_command: Option<String>,
 }
 
@@ -181,46 +189,43 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
         .root
         .canonicalize()
         .with_context(|| format!("failed to resolve root {}", config.root.display()))?;
-    let mut files = discover(&root, &config.paths)?;
-    if !config.ignore.is_empty() {
-        let ignored = config
-            .ignore
-            .iter()
-            .map(|path| {
-                if path.is_absolute() {
-                    path.clone()
-                } else {
-                    root.join(path)
-                }
-            })
-            .collect::<Vec<_>>();
-        files.retain(|file| {
-            !ignored
-                .iter()
-                .any(|ignored_path| file.path.starts_with(ignored_path))
-        });
-    }
-    let pr_summary = if config.changed_only {
+    let ignored = ignored_paths(&root, &config.ignore);
+    let (mut files, mut context_files, pr_summary) = if config.changed_only {
         let base = config.base_branch.as_deref().unwrap_or("main");
         let changed_files = costguard_git::changed_files(&root, base)?;
-        let changed: HashSet<PathBuf> = changed_files.iter().cloned().collect();
-        files.retain(|file| changed.contains(&file.root_relative_path));
-        Some(PrSummary {
-            changed_files,
-            ..PrSummary::default()
-        })
+        let files = read_existing_paths(&root, &changed_files)?;
+        let context_files = discover(&root, &config.paths)?
+            .into_iter()
+            .filter(is_dbt_context_file)
+            .collect::<Vec<_>>();
+        (
+            files,
+            context_files,
+            Some(PrSummary {
+                changed_files,
+                ..PrSummary::default()
+            }),
+        )
     } else {
-        None
+        let files = discover(&root, &config.paths)?;
+        (files.clone(), files, None)
+    };
+
+    if !ignored.is_empty() {
+        files.retain(|file| !is_ignored(file, &ignored));
+        context_files.retain(|file| !is_ignored(file, &ignored));
     };
 
     let counts = ScanCounts::from_files(&files);
-    let dbt = load_dbt_project(&root, config, &files)?;
+    let dbt = load_dbt_project(&root, config, &context_files)?;
     let project = Project {
         root: root.clone(),
         files,
         dbt,
     };
-    let sql_documents = analyze_sql_documents(&project, config.dialect);
+    let sql_documents = analyze_sql_documents(&project.files, config.dialect);
+    let context_sql_documents = analyze_sql_documents(&context_files, config.dialect);
+    let project_indexes = ProjectIndexes::from_sql_documents(&context_sql_documents);
     let sql_by_path = sql_documents
         .iter()
         .map(|doc| (doc.path.clone(), doc))
@@ -237,7 +242,8 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
             file,
             sql,
             dbt_model,
-            all_sql: &sql_documents,
+            all_sql: &context_sql_documents,
+            project_indexes: &project_indexes,
             overrides: &config.rule_overrides,
         };
         let file_diagnostics = apply_suppressions(&file.text, registry.run(&ctx));
@@ -257,6 +263,32 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
         counts,
         pr_summary,
     })
+}
+
+fn ignored_paths(root: &Path, ignore: &[PathBuf]) -> Vec<PathBuf> {
+    ignore
+        .iter()
+        .map(|path| {
+            if path.is_absolute() {
+                path.clone()
+            } else {
+                root.join(path)
+            }
+        })
+        .collect()
+}
+
+fn is_ignored(file: &ProjectFile, ignored: &[PathBuf]) -> bool {
+    ignored
+        .iter()
+        .any(|ignored_path| file.path.starts_with(ignored_path))
+}
+
+fn is_dbt_context_file(file: &ProjectFile) -> bool {
+    matches!(
+        file.kind,
+        FileKind::DbtSqlModel | FileKind::DbtYaml | FileKind::ManifestJson
+    )
 }
 
 pub fn explain(config: &ScanConfig, path: &Path) -> Result<ScanResult> {
@@ -305,10 +337,16 @@ fn load_dbt_project(
     };
 
     for file in files {
+        if file.kind == FileKind::DbtYaml {
+            merge_yaml_project(&mut project, parse_yaml_project(&file.text));
+        }
+    }
+
+    for file in files {
         if file.kind != FileKind::DbtSqlModel {
             continue;
         }
-        let features = costguard_dbt::extract_sql_features(&file.text);
+        let features = extract_sql_features(&file.text);
         let name = file
             .path
             .file_stem()
@@ -332,12 +370,23 @@ fn load_dbt_project(
             .unique_key
             .clone()
             .or(features.config.unique_key.clone());
-        model.refs = features
-            .refs
-            .into_iter()
-            .map(|reference| reference.name)
-            .collect();
-        model.sources = features.sources;
+        if model.refs.is_empty() {
+            model.refs = features
+                .refs
+                .into_iter()
+                .map(|reference| reference.name)
+                .collect();
+        }
+        if model.sources.is_empty() {
+            model.sources = features.sources;
+        }
+        let dependency_key = model.node_id.clone().unwrap_or_else(|| model.name.clone());
+        let dependencies = model.refs.clone();
+        project
+            .graph
+            .depends_on
+            .entry(dependency_key)
+            .or_insert(dependencies);
     }
 
     if project.models.is_empty() {
@@ -347,9 +396,8 @@ fn load_dbt_project(
     }
 }
 
-fn analyze_sql_documents(project: &Project, dialect: SqlDialect) -> Vec<SqlDocument> {
-    project
-        .files
+fn analyze_sql_documents(files: &[ProjectFile], dialect: SqlDialect) -> Vec<SqlDocument> {
+    files
         .iter()
         .filter(|file| matches!(file.kind, FileKind::Sql | FileKind::DbtSqlModel))
         .map(|file| analyze_sql(file.path.clone(), &file.text, dialect, &file.line_index))
@@ -384,20 +432,18 @@ fn enrich_pr_summary(mut summary: PrSummary, project: &Project) -> PrSummary {
         .collect();
     summary.changed_models.sort();
 
-    let changed_model_set: HashSet<&str> =
-        summary.changed_models.iter().map(String::as_str).collect();
-    summary.affected_downstream = dbt
-        .models
-        .values()
-        .filter(|model| {
-            model
-                .refs
-                .iter()
-                .any(|reference| changed_model_set.contains(reference.as_str()))
-        })
-        .map(|model| model.name.clone())
-        .collect();
+    let graph = DbtDependencyGraph::from_project(dbt);
+    summary.affected_downstream = graph.transitive_downstream(&summary.changed_models);
     summary.affected_downstream.sort();
+    summary.affected_exposures = graph.affected_exposures(
+        &summary
+            .changed_models
+            .iter()
+            .chain(summary.affected_downstream.iter())
+            .cloned()
+            .collect::<Vec<_>>(),
+    );
+    summary.affected_exposures.sort();
 
     if !summary.changed_models.is_empty() {
         let selectors = summary
@@ -411,6 +457,132 @@ fn enrich_pr_summary(mut summary: PrSummary, project: &Project) -> PrSummary {
     summary
 }
 
+struct DbtDependencyGraph {
+    reverse_dependencies: HashMap<String, Vec<String>>,
+    exposure_dependencies: HashMap<String, Vec<String>>,
+}
+
+impl DbtDependencyGraph {
+    fn from_project(project: &DbtProject) -> Self {
+        let node_to_model_name = project
+            .models
+            .values()
+            .filter_map(|model| {
+                model
+                    .node_id
+                    .as_ref()
+                    .map(|node_id| (node_id.clone(), model.name.clone()))
+            })
+            .collect::<HashMap<_, _>>();
+        let mut reverse_dependencies: HashMap<String, Vec<String>> = HashMap::new();
+
+        for model in project.models.values() {
+            let dependent = model.name.clone();
+            for reference in &model.refs {
+                reverse_dependencies
+                    .entry(reference.clone())
+                    .or_default()
+                    .push(dependent.clone());
+            }
+            let graph_key = model.node_id.as_ref().unwrap_or(&model.name);
+            if let Some(depends_on) = project.graph.depends_on.get(graph_key) {
+                for dependency in depends_on {
+                    let dependency_name =
+                        normalize_dependency_name(dependency, &node_to_model_name);
+                    reverse_dependencies
+                        .entry(dependency_name)
+                        .or_default()
+                        .push(dependent.clone());
+                }
+            }
+        }
+
+        for dependents in reverse_dependencies.values_mut() {
+            dependents.sort();
+            dependents.dedup();
+        }
+
+        let exposure_dependencies = project
+            .exposures
+            .values()
+            .map(|exposure| {
+                (
+                    exposure.name.clone(),
+                    exposure
+                        .depends_on
+                        .iter()
+                        .map(|dependency| {
+                            normalize_dependency_name(dependency, &node_to_model_name)
+                        })
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .collect();
+
+        Self {
+            reverse_dependencies,
+            exposure_dependencies,
+        }
+    }
+
+    fn transitive_downstream(&self, changed_models: &[String]) -> Vec<String> {
+        let changed = changed_models.iter().cloned().collect::<HashSet<_>>();
+        let mut seen = HashSet::new();
+        let mut stack = changed_models.to_vec();
+        while let Some(model) = stack.pop() {
+            if let Some(dependents) = self.reverse_dependencies.get(&model) {
+                for dependent in dependents {
+                    if changed.contains(dependent) || !seen.insert(dependent.clone()) {
+                        continue;
+                    }
+                    stack.push(dependent.clone());
+                }
+            }
+        }
+        let mut downstream = seen.into_iter().collect::<Vec<_>>();
+        downstream.sort();
+        downstream
+    }
+
+    fn affected_exposures(&self, affected_models: &[String]) -> Vec<String> {
+        let affected = affected_models.iter().cloned().collect::<HashSet<_>>();
+        let mut exposures = self
+            .exposure_dependencies
+            .iter()
+            .filter(|(_, dependencies)| {
+                dependencies
+                    .iter()
+                    .any(|dependency| affected.contains(dependency))
+            })
+            .map(|(name, _)| name.clone())
+            .collect::<Vec<_>>();
+        exposures.sort();
+        exposures
+    }
+}
+
+fn normalize_dependency_name(
+    dependency: &str,
+    node_to_model_name: &HashMap<String, String>,
+) -> String {
+    if let Some(name) = node_to_model_name.get(dependency) {
+        return name.clone();
+    }
+    let trimmed = dependency.trim();
+    if let Some(inner) = trimmed
+        .strip_prefix("ref(")
+        .and_then(|value| value.strip_suffix(')'))
+    {
+        return inner.trim_matches(['"', '\'']).to_string();
+    }
+    trimmed
+        .rsplit('.')
+        .next()
+        .unwrap_or(trimmed)
+        .trim_matches(['"', '\''])
+        .to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -418,5 +590,117 @@ mod tests {
     #[test]
     fn output_format_parses() {
         assert_eq!("json".parse::<OutputFormat>().unwrap(), OutputFormat::Json);
+        assert_eq!(
+            "github".parse::<OutputFormat>().unwrap(),
+            OutputFormat::Github
+        );
+        assert_eq!(
+            "markdown".parse::<OutputFormat>().unwrap(),
+            OutputFormat::Markdown
+        );
+    }
+
+    #[test]
+    fn pr_summary_uses_transitive_manifest_graph_and_exposures() {
+        let mut dbt = DbtProject::default();
+        dbt.models.insert(
+            "a".into(),
+            DbtModel {
+                node_id: Some("model.pkg.a".into()),
+                name: "a".into(),
+                path: Some(PathBuf::from("models/a.sql")),
+                ..DbtModel::default()
+            },
+        );
+        dbt.models.insert(
+            "b".into(),
+            DbtModel {
+                node_id: Some("model.pkg.b".into()),
+                name: "b".into(),
+                path: Some(PathBuf::from("models/b.sql")),
+                ..DbtModel::default()
+            },
+        );
+        dbt.models.insert(
+            "c".into(),
+            DbtModel {
+                node_id: Some("model.pkg.c".into()),
+                name: "c".into(),
+                path: Some(PathBuf::from("models/c.sql")),
+                ..DbtModel::default()
+            },
+        );
+        dbt.graph
+            .depends_on
+            .insert("model.pkg.b".into(), vec!["model.pkg.a".into()]);
+        dbt.graph
+            .depends_on
+            .insert("model.pkg.c".into(), vec!["model.pkg.b".into()]);
+        dbt.exposures.insert(
+            "growth_dashboard".into(),
+            costguard_dbt::DbtExposure {
+                name: "growth_dashboard".into(),
+                depends_on: vec!["model.pkg.c".into()],
+            },
+        );
+        let project = Project {
+            root: PathBuf::from("."),
+            files: Vec::new(),
+            dbt: Some(dbt),
+        };
+        let summary = enrich_pr_summary(
+            PrSummary {
+                changed_files: vec![PathBuf::from("models/a.sql")],
+                ..PrSummary::default()
+            },
+            &project,
+        );
+        assert_eq!(summary.changed_models, vec!["a"]);
+        assert_eq!(summary.affected_downstream, vec!["b", "c"]);
+        assert_eq!(summary.affected_exposures, vec!["growth_dashboard"]);
+    }
+
+    #[test]
+    fn pr_summary_falls_back_to_sql_refs_without_manifest() {
+        let mut dbt = DbtProject::default();
+        dbt.models.insert(
+            "a".into(),
+            DbtModel {
+                name: "a".into(),
+                path: Some(PathBuf::from("models/a.sql")),
+                ..DbtModel::default()
+            },
+        );
+        dbt.models.insert(
+            "b".into(),
+            DbtModel {
+                name: "b".into(),
+                path: Some(PathBuf::from("models/b.sql")),
+                refs: vec!["a".into()],
+                ..DbtModel::default()
+            },
+        );
+        dbt.models.insert(
+            "c".into(),
+            DbtModel {
+                name: "c".into(),
+                path: Some(PathBuf::from("models/c.sql")),
+                refs: vec!["b".into()],
+                ..DbtModel::default()
+            },
+        );
+        let project = Project {
+            root: PathBuf::from("."),
+            files: Vec::new(),
+            dbt: Some(dbt),
+        };
+        let summary = enrich_pr_summary(
+            PrSummary {
+                changed_files: vec![PathBuf::from("models/a.sql")],
+                ..PrSummary::default()
+            },
+            &project,
+        );
+        assert_eq!(summary.affected_downstream, vec!["b", "c"]);
     }
 }
