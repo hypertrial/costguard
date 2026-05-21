@@ -81,6 +81,14 @@ Use the synthetic harness to measure regex caching, project-level indexes, runti
 memory without requiring network access. Keep Spellbook as the real-world false-positive and
 dbt/Jinja robustness benchmark.
 
+## Local regression corpus
+
+Add focused rule/regression cases under [`tests/fixtures/corpus/`](../../tests/fixtures/corpus/):
+
+1. Create a mini dbt project directory with `models/` and optional `schema.yml`.
+2. Register the case in [`tests/fixtures/corpus/manifest.toml`](../../tests/fixtures/corpus/manifest.toml) with `expect_rules` and/or `forbid_rules`.
+3. Run `cargo test -p costguard-core --test corpus`.
+
 Secondary repos to add after Spellbook:
 
 - Mattermost data warehouse: <https://github.com/mattermost/mattermost-data-warehouse/tree/master/transform/snowflake-dbt>

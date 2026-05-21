@@ -253,3 +253,84 @@ fn escape_github_message(value: &str) -> String {
 fn escape_markdown(value: &str) -> String {
     value.replace('|', "\\|")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use costguard_core::ScanResult;
+    use costguard_diagnostics::{Confidence, Diagnostic, Severity};
+    use costguard_scanner::ScanCounts;
+    use std::path::PathBuf;
+
+    fn sample_result(high: bool) -> ScanResult {
+        let diagnostics = if high {
+            vec![Diagnostic {
+                rule_id: "SQLCOST005".into(),
+                severity: Severity::High,
+                path: PathBuf::from("models/marts/a,sql"),
+                line: 1,
+                column: 2,
+                span: None,
+                message: "line1\nline2".into(),
+                risk: Some("risk|note".into()),
+                suggestion: None,
+                confidence: Confidence::High,
+                warehouse: None,
+            }]
+        } else {
+            Vec::new()
+        };
+        ScanResult {
+            diagnostics,
+            counts: ScanCounts::default(),
+            pr_summary: Some(PrSummary {
+                changed_models: vec!["a".into()],
+                affected_downstream: vec!["b".into()],
+                affected_exposures: vec!["dashboard".into()],
+                ..PrSummary::default()
+            }),
+        }
+    }
+
+    #[test]
+    fn escape_github_property_escapes_commas_and_colons() {
+        let rendered = render_github(&sample_result(true));
+        assert!(rendered.contains("file=models/marts/a%2Csql"));
+        assert!(rendered.contains("title=SQLCOST005"));
+        assert!(rendered.contains("::error file="));
+    }
+
+    #[test]
+    fn escape_github_message_preserves_newlines_as_pct() {
+        let rendered = render_github(&sample_result(true));
+        assert!(rendered.contains("line1%0Aline2"));
+    }
+
+    #[test]
+    fn render_markdown_failed_header_counts_high_only() {
+        let rendered = render_markdown(&sample_result(true));
+        assert!(rendered.contains("# Costguard failed this PR"));
+        assert!(rendered.contains("1 high-risk cost finding."));
+    }
+
+    #[test]
+    fn render_markdown_includes_pr_impact_sections() {
+        let rendered = render_markdown(&sample_result(true));
+        assert!(rendered.contains("Changed dbt models"));
+        assert!(rendered.contains("Affected downstream"));
+        assert!(rendered.contains("Affected exposures"));
+        assert!(rendered.contains("- dashboard"));
+    }
+
+    #[test]
+    fn escape_markdown_pipes() {
+        let rendered = render_markdown(&sample_result(true));
+        assert!(rendered.contains("risk\\|note"));
+    }
+
+    #[test]
+    fn render_markdown_pass_header_when_no_high_findings() {
+        let rendered = render_markdown(&sample_result(false));
+        assert!(rendered.contains("# Costguard passed"));
+    }
+}

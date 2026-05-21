@@ -8,6 +8,7 @@ repository.workspace = true
 [dependencies]
 costguard-dbt = { path = "../costguard-dbt" }
 costguard-diagnostics = { path = "../costguard-diagnostics" }
+costguard-platform = { path = "../costguard-platform" }
 regex.workspace = true
 serde.workspace = true
 sqlparser.workspace = true

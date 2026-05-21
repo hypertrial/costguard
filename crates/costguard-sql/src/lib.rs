@@ -1,47 +1,19 @@
 use costguard_dbt::{extract_sql_features, DbtSqlFeatures};
 use costguard_diagnostics::Span;
+use costguard_platform::Platform;
 use regex::Regex;
-use serde::{Deserialize, Serialize};
-use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
+use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum SqlDialect {
-    #[default]
-    Generic,
-    Snowflake,
-    BigQuery,
-    Databricks,
-    Redshift,
-    Postgres,
-    DuckDB,
-}
-
-impl std::str::FromStr for SqlDialect {
-    type Err = String;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "generic" => Ok(Self::Generic),
-            "snowflake" => Ok(Self::Snowflake),
-            "bigquery" => Ok(Self::BigQuery),
-            "databricks" => Ok(Self::Databricks),
-            "redshift" => Ok(Self::Redshift),
-            "postgres" | "postgresql" => Ok(Self::Postgres),
-            "duckdb" => Ok(Self::DuckDB),
-            other => Err(format!("unknown SQL dialect '{other}'")),
-        }
-    }
-}
+pub use costguard_platform::Platform as SqlDialect;
 
 #[derive(Debug, Clone)]
 pub struct SqlDocument {
     pub path: PathBuf,
     pub raw_sql: String,
-    pub dialect: SqlDialect,
+    pub platform: Platform,
     pub parsed: bool,
     pub features: SqlFeatures,
     pub dbt: DbtSqlFeatures,
@@ -103,17 +75,18 @@ pub struct CteFeature {
 pub fn analyze_sql(
     path: PathBuf,
     text: &str,
-    dialect: SqlDialect,
+    platform: Platform,
     line_index: &costguard_diagnostics::LineIndex,
 ) -> SqlDocument {
     let sanitized = strip_jinja(text);
-    let parsed = Parser::parse_sql(&GenericDialect {}, &sanitized).is_ok();
+    let dialect = platform.sqlparser_dialect();
+    let parsed = Parser::parse_sql(dialect.as_ref(), &sanitized).is_ok();
     let dbt = extract_sql_features(text);
     let features = extract_features(text, line_index);
     SqlDocument {
         path,
         raw_sql: text.to_string(),
-        dialect,
+        platform,
         parsed,
         features,
         dbt,
@@ -304,9 +277,7 @@ fn extract_cte_references(
 ) -> Vec<ExpressionFeature> {
     ctes.iter()
         .flat_map(|cte| {
-            let regex = Regex::new(&format!(r#"(?i)\b{}\b"#, regex::escape(&cte.name)))
-                .expect("valid cte regex");
-            regex
+            cte_name_regex(&cte.name)
                 .find_iter(text)
                 .filter(move |matched| matched.start() != cte.span.byte_start)
                 .map(move |matched| ExpressionFeature {
@@ -317,6 +288,21 @@ fn extract_cte_references(
                 .collect::<Vec<_>>()
         })
         .collect()
+}
+
+fn cte_name_regex(name: &str) -> &'static Regex {
+    static CACHE: OnceLock<Mutex<HashMap<String, &'static Regex>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut cache = cache.lock().expect("cte regex cache");
+    let key = name.to_ascii_lowercase();
+    if let Some(regex) = cache.get(&key) {
+        return regex;
+    }
+    let regex = Box::leak(Box::new(
+        Regex::new(&format!(r#"(?i)\b{}\b"#, regex::escape(name))).expect("valid cte regex"),
+    ));
+    cache.insert(key, regex);
+    regex
 }
 
 fn normalize(raw: &str) -> String {
@@ -432,7 +418,7 @@ mod tests {
     fn extracts_select_star_and_window() {
         let text = "select *, row_number() over () as rn from a cross join b";
         let index = LineIndex::new(text);
-        let doc = analyze_sql(PathBuf::from("x.sql"), text, SqlDialect::Generic, &index);
+        let doc = analyze_sql(PathBuf::from("x.sql"), text, Platform::Generic, &index);
         assert_eq!(doc.features.select_stars.len(), 1);
         assert_eq!(doc.features.window_functions.len(), 1);
         assert_eq!(doc.features.joins.len(), 1);

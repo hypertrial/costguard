@@ -1,4 +1,7 @@
-use crate::helpers::{diagnostic, incremental_predicate_suggestion, normalized_path};
+use crate::helpers::{
+    diagnostic, has_bounded_incremental_predicate, incremental_predicate_suggestion,
+    normalized_path,
+};
 use crate::registry::{Rule, RuleContext};
 use costguard_diagnostics::{Diagnostic, Severity};
 
@@ -71,19 +74,12 @@ impl Rule for IncrementalPredicateRule {
         if materialized != Some("incremental") || !sql.dbt.uses_is_incremental {
             return Vec::new();
         }
-        let lower = ctx.file.text.to_ascii_lowercase();
-        let has_predicate = [
-            "updated_at",
-            "created_at",
-            "event_date",
-            "ingested_at",
-            "_partitiontime",
-            "_partitiondate",
-            "partition_date",
-        ]
-        .iter()
-        .any(|needle| lower.contains(needle));
-        if has_predicate {
+        let predicate_scope = sql
+            .dbt
+            .incremental_block
+            .as_deref()
+            .unwrap_or(&ctx.file.text);
+        if has_bounded_incremental_predicate(predicate_scope) {
             return Vec::new();
         }
         vec![diagnostic(

@@ -1,12 +1,10 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use costguard_core::{
-    apply_file_config, explain, load_config, rules, scan, OutputFormat, ScanConfig,
+    apply_file_config, explain, load_config, rules, scan, OutputFormat, Platform, ScanConfig,
 };
 use costguard_diagnostics::Severity;
 use costguard_output::{render, render_rules};
-use costguard_rules::Warehouse;
-use costguard_sql::SqlDialect;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -228,22 +226,10 @@ fn apply_common_flags(
     manifest: Option<PathBuf>,
     fail_on: Option<String>,
 ) -> Result<()> {
-    let warehouse_was_set = warehouse.is_some();
     if let Some(warehouse) = warehouse {
-        config.warehouse = warehouse.parse::<Warehouse>().map_err(anyhow::Error::msg)?;
-    }
-    if let Some(dialect) = dialect {
-        config.dialect = dialect.parse::<SqlDialect>().map_err(anyhow::Error::msg)?;
-    } else if warehouse_was_set {
-        config.dialect = match config.warehouse {
-            Warehouse::Snowflake => SqlDialect::Snowflake,
-            Warehouse::BigQuery => SqlDialect::BigQuery,
-            Warehouse::Databricks => SqlDialect::Databricks,
-            Warehouse::Redshift => SqlDialect::Redshift,
-            Warehouse::Postgres => SqlDialect::Postgres,
-            Warehouse::DuckDB => SqlDialect::DuckDB,
-            Warehouse::Generic => SqlDialect::Generic,
-        };
+        config.platform = warehouse.parse::<Platform>().map_err(anyhow::Error::msg)?;
+    } else if let Some(dialect) = dialect {
+        config.platform = dialect.parse::<Platform>().map_err(anyhow::Error::msg)?;
     }
     if let Some(format) = format {
         config.format = format.into();

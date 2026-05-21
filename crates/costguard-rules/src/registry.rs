@@ -4,52 +4,8 @@ use costguard_scanner::ProjectFile;
 use costguard_sql::SqlDocument;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::str::FromStr;
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Warehouse {
-    #[default]
-    Generic,
-    Snowflake,
-    BigQuery,
-    Databricks,
-    Redshift,
-    Postgres,
-    DuckDB,
-}
-
-impl FromStr for Warehouse {
-    type Err = String;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "generic" => Ok(Self::Generic),
-            "snowflake" => Ok(Self::Snowflake),
-            "bigquery" => Ok(Self::BigQuery),
-            "databricks" => Ok(Self::Databricks),
-            "redshift" => Ok(Self::Redshift),
-            "postgres" | "postgresql" => Ok(Self::Postgres),
-            "duckdb" => Ok(Self::DuckDB),
-            other => Err(format!("unknown warehouse '{other}'")),
-        }
-    }
-}
-
-impl std::fmt::Display for Warehouse {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let value = match self {
-            Self::Generic => "generic",
-            Self::Snowflake => "snowflake",
-            Self::BigQuery => "bigquery",
-            Self::Databricks => "databricks",
-            Self::Redshift => "redshift",
-            Self::Postgres => "postgres",
-            Self::DuckDB => "duckdb",
-        };
-        f.write_str(value)
-    }
-}
+pub use costguard_platform::Platform as Warehouse;
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct RuleOverride {

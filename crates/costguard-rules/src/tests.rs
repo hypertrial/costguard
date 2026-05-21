@@ -1,7 +1,8 @@
-use crate::{ProjectIndexes, RuleContext, RuleOverrides, RuleRegistry, Warehouse};
+use crate::{ProjectIndexes, RuleContext, RuleOverrides, RuleRegistry};
 use costguard_diagnostics::{apply_suppressions, LineIndex};
+use costguard_platform::Platform;
 use costguard_scanner::{FileKind, ProjectFile};
-use costguard_sql::{analyze_sql, SqlDialect, SqlDocument};
+use costguard_sql::{analyze_sql, SqlDocument};
 use std::path::PathBuf;
 
 fn sql_file(path: &str, text: &str) -> ProjectFile {
@@ -29,7 +30,7 @@ fn run_for_file(file: &ProjectFile, docs: &[SqlDocument]) -> Vec<String> {
     let indexes = ProjectIndexes::from_sql_documents(docs);
     let sql = docs.iter().find(|doc| doc.path == file.path);
     let diagnostics = registry.run(&RuleContext {
-        warehouse: Warehouse::Generic,
+        warehouse: Platform::Generic,
         file,
         sql,
         dbt_model: None,
@@ -47,7 +48,7 @@ fn analyze(file: &ProjectFile) -> SqlDocument {
     analyze_sql(
         file.path.clone(),
         &file.text,
-        SqlDialect::Generic,
+        Platform::Generic,
         &file.line_index,
     )
 }

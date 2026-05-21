@@ -1,0 +1,18 @@
+name: costguard-pr
+
+on:
+  pull_request:
+
+jobs:
+  costguard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/costguard
+        with:
+          base: origin/${{ github.base_ref }}
+          warehouse: generic
+          fail-on: high
+          format: github

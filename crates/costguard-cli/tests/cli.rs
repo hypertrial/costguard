@@ -28,7 +28,6 @@ fn scan_text_reports_mvp_diagnostics() {
         "SQLCOST002",
         "SQLCOST003",
         "SQLCOST004",
-        "SQLCOST005",
         "SQLCOST008",
         "SQLCOST010",
         "SQLCOST011",
@@ -73,7 +72,7 @@ fn scan_github_outputs_annotations() {
 fn scan_markdown_outputs_pr_summary_shape() {
     let output = Command::new(bin())
         .arg("scan")
-        .arg(fixture("dbt_incremental"))
+        .arg(fixture("corpus/incremental_missing"))
         .arg("--format")
         .arg("markdown")
         .output()
@@ -251,4 +250,44 @@ fn git(root: &std::path::Path, args: &[&str]) {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+#[test]
+fn pr_mode_fails_in_non_git_directory() {
+    let tempdir = tempfile::tempdir().expect("tempdir");
+    let root = tempdir.path();
+    fs::write(root.join("model.sql"), "select 1\n").expect("write model");
+
+    let output = Command::new(bin())
+        .arg("pr")
+        .current_dir(root)
+        .output()
+        .expect("run costguard");
+    assert_eq!(output.status.code(), Some(3));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("not a git repository"), "{stderr}");
+}
+
+#[test]
+fn pr_mode_fails_for_invalid_base_ref() {
+    let tempdir = tempfile::tempdir().expect("tempdir");
+    let root = tempdir.path();
+    fs::create_dir_all(root.join("models")).expect("create models");
+    fs::write(root.join("models/a.sql"), "select 1\n").expect("write model");
+    git(root, &["init"]);
+    git(root, &["config", "user.email", "costguard@example.com"]);
+    git(root, &["config", "user.name", "Costguard Test"]);
+    git(root, &["add", "."]);
+    git(root, &["commit", "-m", "initial"]);
+
+    let output = Command::new(bin())
+        .arg("pr")
+        .arg("--base")
+        .arg("does-not-exist")
+        .current_dir(root)
+        .output()
+        .expect("run costguard");
+    assert_eq!(output.status.code(), Some(3));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("does-not-exist"), "{stderr}");
 }

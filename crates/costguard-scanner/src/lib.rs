@@ -86,23 +86,7 @@ pub fn discover(root: &Path, requested_paths: &[PathBuf]) -> Result<Vec<ProjectF
     }
     paths.sort_by(|left, right| left.0.cmp(&right.0));
     paths.dedup_by(|left, right| left.0 == right.0);
-
-    paths
-        .into_par_iter()
-        .map(|(path, kind)| {
-            let text = std::fs::read_to_string(&path)
-                .with_context(|| format!("failed to read {}", path.display()))?;
-            let root_relative_path = path.strip_prefix(root).unwrap_or(&path).to_path_buf();
-            let line_index = LineIndex::new(&text);
-            Ok(ProjectFile {
-                path,
-                root_relative_path,
-                kind,
-                text,
-                line_index,
-            })
-        })
-        .collect()
+    load_project_files(root, paths)
 }
 
 pub fn read_existing_paths(root: &Path, requested_paths: &[PathBuf]) -> Result<Vec<ProjectFile>> {
@@ -123,7 +107,10 @@ pub fn read_existing_paths(root: &Path, requested_paths: &[PathBuf]) -> Result<V
         .collect::<Vec<_>>();
     paths.sort_by(|left, right| left.0.cmp(&right.0));
     paths.dedup_by(|left, right| left.0 == right.0);
+    load_project_files(root, paths)
+}
 
+fn load_project_files(root: &Path, paths: Vec<(PathBuf, FileKind)>) -> Result<Vec<ProjectFile>> {
     paths
         .into_par_iter()
         .map(|(path, kind)| {

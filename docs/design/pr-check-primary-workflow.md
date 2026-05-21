@@ -8,7 +8,9 @@ Primary positioning:
 
 The local Rust CLI is the engine that powers the workflow. It is important for developer debugging,
 pre-commit usage, and CI portability, but product decisions should optimize first for PR checks.
-The current MVP ships the CLI engine first; a GitHub Action should be the primary packaged workflow.
+The current MVP ships the CLI engine and a composite GitHub Action at
+[`.github/actions/costguard`](../../.github/actions/costguard). The PR workflow lives in
+[`.github/workflows/costguard-pr.yml`](../../.github/workflows/costguard-pr.yml).
 
 Workflow:
 
@@ -48,7 +50,8 @@ costguard pr --base origin/main --warehouse snowflake --fail-on high --format js
 `github` emits annotation commands. `markdown` emits a PR-summary-oriented report.
 `json` preserves the `diagnostics` array and includes `pr_summary` when PR mode is used.
 PR mode should scan changed files first, then use manifest/YAML/SQL graph context only for
-blast-radius summaries and rule context.
+blast-radius summaries and rule context. Invalid git bases and non-git directories must fail
+the check instead of silently scanning zero files.
 
 Expected PR output should include:
 

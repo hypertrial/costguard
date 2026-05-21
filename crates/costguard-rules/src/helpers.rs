@@ -46,6 +46,34 @@ pub(crate) fn normalized_path(path: &Path) -> String {
         .to_ascii_lowercase()
 }
 
+pub(crate) fn has_bounded_incremental_predicate(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    if [
+        "updated_at",
+        "created_at",
+        "event_date",
+        "ingested_at",
+        "_partitiontime",
+        "_partitiondate",
+        "partition_date",
+    ]
+    .iter()
+    .any(|needle| lower.contains(needle))
+    {
+        return true;
+    }
+
+    [
+        "not in (select",
+        "from {{ this }}",
+        "> (select max(",
+        "except select",
+        "where id not in",
+    ]
+    .iter()
+    .any(|needle| lower.contains(needle))
+}
+
 pub(crate) fn incremental_predicate_suggestion(warehouse: Warehouse) -> &'static str {
     match warehouse {
         Warehouse::BigQuery => {

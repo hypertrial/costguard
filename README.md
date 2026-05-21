@@ -58,6 +58,26 @@ For CI, `--format github` emits GitHub annotation commands and `--format markdow
 emits a PR-summary-oriented report. `costguard pr` scans changed files first, while still
 loading dbt manifest/YAML/SQL graph context for downstream blast-radius summaries.
 
+## GitHub Action
+
+Use the composite action in [`.github/actions/costguard`](.github/actions/costguard):
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0
+- uses: ./.github/actions/costguard
+  with:
+    base: origin/main
+    warehouse: snowflake
+    fail-on: high
+    format: github
+```
+
+Inputs: `base`, `warehouse`, `fail-on`, `format` (`github`|`markdown`|`json`|`text`), optional `manifest`, and `working-directory`.
+
+GitHub-hosted runners require org Actions billing to be enabled for private repositories.
+
 ## Real-world Stress Testing
 
 The first planned public-real stress target is Dune Spellbook. See

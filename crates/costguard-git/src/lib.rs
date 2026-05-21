@@ -1,9 +1,40 @@
 use anyhow::{Context, Result};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, ExitStatus};
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+#[error("git {command} failed with status {status}: {stderr}")]
+pub struct GitCommandError {
+    pub command: String,
+    pub status: i32,
+    pub stderr: String,
+}
+
+impl GitCommandError {
+    fn from_output(command: &str, status: ExitStatus, stderr: &[u8]) -> Self {
+        Self {
+            command: command.to_string(),
+            status: status.code().unwrap_or(-1),
+            stderr: String::from_utf8_lossy(stderr).trim().to_string(),
+        }
+    }
+}
+
+pub fn is_git_repository(root: &Path) -> bool {
+    match run_git(root, &["rev-parse", "--is-inside-work-tree"]) {
+        Ok(output) => {
+            output.status.success() && String::from_utf8_lossy(&output.stdout).trim() == "true"
+        }
+        Err(_) => false,
+    }
+}
 
 pub fn changed_files(root: &Path, base: &str) -> Result<Vec<PathBuf>> {
+    if !is_git_repository(root) {
+        anyhow::bail!("{} is not a git repository", root.display());
+    }
     let mut paths = BTreeSet::new();
     for path in committed_diff(root, base)? {
         paths.insert(path);
@@ -32,15 +63,20 @@ fn committed_diff(root: &Path, base: &str) -> Result<Vec<PathBuf>> {
 }
 
 fn git_paths(root: &Path, args: &[&str]) -> Result<Vec<PathBuf>> {
-    let output = Command::new("git")
+    let command = format!("git {}", args.join(" "));
+    let output = run_git(root, args).with_context(|| format!("failed to execute {command}"))?;
+    if !output.status.success() {
+        return Err(GitCommandError::from_output(&command, output.status, &output.stderr).into());
+    }
+    Ok(parse_paths(&output.stdout))
+}
+
+fn run_git(root: &Path, args: &[&str]) -> Result<std::process::Output> {
+    Command::new("git")
         .args(args)
         .current_dir(root)
         .output()
-        .with_context(|| format!("failed to execute git {}", args.join(" ")))?;
-    if !output.status.success() {
-        return Ok(Vec::new());
-    }
-    Ok(parse_paths(&output.stdout))
+        .with_context(|| format!("failed to execute git {}", args.join(" ")))
 }
 
 fn parse_paths(bytes: &[u8]) -> Vec<PathBuf> {
@@ -86,6 +122,27 @@ mod tests {
         assert!(changed.contains(&PathBuf::from("models/staged.sql")));
         assert!(changed.contains(&PathBuf::from("models/base.sql")));
         assert!(changed.contains(&PathBuf::from("models/untracked.sql")));
+    }
+
+    #[test]
+    fn changed_files_fails_for_invalid_base_ref() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let root = tempdir.path();
+        fs::write(root.join("model.sql"), "select 1\n").expect("write model");
+        git(root, &["init"]);
+        git(root, &["config", "user.email", "costguard@example.com"]);
+        git(root, &["config", "user.name", "Costguard Test"]);
+        git(root, &["add", "."]);
+        git(root, &["commit", "-m", "initial"]);
+
+        let err = changed_files(root, "does-not-exist").expect_err("invalid base");
+        assert!(err.to_string().contains("does-not-exist"));
+    }
+
+    #[test]
+    fn is_git_repository_false_for_plain_directory() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        assert!(!is_git_repository(tempdir.path()));
     }
 
     fn git(root: &Path, args: &[&str]) {

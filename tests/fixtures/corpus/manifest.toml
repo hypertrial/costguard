@@ -1,0 +1,29 @@
+[[case]]
+name = "incremental_date"
+path = "incremental_date"
+expect_rules = []
+forbid_rules = ["SQLCOST005"]
+
+[[case]]
+name = "incremental_key"
+path = "incremental_key"
+expect_rules = []
+forbid_rules = ["SQLCOST005"]
+
+[[case]]
+name = "incremental_missing"
+path = "incremental_missing"
+expect_rules = ["SQLCOST005"]
+forbid_rules = []
+
+[[case]]
+name = "jinja_heavy"
+path = "jinja_heavy"
+expect_rules = []
+forbid_rules = []
+
+[[case]]
+name = "repeated_json"
+path = "repeated_json"
+expect_rules = ["SQLCOST002"]
+forbid_rules = ["SQLCOST005"]

@@ -12,6 +12,7 @@ pub struct DbtSqlFeatures {
     pub sources: Vec<DbtSourceRef>,
     pub config: DbtConfig,
     pub uses_is_incremental: bool,
+    pub incremental_block: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -105,15 +106,44 @@ pub fn extract_sql_features(text: &str) -> DbtSqlFeatures {
     }
 
     features.uses_is_incremental = text.contains("is_incremental()");
+    features.incremental_block = extract_incremental_block(text);
     features
 }
 
+pub fn extract_incremental_block(text: &str) -> Option<String> {
+    incremental_block_regex()
+        .captures(text)
+        .and_then(|capture| capture.get(1))
+        .map(|matched| matched.as_str().trim().to_string())
+        .filter(|block| !block.is_empty())
+}
+
+fn incremental_block_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(r"(?is)\{%\s*(?:if|elif)\s+is_incremental\s*\(\)\s*%\}(.*?)\{%\s*endif\s*%\}")
+            .expect("valid incremental regex")
+    })
+}
+
 fn extract_config_value(body: &str, key: &str) -> Option<String> {
-    let pattern = format!(r#"{key}\s*=\s*['"]([^'"]+)['"]"#);
-    let regex = Regex::new(&pattern).expect("valid config regex");
-    regex
+    config_key_regex(key)
         .captures(body)
         .and_then(|capture| capture.get(1).map(|value| value.as_str().to_string()))
+}
+
+fn config_key_regex(key: &str) -> &'static Regex {
+    static MATERIALIZED: OnceLock<Regex> = OnceLock::new();
+    static UNIQUE_KEY: OnceLock<Regex> = OnceLock::new();
+    match key {
+        "materialized" => MATERIALIZED.get_or_init(|| {
+            Regex::new(r#"materialized\s*=\s*['"]([^'"]+)['"]"#).expect("valid config regex")
+        }),
+        "unique_key" => UNIQUE_KEY.get_or_init(|| {
+            Regex::new(r#"unique_key\s*=\s*['"]([^'"]+)['"]"#).expect("valid config regex")
+        }),
+        other => panic!("unsupported config key: {other}"),
+    }
 }
 
 fn ref_regex() -> &'static Regex {
@@ -523,6 +553,20 @@ mod tests {
         assert_eq!(features.config.materialized.as_deref(), Some("incremental"));
         assert_eq!(features.config.unique_key.as_deref(), Some("id"));
         assert!(features.uses_is_incremental);
+    }
+
+    #[test]
+    fn extracts_incremental_block() {
+        let text = r#"
+select id from t
+{% if is_incremental() %}
+where id not in (select id from {{ this }})
+{% endif %}
+"#;
+        let features = extract_sql_features(text);
+        assert!(features.uses_is_incremental);
+        let block = features.incremental_block.expect("incremental block");
+        assert!(block.contains("not in (select id from {{ this }})"));
     }
 
     #[test]

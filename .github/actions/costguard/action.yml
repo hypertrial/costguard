@@ -1,0 +1,62 @@
+name: Costguard PR Check
+description: Run costguard pr against changed SQL/dbt files
+
+inputs:
+  base:
+    description: Git base ref for changed-file detection
+    required: false
+    default: origin/main
+  warehouse:
+    description: Warehouse platform for rule context
+    required: false
+    default: generic
+  fail-on:
+    description: Minimum severity that fails the check
+    required: false
+    default: high
+  format:
+    description: Output format (github, markdown, json, text)
+    required: false
+    default: github
+  manifest:
+    description: Optional explicit dbt manifest path
+    required: false
+    default: ""
+  working-directory:
+    description: Directory containing the dbt project
+    required: false
+    default: .
+
+runs:
+  using: composite
+  steps:
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install costguard CLI
+      shell: bash
+      run: cargo install --path crates/costguard-cli --locked --force
+
+    - name: Run costguard pr
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -eo pipefail
+        args=(
+          pr
+          --base "${{ inputs.base }}"
+          --warehouse "${{ inputs.warehouse }}"
+          --fail-on "${{ inputs.fail-on }}"
+          --format "${{ inputs.format }}"
+        )
+        if [ -n "${{ inputs.manifest }}" ]; then
+          args+=(--manifest "${{ inputs.manifest }}")
+        fi
+        set +e
+        output="$(costguard "${args[@]}")"
+        status=$?
+        printf '%s\n' "$output"
+        if [ "${{ inputs.format }}" = "markdown" ] && [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+          printf '%s\n' "$output" >> "$GITHUB_STEP_SUMMARY"
+        fi
+        exit "$status"

@@ -11,3 +11,6 @@ costguard-core = { path = "../costguard-core" }
 costguard-diagnostics = { path = "../costguard-diagnostics" }
 serde.workspace = true
 serde_json.workspace = true
+
+[dev-dependencies]
+costguard-scanner = { path = "../costguard-scanner" }
