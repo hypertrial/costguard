@@ -1,0 +1,13 @@
+[package]
+name = "costguard-scanner"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+costguard-diagnostics = { path = "../costguard-diagnostics" }
+ignore.workspace = true
+rayon.workspace = true
+serde.workspace = true

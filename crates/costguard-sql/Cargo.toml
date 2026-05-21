@@ -1,0 +1,13 @@
+[package]
+name = "costguard-sql"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+costguard-dbt = { path = "../costguard-dbt" }
+costguard-diagnostics = { path = "../costguard-diagnostics" }
+regex.workspace = true
+serde.workspace = true
+sqlparser.workspace = true

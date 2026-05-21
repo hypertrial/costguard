@@ -1,0 +1,32 @@
+{
+  "nodes": {
+    "model.costguard.stg_events": {
+      "resource_type": "model",
+      "name": "stg_events",
+      "original_file_path": "models/staging/stg_events.sql",
+      "config": { "materialized": "view" },
+      "refs": [],
+      "sources": [["raw", "events"]],
+      "depends_on": { "nodes": ["source.costguard.raw.events"] },
+      "columns": { "id": {} },
+      "tags": []
+    },
+    "model.costguard.fct_sessions": {
+      "resource_type": "model",
+      "name": "fct_sessions",
+      "original_file_path": "models/marts/fct_sessions.sql",
+      "config": { "materialized": "incremental" },
+      "refs": [["stg_events"]],
+      "sources": [["raw", "events"]],
+      "depends_on": { "nodes": ["model.costguard.stg_events", "source.costguard.raw.events"] },
+      "columns": { "id": {} },
+      "tags": []
+    }
+  },
+  "sources": {
+    "source.costguard.raw.events": {
+      "source_name": "raw",
+      "name": "events"
+    }
+  }
+}

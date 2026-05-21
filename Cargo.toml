@@ -1,0 +1,32 @@
+[workspace]
+members = [
+    "crates/costguard-cli",
+    "crates/costguard-core",
+    "crates/costguard-scanner",
+    "crates/costguard-sql",
+    "crates/costguard-dbt",
+    "crates/costguard-rules",
+    "crates/costguard-diagnostics",
+    "crates/costguard-output",
+    "crates/costguard-git",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/hypertrial/costguard"
+
+[workspace.dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+ignore = "0.4"
+rayon = "1"
+regex = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+sqlparser = "0.51"
+tempfile = "3"
+thiserror = "1"
+toml = "0.8"

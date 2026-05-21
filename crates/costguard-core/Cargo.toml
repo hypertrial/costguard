@@ -1,0 +1,18 @@
+[package]
+name = "costguard-core"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+costguard-dbt = { path = "../costguard-dbt" }
+costguard-diagnostics = { path = "../costguard-diagnostics" }
+costguard-git = { path = "../costguard-git" }
+costguard-rules = { path = "../costguard-rules" }
+costguard-scanner = { path = "../costguard-scanner" }
+costguard-sql = { path = "../costguard-sql" }
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
