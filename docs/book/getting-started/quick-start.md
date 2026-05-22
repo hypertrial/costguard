@@ -30,9 +30,11 @@ Use the composite action at [`.github/actions/costguard`](https://github.com/hyp
     format: github
 ```
 
-Inputs: `base`, `warehouse`, `fail-on`, `format` (`github` \| `markdown` \| `json` \| `text`), optional `manifest`, `working-directory`, and dbt compile settings (`compile-dbt`, `dbt-target`, `dbt-project-dir`, `dbt-profiles-dir`, `dbt-adapter-package`).
+Inputs: `base`, `warehouse`, `fail-on`, `format` (`github` \| `markdown` \| `json` \| `text`), optional `manifest`, `working-directory`, and dbt compile settings (`compile-dbt`, `dbt-target`, `dbt-project-dir`, `dbt-profiles-dir`, `dbt-adapter-package`, `dbt-profile-type`, `dbt-compile-dirs`, `manifest-output`).
 
-When `compile-dbt` is enabled (default), the action runs `dbt deps` and `dbt compile`, then passes `--manifest target/manifest.json` when present. Compile uses a dummy local profile (no warehouse connection). Override `dbt-adapter-package` for non-Trino projects (for example `dbt-postgres` for jaffle-shop).
+When `compile-dbt` is enabled (default), the action runs the shared [`dbt_compile_for_costguard.py`](../../scripts/dbt_compile_for_costguard.py) helper (same logic as the Spellbook benchmark harness): `dbt deps`, `dbt compile`, optional multi-subproject manifest merge, then passes `--manifest` when present. Compile uses a dummy local profile (no warehouse connection). Set `dbt-profile-type` or derive it from `dbt-adapter-package` (for example `dbt-postgres` → `postgres`).
+
+For monorepos with multiple dbt subprojects (Spellbook-style), set `dbt-compile-dirs` to a comma- or newline-separated list and `manifest-output` to the merged root manifest path (default `target/manifest.json`).
 
 ## CI output formats
 

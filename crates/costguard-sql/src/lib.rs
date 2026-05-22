@@ -1,3 +1,6 @@
+mod features;
+mod strip;
+
 use costguard_dbt::{extract_sql_features, DbtSqlFeatures};
 use costguard_diagnostics::Span;
 use costguard_platform::Platform;
@@ -30,6 +33,7 @@ pub struct SqlDocument {
     pub parse_input: ParseInput,
     pub features: SqlFeatures,
     pub dbt: DbtSqlFeatures,
+    pub feature_extraction_used_ast: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -94,8 +98,13 @@ pub fn analyze_sql(
     is_dbt_sql_model: bool,
 ) -> SqlDocument {
     let dialect = platform.sqlparser_dialect();
-    let sanitized = strip_jinja(text);
+    let (sanitized, strip_map) = strip::strip_jinja_with_map(text);
     let parsed_raw = try_parse_sql(dialect.as_ref(), &sanitized);
+    let statements = if parsed_raw {
+        Parser::parse_sql(dialect.as_ref(), &sanitized).ok()
+    } else {
+        None
+    };
     let parsed_compiled = compiled_code
         .map(|code| try_parse_compiled_sql(code, platform))
         .unwrap_or(false);
@@ -112,7 +121,17 @@ pub fn analyze_sql(
         (parsed_raw, ParseInput::Raw)
     };
     let dbt = extract_sql_features(text);
-    let features = extract_features(text, line_index);
+    let regex_features = extract_features(text, line_index);
+    let (features, feature_extraction_used_ast) = if let Some(stmts) = &statements {
+        let ast_features =
+            features::extract_shape_features_ast(stmts, &sanitized, text, &strip_map, line_index);
+        (
+            features::merge_shape_features(regex_features, ast_features, parsed_raw),
+            parsed_raw,
+        )
+    } else {
+        (regex_features, false)
+    };
     SqlDocument {
         path,
         raw_sql: text.to_string(),
@@ -125,6 +144,7 @@ pub fn analyze_sql(
         parse_input,
         features,
         dbt,
+        feature_extraction_used_ast,
     }
 }
 
@@ -679,10 +699,7 @@ fn returning_clause_regex() -> &'static Regex {
 }
 
 pub fn strip_jinja(text: &str) -> String {
-    let without_blocks = jinja_block_regex().replace_all(text, " ");
-    jinja_expr_regex()
-        .replace_all(&without_blocks, " __jinja__ ")
-        .to_string()
+    strip::strip_jinja(text)
 }
 
 fn extract_features(text: &str, line_index: &costguard_diagnostics::LineIndex) -> SqlFeatures {
@@ -908,16 +925,6 @@ fn normalize_json_key(raw: &str) -> String {
 
 fn cached_regex(slot: &'static OnceLock<Regex>, pattern: &str) -> &'static Regex {
     slot.get_or_init(|| Regex::new(pattern).expect("valid regex"))
-}
-
-fn jinja_block_regex() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    cached_regex(&RE, r#"(?s)\{[%#].*?[%#]\}"#)
-}
-
-fn jinja_expr_regex() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    cached_regex(&RE, r#"(?s)\{\{.*?\}\}"#)
 }
 
 fn select_star_regex() -> &'static Regex {

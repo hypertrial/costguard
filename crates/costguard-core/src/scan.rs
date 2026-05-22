@@ -4,15 +4,22 @@ use crate::{PrSummary, Project, ScanMetrics, ScanResult};
 use anyhow::{Context, Result};
 use costguard_dbt::{
     apply_dbt_project_configs, compiled_code_by_model_path, extract_sql_features,
-    merge_yaml_project, parse_manifest, parse_yaml_project, DbtModel, DbtProject,
+    merge_yaml_project, parse_manifest, parse_yaml_project_with_warnings, DbtModel, DbtProject,
+    MetadataWarning, MetadataWarningKind,
 };
-use costguard_diagnostics::apply_suppressions;
+use costguard_diagnostics::{apply_suppressions, Diagnostic, Severity};
 use costguard_platform::Platform;
 use costguard_rules::{ProjectIndexes, RuleMetadata, RuleRegistry};
 use costguard_scanner::{discover, read_existing_paths, FileKind, ProjectFile, ScanCounts};
 use costguard_sql::{analyze_sql, SqlDocument};
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
+
+struct DbtLoadOutcome {
+    project: Option<DbtProject>,
+    warnings: Vec<MetadataWarning>,
+    metadata_only: bool,
+}
 
 pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
     let root = config
@@ -53,7 +60,28 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
     }
 
     let counts = ScanCounts::from_files(&files);
-    let dbt = load_dbt_project(&root, config, context_files.as_deref().unwrap_or(&files))?;
+    let context_for_dbt = context_files.as_deref().unwrap_or(&files);
+    let dbt_load = load_dbt_project(&root, config, context_for_dbt)?;
+    let metadata_only = dbt_load.metadata_only;
+    let metadata_warnings_count = dbt_load.warnings.len();
+    let yaml_parse_failures = dbt_load
+        .warnings
+        .iter()
+        .filter(|warning| warning.kind == MetadataWarningKind::YamlParseFailed)
+        .count();
+    let dbt_project_parse_failures = dbt_load
+        .warnings
+        .iter()
+        .filter(|warning| {
+            matches!(
+                warning.kind,
+                MetadataWarningKind::DbtProjectParseFailed
+                    | MetadataWarningKind::DbtProjectAmbiguousModels
+            )
+        })
+        .count();
+    let metadata_diagnostics = metadata_diagnostics(&root, &dbt_load.warnings);
+    let dbt = dbt_load.project;
     let project = Project {
         root: root.clone(),
         files,
@@ -80,7 +108,7 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
         .collect::<HashMap<_, _>>();
     let dbt_by_path = dbt_models_by_path(&project);
     let registry = RuleRegistry::default_rules();
-    let mut diagnostics = Vec::new();
+    let mut diagnostics = metadata_diagnostics;
 
     for file in &project.files {
         let sql = sql_by_path.get(&file.path).copied();
@@ -106,7 +134,15 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
     });
 
     let pr_summary = pr_summary.map(|summary| enrich_pr_summary(summary, &project));
-    let metrics = build_scan_metrics(&context_sql_documents, &diagnostics, counts);
+    let metrics = build_scan_metrics(
+        &context_sql_documents,
+        &diagnostics,
+        counts,
+        metadata_only,
+        metadata_warnings_count,
+        yaml_parse_failures,
+        dbt_project_parse_failures,
+    );
     Ok(ScanResult {
         diagnostics,
         counts: metrics.counts.clone(),
@@ -155,7 +191,8 @@ fn load_dbt_project(
     root: &Path,
     config: &ScanConfig,
     files: &[ProjectFile],
-) -> Result<Option<DbtProject>> {
+) -> Result<DbtLoadOutcome> {
+    let mut warnings = Vec::new();
     let explicit_manifest_path = config.manifest_path.as_ref().map(|path| {
         if path.is_absolute() {
             path.clone()
@@ -170,6 +207,7 @@ fn load_dbt_project(
     }
 
     let manifest_path = explicit_manifest_path
+        .clone()
         .or_else(|| {
             let auto = root.join("target/manifest.json");
             auto.exists().then_some(auto)
@@ -181,14 +219,32 @@ fn load_dbt_project(
                 .map(|file| file.path.clone())
         });
 
+    let loaded_manifest = manifest_path.is_some();
     let mut project = match manifest_path {
         Some(path) => parse_manifest(&path)?,
         None => DbtProject::default(),
     };
 
+    let has_dbt_files = files.iter().any(|file| {
+        matches!(
+            file.kind,
+            FileKind::DbtSqlModel | FileKind::DbtYaml | FileKind::ManifestJson
+        )
+    });
+    if !loaded_manifest && has_dbt_files {
+        warnings.push(MetadataWarning {
+            kind: MetadataWarningKind::NoManifest,
+            path: None,
+            message: "no dbt manifest found; using YAML and SQL metadata only".to_string(),
+        });
+    }
+
     for file in files {
         if file.kind == FileKind::DbtYaml {
-            merge_yaml_project(&mut project, parse_yaml_project(&file.text));
+            let (yaml_project, yaml_warnings) =
+                parse_yaml_project_with_warnings(&file.text, &file.path);
+            merge_yaml_project(&mut project, yaml_project);
+            warnings.extend(yaml_warnings);
         }
     }
 
@@ -243,13 +299,59 @@ fn load_dbt_project(
             .or_insert(dependencies);
     }
 
-    apply_dbt_project_configs(root, &mut project);
+    warnings.extend(apply_dbt_project_configs(root, &mut project));
 
-    if project.models.is_empty() {
-        Ok(None)
+    let metadata_only = !loaded_manifest && has_dbt_files;
+    let project = if project.models.is_empty() {
+        None
     } else {
-        Ok(Some(project))
-    }
+        Some(project)
+    };
+
+    Ok(DbtLoadOutcome {
+        project,
+        warnings,
+        metadata_only,
+    })
+}
+
+fn metadata_diagnostics(root: &Path, warnings: &[MetadataWarning]) -> Vec<Diagnostic> {
+    warnings
+        .iter()
+        .map(|warning| metadata_warning_to_diagnostic(root, warning))
+        .collect()
+}
+
+fn metadata_warning_to_diagnostic(root: &Path, warning: &MetadataWarning) -> Diagnostic {
+    let (rule_id, severity, suggestion) = match warning.kind {
+        MetadataWarningKind::NoManifest => (
+            "SQLCOST016",
+            Severity::Info,
+            "run dbt compile and pass --manifest target/manifest.json for richer metadata",
+        ),
+        MetadataWarningKind::YamlParseFailed => (
+            "SQLCOST017",
+            Severity::Low,
+            "fix the schema YAML syntax so Costguard can read model config",
+        ),
+        MetadataWarningKind::DbtProjectParseFailed
+        | MetadataWarningKind::DbtProjectAmbiguousModels => (
+            "SQLCOST018",
+            Severity::Low,
+            "fix dbt_project.yml syntax or project name alignment for folder config",
+        ),
+    };
+    let path = warning
+        .path
+        .as_ref()
+        .map(|path| {
+            path.strip_prefix(root)
+                .map(Path::to_path_buf)
+                .unwrap_or_else(|_| path.clone())
+        })
+        .unwrap_or_else(|| PathBuf::from("."));
+    Diagnostic::new(rule_id, severity, path, None, warning.message.clone())
+        .with_suggestion(suggestion)
 }
 
 fn analyze_sql_documents(
@@ -280,6 +382,10 @@ fn build_scan_metrics(
     sql_documents: &[SqlDocument],
     diagnostics: &[costguard_diagnostics::Diagnostic],
     counts: ScanCounts,
+    metadata_only: bool,
+    metadata_warnings: usize,
+    yaml_parse_failures: usize,
+    dbt_project_parse_failures: usize,
 ) -> ScanMetrics {
     let model_docs = sql_documents
         .iter()
@@ -322,6 +428,10 @@ fn build_scan_metrics(
         sql_parse_other_failures,
         sql_parse_compiled_total,
         sql_parse_compiled_failures,
+        metadata_warnings,
+        yaml_parse_failures,
+        dbt_project_parse_failures,
+        metadata_only_scan: metadata_only,
         diagnostics_by_rule,
         diagnostics_by_severity,
     }

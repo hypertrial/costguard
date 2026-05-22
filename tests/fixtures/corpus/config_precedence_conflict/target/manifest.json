@@ -1,0 +1,16 @@
+{
+  "nodes": {
+    "model.config_precedence.fct_events": {
+      "resource_type": "model",
+      "name": "fct_events",
+      "original_file_path": "models/marts/fct_events.sql",
+      "config": {
+        "materialized": "incremental",
+        "unique_key": "id"
+      },
+      "compiled_code": "select 1 as id"
+    }
+  },
+  "sources": {},
+  "exposures": {}
+}

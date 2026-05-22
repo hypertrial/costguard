@@ -1,0 +1,11 @@
+name: ambiguous
+version: 2.0.0
+profile: ambiguous
+
+model-paths: ["models"]
+
+models:
+  alpha:
+    +materialized: table
+  beta:
+    +materialized: view

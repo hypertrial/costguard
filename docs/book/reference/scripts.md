@@ -2,6 +2,43 @@
 
 Helper scripts live under [`scripts/`](../../scripts/) at the repository root. Prefer `python3` when invoking them.
 
+For Spellbook, the script compiles five subprojects and **merges** their manifests into `target/manifest.json` at the repo root before scanning. The GitHub Action uses the same merge logic via [`dbt_compile_for_costguard.py`](../../scripts/dbt_compile_for_costguard.py).
+
+## `dbt_compile_for_costguard.py`
+
+Shared dbt compile and manifest merge helper used by the GitHub Action and `benchmark_external_repo.py`.
+
+```bash
+python3 scripts/dbt_compile_for_costguard.py \
+  --checkout . \
+  --project-dir dbt_subprojects/dex \
+  --adapter-package dbt-trino \
+  --profile-type trino \
+  --manifest-out target/manifest.json
+
+python3 scripts/dbt_compile_for_costguard.py \
+  --checkout . \
+  --compile-dirs "dbt_subprojects/dex,dbt_subprojects/tokens" \
+  --adapter-package dbt-trino \
+  --manifest-out target/manifest.json
+```
+
+| Flag | Description |
+| --- | --- |
+| `--checkout` | Repository root |
+| `--project-dir` | Single dbt project directory (relative to checkout) |
+| `--compile-dirs` | Comma/newline separated subproject paths to compile and merge |
+| `--adapter-package` | pip package (for example `dbt-trino`) |
+| `--profile-type` | Dummy profile adapter type (defaults from adapter package) |
+| `--manifest-out` | Output path for merged or single manifest |
+| `--use-system-dbt` | Use `dbt` from PATH instead of cached venv |
+
+Unit tests:
+
+```bash
+python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+```
+
 ## `benchmark_external_repo.py`
 
 Run vendored fixtures or clone external dbt repos at pinned commits.

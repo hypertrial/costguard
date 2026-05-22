@@ -26,18 +26,18 @@ impl Rule for IncrementalUniqueKeyRule {
         let Some(sql) = ctx.sql else {
             return Vec::new();
         };
-        let materialized = sql.dbt.config.materialized.as_deref().or(ctx
+        let materialized = ctx
             .dbt_model
-            .and_then(|model| model.materialized.as_deref()));
-        let unique_key = sql
-            .dbt
-            .config
-            .unique_key
-            .as_deref()
-            .or(ctx.dbt_model.and_then(|model| model.unique_key.as_deref()));
-        let incremental_strategy = sql.dbt.config.incremental_strategy.as_deref().or(ctx
+            .and_then(|model| model.materialized.as_deref())
+            .or(sql.dbt.config.materialized.as_deref());
+        let unique_key = ctx
             .dbt_model
-            .and_then(|model| model.incremental_strategy.as_deref()));
+            .and_then(|model| model.unique_key.as_deref())
+            .or(sql.dbt.config.unique_key.as_deref());
+        let incremental_strategy = ctx
+            .dbt_model
+            .and_then(|model| model.incremental_strategy.as_deref())
+            .or(sql.dbt.config.incremental_strategy.as_deref());
         if materialized == Some("incremental") && unique_key.is_none() {
             if incremental_strategy.is_some_and(|strategy| strategy.eq_ignore_ascii_case("append"))
             {
@@ -77,9 +77,10 @@ impl Rule for IncrementalPredicateRule {
         let Some(sql) = ctx.sql else {
             return Vec::new();
         };
-        let materialized = sql.dbt.config.materialized.as_deref().or(ctx
+        let materialized = ctx
             .dbt_model
-            .and_then(|model| model.materialized.as_deref()));
+            .and_then(|model| model.materialized.as_deref())
+            .or(sql.dbt.config.materialized.as_deref());
         if materialized != Some("incremental") || !sql.dbt.uses_is_incremental {
             return Vec::new();
         }

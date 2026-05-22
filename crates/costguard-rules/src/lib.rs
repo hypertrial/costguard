@@ -1,6 +1,7 @@
 mod dbt;
 mod expressions;
 mod helpers;
+mod metadata;
 mod python;
 mod registry;
 mod sql_shape;

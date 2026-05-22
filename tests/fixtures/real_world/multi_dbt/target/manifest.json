@@ -1,0 +1,24 @@
+{
+  "nodes": {
+    "model.alpha.alpha_model": {
+      "resource_type": "model",
+      "name": "alpha_model",
+      "original_file_path": "alpha/models/marts/alpha_model.sql",
+      "config": {
+        "materialized": "table"
+      },
+      "compiled_code": "select 1 as alpha_id"
+    },
+    "model.beta.beta_model": {
+      "resource_type": "model",
+      "name": "beta_model",
+      "original_file_path": "beta/models/marts/beta_model.sql",
+      "config": {
+        "materialized": "table"
+      },
+      "compiled_code": "select 2 as beta_id"
+    }
+  },
+  "sources": {},
+  "exposures": {}
+}

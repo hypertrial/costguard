@@ -42,6 +42,10 @@ pub struct ScanMetrics {
     pub sql_parse_other_failures: usize,
     pub sql_parse_compiled_total: usize,
     pub sql_parse_compiled_failures: usize,
+    pub metadata_warnings: usize,
+    pub yaml_parse_failures: usize,
+    pub dbt_project_parse_failures: usize,
+    pub metadata_only_scan: bool,
     pub diagnostics_by_rule: BTreeMap<String, usize>,
     pub diagnostics_by_severity: BTreeMap<String, usize>,
 }

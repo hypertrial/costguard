@@ -81,3 +81,33 @@ name = "spellbook_compiled_parse"
 path = "spellbook_compiled_parse"
 expect_rules = []
 forbid_rules = ["SQLCOST005"]
+
+[[case]]
+name = "ast_shape"
+path = "ast_shape"
+expect_rules = ["SQLCOST012"]
+forbid_rules = []
+
+[[case]]
+name = "metadata_only"
+path = "metadata_only"
+expect_rules = ["SQLCOST016"]
+forbid_rules = []
+
+[[case]]
+name = "yaml_parse_error"
+path = "yaml_parse_error"
+expect_rules = ["SQLCOST017"]
+forbid_rules = []
+
+[[case]]
+name = "dbt_project_ambiguous"
+path = "dbt_project_ambiguous"
+expect_rules = ["SQLCOST018"]
+forbid_rules = []
+
+[[case]]
+name = "config_precedence_conflict"
+path = "config_precedence_conflict"
+expect_rules = []
+forbid_rules = ["SQLCOST004"]

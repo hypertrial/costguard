@@ -2,10 +2,13 @@ mod project_config;
 
 use anyhow::{Context, Result};
 use project_config::{
-    apply_folder_config_to_model, discover_dbt_project_files, find_dbt_project_for_model,
-    parse_config_node, resolve_folder_config_for_model,
+    apply_folder_config_to_model, discover_dbt_project_files_with_warnings,
+    find_dbt_project_for_model, parse_config_node, resolve_folder_config_for_model,
 };
-pub use project_config::{parse_config_node as parse_dbt_config, DbtProjectFile, FolderConfigMap};
+pub use project_config::{
+    parse_config_node as parse_dbt_config, parse_dbt_project_with_warnings, DbtProjectFile,
+    FolderConfigMap,
+};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -91,6 +94,21 @@ pub struct DbtColumn {
 pub struct DbtTest {
     pub name: String,
     pub args: Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MetadataWarningKind {
+    YamlParseFailed,
+    DbtProjectParseFailed,
+    DbtProjectAmbiguousModels,
+    NoManifest,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MetadataWarning {
+    pub kind: MetadataWarningKind,
+    pub path: Option<PathBuf>,
+    pub message: String,
 }
 
 pub fn extract_sql_features(text: &str) -> DbtSqlFeatures {
@@ -386,9 +404,27 @@ pub fn parse_yaml_models(text: &str) -> Vec<DbtModel> {
 }
 
 pub fn parse_yaml_project(text: &str) -> DbtProject {
+    parse_yaml_project_with_warnings(text, Path::new("<yaml>")).0
+}
+
+pub fn parse_yaml_project_with_warnings(
+    text: &str,
+    path: &Path,
+) -> (DbtProject, Vec<MetadataWarning>) {
     let Ok(value) = serde_yaml::from_str::<Value>(text) else {
-        return DbtProject::default();
+        return (
+            DbtProject::default(),
+            vec![MetadataWarning {
+                kind: MetadataWarningKind::YamlParseFailed,
+                path: Some(path.to_path_buf()),
+                message: format!("failed to parse schema YAML at {}", path.display()),
+            }],
+        );
     };
+    (parse_yaml_value(value), Vec::new())
+}
+
+fn parse_yaml_value(value: Value) -> DbtProject {
     let mut project = DbtProject::default();
 
     if let Some(models) = value.get("models").and_then(Value::as_array) {
@@ -539,8 +575,8 @@ pub fn compiled_code_by_model_path(project: &DbtProject) -> HashMap<PathBuf, Str
         .collect()
 }
 
-pub fn apply_dbt_project_configs(root: &Path, project: &mut DbtProject) {
-    let project_files = discover_dbt_project_files(root);
+pub fn apply_dbt_project_configs(root: &Path, project: &mut DbtProject) -> Vec<MetadataWarning> {
+    let (project_files, warnings) = discover_dbt_project_files_with_warnings(root);
     for model in project.models.values_mut() {
         let Some(model_path) = model.path.as_ref() else {
             continue;
@@ -553,6 +589,7 @@ pub fn apply_dbt_project_configs(root: &Path, project: &mut DbtProject) {
         let folder_config = resolve_folder_config_for_model(&absolute_model_path, project_file);
         apply_folder_config_to_model(model, &folder_config);
     }
+    warnings
 }
 
 fn merge_columns(target: &mut Vec<DbtColumn>, yaml_columns: Vec<DbtColumn>) {
@@ -620,6 +657,15 @@ fn string_or_string_array(value: Option<&Value>) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parse_yaml_project_emits_warning_on_invalid_yaml() {
+        let (project, warnings) =
+            parse_yaml_project_with_warnings("{{not yaml", Path::new("models/schema.yml"));
+        assert!(project.models.is_empty());
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(warnings[0].kind, MetadataWarningKind::YamlParseFailed);
+    }
 
     #[test]
     fn extracts_dbt_sql_features() {

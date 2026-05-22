@@ -1,0 +1,5 @@
+name: metadata_only
+version: 2.0.0
+profile: metadata_only
+
+model-paths: ["models"]

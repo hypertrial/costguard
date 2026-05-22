@@ -9,6 +9,7 @@
       "sql": 8493,
       "yaml": 2591
     },
+    "dbt_project_parse_failures": 0,
     "diagnostics_by_rule": {
       "SQLCOST002": 402,
       "SQLCOST003": 20,
@@ -26,12 +27,15 @@
       "low": 1338,
       "med": 2790
     },
+    "metadata_only_scan": false,
+    "metadata_warnings": 0,
     "sql_parse_compiled_failures": 0,
     "sql_parse_compiled_total": 8001,
-    "sql_parse_failures": 80,
-    "sql_parse_other_failures": 379,
+    "sql_parse_failures": 107,
+    "sql_parse_other_failures": 296,
     "sql_parse_other_total": 385,
-    "sql_parse_total": 8108
+    "sql_parse_total": 8108,
+    "yaml_parse_failures": 0
   },
   "target": "external/spellbook",
   "thresholds": {

@@ -99,6 +99,9 @@ impl RuleRegistry {
                 Box::new(crate::sql_shape::UnpartitionedWindowRule),
                 Box::new(crate::sql_shape::RepeatedCteRule),
                 Box::new(crate::expressions::RepeatedExpensiveAcrossFilesRule),
+                Box::new(crate::metadata::MetadataOnlyScanRule),
+                Box::new(crate::metadata::YamlParseFailedRule),
+                Box::new(crate::metadata::DbtProjectMetadataRule),
             ],
         }
     }

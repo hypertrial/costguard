@@ -16,6 +16,7 @@ target
 **/mutants.out*/
 
 .cache/
+__pycache__/
 /book/
 /design/
 /rules/

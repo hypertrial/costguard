@@ -1,0 +1,6 @@
+models:
+  - name: fct_events
+    columns:
+      - name: id
+      - name: updated_at
+      this is invalid yaml

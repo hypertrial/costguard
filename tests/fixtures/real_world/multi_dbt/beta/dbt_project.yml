@@ -1,0 +1,5 @@
+name: beta
+version: 2.0.0
+profile: beta
+
+model-paths: ["models"]

@@ -1,4 +1,4 @@
-use crate::{DbtConfig, DbtModel};
+use crate::{DbtConfig, DbtModel, MetadataWarning, MetadataWarningKind};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -136,13 +136,28 @@ fn is_config_or_meta_key(key: &str) -> bool {
         || key == "data_tests"
 }
 
+#[allow(dead_code)]
 pub fn parse_dbt_project_text(text: &str) -> DbtProjectFile {
+    parse_dbt_project_with_warnings(text, Path::new("<dbt_project.yml>")).0
+}
+
+pub fn parse_dbt_project_with_warnings(
+    text: &str,
+    path: &Path,
+) -> (DbtProjectFile, Vec<MetadataWarning>) {
     let Ok(value) = serde_yaml::from_str::<Value>(text) else {
-        return DbtProjectFile {
-            path: PathBuf::new(),
-            project_name: None,
-            folder_configs: FolderConfigMap::default(),
-        };
+        return (
+            DbtProjectFile {
+                path: path.to_path_buf(),
+                project_name: None,
+                folder_configs: FolderConfigMap::default(),
+            },
+            vec![MetadataWarning {
+                kind: MetadataWarningKind::DbtProjectParseFailed,
+                path: Some(path.to_path_buf()),
+                message: format!("failed to parse dbt_project.yml at {}", path.display()),
+            }],
+        );
     };
 
     let project_name = value
@@ -150,23 +165,38 @@ pub fn parse_dbt_project_text(text: &str) -> DbtProjectFile {
         .and_then(Value::as_str)
         .map(str::to_string);
 
+    let mut warnings = Vec::new();
     let mut folder_configs = FolderConfigMap::default();
     if let Some(models) = value.get("models") {
-        if let Some(project_node) = resolve_project_models_node(models, project_name.as_deref()) {
-            walk_folder_tree(
+        match resolve_project_models_node(models, project_name.as_deref()) {
+            Some(project_node) => walk_folder_tree(
                 project_node,
                 "",
                 DbtConfig::default(),
                 &mut folder_configs.configs,
-            );
+            ),
+            None if models.is_object() && models.as_object().is_some_and(|obj| obj.len() > 1) => {
+                warnings.push(MetadataWarning {
+                    kind: MetadataWarningKind::DbtProjectAmbiguousModels,
+                    path: Some(path.to_path_buf()),
+                    message: format!(
+                        "ambiguous models block in {} (multiple project keys without a matching name)",
+                        path.display()
+                    ),
+                });
+            }
+            None => {}
         }
     }
 
-    DbtProjectFile {
-        path: PathBuf::new(),
-        project_name,
-        folder_configs,
-    }
+    (
+        DbtProjectFile {
+            path: path.to_path_buf(),
+            project_name,
+            folder_configs,
+        },
+        warnings,
+    )
 }
 
 fn resolve_project_models_node<'a>(
@@ -215,21 +245,36 @@ fn walk_folder_tree(
     }
 }
 
+#[allow(dead_code)]
 pub fn discover_dbt_project_files(root: &Path) -> Vec<DbtProjectFile> {
+    discover_dbt_project_files_with_warnings(root).0
+}
+
+pub fn discover_dbt_project_files_with_warnings(
+    root: &Path,
+) -> (Vec<DbtProjectFile>, Vec<MetadataWarning>) {
     let mut files = Vec::new();
-    collect_dbt_project_files(root, root, &mut files);
+    let mut warnings = Vec::new();
+    collect_dbt_project_files(root, root, &mut files, &mut warnings);
     files.sort_by(|left, right| left.path.cmp(&right.path));
-    files
+    (files, warnings)
 }
 
 #[allow(clippy::only_used_in_recursion)]
-fn collect_dbt_project_files(root: &Path, current: &Path, files: &mut Vec<DbtProjectFile>) {
+fn collect_dbt_project_files(
+    root: &Path,
+    current: &Path,
+    files: &mut Vec<DbtProjectFile>,
+    warnings: &mut Vec<MetadataWarning>,
+) {
     let entry_path = current.join("dbt_project.yml");
     if entry_path.is_file() {
         if let Ok(text) = std::fs::read_to_string(&entry_path) {
-            let mut project = parse_dbt_project_text(&text);
+            let (mut project, project_warnings) =
+                parse_dbt_project_with_warnings(&text, &entry_path);
             project.path = entry_path.clone();
             files.push(project);
+            warnings.extend(project_warnings);
         }
     }
 
@@ -251,7 +296,7 @@ fn collect_dbt_project_files(root: &Path, current: &Path, files: &mut Vec<DbtPro
         {
             continue;
         }
-        collect_dbt_project_files(root, &path, files);
+        collect_dbt_project_files(root, &path, files, warnings);
     }
 }
 

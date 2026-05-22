@@ -1,0 +1,5 @@
+name: config_precedence
+version: 2.0.0
+profile: config_precedence
+
+model-paths: ["models"]

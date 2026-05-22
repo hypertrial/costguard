@@ -24,6 +24,9 @@ python3 scripts/generate_rule_docs.py
 | medium | `SQLCOST013` | Unpartitioned window function | [SQLCOST013](../../rules/SQLCOST013.md) |
 | low | `SQLCOST014` | Repeated CTE reference | [SQLCOST014](../../rules/SQLCOST014.md) |
 | medium | `SQLCOST015` | Expensive expression repeated across downstream models | [SQLCOST015](../../rules/SQLCOST015.md) |
+| info | `SQLCOST016` | Scan without dbt manifest | [SQLCOST016](../../rules/SQLCOST016.md) |
+| low | `SQLCOST017` | Schema YAML parse failure | [SQLCOST017](../../rules/SQLCOST017.md) |
+| low | `SQLCOST018` | dbt_project.yml metadata issue | [SQLCOST018](../../rules/SQLCOST018.md) |
 
 ## Descriptions
 
@@ -146,4 +149,28 @@ Fix guidance: [SQLCOST014.md](../../rules/SQLCOST014.md)
 Detects repeated JSON, regex, or normalization expressions across files.
 
 Fix guidance: [SQLCOST015.md](../../rules/SQLCOST015.md)
+
+### `SQLCOST016` — Scan without dbt manifest
+
+**Severity:** info
+
+Reports when Costguard scans dbt metadata from YAML/SQL only without a manifest.
+
+Fix guidance: [SQLCOST016.md](../../rules/SQLCOST016.md)
+
+### `SQLCOST017` — Schema YAML parse failure
+
+**Severity:** low
+
+Reports when a dbt schema YAML file failed to parse.
+
+Fix guidance: [SQLCOST017.md](../../rules/SQLCOST017.md)
+
+### `SQLCOST018` — dbt_project.yml metadata issue
+
+**Severity:** low
+
+Reports when dbt_project.yml failed to parse or has an ambiguous models block.
+
+Fix guidance: [SQLCOST018.md](../../rules/SQLCOST018.md)
 <!-- generated:rules:end -->

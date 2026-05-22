@@ -1,0 +1,5 @@
+name: yaml_parse_error
+version: 2.0.0
+profile: yaml_parse_error
+
+model-paths: ["models"]

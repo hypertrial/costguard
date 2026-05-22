@@ -1,0 +1,4 @@
+models:
+  - name: stg_orders
+    columns:
+      - name: id

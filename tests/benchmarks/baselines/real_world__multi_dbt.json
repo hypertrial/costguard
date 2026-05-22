@@ -1,0 +1,41 @@
+{
+  "expect_rules": [],
+  "forbid_rules": [
+    "SQLCOST005"
+  ],
+  "kind": "vendored",
+  "metrics": {
+    "counts": {
+      "manifest": 1,
+      "other": 0,
+      "python": 0,
+      "sql": 2,
+      "yaml": 2
+    },
+    "dbt_project_parse_failures": 1,
+    "diagnostics_by_rule": {
+      "SQLCOST018": 1
+    },
+    "diagnostics_by_severity": {
+      "low": 1
+    },
+    "metadata_only_scan": false,
+    "metadata_warnings": 1,
+    "sql_parse_compiled_failures": 0,
+    "sql_parse_compiled_total": 2,
+    "sql_parse_failures": 0,
+    "sql_parse_other_failures": 0,
+    "sql_parse_other_total": 0,
+    "sql_parse_total": 2,
+    "yaml_parse_failures": 0
+  },
+  "target": "real_world/multi_dbt",
+  "thresholds": {
+    "exact_diagnostics_by_rule": {
+      "SQLCOST018": 1
+    },
+    "max_sql_parse_failures": 0
+  },
+  "version": 1,
+  "warehouse": "generic"
+}

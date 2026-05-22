@@ -46,6 +46,18 @@ inputs:
     description: pip package for dbt compile (for example dbt-trino or dbt-postgres)
     required: false
     default: dbt-trino
+  dbt-profile-type:
+    description: Dummy profiles.yml adapter type (defaults from dbt-adapter-package when empty)
+    required: false
+    default: ""
+  dbt-compile-dirs:
+    description: Comma or newline separated dbt subproject paths to compile and merge
+    required: false
+    default: ""
+  manifest-output:
+    description: Path for merged manifest output relative to working-directory
+    required: false
+    default: target/manifest.json
 
 runs:
   using: composite
@@ -66,68 +78,60 @@ runs:
     - name: Compile dbt project
       if: inputs.compile-dbt == 'true'
       shell: bash
-      working-directory: ${{ inputs.working-directory }}
       env:
         DBT_ADAPTER_PACKAGE: ${{ inputs.dbt-adapter-package }}
         DBT_TARGET: ${{ inputs.dbt-target }}
         DBT_PROJECT_DIR_INPUT: ${{ inputs.dbt-project-dir }}
         DBT_PROFILES_DIR_INPUT: ${{ inputs.dbt-profiles-dir }}
+        DBT_PROFILE_TYPE_INPUT: ${{ inputs.dbt-profile-type }}
+        DBT_COMPILE_DIRS_INPUT: ${{ inputs.dbt-compile-dirs }}
+        MANIFEST_OUTPUT_INPUT: ${{ inputs.manifest-output }}
+        WORKING_DIRECTORY_INPUT: ${{ inputs.working-directory }}
       run: |
         set -eo pipefail
+        repo_root="${GITHUB_WORKSPACE}"
+        workdir="${WORKING_DIRECTORY_INPUT:-.}"
+        if [ "${workdir}" != "." ]; then
+          repo_root="${GITHUB_WORKSPACE}/${workdir}"
+        fi
         project_dir="${DBT_PROJECT_DIR_INPUT:-.}"
-        if [ ! -f "${project_dir}/dbt_project.yml" ]; then
-          echo "No dbt_project.yml in ${project_dir}; skipping dbt compile."
+        compile_dirs="${DBT_COMPILE_DIRS_INPUT}"
+        if [ -z "${compile_dirs}" ] && [ ! -f "${repo_root}/${project_dir}/dbt_project.yml" ]; then
+          echo "No dbt_project.yml in ${repo_root}/${project_dir}; skipping dbt compile."
           exit 0
         fi
 
         python -m pip install --upgrade pip
         python -m pip install "${DBT_ADAPTER_PACKAGE}"
 
-        profiles_dir="${DBT_PROFILES_DIR_INPUT:-${project_dir}}"
-        mkdir -p "${profiles_dir}"
-        if [ ! -f "${profiles_dir}/profiles.yml" ]; then
-          profile_name="$(grep -E '^[[:space:]]*profile:' "${project_dir}/dbt_project.yml" | head -n1 | sed -E "s/^[[:space:]]*profile:[[:space:]]*['\"]?([^'\"[:space:]]+)['\"]?/\1/")"
-          if [ -z "${profile_name}" ]; then
-            profile_name="costguard"
-          fi
-          {
-            echo "${profile_name}:"
-            echo "  target: ${DBT_TARGET}"
-            echo "  outputs:"
-            echo "    ${DBT_TARGET}:"
-            echo "      type: trino"
-            echo "      host: localhost"
-            echo "      port: 8080"
-            echo "      user: costguard"
-            echo "      database: costguard"
-            echo "      schema: costguard"
-          } > "${profiles_dir}/profiles.yml"
-          echo "Wrote dummy profiles.yml for profile '${profile_name}'."
+        args=(
+          python3 "${GITHUB_WORKSPACE}/scripts/dbt_compile_for_costguard.py"
+          --checkout "${repo_root}"
+          --adapter-package "${DBT_ADAPTER_PACKAGE}"
+          --target "${DBT_TARGET}"
+          --manifest-out "${MANIFEST_OUTPUT_INPUT}"
+          --use-system-dbt
+        )
+        if [ -n "${DBT_PROFILE_TYPE_INPUT}" ]; then
+          args+=(--profile-type "${DBT_PROFILE_TYPE_INPUT}")
         fi
-
-        export DBT_PROFILES_DIR="${profiles_dir}"
-        set +e
-        dbt deps --project-dir "${project_dir}"
-        deps_status=$?
-        set -e
-        if [ "${deps_status}" -ne 0 ]; then
-          echo "::warning::dbt deps failed (exit ${deps_status}); continuing to compile."
+        if [ -n "${DBT_PROFILES_DIR_INPUT}" ]; then
+          args+=(--profiles-dir "${DBT_PROFILES_DIR_INPUT}")
         fi
-
-        dbt compile --project-dir "${project_dir}" --target "${DBT_TARGET}"
-        if [ ! -f "${project_dir}/target/manifest.json" ]; then
-          echo "::error::dbt compile completed but ${project_dir}/target/manifest.json is missing."
-          exit 1
+        if [ -n "${compile_dirs}" ]; then
+          args+=(--compile-dirs "${compile_dirs}")
+        else
+          args+=(--project-dir "${project_dir}")
         fi
+        "${args[@]}"
 
     - name: Run costguard pr
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       env:
-        DBT_PROJECT_DIR_INPUT: ${{ inputs.dbt-project-dir }}
+        MANIFEST_OUTPUT_INPUT: ${{ inputs.manifest-output }}
       run: |
         set -eo pipefail
-        project_dir="${DBT_PROJECT_DIR_INPUT:-.}"
         args=(
           pr
           --base "${{ inputs.base }}"
@@ -136,8 +140,8 @@ runs:
           --format "${{ inputs.format }}"
         )
         manifest="${{ inputs.manifest }}"
-        if [ -z "${manifest}" ] && [ -f "${project_dir}/target/manifest.json" ]; then
-          manifest="${project_dir}/target/manifest.json"
+        if [ -z "${manifest}" ] && [ -f "${MANIFEST_OUTPUT_INPUT}" ]; then
+          manifest="${MANIFEST_OUTPUT_INPUT}"
         fi
         if [ -n "${manifest}" ]; then
           args+=(--manifest "${manifest}")

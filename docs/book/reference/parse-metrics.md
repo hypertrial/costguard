@@ -1,6 +1,6 @@
 # Parse metrics
 
-Parse metrics measure SQL/Jinja robustness. They do **not** gate rule execution — rules analyze raw source SQL via regex and AST helpers.
+Parse metrics measure SQL/Jinja robustness. They do **not** gate rule execution — shape rules prefer parsed AST features when raw SQL parses, with regex fallback for expression rules and parse failures.
 
 ## Model-scoped metrics
 
@@ -21,6 +21,19 @@ Macros, tests, and non-model SQL use separate counters:
 | --- | --- |
 | `sql_parse_other_total` | Non-model SQL files |
 | `sql_parse_other_failures` | Non-model parse failures |
+
+## Metadata metrics
+
+When dbt metadata is loaded without a manifest or YAML/dbt_project parsing fails:
+
+| Metric | Description |
+| --- | --- |
+| `metadata_warnings` | Total metadata warning events collected during scan |
+| `yaml_parse_failures` | Schema YAML files that failed to parse |
+| `dbt_project_parse_failures` | `dbt_project.yml` parse or ambiguous `models:` block failures |
+| `metadata_only_scan` | `true` when no manifest was loaded but dbt files were present |
+
+Related diagnostics: `SQLCOST016` (no manifest), `SQLCOST017` (YAML parse failure), `SQLCOST018` (`dbt_project.yml` issue). These are Info/Low severity and do not fail default `--fail-on high` runs.
 
 ## Headline vs compiled parse
 

@@ -1,0 +1,5 @@
+name: ast_shape
+version: 2.0.0
+profile: ast_shape
+
+model-paths: ["models"]
