@@ -49,9 +49,10 @@ When an external benchmark surfaces a finding worth keeping:
 
 | Rule | Repo | Verdict | Notes |
 | --- | --- | --- | --- |
-| SQLCOST005 | spellbook | investigate | `block_time` predicates may need needle tuning |
+| SQLCOST005 | spellbook | fixed | `block_time`, `evt_block_time`, `block_date`, and related needles added |
+| SQLCOST004 | spellbook | partially fixed | schema YAML, nested `dbt_project.yml`, and explicit `incremental_strategy: append` reduce false positives; merge/delete+insert without key still flagged |
+| SQLCOST004 | spellbook | investigate remaining | many incrementals still lack `unique_key` and explicit append strategy |
 | SQLCOST002 | jaffle-shop | true positive | repeated JSON extraction in staging |
-| | | | |
 
 ## PR replay testing
 

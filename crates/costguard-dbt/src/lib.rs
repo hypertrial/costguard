@@ -1,4 +1,11 @@
+mod project_config;
+
 use anyhow::{Context, Result};
+use project_config::{
+    apply_folder_config_to_model, discover_dbt_project_files, find_dbt_project_for_model,
+    parse_config_node, resolve_folder_config_for_model,
+};
+pub use project_config::{parse_config_node as parse_dbt_config, DbtProjectFile, FolderConfigMap};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -19,6 +26,7 @@ pub struct DbtSqlFeatures {
 pub struct DbtConfig {
     pub materialized: Option<String>,
     pub unique_key: Option<String>,
+    pub incremental_strategy: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -52,6 +60,7 @@ pub struct DbtModel {
     pub path: Option<PathBuf>,
     pub materialized: Option<String>,
     pub unique_key: Option<String>,
+    pub incremental_strategy: Option<String>,
     pub tags: Vec<String>,
     pub columns: Vec<DbtColumn>,
     pub tests: Vec<DbtTest>,
@@ -103,6 +112,7 @@ pub fn extract_sql_features(text: &str) -> DbtSqlFeatures {
         let body = capture.as_str();
         features.config.materialized = extract_config_value(body, "materialized");
         features.config.unique_key = extract_config_value(body, "unique_key");
+        features.config.incremental_strategy = extract_config_value(body, "incremental_strategy");
     }
 
     features.uses_is_incremental = text.contains("is_incremental()");
@@ -135,12 +145,16 @@ fn extract_config_value(body: &str, key: &str) -> Option<String> {
 fn config_key_regex(key: &str) -> &'static Regex {
     static MATERIALIZED: OnceLock<Regex> = OnceLock::new();
     static UNIQUE_KEY: OnceLock<Regex> = OnceLock::new();
+    static INCREMENTAL_STRATEGY: OnceLock<Regex> = OnceLock::new();
     match key {
         "materialized" => MATERIALIZED.get_or_init(|| {
             Regex::new(r#"materialized\s*=\s*['"]([^'"]+)['"]"#).expect("valid config regex")
         }),
         "unique_key" => UNIQUE_KEY.get_or_init(|| {
             Regex::new(r#"unique_key\s*=\s*['"]([^'"]+)['"]"#).expect("valid config regex")
+        }),
+        "incremental_strategy" => INCREMENTAL_STRATEGY.get_or_init(|| {
+            Regex::new(r#"incremental_strategy\s*=\s*['"]([^'"]+)['"]"#).expect("valid config regex")
         }),
         other => panic!("unsupported config key: {other}"),
     }
@@ -205,6 +219,10 @@ pub fn parse_manifest_text(text: &str) -> Result<DbtProject> {
                 ),
                 _ => None,
             });
+            let incremental_strategy = config
+                .get("incremental_strategy")
+                .and_then(Value::as_str)
+                .map(str::to_string);
             let refs = node
                 .get("refs")
                 .and_then(Value::as_array)
@@ -263,6 +281,7 @@ pub fn parse_manifest_text(text: &str) -> Result<DbtProject> {
                     path,
                     materialized,
                     unique_key,
+                    incremental_strategy,
                     tags,
                     columns,
                     tests: Vec::new(),
@@ -370,6 +389,10 @@ pub fn parse_yaml_project(text: &str) -> DbtProject {
             };
             let tags = string_or_string_array(model.get("tags"));
             let tests = parse_tests(model.get("tests"));
+            let yaml_config = model
+                .get("config")
+                .map(parse_config_node)
+                .unwrap_or_default();
             let columns = model
                 .get("columns")
                 .and_then(Value::as_array)
@@ -381,6 +404,9 @@ pub fn parse_yaml_project(text: &str) -> DbtProject {
                 name.to_string(),
                 DbtModel {
                     name: name.to_string(),
+                    materialized: yaml_config.materialized,
+                    unique_key: yaml_config.unique_key,
+                    incremental_strategy: yaml_config.incremental_strategy,
                     tags,
                     tests,
                     columns,
@@ -449,14 +475,15 @@ pub fn merge_yaml_project(target: &mut DbtProject, yaml: DbtProject) {
                 ..DbtModel::default()
             });
         if model.tags.is_empty() {
-            model.tags = yaml_model.tags;
+            model.tags = yaml_model.tags.clone();
         } else {
-            for tag in yaml_model.tags {
-                if !model.tags.contains(&tag) {
-                    model.tags.push(tag);
+            for tag in &yaml_model.tags {
+                if !model.tags.contains(tag) {
+                    model.tags.push(tag.clone());
                 }
             }
         }
+        merge_model_config_fields(model, &yaml_model);
         merge_columns(&mut model.columns, yaml_model.columns);
         merge_tests(&mut model.tests, yaml_model.tests);
     }
@@ -476,6 +503,34 @@ pub fn merge_yaml_project(target: &mut DbtProject, yaml: DbtProject) {
     }
     for (name, exposure) in yaml.exposures {
         target.exposures.entry(name).or_insert(exposure);
+    }
+}
+
+fn merge_model_config_fields(target: &mut DbtModel, source: &DbtModel) {
+    if target.materialized.is_none() {
+        target.materialized = source.materialized.clone();
+    }
+    if target.unique_key.is_none() {
+        target.unique_key = source.unique_key.clone();
+    }
+    if target.incremental_strategy.is_none() {
+        target.incremental_strategy = source.incremental_strategy.clone();
+    }
+}
+
+pub fn apply_dbt_project_configs(root: &Path, project: &mut DbtProject) {
+    let project_files = discover_dbt_project_files(root);
+    for model in project.models.values_mut() {
+        let Some(model_path) = model.path.as_ref() else {
+            continue;
+        };
+        let absolute_model_path = root.join(model_path);
+        let Some(project_file) = find_dbt_project_for_model(&absolute_model_path, &project_files)
+        else {
+            continue;
+        };
+        let folder_config = resolve_folder_config_for_model(&absolute_model_path, project_file);
+        apply_folder_config_to_model(model, &folder_config);
     }
 }
 
@@ -600,6 +655,52 @@ exposures:
             project.exposures["dashboard"].depends_on[0],
             "ref('fct_sessions')"
         );
+    }
+
+    #[test]
+    fn parses_yaml_model_config() {
+        let yaml = r#"
+models:
+  - name: fct_sessions
+    config:
+      materialized: incremental
+      unique_key: id
+      incremental_strategy: merge
+"#;
+        let project = parse_yaml_project(yaml);
+        let model = project.models.get("fct_sessions").unwrap();
+        assert_eq!(model.materialized.as_deref(), Some("incremental"));
+        assert_eq!(model.unique_key.as_deref(), Some("id"));
+        assert_eq!(model.incremental_strategy.as_deref(), Some("merge"));
+    }
+
+    #[test]
+    fn yaml_merge_enriches_model_config_fields() {
+        let mut target = DbtProject::default();
+        target.models.insert(
+            "fct_sessions".into(),
+            DbtModel {
+                node_id: Some("model.pkg.fct_sessions".into()),
+                name: "fct_sessions".into(),
+                materialized: Some("incremental".into()),
+                ..DbtModel::default()
+            },
+        );
+        let yaml = parse_yaml_project(
+            r#"
+models:
+  - name: fct_sessions
+    config:
+      unique_key: id
+      incremental_strategy: merge
+"#,
+        );
+
+        merge_yaml_project(&mut target, yaml);
+        let model = target.models.get("fct_sessions").unwrap();
+        assert_eq!(model.materialized.as_deref(), Some("incremental"));
+        assert_eq!(model.unique_key.as_deref(), Some("id"));
+        assert_eq!(model.incremental_strategy.as_deref(), Some("merge"));
     }
 
     #[test]

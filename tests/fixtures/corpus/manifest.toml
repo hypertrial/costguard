@@ -17,6 +17,30 @@ expect_rules = ["SQLCOST005"]
 forbid_rules = []
 
 [[case]]
+name = "incremental_yaml_config"
+path = "incremental_yaml_config"
+expect_rules = []
+forbid_rules = ["SQLCOST004"]
+
+[[case]]
+name = "incremental_block_time"
+path = "incremental_block_time"
+expect_rules = []
+forbid_rules = ["SQLCOST005"]
+
+[[case]]
+name = "incremental_append"
+path = "incremental_append"
+expect_rules = []
+forbid_rules = ["SQLCOST004"]
+
+[[case]]
+name = "incremental_dbt_project"
+path = "incremental_dbt_project"
+expect_rules = []
+forbid_rules = ["SQLCOST004"]
+
+[[case]]
 name = "jinja_heavy"
 path = "jinja_heavy"
 expect_rules = []

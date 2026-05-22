@@ -35,7 +35,19 @@ impl Rule for IncrementalUniqueKeyRule {
             .unique_key
             .as_deref()
             .or(ctx.dbt_model.and_then(|model| model.unique_key.as_deref()));
+        let incremental_strategy = sql
+            .dbt
+            .config
+            .incremental_strategy
+            .as_deref()
+            .or(ctx
+                .dbt_model
+                .and_then(|model| model.incremental_strategy.as_deref()));
         if materialized == Some("incremental") && unique_key.is_none() {
+            if incremental_strategy.is_some_and(|strategy| strategy.eq_ignore_ascii_case("append"))
+            {
+                return Vec::new();
+            }
             vec![diagnostic(
                 ctx,
                 self.id(),
@@ -44,7 +56,9 @@ impl Rule for IncrementalUniqueKeyRule {
                 "Incremental model appears to have no unique_key.",
             )
             .with_risk("merge/update logic may be unsafe or require full scans.")
-            .with_suggestion("define config(unique_key=...) or document why this is append-only.")]
+            .with_suggestion(
+                "define config(unique_key=...) or set incremental_strategy='append' for append-only models.",
+            )]
         } else {
             Vec::new()
         }

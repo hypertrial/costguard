@@ -150,3 +150,29 @@ fn representative_negative_cases_do_not_fire() {
     assert!(!ids.contains(&"SQLCOST001".to_string()));
     assert!(!ids.contains(&"SQLCOST007".to_string()));
 }
+
+#[test]
+fn append_incremental_without_unique_key_does_not_fire_sqlcost004() {
+    let file = sql_file(
+        "models/marts/fct.sql",
+        "{{ config(materialized='incremental', incremental_strategy='append') }} select id from t",
+    );
+    let doc = analyze(&file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(!ids.contains(&"SQLCOST004".to_string()));
+}
+
+#[test]
+fn block_time_incremental_predicate_does_not_fire_sqlcost005() {
+    let file = sql_file(
+        "models/marts/dex_trades.sql",
+        "{{ config(materialized='incremental', unique_key='tx_hash') }}
+select tx_hash, block_time from {{ source('dex', 'trades') }}
+{% if is_incremental() %}
+where block_time >= date_sub(current_date(), interval 3 day)
+{% endif %}",
+    );
+    let doc = analyze(&file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(!ids.contains(&"SQLCOST005".to_string()));
+}

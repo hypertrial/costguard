@@ -3,8 +3,8 @@ use crate::dbt_graph::enrich_pr_summary;
 use crate::{PrSummary, Project, ScanMetrics, ScanResult};
 use anyhow::{Context, Result};
 use costguard_dbt::{
-    extract_sql_features, merge_yaml_project, parse_manifest, parse_yaml_project, DbtModel,
-    DbtProject,
+    apply_dbt_project_configs, extract_sql_features, merge_yaml_project, parse_manifest,
+    parse_yaml_project, DbtModel, DbtProject,
 };
 use costguard_diagnostics::apply_suppressions;
 use costguard_platform::Platform;
@@ -214,6 +214,10 @@ fn load_dbt_project(
             .unique_key
             .clone()
             .or(features.config.unique_key.clone());
+        model.incremental_strategy = model
+            .incremental_strategy
+            .clone()
+            .or(features.config.incremental_strategy.clone());
         if model.refs.is_empty() {
             model.refs = features
                 .refs
@@ -232,6 +236,8 @@ fn load_dbt_project(
             .entry(dependency_key)
             .or_insert(dependencies);
     }
+
+    apply_dbt_project_configs(root, &mut project);
 
     if project.models.is_empty() {
         Ok(None)

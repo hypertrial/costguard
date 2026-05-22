@@ -12,11 +12,9 @@
     },
     "diagnostics_by_rule": {
       "SQLCOST002": 1,
-      "SQLCOST005": 1,
       "SQLCOST011": 1
     },
     "diagnostics_by_severity": {
-      "high": 1,
       "med": 2
     },
     "sql_parse_failures": 1,
@@ -26,7 +24,6 @@
   "thresholds": {
     "exact_diagnostics_by_rule": {
       "SQLCOST002": 1,
-      "SQLCOST005": 1,
       "SQLCOST011": 1
     },
     "max_sql_parse_failures": 1

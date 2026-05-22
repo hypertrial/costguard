@@ -12,8 +12,8 @@
     "diagnostics_by_rule": {
       "SQLCOST002": 402,
       "SQLCOST003": 20,
-      "SQLCOST004": 5005,
-      "SQLCOST005": 1719,
+      "SQLCOST004": 4906,
+      "SQLCOST005": 247,
       "SQLCOST006": 516,
       "SQLCOST008": 826,
       "SQLCOST012": 1868,
@@ -22,7 +22,7 @@
       "SQLCOST015": 858
     },
     "diagnostics_by_severity": {
-      "high": 8592,
+      "high": 7021,
       "low": 1338,
       "med": 2790
     },

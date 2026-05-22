@@ -1,0 +1,11 @@
+version: 2
+
+sources:
+  - name: raw
+    tables:
+      - name: events
+
+models:
+  - name: fct_sessions
+    config:
+      unique_key: id

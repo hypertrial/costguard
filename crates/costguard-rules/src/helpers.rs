@@ -56,6 +56,24 @@ pub(crate) fn has_bounded_incremental_predicate(text: &str) -> bool {
         "_partitiontime",
         "_partitiondate",
         "partition_date",
+        "block_time",
+        "evt_block_time",
+        "block_date",
+        "block_timestamp",
+        "block_number",
+        "block_num",
+        "evt_block_number",
+    ]
+    .iter()
+    .any(|needle| lower.contains(needle))
+    {
+        return true;
+    }
+
+    if [
+        " date_trunc(",
+        " minute",
+        " hour",
     ]
     .iter()
     .any(|needle| lower.contains(needle))
@@ -83,6 +101,6 @@ pub(crate) fn incremental_predicate_suggestion(warehouse: Warehouse) -> &'static
             "add an updated_at/event_date predicate to improve pruning on clustered or micro-partitioned data."
         }
         Warehouse::Databricks => "add a partition or date predicate to limit incremental reads.",
-        _ => "add an updated_at, created_at, event_date, ingested_at, or partition predicate.",
+        _ => "add an updated_at, created_at, event_date, block_time, ingested_at, or partition predicate.",
     }
 }

@@ -1,0 +1,7 @@
+name: incremental_fixture
+
+models:
+  incremental_fixture:
+    marts:
+      +materialized: incremental
+      +unique_key: id
