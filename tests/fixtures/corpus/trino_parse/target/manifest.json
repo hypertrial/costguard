@@ -1,0 +1,22 @@
+{
+  "nodes": {
+    "model.corpus.fct_try_cast": {
+      "resource_type": "model",
+      "name": "fct_try_cast",
+      "original_file_path": "models/marts/fct_try_cast.sql",
+      "config": { "materialized": "table" },
+      "compiled_code": "-- compiled by dbt\nSELECT tx_hash, TRY_CAST(block_time AS timestamp) AS block_time FROM dex.trades",
+      "refs": [],
+      "sources": [["dex", "trades"]],
+      "depends_on": { "nodes": ["source.corpus.dex.trades"] },
+      "columns": {},
+      "tags": []
+    }
+  },
+  "sources": {
+    "source.corpus.dex.trades": {
+      "source_name": "dex",
+      "name": "trades"
+    }
+  }
+}

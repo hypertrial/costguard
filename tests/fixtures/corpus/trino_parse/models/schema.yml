@@ -1,0 +1,9 @@
+version: 2
+
+sources:
+  - name: dex
+    tables:
+      - name: trades
+
+models:
+  - name: fct_try_cast

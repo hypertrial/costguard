@@ -115,7 +115,9 @@ for the product workflow priority.
 
 Supported `--warehouse` values include `generic`, `snowflake`, `bigquery`, `databricks`, `redshift`, `postgres`, `duckdb`, and `trino` (Presto/Trino SQL via Hive-family parsing). For Dune Spellbook and other Trino dbt projects, use `--warehouse trino`.
 
-For accurate parse metrics on Jinja-heavy dbt models, run `dbt compile` first and pass `--manifest target/manifest.json`. Costguard parses manifest `compiled_code` when present; rule diagnostics remain anchored to raw source lines.
+For accurate parse metrics on Jinja-heavy dbt models, run `dbt compile` first and pass `--manifest target/manifest.json`. Costguard parses manifest `compiled_code` when present (with Trino normalization); headline parse success falls back to stripped raw SQL when compiled parse fails. Rule diagnostics always remain anchored to raw source lines.
+
+Spellbook benchmarks compile five subprojects: `dex`, `tokens`, `solana`, `daily_spellbook`, and `hourly_spellbook` (see [`tests/benchmarks/repos.toml`](tests/benchmarks/repos.toml)).
 
 ```toml
 warehouse = "snowflake"

@@ -12,7 +12,7 @@
     "diagnostics_by_rule": {
       "SQLCOST002": 402,
       "SQLCOST003": 20,
-      "SQLCOST004": 2716,
+      "SQLCOST004": 1,
       "SQLCOST005": 247,
       "SQLCOST006": 516,
       "SQLCOST008": 826,
@@ -22,13 +22,13 @@
       "SQLCOST015": 858
     },
     "diagnostics_by_severity": {
-      "high": 4831,
+      "high": 2116,
       "low": 1338,
       "med": 2790
     },
-    "sql_parse_compiled_failures": 316,
-    "sql_parse_compiled_total": 3001,
-    "sql_parse_failures": 5423,
+    "sql_parse_compiled_failures": 865,
+    "sql_parse_compiled_total": 8001,
+    "sql_parse_failures": 972,
     "sql_parse_other_failures": 379,
     "sql_parse_other_total": 385,
     "sql_parse_total": 8108
@@ -36,7 +36,7 @@
   "target": "external/spellbook",
   "thresholds": {
     "max_parse_failure_delta": 50,
-    "max_parse_failure_rate": 0.67
+    "max_parse_failure_rate": 0.13
   },
   "version": 1,
   "warehouse": "trino"

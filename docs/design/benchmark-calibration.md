@@ -35,9 +35,15 @@ Baselines live in [`tests/benchmarks/baselines/`](../tests/benchmarks/baselines/
 
 ### Parse metric semantics
 
-Primary parse metrics (`sql_parse_total`, `sql_parse_failures`) count **production dbt models** only (`models/**/*.sql`). Macros, tests, and other SQL files are tracked separately as `sql_parse_other_total` / `sql_parse_other_failures`. When a manifest with `compiled_code` is loaded, compiled parse attempts are recorded in `sql_parse_compiled_total` / `sql_parse_compiled_failures`.
+Primary parse metrics (`sql_parse_total`, `sql_parse_failures`) count **production dbt models** only (`models/**/*.sql`). Macros, tests, and other SQL files are tracked separately as `sql_parse_other_total` / `sql_parse_other_failures`.
 
-External Spellbook benchmarks require `dbt compile` (see `compile_dbt = true` in [`repos.toml`](../tests/benchmarks/repos.toml)) and `--warehouse trino`.
+When a manifest with `compiled_code` is loaded:
+
+- Costguard normalizes compiled SQL (comment stripping, Trino rewrites) before parse attempts.
+- Headline `sql_parse_failures` uses compiled parse when available, with **stripped-raw fallback** when compiled parse fails (`parsed_compiled || parsed_raw`).
+- `sql_parse_compiled_total` counts models with a compiled attempt; `sql_parse_compiled_failures` counts models where **compiled parse failed** (dialect quality signal, independent of raw fallback).
+
+External Spellbook benchmarks compile all five subprojects (`dex`, `tokens`, `solana`, `daily_spellbook`, `hourly_spellbook`) — see `dbt_compile_dirs` in [`repos.toml`](../tests/benchmarks/repos.toml) — and scan with `--warehouse trino`.
 
 Reports are written to `tests/benchmarks/reports/` (gitignored).
 
@@ -58,7 +64,8 @@ When an external benchmark surfaces a finding worth keeping:
 | SQLCOST005 | spellbook | fixed | `block_time`, `evt_block_time`, `block_date`, and related needles added |
 | SQLCOST004 | spellbook | partially fixed | schema YAML, nested `dbt_project.yml`, explicit `incremental_strategy: append`, and compiled Trino parsing reduce false positives |
 | SQLCOST004 | spellbook | investigate remaining | many incrementals still lack `unique_key` and explicit append strategy |
-| parse metrics | spellbook | improved | with `dbt compile`, `--warehouse trino`, and model-scoped metrics: ~67% model parse failure rate (5423/8108), down from ~97% on raw generic parsing |
+| parse metrics | spellbook | improved (tier 1) | compile + Trino + model-scoped metrics: ~67% model parse failure rate (5423/8108) |
+| parse metrics | spellbook | improved (P0–P2) | five-subproject compile + Trino normalization + raw fallback: **12%** model parse failure rate (972/8108), `sql_parse_compiled_total` 8001 |
 | SQLCOST002 | jaffle-shop | true positive | repeated JSON extraction in staging |
 
 ## PR replay testing

@@ -70,7 +70,7 @@ impl Platform {
             Self::Redshift => Box::new(RedshiftSqlDialect {}),
             Self::Postgres => Box::new(PostgreSqlDialect {}),
             Self::DuckDB => Box::new(DuckDbDialect {}),
-            Self::Trino => Box::new(TrinoDialect {}),
+            Self::Trino => Box::new(TrinoDialect::default()),
         }
     }
 }

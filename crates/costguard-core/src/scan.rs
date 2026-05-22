@@ -300,7 +300,10 @@ fn build_scan_metrics(
     let sql_parse_other_total = other_docs.len();
     let sql_parse_other_failures = other_docs.iter().filter(|doc| !doc.parsed).count();
     let sql_parse_compiled_total = compiled_docs.len();
-    let sql_parse_compiled_failures = compiled_docs.iter().filter(|doc| !doc.parsed).count();
+    let sql_parse_compiled_failures = compiled_docs
+        .iter()
+        .filter(|doc| !doc.parsed_compiled)
+        .count();
     let mut diagnostics_by_rule = BTreeMap::new();
     let mut diagnostics_by_severity = BTreeMap::new();
     for diagnostic in diagnostics {

@@ -89,6 +89,26 @@ fn compiled_manifest_parse_uses_compiled_code_for_metrics() {
 }
 
 #[test]
+fn trino_parse_fixture_uses_compiled_normalization() {
+    use costguard_platform::Platform;
+
+    let case_path = corpus_root().join("trino_parse");
+    let config = ScanConfig {
+        root: case_path.clone(),
+        paths: vec![PathBuf::from("models")],
+        platform: Platform::Trino,
+        manifest_path: Some(case_path.join("target/manifest.json")),
+        fail_on: Some(Severity::High),
+        ..ScanConfig::default()
+    };
+    let result = scan(&config).expect("scan trino parse case");
+    assert_eq!(result.metrics.sql_parse_total, 1);
+    assert_eq!(result.metrics.sql_parse_failures, 0);
+    assert_eq!(result.metrics.sql_parse_compiled_total, 1);
+    assert_eq!(result.metrics.sql_parse_compiled_failures, 0);
+}
+
+#[test]
 fn synthetic_project_scan_smoke() {
     let tempdir = tempfile::tempdir().expect("tempdir");
     let output = std::process::Command::new("python3")

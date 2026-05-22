@@ -13,6 +13,7 @@ pub use costguard_platform::Platform as SqlDialect;
 pub enum ParseInput {
     Raw,
     Compiled,
+    CompiledWithRawFallback,
 }
 
 #[derive(Debug, Clone)]
@@ -95,11 +96,20 @@ pub fn analyze_sql(
     let sanitized = strip_jinja(text);
     let parsed_raw = try_parse_sql(dialect.as_ref(), &sanitized);
     let parsed_compiled = compiled_code
-        .map(|code| try_parse_sql(dialect.as_ref(), code))
+        .map(|code| {
+            let normalized = normalize_for_parse(code, platform);
+            try_parse_sql_with_fallbacks(dialect.as_ref(), &normalized, platform)
+        })
         .unwrap_or(false);
     let used_compiled_for_parse = compiled_code.is_some();
     let (parsed, parse_input) = if used_compiled_for_parse {
-        (parsed_compiled, ParseInput::Compiled)
+        if parsed_compiled {
+            (true, ParseInput::Compiled)
+        } else if parsed_raw {
+            (true, ParseInput::CompiledWithRawFallback)
+        } else {
+            (false, ParseInput::Compiled)
+        }
     } else {
         (parsed_raw, ParseInput::Raw)
     };
@@ -122,6 +132,158 @@ pub fn analyze_sql(
 
 fn try_parse_sql(dialect: &dyn sqlparser::dialect::Dialect, text: &str) -> bool {
     Parser::parse_sql(dialect, text).is_ok()
+}
+
+pub fn normalize_for_parse(text: &str, platform: Platform) -> String {
+    let trimmed = text.trim();
+    let without_comments = strip_sql_comments(trimmed);
+    if platform == Platform::Trino {
+        apply_trino_parse_rewrites(&without_comments)
+    } else {
+        without_comments
+    }
+}
+
+fn try_parse_sql_with_fallbacks(
+    dialect: &dyn sqlparser::dialect::Dialect,
+    text: &str,
+    platform: Platform,
+) -> bool {
+    if try_parse_sql(dialect, text) {
+        return true;
+    }
+
+    let relaxed = apply_trino_parse_rewrites(text);
+    if relaxed != text && try_parse_sql(dialect, &relaxed) {
+        return true;
+    }
+
+    if let Some(statement) = largest_query_statement(text) {
+        if try_parse_sql(dialect, &statement) {
+            return true;
+        }
+        let normalized_statement = normalize_for_parse(&statement, platform);
+        if try_parse_sql(dialect, &normalized_statement) {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn strip_sql_comments(text: &str) -> String {
+    let mut output = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut block_depth = 0usize;
+
+    while let Some(ch) = chars.next() {
+        if block_depth > 0 {
+            if ch == '/' && chars.peek() == Some(&'*') {
+                chars.next();
+                block_depth += 1;
+                continue;
+            }
+            if ch == '*' && chars.peek() == Some(&'/') {
+                chars.next();
+                block_depth -= 1;
+            }
+            continue;
+        }
+
+        if !in_single && !in_double && ch == '/' && chars.peek() == Some(&'*') {
+            chars.next();
+            block_depth = 1;
+            output.push(' ');
+            continue;
+        }
+
+        if !in_single && !in_double && ch == '-' && chars.peek() == Some(&'-') {
+            while chars.next().is_some_and(|next| next != '\n') {}
+            output.push('\n');
+            continue;
+        }
+
+        if !in_double && ch == '\'' {
+            in_single = !in_single;
+            output.push(ch);
+            continue;
+        }
+
+        if !in_single && ch == '"' {
+            in_double = !in_double;
+            output.push(ch);
+            continue;
+        }
+
+        output.push(ch);
+    }
+
+    output.trim().to_string()
+}
+
+fn apply_trino_parse_rewrites(text: &str) -> String {
+    let without_try_cast = try_cast_regex().replace_all(text, "CAST(");
+    try_fn_regex()
+        .replace_all(&without_try_cast, "(")
+        .to_string()
+}
+
+fn split_sql_statements(text: &str) -> Vec<String> {
+    let mut statements = Vec::new();
+    let mut current = String::new();
+    let mut chars = text.chars().peekable();
+    let mut in_single = false;
+    let mut in_double = false;
+
+    while let Some(ch) = chars.next() {
+        if !in_double && ch == '\'' {
+            in_single = !in_single;
+            current.push(ch);
+            continue;
+        }
+        if !in_single && ch == '"' {
+            in_double = !in_double;
+            current.push(ch);
+            continue;
+        }
+        if !in_single && !in_double && ch == ';' {
+            let trimmed = current.trim();
+            if !trimmed.is_empty() {
+                statements.push(trimmed.to_string());
+            }
+            current.clear();
+            continue;
+        }
+        current.push(ch);
+    }
+
+    let trimmed = current.trim();
+    if !trimmed.is_empty() {
+        statements.push(trimmed.to_string());
+    }
+    statements
+}
+
+fn largest_query_statement(text: &str) -> Option<String> {
+    split_sql_statements(text)
+        .into_iter()
+        .filter(|statement| {
+            let lower = statement.trim_start().to_ascii_lowercase();
+            lower.starts_with("select") || lower.starts_with("with")
+        })
+        .max_by_key(|statement| statement.len())
+}
+
+fn try_cast_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    cached_regex(&RE, r"(?i)\bTRY_CAST\s*\(")
+}
+
+fn try_fn_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    cached_regex(&RE, r"(?i)\bTRY\s*\(")
 }
 
 pub fn strip_jinja(text: &str) -> String {
@@ -460,5 +622,52 @@ mod tests {
         assert_eq!(doc.features.select_stars.len(), 1);
         assert_eq!(doc.features.window_functions.len(), 1);
         assert_eq!(doc.features.joins.len(), 1);
+    }
+
+    #[test]
+    fn normalize_strips_comments_and_try_cast() {
+        let sql = "-- header\nSELECT TRY_CAST(x AS bigint) FROM t";
+        let normalized = normalize_for_parse(sql, Platform::Trino);
+        assert!(!normalized.contains("-- header"));
+        assert!(normalized.contains("CAST("));
+        assert!(!normalized.to_ascii_lowercase().contains("try_cast"));
+    }
+
+    #[test]
+    fn compiled_fallback_uses_raw_when_compiled_unparseable() {
+        let raw = "select id from stg";
+        let compiled = "SELECT id FROM stg WHERE TRY_INVALID_SYNTAX(!!!";
+        let index = LineIndex::new(raw);
+        let doc = analyze_sql(
+            PathBuf::from("x.sql"),
+            raw,
+            Platform::Trino,
+            &index,
+            Some(compiled),
+            true,
+        );
+        assert!(!doc.parsed_compiled);
+        assert!(doc.parsed_raw);
+        assert!(doc.parsed);
+        assert_eq!(doc.parse_input, ParseInput::CompiledWithRawFallback);
+    }
+
+    #[test]
+    fn trino_try_cast_normalizes_to_parseable_sql() {
+        let sql = "SELECT TRY_CAST(block_time AS timestamp) FROM dex.trades";
+        let normalized = normalize_for_parse(sql, Platform::Trino);
+        let dialect = Platform::Trino.sqlparser_dialect();
+        assert!(Parser::parse_sql(dialect.as_ref(), &normalized).is_ok());
+    }
+
+    #[test]
+    fn parses_largest_statement_from_multi_statement_compiled() {
+        let dialect = Platform::Trino.sqlparser_dialect();
+        let sql = "SET session x = '1'; SELECT id FROM t WHERE block_time >= date_sub(current_date, interval '3' day);";
+        assert!(try_parse_sql_with_fallbacks(
+            dialect.as_ref(),
+            sql,
+            Platform::Trino
+        ));
     }
 }

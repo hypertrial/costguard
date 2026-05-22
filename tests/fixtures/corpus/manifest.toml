@@ -69,3 +69,9 @@ name = "compiled_manifest_parse"
 path = "compiled_manifest_parse"
 expect_rules = []
 forbid_rules = ["SQLCOST005"]
+
+[[case]]
+name = "trino_parse"
+path = "trino_parse"
+expect_rules = []
+forbid_rules = ["SQLCOST005"]

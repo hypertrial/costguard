@@ -16,9 +16,18 @@ dbt_adapter = "dbt-trino"
 dbt_profile_type = "trino"
 dbt_compile_dirs = [
   "dbt_subprojects/dex",
+  "dbt_subprojects/tokens",
+  "dbt_subprojects/solana",
+  "dbt_subprojects/daily_spellbook",
+  "dbt_subprojects/hourly_spellbook",
+]
+scan_paths = [
+  ".",
+  "dbt_subprojects/dex",
   "dbt_subprojects/solana",
   "dbt_subprojects/tokens",
+  "dbt_subprojects/daily_spellbook",
+  "dbt_subprojects/hourly_spellbook",
 ]
-scan_paths = [".", "dbt_subprojects/dex", "dbt_subprojects/solana", "dbt_subprojects/tokens"]
 fail_on = "critical"
 max_parse_failure_rate = 0.35

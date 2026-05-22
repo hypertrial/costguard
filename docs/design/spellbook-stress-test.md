@@ -36,8 +36,11 @@ git clone https://github.com/duneanalytics/spellbook.git
 cd spellbook
 
 pip install dbt-trino
-dbt deps
-dbt compile --target dev
+# Compile each subproject (benchmark script automates this):
+for sub in dex tokens solana daily_spellbook hourly_spellbook; do
+  dbt deps --project-dir "dbt_subprojects/${sub}"
+  dbt compile --project-dir "dbt_subprojects/${sub}" --target dev
+done
 
 costguard scan . --warehouse trino --manifest target/manifest.json
 costguard scan models --warehouse trino --manifest target/manifest.json --format json > costguard-spellbook.json
