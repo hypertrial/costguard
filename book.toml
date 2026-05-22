@@ -1,0 +1,13 @@
+[book]
+title = "Costguard"
+authors = ["Costguard Contributors"]
+description = "Documentation for Costguard — PR-first cost and performance guardrails for dbt and warehouse SQL."
+language = "en"
+src = "docs/book"
+
+[build]
+build-dir = "book"
+
+[output.html]
+git-repository-url = "https://github.com/hypertrial/costguard"
+edit-url-template = "https://github.com/hypertrial/costguard/edit/main/{path}"

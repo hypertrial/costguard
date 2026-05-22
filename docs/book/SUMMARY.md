@@ -1,0 +1,53 @@
+# Summary
+
+[Introduction](README.md)
+
+# Getting started
+
+- [Quick start (PR check)](getting-started/quick-start.md)
+- [Local scan and explain](getting-started/local-scan.md)
+- [Pre-commit (planned)](getting-started/pre-commit.md)
+
+# Reference
+
+- [CLI](reference/cli.md)
+- [Configuration](reference/configuration.md)
+- [Output formats and exit codes](reference/output.md)
+- [Suppressions](reference/suppressions.md)
+- [Parse metrics](reference/parse-metrics.md)
+- [Platforms and warehouses](reference/platforms.md)
+- [Scripts](reference/scripts.md)
+
+# Rules
+
+- [Rule catalog](rules/index.md)
+- [SQLCOST001](../rules/SQLCOST001.md)
+- [SQLCOST002](../rules/SQLCOST002.md)
+- [SQLCOST003](../rules/SQLCOST003.md)
+- [SQLCOST004](../rules/SQLCOST004.md)
+- [SQLCOST005](../rules/SQLCOST005.md)
+- [SQLCOST006](../rules/SQLCOST006.md)
+- [SQLCOST007](../rules/SQLCOST007.md)
+- [SQLCOST008](../rules/SQLCOST008.md)
+- [SQLCOST009](../rules/SQLCOST009.md)
+- [SQLCOST010](../rules/SQLCOST010.md)
+- [SQLCOST011](../rules/SQLCOST011.md)
+- [SQLCOST012](../rules/SQLCOST012.md)
+- [SQLCOST013](../rules/SQLCOST013.md)
+- [SQLCOST014](../rules/SQLCOST014.md)
+- [SQLCOST015](../rules/SQLCOST015.md)
+
+# Design
+
+- [PR check primary workflow](../design/pr-check-primary-workflow.md)
+- [Benchmark calibration](../design/benchmark-calibration.md)
+- [Spellbook stress test](../design/spellbook-stress-test.md)
+
+# Contributing and testing
+
+- [Benchmark tiers](contributing/benchmark-tiers.md)
+- [Corpus and vendored fixtures](contributing/corpus-fixtures.md)
+
+# Glossary
+
+- [Glossary](glossary.md)

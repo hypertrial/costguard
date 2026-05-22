@@ -42,6 +42,8 @@ The MVP should optimize this command:
 costguard pr --base origin/main --warehouse snowflake --fail-on high
 ```
 
+> **Note:** CLI default for `--base` is `main`. CI examples use `origin/main` after checkout with `fetch-depth: 0`.
+
 CI-oriented output formats:
 
 ```bash
@@ -94,3 +96,5 @@ MVP pass/fail should be based on risk severity:
 Do not make dollar thresholds the MVP. True cost estimation needs warehouse metadata,
 table sizes, query history, pricing models, partitioning/clustering stats, cache behavior,
 and execution plans. Add dollar estimates later as enrichment, not as the first gating model.
+
+Suppression directives: prefer SQL comment prefix `-- costguard: ...` (bare `costguard:` also works). See [Suppressions](../book/reference/suppressions.md).

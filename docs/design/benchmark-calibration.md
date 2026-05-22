@@ -1,10 +1,11 @@
 # Benchmark calibration workflow
 
-Costguard uses a three-tier testing model for realistic dbt project analysis:
+Costguard uses a **four-layer** benchmark model for realistic dbt project analysis. See the [Glossary — Benchmark layers](../book/glossary.md#benchmark-layers-canonical) for canonical definitions and legacy tier mapping.
 
 1. **Corpus regression** (`tests/fixtures/corpus/`) — fast, deterministic rule contracts in normal CI.
 2. **Vendored real-world snippets** (`tests/fixtures/real_world/`) — offline production-style SQL/Jinja/manifest patterns.
 3. **External repo benchmarks** — opt-in clones of public dbt projects at pinned commits.
+4. **Synthetic scale** — generated 1k/5k/10k model repos for runtime and memory testing.
 
 ## Quick commands
 
@@ -30,7 +31,7 @@ GitHub Actions: run the **benchmark** workflow manually (`workflow_dispatch`) wi
 
 ## Baseline files
 
-Baselines live in [`tests/benchmarks/baselines/`](../tests/benchmarks/baselines/). External repo pins are defined in [`tests/benchmarks/repos.toml`](../tests/benchmarks/repos.toml).
+Baselines live in [`tests/benchmarks/baselines/`](../../tests/benchmarks/baselines/). External repo pins are defined in [`tests/benchmarks/repos.toml`](../../tests/benchmarks/repos.toml).
 
 | Target kind | Pass criteria |
 | --- | --- |
@@ -47,7 +48,7 @@ When a manifest with `compiled_code` is loaded:
 - Headline `sql_parse_failures` uses compiled parse when available, with **stripped-raw fallback** when compiled parse fails (`parsed_compiled || parsed_raw`).
 - `sql_parse_compiled_total` counts models with a compiled attempt; `sql_parse_compiled_failures` counts models where **compiled parse failed** (dialect quality signal, independent of raw fallback). Spellbook baseline requires **`sql_parse_compiled_failures = 0`**.
 
-External Spellbook benchmarks compile all five subprojects (`dex`, `tokens`, `solana`, `daily_spellbook`, `hourly_spellbook`) — see `dbt_compile_dirs` in [`repos.toml`](../tests/benchmarks/repos.toml) — and scan with `--warehouse trino`.
+External Spellbook benchmarks compile all five subprojects (`dex`, `tokens`, `solana`, `daily_spellbook`, `hourly_spellbook`) — see `dbt_compile_dirs` in [`repos.toml`](../../tests/benchmarks/repos.toml) — merge manifests into root `target/manifest.json`, and scan with `--warehouse trino`.
 
 Reports are written to `tests/benchmarks/reports/` (gitignored).
 
@@ -57,7 +58,7 @@ When an external benchmark surfaces a finding worth keeping:
 
 1. **Triage** the diagnostic — true positive, false positive, or parser limitation.
 2. **Extract** a minimal SQL/YAML snippet into `tests/fixtures/corpus/` or `tests/fixtures/real_world/`.
-3. **Register** corpus cases in [`tests/fixtures/corpus/manifest.toml`](../tests/fixtures/corpus/manifest.toml).
+3. **Register** corpus cases in [`tests/fixtures/corpus/manifest.toml`](../../tests/fixtures/corpus/manifest.toml).
 4. **Update** the relevant baseline with `--update-baseline`.
 5. **Record** the verdict in the table below.
 
@@ -79,5 +80,6 @@ PR-mode behavior is covered by [`crates/costguard-core/tests/pr_replay.rs`](../.
 
 ## Related docs
 
+- [Documentation book](../book/README.md)
 - [Spellbook stress test plan](spellbook-stress-test.md)
 - [PR check primary workflow](pr-check-primary-workflow.md)

@@ -16,6 +16,9 @@ target
 **/mutants.out*/
 
 .cache/
+/book/
+/design/
+/rules/
 tests/benchmarks/reports/
 
 # RustRover

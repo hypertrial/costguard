@@ -4,9 +4,9 @@ Dune Spellbook (`duneanalytics/spellbook`) is the primary public-real stress tes
 
 Primary repo: <https://github.com/duneanalytics/spellbook>
 
-## Automated benchmark harness
+## Automated benchmark harness (recommended)
 
-Use the repo benchmark script instead of ad-hoc clone commands when possible:
+Use the repo benchmark script instead of ad-hoc clone commands:
 
 ```bash
 python3 scripts/benchmark_external_repo.py --repo spellbook
@@ -14,10 +14,19 @@ python3 scripts/benchmark_external_repo.py --repo jaffle-shop
 python3 scripts/benchmark_external_repo.py --all-vendored
 ```
 
+The script compiles five subprojects, **merges** their manifests into root `target/manifest.json`, scans with `--warehouse trino`, and compares against baselines.
+
+Compiled-parse gate:
+
+```bash
+python3 scripts/audit_compiled_parse_failures.py \
+  ~/.cache/costguard/benchmarks/spellbook/target/manifest.json --bucket
+```
+
 Pinned commits and scan paths are defined in
 [`tests/benchmarks/repos.toml`](../../tests/benchmarks/repos.toml).
 Baselines live in [`tests/benchmarks/baselines/`](../../tests/benchmarks/baselines/).
-See [`benchmark-calibration.md`](benchmark-calibration.md) for the triage loop.
+See [`benchmark-calibration.md`](benchmark-calibration.md) for the triage loop and [Benchmark tiers](../book/contributing/benchmark-tiers.md) for the canonical four-layer model.
 
 GitHub Actions: run the **benchmark** workflow (`workflow_dispatch`) with target `spellbook`.
 
@@ -29,33 +38,39 @@ Why Spellbook:
 - Its blockchain analytics domain creates realistic SQL and Jinja patterns across DEX, NFT, Solana, and token datasets.
 - It should expose scanner gaps, dbt graph assumptions, noisy rules, and parser resilience issues quickly.
 
-Initial command set:
+## Manual workflow (advanced / debugging)
+
+For debugging outside the benchmark harness:
 
 ```bash
 git clone https://github.com/duneanalytics/spellbook.git
 cd spellbook
 
 pip install dbt-trino
-# Compile each subproject (benchmark script automates this):
 for sub in dex tokens solana daily_spellbook hourly_spellbook; do
   dbt deps --project-dir "dbt_subprojects/${sub}"
   dbt compile --project-dir "dbt_subprojects/${sub}" --target dev
 done
+```
 
+After per-subproject compiles, merge manifests before scanning (the benchmark script does this via `merge_manifests` in `scripts/benchmark_external_repo.py`). Without a merged root manifest, `--manifest target/manifest.json` may be missing or incomplete.
+
+Example scan after merge (or use the benchmark script):
+
+```bash
 costguard scan . --warehouse trino --manifest target/manifest.json
-costguard scan models --warehouse trino --manifest target/manifest.json --format json > costguard-spellbook.json
-costguard scan dbt_subprojects --warehouse trino --manifest target/manifest.json
+costguard scan dbt_subprojects --warehouse trino --manifest target/manifest.json --format json > costguard-spellbook.json
 costguard scan . --warehouse trino --manifest target/manifest.json --fail-on high
 ```
 
-PR-first output smoke checks after cloning:
+PR-first output smoke checks:
 
 ```bash
 costguard pr --base origin/main --warehouse trino --manifest target/manifest.json --fail-on high --format github
 costguard pr --base origin/main --warehouse trino --manifest target/manifest.json --fail-on high --format markdown
 ```
 
-These commands should be run manually or in an explicit benchmark job, not in normal CI. The benchmark script runs `dbt compile` automatically when `compile_dbt = true` in `repos.toml`.
+These commands should be run manually or in an explicit benchmark job, not in normal CI.
 
 Later, if project-directory workflows need targeted checks:
 
@@ -65,12 +80,12 @@ costguard scan dbt_subprojects/solana --warehouse trino --manifest target/manife
 costguard scan dbt_subprojects/tokens --warehouse trino --manifest target/manifest.json
 ```
 
-Metrics to capture:
+## Metrics to capture
 
 | Metric | Why |
 | --- | --- |
 | Total files scanned | scanner correctness |
-| SQL/Jinja parse failure rate | robustness |
+| SQL/Jinja parse failure rate (model-scoped) | robustness — see [Parse metrics](../book/reference/parse-metrics.md) |
 | `sql_parse_compiled_failures` | Trino compiled SQL dialect quality (Spellbook gate: 0) |
 | Diagnostics per rule | noisy-rule detection |
 | High-severity false positives | MVP quality |
@@ -79,19 +94,21 @@ Metrics to capture:
 | Suppression needs | rule ergonomics |
 | Crash count | parser resilience |
 
-Benchmark tiers:
+## Benchmark layers
+
+See [Benchmark tiers](../book/contributing/benchmark-tiers.md) for the canonical four-layer model. Legacy Spellbook roadmap names:
 
 ```text
-tier_0_smoke:   dbt-labs/jaffle-shop
+tier_0_smoke:   dbt-labs/jaffle-shop        -> External layer
 tier_1_real:    mattermost/mattermost-data-warehouse
-tier_2_stress:  duneanalytics/spellbook
-tier_3_breadth: selected repos from InfuseAI/awesome-public-dbt-projects
-tier_4_scale:   synthetic 1k/5k/10k model generated repos
+tier_2_stress:  duneanalytics/spellbook     -> External layer
+tier_3_breadth: selected awesome-public-dbt-projects repos
+tier_4_scale:   synthetic 1k/5k/10k         -> Synthetic scale layer
 ```
 
 Use Spellbook as the primary public-real stress test before expanding to the broader public dbt corpus.
 
-Synthetic scale harness:
+## Synthetic scale harness
 
 ```bash
 python3 scripts/generate_synthetic_dbt.py /tmp/costguard-synthetic-1k --models 1000
@@ -99,6 +116,9 @@ costguard scan /tmp/costguard-synthetic-1k --warehouse generic --fail-on critica
 
 python3 scripts/generate_synthetic_dbt.py /tmp/costguard-synthetic-5k --models 5000
 costguard scan /tmp/costguard-synthetic-5k --warehouse generic --fail-on critical
+
+python3 scripts/generate_synthetic_dbt.py /tmp/costguard-synthetic-10k --models 10000
+costguard scan /tmp/costguard-synthetic-10k --warehouse generic --fail-on critical
 ```
 
 Use the synthetic harness to measure regex caching, project-level indexes, runtime, and peak

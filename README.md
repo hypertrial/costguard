@@ -4,63 +4,34 @@ Costguard is a PR-first check for catching expensive dbt and warehouse SQL befor
 
 Runs locally as a fast Rust CLI. No warehouse credentials required.
 
-## Why
-
-Analytics teams usually introduce warehouse cost and performance risks through normal PRs:
-unsafe incremental models, repeated JSON parsing, unbounded joins, blind `SELECT DISTINCT`,
-missing partition predicates, expensive regex, direct raw-source usage, and row-wise Python logic.
-
-Costguard is designed around this workflow:
-
-```text
-PR opened -> changed SQL/dbt files scanned -> cost/perf risks annotated -> fail on high-risk findings -> merge safer analytics code
-```
-
-Think of the CLI as the engine. The primary product workflow is automated PR review.
-
-```text
-Costguard CLI = engine
-Costguard GitHub Action = primary product workflow
-Costguard pre-commit = secondary workflow
-Costguard local scan = developer/debug workflow
-```
-
-The current MVP ships the CLI engine first; a GitHub Action should be the primary packaged workflow.
-
-## Install
+## Quick start
 
 ```bash
 cargo install --path crates/costguard-cli
-```
-
-## Usage
-
-```bash
-costguard pr --base origin/main --warehouse snowflake --fail-on high
-costguard scan models/ --warehouse snowflake
-costguard scan models/ --warehouse bigquery --format json
-costguard scan models/ --format github
-costguard scan models/ --format markdown
-costguard explain models/marts/fct_orders.sql
-costguard rules
-```
-
-The MVP fails builds by risk severity, not estimated dollars:
-
-```bash
 costguard pr --base origin/main --warehouse snowflake --fail-on high
 ```
 
-Dollar-cost estimates can be added later as enrichment once warehouse metadata, history,
-pricing, and execution-plan signals are available.
+## Documentation
 
-For CI, `--format github` emits GitHub annotation commands and `--format markdown`
-emits a PR-summary-oriented report. `costguard pr` scans changed files first, while still
-loading dbt manifest/YAML/SQL graph context for downstream blast-radius summaries.
+Full documentation is in the mdBook site under [`docs/book/`](docs/book/README.md).
+
+Build and preview locally:
+
+```bash
+python3 scripts/generate_rule_docs.py
+mdbook build
+mdbook serve
+```
+
+| Topic | Link |
+| --- | --- |
+| PR check setup | [Quick start](docs/book/getting-started/quick-start.md) |
+| CLI and config | [Reference](docs/book/reference/cli.md) |
+| Rule catalog | [Rules](docs/book/rules/index.md) |
+| Benchmarks | [Benchmark tiers](docs/book/contributing/benchmark-tiers.md) |
+| Terminology | [Glossary](docs/book/glossary.md) |
 
 ## GitHub Action
-
-Use the composite action in [`.github/actions/costguard`](.github/actions/costguard):
 
 ```yaml
 - uses: actions/checkout@v4
@@ -74,102 +45,48 @@ Use the composite action in [`.github/actions/costguard`](.github/actions/costgu
     format: github
 ```
 
-Inputs: `base`, `warehouse`, `fail-on`, `format` (`github`|`markdown`|`json`|`text`), optional `manifest`, `working-directory`, and dbt compile settings (`compile-dbt`, `dbt-target`, `dbt-project-dir`, `dbt-profiles-dir`, `dbt-adapter-package`).
+See [Quick start (PR check)](docs/book/getting-started/quick-start.md) for inputs and dbt compile behavior.
 
-When `compile-dbt` is enabled (default), the action runs `dbt deps` and `dbt compile` before scanning and automatically passes `--manifest target/manifest.json` when present. Compile uses a dummy local profile (no warehouse connection required). Override `dbt-adapter-package` for non-Trino projects (for example `dbt-postgres` for jaffle-shop).
+## What it detects
 
-GitHub-hosted runners require org Actions billing to be enabled for private repositories.
+Costguard ships 15 SQLCOST rules for incremental safety, repeated expressions, join risk, and dbt anti-patterns. See the [rule catalog](docs/book/rules/index.md) for severity and fix guidance.
 
-## Real-world Stress Testing
-
-Costguard ships a benchmark harness for realistic dbt project analysis. See
-[`docs/design/benchmark-calibration.md`](docs/design/benchmark-calibration.md)
-for the full calibration loop.
-
-| Tier | Target | How to run |
-| --- | --- | --- |
-| 0 smoke | jaffle-shop | `python3 scripts/benchmark_external_repo.py --repo jaffle-shop` |
-| 1 vendored | real-world snippets | `python3 scripts/benchmark_external_repo.py --all-vendored` |
-| 2 stress | spellbook | `python3 scripts/benchmark_external_repo.py --repo spellbook` |
-| 3 scale | synthetic 1k/5k/10k | `scripts/generate_synthetic_dbt.py` |
-
-Vendored offline fixtures live in [`tests/fixtures/real_world/`](tests/fixtures/real_world/).
-Baselines are in [`tests/benchmarks/baselines/`](tests/benchmarks/baselines/).
-
-Run the **benchmark** GitHub Actions workflow manually for jaffle-shop or Spellbook clones.
-Spellbook details: [`docs/design/spellbook-stress-test.md`](docs/design/spellbook-stress-test.md).
-
-For local scale checks without network access, generate a synthetic dbt-style project:
+## Benchmark smoke tests
 
 ```bash
-python3 scripts/generate_synthetic_dbt.py /tmp/costguard-synthetic --models 1000
-costguard scan /tmp/costguard-synthetic --warehouse generic --fail-on critical
+python3 scripts/benchmark_external_repo.py --all-vendored
+python3 scripts/benchmark_external_repo.py --repo spellbook
+cargo test -p costguard-core --test corpus
 ```
 
-See [`docs/design/pr-check-primary-workflow.md`](docs/design/pr-check-primary-workflow.md)
-for the product workflow priority.
+Layer definitions: [Benchmark tiers](docs/book/contributing/benchmark-tiers.md).
 
-## Configuration
-
-`costguard.toml` is optional. CLI flags override file settings.
-
-Supported `--warehouse` values include `generic`, `snowflake`, `bigquery`, `databricks`, `redshift`, `postgres`, `duckdb`, and `trino` (Presto/Trino SQL via Hive-family parsing). For Dune Spellbook and other Trino dbt projects, use `--warehouse trino`.
-
-For accurate parse metrics on Jinja-heavy dbt models, run `dbt compile` first and pass `--manifest target/manifest.json`. Costguard parses manifest `compiled_code` when present (with Trino normalization and GenericDialect fallback); headline parse success falls back to stripped raw SQL when compiled parse fails. The dialect-quality metric `sql_parse_compiled_failures` tracks compiled-only parse success. Rule diagnostics always remain anchored to raw source lines.
-
-Audit compiled parse failures against a merged manifest:
-
-```bash
-python3 scripts/audit_compiled_parse_failures.py path/to/manifest.json --bucket
-```
-
-Spellbook benchmarks compile five subprojects: `dex`, `tokens`, `solana`, `daily_spellbook`, and `hourly_spellbook` (see [`tests/benchmarks/repos.toml`](tests/benchmarks/repos.toml)).
+## Configuration sketch
 
 ```toml
 warehouse = "snowflake"
-dialect = "snowflake"
 
 [scan]
 paths = ["models"]
 ignore = ["target", "dbt_packages"]
 
 [output]
-format = "text"
 fail_on = "high"
 
 [dbt]
 manifest_path = "target/manifest.json"
-
-[rules.SQLCOST002]
-threshold = 3
 ```
 
-Exit codes:
+Full schema: [Configuration](docs/book/reference/configuration.md).
 
-- `0`: completed without diagnostics at or above the fail threshold
-- `1`: diagnostics met or exceeded the fail threshold
-- `2`: configuration error
-- `3`: runtime error
+## Exit codes
 
-## What It Detects
-
-- full-scan incremental models
-- repeated JSON extraction
-- repeated regex work
-- unbounded and cross joins
-- `SELECT *` in downstream models
-- blind `SELECT DISTINCT`
-- unpartitioned window functions
-- raw sources used directly in marts
-- row-wise Python dbt model logic
-
-## Non-goals
-
-- not a dbt replacement
-- not a SQL formatter
-- not a SaaS monitor
-- not a warehouse optimizer
-- does not execute Jinja or connect to warehouses
+| Code | Meaning |
+| --- | --- |
+| `0` | Pass |
+| `1` | Findings at or above `--fail-on` |
+| `2` | Config error |
+| `3` | Runtime error |
 
 ## Status
 
