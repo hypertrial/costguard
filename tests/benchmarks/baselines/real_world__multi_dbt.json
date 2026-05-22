@@ -14,7 +14,7 @@
     },
     "dbt_project_parse_failures": 1,
     "diagnostics_by_rule": {
-      "SQLCOST018": 1
+      "SQLCOST025": 1
     },
     "diagnostics_by_severity": {
       "low": 1
@@ -32,7 +32,7 @@
   "target": "real_world/multi_dbt",
   "thresholds": {
     "exact_diagnostics_by_rule": {
-      "SQLCOST018": 1
+      "SQLCOST025": 1
     },
     "max_sql_parse_failures": 0
   },

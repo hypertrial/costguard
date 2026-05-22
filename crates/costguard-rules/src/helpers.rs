@@ -88,6 +88,52 @@ pub(crate) fn has_bounded_incremental_predicate(text: &str) -> bool {
     .any(|needle| lower.contains(needle))
 }
 
+pub(crate) fn incremental_source_filter_deferred(
+    text: &str,
+    uses_is_incremental: bool,
+    has_sources: bool,
+    materialized: Option<&str>,
+    incremental_block: Option<&str>,
+) -> bool {
+    if !uses_is_incremental || !has_sources || materialized != Some("incremental") {
+        return false;
+    }
+    let predicate_scope = incremental_block.unwrap_or(text);
+    if !has_bounded_incremental_predicate(predicate_scope) {
+        return false;
+    }
+    source_read_lacks_local_partition_predicate(text)
+}
+
+fn source_read_lacks_local_partition_predicate(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    let mut search_start = 0;
+    while let Some(rel_idx) = lower[search_start..].find("source(") {
+        let abs_idx = search_start + rel_idx;
+        let before = &lower[..abs_idx];
+        let select_start = before.rfind("select").unwrap_or(0);
+        let after = &text[abs_idx..];
+        let close = after
+            .find("),")
+            .or(after.find("\n),"))
+            .unwrap_or(after.len().min(1200));
+        let scope = &text[select_start..abs_idx + close];
+        if source_scope_lacks_partition_predicate(scope) {
+            return true;
+        }
+        search_start = abs_idx + 7;
+    }
+    false
+}
+
+fn source_scope_lacks_partition_predicate(scope: &str) -> bool {
+    let lower = scope.to_ascii_lowercase();
+    let Some(where_idx) = lower.rfind("where") else {
+        return true;
+    };
+    !has_bounded_incremental_predicate(&lower[where_idx..])
+}
+
 pub(crate) fn incremental_predicate_suggestion(warehouse: Warehouse) -> &'static str {
     match warehouse {
         Warehouse::BigQuery => {

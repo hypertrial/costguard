@@ -2,8 +2,9 @@ use crate::strip::JinjaStripMap;
 use crate::{CteFeature, ExpressionFeature, JoinFeature, JoinKind, SqlFeatures, WindowFeature};
 use costguard_diagnostics::{LineIndex, Span};
 use sqlparser::ast::{
-    Expr, Function, Join, JoinConstraint, JoinOperator, Query, Select, SelectItem, SetExpr,
-    Statement, TableFactor, TableWithJoins, WindowSpec, WindowType, With,
+    BinaryOperator, DataType, DuplicateTreatment, Expr, Function, FunctionArguments, Join,
+    JoinConstraint, JoinOperator, ObjectName, Query, Select, SelectItem, SetExpr, SetOperator,
+    SetQuantifier, Statement, TableFactor, TableWithJoins, WindowSpec, WindowType, With,
 };
 
 pub fn extract_shape_features_ast(
@@ -78,7 +79,27 @@ fn extract_set_expr(
         SetExpr::Query(query) => {
             extract_query(query, sanitized, raw, strip_map, line_index, features)
         }
-        SetExpr::SetOperation { left, right, .. } => {
+        SetExpr::SetOperation {
+            op,
+            set_quantifier,
+            left,
+            right,
+        } => {
+            if matches!(op, SetOperator::Union)
+                && !matches!(
+                    set_quantifier,
+                    SetQuantifier::All | SetQuantifier::AllByName
+                )
+            {
+                if let Some(span) = find_clause_span(sanitized, raw, strip_map, line_index, "union")
+                {
+                    features.unions_without_all.push(ExpressionFeature {
+                        span,
+                        key: "union".into(),
+                        text: "union".into(),
+                    });
+                }
+            }
             extract_set_expr(left, sanitized, raw, strip_map, line_index, features);
             extract_set_expr(right, sanitized, raw, strip_map, line_index, features);
         }
@@ -102,6 +123,12 @@ fn extract_select(
                 text: "select distinct".into(),
             });
         }
+    }
+
+    if let Some(where_expr) = &select.selection {
+        extract_non_sargable_predicates(
+            where_expr, sanitized, raw, strip_map, line_index, features,
+        );
     }
 
     for item in &select.projection {
@@ -169,28 +196,35 @@ fn extract_join(
         JoinKind::Full => "full join",
         JoinKind::Inner | JoinKind::Comma => " join",
     };
-    let predicate = match &join.join_operator {
+    let (predicate, has_equality, function_on_join_key) = match &join.join_operator {
         JoinOperator::Inner(inner)
         | JoinOperator::LeftOuter(inner)
         | JoinOperator::RightOuter(inner)
         | JoinOperator::FullOuter(inner) => match inner {
-            JoinConstraint::On(expr) => Some(expr.to_string()),
-            JoinConstraint::Using(ids) => Some(format!("USING({ids:?})")),
-            _ => None,
+            JoinConstraint::On(expr) => {
+                let predicate = expr.to_string();
+                let predicate_lower = predicate.to_ascii_lowercase();
+                (
+                    Some(predicate),
+                    has_equality_predicate(&predicate_lower),
+                    join_predicate_has_function_on_key(expr),
+                )
+            }
+            JoinConstraint::Using(ids) => {
+                let predicate = format!("USING({ids:?})");
+                (Some(predicate), true, false)
+            }
+            _ => (None, false, false),
         },
-        _ => None,
+        _ => (None, false, false),
     };
-    let predicate_lower = predicate
-        .as_deref()
-        .unwrap_or_default()
-        .to_ascii_lowercase();
     if let Some(span) = find_clause_span(sanitized, raw, strip_map, line_index, needle) {
         features.joins.push(JoinFeature {
             span,
             kind,
             predicate,
-            has_equality: has_equality_predicate(&predicate_lower),
-            function_on_both_sides: function_on_both_sides(&predicate_lower),
+            has_equality,
+            function_on_join_key,
         });
     }
     extract_table_factor(
@@ -212,6 +246,20 @@ fn extract_table_factor(
     features: &mut SqlFeatures,
 ) {
     match factor {
+        TableFactor::Table { name, .. } => {
+            if table_name_has_wildcard(name) && !text_has_table_suffix_bound(sanitized) {
+                let table_text = name.to_string();
+                if let Some(span) =
+                    find_clause_span(sanitized, raw, strip_map, line_index, &table_text)
+                {
+                    features.wildcard_table_scans.push(ExpressionFeature {
+                        span,
+                        key: table_text.clone(),
+                        text: table_text,
+                    });
+                }
+            }
+        }
         TableFactor::Derived { subquery, .. } => {
             extract_set_expr(
                 subquery.body.as_ref(),
@@ -246,6 +294,18 @@ fn extract_expr(
 ) {
     match expr {
         Expr::Function(function) => {
+            if is_count_distinct(function) {
+                let snippet = function.to_string();
+                if let Some(span) =
+                    find_clause_span(sanitized, raw, strip_map, line_index, &snippet)
+                {
+                    features.count_distincts.push(ExpressionFeature {
+                        span,
+                        key: "count(distinct".into(),
+                        text: snippet,
+                    });
+                }
+            }
             extract_function(function, sanitized, raw, strip_map, line_index, features)
         }
         Expr::Nested(inner) => extract_expr(inner, sanitized, raw, strip_map, line_index, features),
@@ -278,6 +338,54 @@ fn extract_function(
                 }
             }
         }
+    }
+}
+
+fn extract_non_sargable_predicates(
+    expr: &Expr,
+    sanitized: &str,
+    raw: &str,
+    strip_map: &JinjaStripMap,
+    line_index: &LineIndex,
+    features: &mut SqlFeatures,
+) {
+    match expr {
+        Expr::BinaryOp { left, op, right } => match op {
+            BinaryOperator::And | BinaryOperator::Or => {
+                extract_non_sargable_predicates(
+                    left, sanitized, raw, strip_map, line_index, features,
+                );
+                extract_non_sargable_predicates(
+                    right, sanitized, raw, strip_map, line_index, features,
+                );
+            }
+            BinaryOperator::Eq
+            | BinaryOperator::NotEq
+            | BinaryOperator::Lt
+            | BinaryOperator::LtEq
+            | BinaryOperator::Gt
+            | BinaryOperator::GtEq => {
+                for side in [left.as_ref(), right.as_ref()] {
+                    if is_non_sargable_filter(side) {
+                        let snippet = side.to_string();
+                        if let Some(span) =
+                            find_clause_span(sanitized, raw, strip_map, line_index, &snippet)
+                        {
+                            features.non_sargable_predicates.push(ExpressionFeature {
+                                span,
+                                key: snippet.clone(),
+                                text: snippet,
+                            });
+                        }
+                    }
+                }
+            }
+            _ => {}
+        },
+        Expr::Nested(inner) => {
+            extract_non_sargable_predicates(inner, sanitized, raw, strip_map, line_index, features)
+        }
+        _ => {}
     }
 }
 
@@ -357,8 +465,158 @@ fn has_equality_predicate(predicate: &str) -> bool {
     predicate.contains('=') && !predicate.contains(">=") && !predicate.contains("<=")
 }
 
-fn function_on_both_sides(predicate: &str) -> bool {
-    predicate.contains('(') && predicate.contains('=')
+fn join_predicate_has_function_on_key(expr: &Expr) -> bool {
+    match expr {
+        Expr::BinaryOp {
+            left,
+            op: BinaryOperator::Eq,
+            right,
+        } => is_function_wrapped_join_key(left) || is_function_wrapped_join_key(right),
+        Expr::BinaryOp {
+            left,
+            op: BinaryOperator::And,
+            right,
+        } => join_predicate_has_function_on_key(left) || join_predicate_has_function_on_key(right),
+        Expr::Nested(inner) => join_predicate_has_function_on_key(inner),
+        _ => false,
+    }
+}
+
+fn is_function_wrapped_join_key(expr: &Expr) -> bool {
+    match expr {
+        Expr::Function(function) => is_join_key_normalization_function(function),
+        Expr::Cast { .. } => true,
+        Expr::Nested(inner) => is_function_wrapped_join_key(inner),
+        _ => false,
+    }
+}
+
+fn is_join_key_normalization_function(function: &Function) -> bool {
+    let name = function_name(function);
+    matches!(
+        name.as_str(),
+        "lower"
+            | "upper"
+            | "trim"
+            | "ltrim"
+            | "rtrim"
+            | "cast"
+            | "date"
+            | "date_trunc"
+            | "to_char"
+            | "to_varchar"
+            | "coalesce"
+    )
+}
+
+fn is_non_sargable_filter(expr: &Expr) -> bool {
+    match expr {
+        Expr::Function(function) => {
+            is_sargability_breaking_function(function)
+                && function
+                    .args
+                    .args()
+                    .iter()
+                    .any(expr_contains_partition_column_in_arg)
+        }
+        Expr::Cast {
+            expr: inner,
+            data_type,
+            ..
+        } => is_date_like_type(data_type) && expr_contains_partition_column(inner),
+        Expr::Nested(inner) => is_non_sargable_filter(inner),
+        _ => false,
+    }
+}
+
+fn is_sargability_breaking_function(function: &Function) -> bool {
+    let name = function_name(function);
+    matches!(
+        name.as_str(),
+        "date" | "date_trunc" | "timestamp_trunc" | "datetime" | "to_date" | "trunc" | "cast"
+    )
+}
+
+fn is_count_distinct(function: &Function) -> bool {
+    function_name(function) == "count"
+        && matches!(function.args, FunctionArguments::List(ref list) if matches!(list.duplicate_treatment, Some(DuplicateTreatment::Distinct)))
+}
+
+fn function_name(function: &Function) -> String {
+    function
+        .name
+        .0
+        .last()
+        .map(|ident| ident.value.to_ascii_lowercase())
+        .unwrap_or_default()
+}
+
+fn expr_contains_partition_column(expr: &Expr) -> bool {
+    match expr {
+        Expr::Identifier(ident) => is_partition_column_name(&ident.value),
+        Expr::CompoundIdentifier(parts) => parts
+            .last()
+            .is_some_and(|ident| is_partition_column_name(&ident.value)),
+        Expr::Function(function) => function
+            .args
+            .args()
+            .iter()
+            .any(expr_contains_partition_column_in_arg),
+        Expr::Cast { expr: inner, .. } => expr_contains_partition_column(inner),
+        Expr::Nested(inner) => expr_contains_partition_column(inner),
+        _ => false,
+    }
+}
+
+fn expr_contains_partition_column_in_arg(arg: &sqlparser::ast::FunctionArg) -> bool {
+    use sqlparser::ast::FunctionArg;
+    match arg {
+        FunctionArg::Unnamed(sqlparser::ast::FunctionArgExpr::Expr(expr))
+        | FunctionArg::Named {
+            arg: sqlparser::ast::FunctionArgExpr::Expr(expr),
+            ..
+        } => expr_contains_partition_column(expr),
+        _ => false,
+    }
+}
+
+fn is_partition_column_name(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    [
+        "block_time",
+        "event_time",
+        "created_at",
+        "updated_at",
+        "event_date",
+        "ingested_at",
+        "_partitiontime",
+        "_partitiondate",
+        "partition_date",
+        "block_date",
+        "block_timestamp",
+        "block_number",
+        "block_num",
+        "evt_block_time",
+        "evt_block_number",
+    ]
+    .iter()
+    .any(|needle| lower == *needle || lower.ends_with(&format!("_{needle}")))
+}
+
+fn is_date_like_type(data_type: &DataType) -> bool {
+    matches!(
+        data_type,
+        DataType::Date | DataType::Datetime(_) | DataType::Timestamp(_, _) | DataType::Time(_, _)
+    )
+}
+
+fn table_name_has_wildcard(name: &ObjectName) -> bool {
+    name.to_string().contains('*')
+}
+
+fn text_has_table_suffix_bound(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    lower.contains("_table_suffix")
 }
 
 pub fn merge_shape_features(mut base: SqlFeatures, ast: SqlFeatures, parsed: bool) -> SqlFeatures {
@@ -386,5 +644,30 @@ pub fn merge_shape_features(mut base: SqlFeatures, ast: SqlFeatures, parsed: boo
     if !ast.cte_references.is_empty() {
         base.cte_references = ast.cte_references;
     }
+    if !ast.non_sargable_predicates.is_empty() {
+        base.non_sargable_predicates = ast.non_sargable_predicates;
+    }
+    if !ast.unions_without_all.is_empty() {
+        base.unions_without_all = ast.unions_without_all;
+    }
+    if !ast.count_distincts.is_empty() {
+        base.count_distincts = ast.count_distincts;
+    }
+    if !ast.wildcard_table_scans.is_empty() {
+        base.wildcard_table_scans = ast.wildcard_table_scans;
+    }
     base
+}
+
+trait FunctionArgListExt {
+    fn args(&self) -> &[sqlparser::ast::FunctionArg];
+}
+
+impl FunctionArgListExt for FunctionArguments {
+    fn args(&self) -> &[sqlparser::ast::FunctionArg] {
+        match self {
+            FunctionArguments::List(list) => &list.args,
+            _ => &[],
+        }
+    }
 }

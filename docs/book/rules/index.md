@@ -24,9 +24,16 @@ python3 scripts/generate_rule_docs.py
 | medium | `SQLCOST013` | Unpartitioned window function | [SQLCOST013](../../rules/SQLCOST013.md) |
 | low | `SQLCOST014` | Repeated CTE reference | [SQLCOST014](../../rules/SQLCOST014.md) |
 | medium | `SQLCOST015` | Expensive expression repeated across downstream models | [SQLCOST015](../../rules/SQLCOST015.md) |
-| info | `SQLCOST016` | Scan without dbt manifest | [SQLCOST016](../../rules/SQLCOST016.md) |
-| low | `SQLCOST017` | Schema YAML parse failure | [SQLCOST017](../../rules/SQLCOST017.md) |
-| low | `SQLCOST018` | dbt_project.yml metadata issue | [SQLCOST018](../../rules/SQLCOST018.md) |
+| high | `SQLCOST016` | Non-sargable partition or date predicate | [SQLCOST016](../../rules/SQLCOST016.md) |
+| high | `SQLCOST017` | Function-wrapped join key | [SQLCOST017](../../rules/SQLCOST017.md) |
+| medium | `SQLCOST018` | UNION instead of UNION ALL | [SQLCOST018](../../rules/SQLCOST018.md) |
+| high | `SQLCOST019` | Incremental model reads source without source-side bound | [SQLCOST019](../../rules/SQLCOST019.md) |
+| medium | `SQLCOST020` | Exact distinct aggregation on large model | [SQLCOST020](../../rules/SQLCOST020.md) |
+| medium | `SQLCOST021` | BigQuery wildcard table scan without suffix bound | [SQLCOST021](../../rules/SQLCOST021.md) |
+| medium | `SQLCOST022` | Python model collects warehouse data locally | [SQLCOST022](../../rules/SQLCOST022.md) |
+| info | `SQLCOST023` | Scan without dbt manifest | [SQLCOST023](../../rules/SQLCOST023.md) |
+| low | `SQLCOST024` | Schema YAML parse failure | [SQLCOST024](../../rules/SQLCOST024.md) |
+| low | `SQLCOST025` | dbt_project.yml metadata issue | [SQLCOST025](../../rules/SQLCOST025.md) |
 
 ## Descriptions
 
@@ -150,27 +157,83 @@ Detects repeated JSON, regex, or normalization expressions across files.
 
 Fix guidance: [SQLCOST015.md](../../rules/SQLCOST015.md)
 
-### `SQLCOST016` — Scan without dbt manifest
+### `SQLCOST016` — Non-sargable partition or date predicate
+
+**Severity:** high
+
+Detects filters that wrap likely partition or date columns in functions.
+
+Fix guidance: [SQLCOST016.md](../../rules/SQLCOST016.md)
+
+### `SQLCOST017` — Function-wrapped join key
+
+**Severity:** high
+
+Detects joins where a join key is transformed inline.
+
+Fix guidance: [SQLCOST017.md](../../rules/SQLCOST017.md)
+
+### `SQLCOST018` — UNION instead of UNION ALL
+
+**Severity:** medium
+
+Detects plain UNION in dbt models.
+
+Fix guidance: [SQLCOST018.md](../../rules/SQLCOST018.md)
+
+### `SQLCOST019` — Incremental model reads source without source-side bound
+
+**Severity:** high
+
+Detects incremental models that read source() before applying a partition predicate.
+
+Fix guidance: [SQLCOST019.md](../../rules/SQLCOST019.md)
+
+### `SQLCOST020` — Exact distinct aggregation on large model
+
+**Severity:** medium
+
+Detects count(distinct ...) in downstream models.
+
+Fix guidance: [SQLCOST020.md](../../rules/SQLCOST020.md)
+
+### `SQLCOST021` — BigQuery wildcard table scan without suffix bound
+
+**Severity:** medium
+
+Detects wildcard tables without a bounded _TABLE_SUFFIX filter.
+
+Fix guidance: [SQLCOST021.md](../../rules/SQLCOST021.md)
+
+### `SQLCOST022` — Python model collects warehouse data locally
+
+**Severity:** medium
+
+Detects Python dbt patterns that pull warehouse data into local memory.
+
+Fix guidance: [SQLCOST022.md](../../rules/SQLCOST022.md)
+
+### `SQLCOST023` — Scan without dbt manifest
 
 **Severity:** info
 
 Reports when Costguard scans dbt metadata from YAML/SQL only without a manifest.
 
-Fix guidance: [SQLCOST016.md](../../rules/SQLCOST016.md)
+Fix guidance: [SQLCOST023.md](../../rules/SQLCOST023.md)
 
-### `SQLCOST017` — Schema YAML parse failure
+### `SQLCOST024` — Schema YAML parse failure
 
 **Severity:** low
 
 Reports when a dbt schema YAML file failed to parse.
 
-Fix guidance: [SQLCOST017.md](../../rules/SQLCOST017.md)
+Fix guidance: [SQLCOST024.md](../../rules/SQLCOST024.md)
 
-### `SQLCOST018` — dbt_project.yml metadata issue
+### `SQLCOST025` — dbt_project.yml metadata issue
 
 **Severity:** low
 
 Reports when dbt_project.yml failed to parse or has an ambiguous models block.
 
-Fix guidance: [SQLCOST018.md](../../rules/SQLCOST018.md)
+Fix guidance: [SQLCOST025.md](../../rules/SQLCOST025.md)
 <!-- generated:rules:end -->

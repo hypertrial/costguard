@@ -7,7 +7,7 @@ pub(crate) struct DbtProjectMetadataRule;
 
 impl Rule for MetadataOnlyScanRule {
     fn id(&self) -> &'static str {
-        "SQLCOST016"
+        "SQLCOST023"
     }
     fn name(&self) -> &'static str {
         "Scan without dbt manifest"
@@ -25,7 +25,7 @@ impl Rule for MetadataOnlyScanRule {
 
 impl Rule for YamlParseFailedRule {
     fn id(&self) -> &'static str {
-        "SQLCOST017"
+        "SQLCOST024"
     }
     fn name(&self) -> &'static str {
         "Schema YAML parse failure"
@@ -43,7 +43,7 @@ impl Rule for YamlParseFailedRule {
 
 impl Rule for DbtProjectMetadataRule {
     fn id(&self) -> &'static str {
-        "SQLCOST018"
+        "SQLCOST025"
     }
     fn name(&self) -> &'static str {
         "dbt_project.yml metadata issue"

@@ -95,17 +95,98 @@ fn sql_rules_have_positive_coverage() {
             "models/marts/fct.sql",
             "with c as (select * from t) select * from c join c b on c.id = b.id",
         ),
+        (
+            "SQLCOST016",
+            "models/marts/fct.sql",
+            "select id from t where date(block_time) = current_date",
+        ),
+        (
+            "SQLCOST017",
+            "models/marts/fct.sql",
+            "select * from events e join users u on lower(e.email) = lower(u.email)",
+        ),
+        (
+            "SQLCOST018",
+            "models/staging/stg.sql",
+            "select id from stripe_payments union select id from paypal_payments",
+        ),
+        (
+            "SQLCOST019",
+            "models/marts/fct.sql",
+            "{{ config(materialized='incremental', unique_key='id') }}
+with raw as (
+  select * from {{ source('events', 'raw_events') }}
+),
+filtered as (
+  select * from raw
+  {% if is_incremental() %}
+  where event_date >= current_date - 3
+  {% endif %}
+)
+select * from filtered",
+        ),
+        (
+            "SQLCOST020",
+            "models/marts/fct.sql",
+            "select campaign_id, count(distinct user_id) from events group by 1",
+        ),
+        (
+            "SQLCOST022",
+            "models/marts/model.py",
+            "rows = df.collect()",
+        ),
     ];
 
     for (rule_id, path, text) in cases {
-        let file = sql_file(path, text);
-        let doc = analyze(&file);
-        let ids = run_for_file(&file, &[doc]);
+        let file = if path.ends_with(".py") {
+            python_file(path, text)
+        } else {
+            sql_file(path, text)
+        };
+        let doc = if path.ends_with(".py") {
+            None
+        } else {
+            Some(analyze(&file))
+        };
+        let docs = doc.iter().cloned().collect::<Vec<_>>();
+        let ids = run_for_file(&file, &docs);
         assert!(
             ids.contains(&rule_id.to_string()),
             "missing {rule_id}: {ids:?}"
         );
     }
+}
+
+#[test]
+fn bigquery_wildcard_rule_has_positive_coverage() {
+    let file = sql_file(
+        "models/marts/events.sql",
+        "select * from `project.dataset.events_*`",
+    );
+    let doc = analyze_bigquery(&file);
+    let registry = RuleRegistry::default_rules();
+    let indexes = ProjectIndexes::from_sql_documents(std::slice::from_ref(&doc));
+    let diagnostics = registry.run(&RuleContext {
+        warehouse: Platform::BigQuery,
+        file: &file,
+        sql: Some(&doc),
+        dbt_model: None,
+        all_sql: std::slice::from_ref(&doc),
+        project_indexes: &indexes,
+        overrides: &RuleOverrides::default(),
+    });
+    assert!(diagnostics.iter().any(|d| d.rule_id == "SQLCOST021"));
+}
+
+fn analyze_bigquery(file: &ProjectFile) -> SqlDocument {
+    analyze_sql(
+        file.path.clone(),
+        &file.text,
+        Platform::BigQuery,
+        &file.line_index,
+        None,
+        true,
+    )
 }
 
 #[test]
@@ -177,4 +258,19 @@ where block_time >= date_sub(current_date(), interval 3 day)
     let doc = analyze(&file);
     let ids = run_for_file(&file, &[doc]);
     assert!(!ids.contains(&"SQLCOST005".to_string()));
+}
+
+#[test]
+fn block_time_incremental_predicate_on_source_does_not_fire_sqlcost019() {
+    let file = sql_file(
+        "models/marts/dex_trades.sql",
+        "{{ config(materialized='incremental', unique_key='tx_hash') }}
+select tx_hash, block_time from {{ source('dex', 'trades') }}
+{% if is_incremental() %}
+where block_time >= date_sub(current_date(), interval 3 day)
+{% endif %}",
+    );
+    let doc = analyze(&file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(!ids.contains(&"SQLCOST019".to_string()));
 }

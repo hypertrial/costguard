@@ -33,7 +33,7 @@ When dbt metadata is loaded without a manifest or YAML/dbt_project parsing fails
 | `dbt_project_parse_failures` | `dbt_project.yml` parse or ambiguous `models:` block failures |
 | `metadata_only_scan` | `true` when no manifest was loaded but dbt files were present |
 
-Related diagnostics: `SQLCOST016` (no manifest), `SQLCOST017` (YAML parse failure), `SQLCOST018` (`dbt_project.yml` issue). These are Info/Low severity and do not fail default `--fail-on high` runs.
+Related diagnostics: `SQLCOST023` (no manifest), `SQLCOST024` (YAML parse failure), `SQLCOST025` (`dbt_project.yml` issue). These are Info/Low severity and do not fail default `--fail-on high` runs.
 
 ## Headline vs compiled parse
 

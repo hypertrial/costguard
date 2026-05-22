@@ -1,7 +1,12 @@
-# SQLCOST016: Scan without dbt manifest
+# SQLCOST016: Non-sargable partition or date predicate
 
-**Severity:** info
+**Severity:** high
 
-Reports when Costguard scans dbt SQL and schema YAML without a compiled `target/manifest.json`.
+Detects filters that wrap likely partition or date columns in functions, such as `date(block_time)`, `cast(event_time as date)`, or `date_trunc('day', created_at)`.
 
-Run `dbt compile` and pass `--manifest target/manifest.json` for richer model metadata and compiled SQL parse metrics.
+Compare the raw column to a bounded range instead:
+
+```sql
+where block_time >= current_date
+  and block_time < current_date + interval '1 day'
+```

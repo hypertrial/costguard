@@ -36,6 +36,16 @@
 - [SQLCOST013](../rules/SQLCOST013.md)
 - [SQLCOST014](../rules/SQLCOST014.md)
 - [SQLCOST015](../rules/SQLCOST015.md)
+- [SQLCOST016](../rules/SQLCOST016.md)
+- [SQLCOST017](../rules/SQLCOST017.md)
+- [SQLCOST018](../rules/SQLCOST018.md)
+- [SQLCOST019](../rules/SQLCOST019.md)
+- [SQLCOST020](../rules/SQLCOST020.md)
+- [SQLCOST021](../rules/SQLCOST021.md)
+- [SQLCOST022](../rules/SQLCOST022.md)
+- [SQLCOST023](../rules/SQLCOST023.md)
+- [SQLCOST024](../rules/SQLCOST024.md)
+- [SQLCOST025](../rules/SQLCOST025.md)
 
 # Design
 

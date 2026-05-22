@@ -1,7 +1,7 @@
-# SQLCOST017: Schema YAML parse failure
+# SQLCOST017: Function-wrapped join key
 
-**Severity:** low
+**Severity:** high
 
-Reports when a dbt schema YAML file failed to parse. Costguard continues with empty YAML metadata for that file.
+Detects joins where either join key is transformed inline, such as `lower(a.email) = lower(b.email)` or `cast(a.id as varchar) = b.id`.
 
-Fix the YAML syntax so model config, tests, and column metadata are available to incremental and graph rules.
+Normalize keys once in staging, then join on stored normalized columns.

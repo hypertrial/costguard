@@ -1,12 +1,13 @@
 use crate::helpers::{
     diagnostic, has_bounded_incremental_predicate, incremental_predicate_suggestion,
-    normalized_path,
+    incremental_source_filter_deferred, normalized_path,
 };
 use crate::registry::{Rule, RuleContext};
 use costguard_diagnostics::{Diagnostic, Severity};
 
 pub(crate) struct IncrementalUniqueKeyRule;
 pub(crate) struct IncrementalPredicateRule;
+pub(crate) struct IncrementalSourceBoundRule;
 pub(crate) struct SourceInMartRule;
 
 impl Rule for IncrementalUniqueKeyRule {
@@ -101,6 +102,52 @@ impl Rule for IncrementalPredicateRule {
         )
         .with_risk("incremental runs may scan much more source data than intended.")
         .with_suggestion(incremental_predicate_suggestion(ctx.warehouse))]
+    }
+}
+
+impl Rule for IncrementalSourceBoundRule {
+    fn id(&self) -> &'static str {
+        "SQLCOST019"
+    }
+    fn name(&self) -> &'static str {
+        "Incremental model reads source without source-side bound"
+    }
+    fn description(&self) -> &'static str {
+        "Detects incremental models that read source() before applying a partition predicate."
+    }
+    fn default_severity(&self) -> Severity {
+        Severity::High
+    }
+    fn check(&self, ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
+        let Some(sql) = ctx.sql else {
+            return Vec::new();
+        };
+        let materialized = ctx
+            .dbt_model
+            .and_then(|model| model.materialized.as_deref())
+            .or(sql.dbt.config.materialized.as_deref());
+        if !incremental_source_filter_deferred(
+            &ctx.file.text,
+            sql.dbt.uses_is_incremental,
+            !sql.dbt.sources.is_empty(),
+            materialized,
+            sql.dbt.incremental_block.as_deref(),
+        ) {
+            return Vec::new();
+        }
+        vec![diagnostic(
+            ctx,
+            self.id(),
+            self.default_severity(),
+            None,
+            "Incremental model reads source() before applying a partition or date predicate.",
+        )
+        .with_risk(
+            "incremental runs may scan far more raw source data than intended even when a downstream filter exists.",
+        )
+        .with_suggestion(
+            "push the partition or date predicate into the first CTE or subquery that reads source().",
+        )]
     }
 }
 

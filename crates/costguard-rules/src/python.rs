@@ -5,6 +5,7 @@ use regex::Regex;
 use std::sync::OnceLock;
 
 pub(crate) struct PythonRowWiseRule;
+pub(crate) struct PythonLocalCollectionRule;
 
 impl Rule for PythonRowWiseRule {
     fn id(&self) -> &'static str {
@@ -40,6 +41,54 @@ impl Rule for PythonRowWiseRule {
             })
             .collect()
     }
+}
+
+impl Rule for PythonLocalCollectionRule {
+    fn id(&self) -> &'static str {
+        "SQLCOST022"
+    }
+    fn name(&self) -> &'static str {
+        "Python model collects warehouse data locally"
+    }
+    fn description(&self) -> &'static str {
+        "Detects Python dbt patterns that pull warehouse data into local memory."
+    }
+    fn default_severity(&self) -> Severity {
+        Severity::Medium
+    }
+    fn check(&self, ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
+        if ctx.file.kind != costguard_scanner::FileKind::Python {
+            return Vec::new();
+        }
+        local_collection_regex()
+            .find_iter(&ctx.file.text)
+            .map(|matched| {
+                diagnostic(
+                    ctx,
+                    self.id(),
+                    self.default_severity(),
+                    Some(ctx.file.line_index.span(matched.start(), matched.end())),
+                    "Python model collects warehouse data into local memory.",
+                )
+                .with_risk(
+                    "local collection can move large warehouse datasets into driver memory and make Python models slow or unstable.",
+                )
+                .with_suggestion(
+                    "keep transformations in the warehouse dataframe API instead of toPandas(), collect(), or broad local conversion.",
+                )
+            })
+            .collect()
+    }
+}
+
+fn local_collection_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(
+            r#"(?i)\.(?:collect|to_pandas|topandas|to_dict|toPandas)\s*\(|\.fetch(?:all|many)\s*\("#,
+        )
+        .expect("valid python regex")
+    })
 }
 
 fn row_wise_regex() -> &'static Regex {

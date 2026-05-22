@@ -325,18 +325,18 @@ fn metadata_diagnostics(root: &Path, warnings: &[MetadataWarning]) -> Vec<Diagno
 fn metadata_warning_to_diagnostic(root: &Path, warning: &MetadataWarning) -> Diagnostic {
     let (rule_id, severity, suggestion) = match warning.kind {
         MetadataWarningKind::NoManifest => (
-            "SQLCOST016",
+            "SQLCOST023",
             Severity::Info,
             "run dbt compile and pass --manifest target/manifest.json for richer metadata",
         ),
         MetadataWarningKind::YamlParseFailed => (
-            "SQLCOST017",
+            "SQLCOST024",
             Severity::Low,
             "fix the schema YAML syntax so Costguard can read model config",
         ),
         MetadataWarningKind::DbtProjectParseFailed
         | MetadataWarningKind::DbtProjectAmbiguousModels => (
-            "SQLCOST018",
+            "SQLCOST025",
             Severity::Low,
             "fix dbt_project.yml syntax or project name alignment for folder config",
         ),

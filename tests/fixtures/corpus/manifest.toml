@@ -91,19 +91,19 @@ forbid_rules = []
 [[case]]
 name = "metadata_only"
 path = "metadata_only"
-expect_rules = ["SQLCOST016"]
+expect_rules = ["SQLCOST023"]
 forbid_rules = []
 
 [[case]]
 name = "yaml_parse_error"
 path = "yaml_parse_error"
-expect_rules = ["SQLCOST017"]
+expect_rules = ["SQLCOST024"]
 forbid_rules = []
 
 [[case]]
 name = "dbt_project_ambiguous"
 path = "dbt_project_ambiguous"
-expect_rules = ["SQLCOST018"]
+expect_rules = ["SQLCOST025"]
 forbid_rules = []
 
 [[case]]

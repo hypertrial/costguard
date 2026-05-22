@@ -80,7 +80,7 @@ impl Rule for UnboundedJoinRule {
                 matches!(
                     join.kind,
                     JoinKind::Inner | JoinKind::Left | JoinKind::Right | JoinKind::Full
-                ) && (!join.has_equality || join.function_on_both_sides)
+                ) && !join.has_equality
             })
             .map(|join| {
                 diagnostic(
@@ -91,7 +91,7 @@ impl Rule for UnboundedJoinRule {
                     "Join has no clear equality predicate.",
                 )
                 .with_risk(
-                    "non-equality or function-wrapped joins can cause large intermediate scans.",
+                    "non-equality joins can cause large intermediate scans and unexpected row multiplication.",
                 )
                 .with_suggestion("join on stable keys before applying transformations or filters.")
                 .with_confidence(Confidence::Medium)

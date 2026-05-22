@@ -1,7 +1,7 @@
-# SQLCOST018: dbt_project.yml metadata issue
+# SQLCOST018: UNION instead of UNION ALL
 
-**Severity:** low
+**Severity:** medium (high in staging/intermediate fan-in models)
 
-Reports when `dbt_project.yml` failed to parse or has an ambiguous `models:` block (multiple project keys without a matching project name).
+Detects plain `UNION` in dbt models. `UNION` deduplicates and can force expensive global sorts or hash aggregation.
 
-Fix the project file so folder-level model config can be applied.
+Prefer `UNION ALL` when duplicate rows are not expected.

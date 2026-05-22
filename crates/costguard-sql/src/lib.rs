@@ -48,6 +48,10 @@ pub struct SqlFeatures {
     pub normalization_calls: Vec<ExpressionFeature>,
     pub ctes: Vec<CteFeature>,
     pub cte_references: Vec<ExpressionFeature>,
+    pub non_sargable_predicates: Vec<ExpressionFeature>,
+    pub unions_without_all: Vec<ExpressionFeature>,
+    pub count_distincts: Vec<ExpressionFeature>,
+    pub wildcard_table_scans: Vec<ExpressionFeature>,
 }
 
 #[derive(Debug, Clone)]
@@ -63,7 +67,7 @@ pub struct JoinFeature {
     pub kind: JoinKind,
     pub predicate: Option<String>,
     pub has_equality: bool,
-    pub function_on_both_sides: bool,
+    pub function_on_join_key: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -719,7 +723,25 @@ fn extract_features(text: &str, line_index: &costguard_diagnostics::LineIndex) -
     features.joins = extract_joins(text, line_index);
     features.ctes = extract_ctes(text, line_index);
     features.cte_references = extract_cte_references(text, line_index, &features.ctes);
+    features.non_sargable_predicates =
+        matches_as_features(text, line_index, non_sargable_predicate_regex(), normalize);
+    features.unions_without_all = extract_unions_without_all(text, line_index);
+    features.count_distincts =
+        matches_as_features(text, line_index, count_distinct_regex(), |_| {
+            "count(distinct".into()
+        });
+    features.wildcard_table_scans = extract_wildcard_table_scans(text, line_index);
     features
+}
+
+fn extract_wildcard_table_scans(
+    text: &str,
+    line_index: &costguard_diagnostics::LineIndex,
+) -> Vec<ExpressionFeature> {
+    if text.to_ascii_lowercase().contains("_table_suffix") {
+        return Vec::new();
+    }
+    matches_as_features(text, line_index, wildcard_table_regex(), normalize)
 }
 
 fn matches_as_features<F>(
@@ -793,7 +815,7 @@ fn extract_joins(text: &str, line_index: &costguard_diagnostics::LineIndex) -> V
             span: line_index.span(matched.start(), after_end),
             kind,
             has_equality: has_equality_predicate(&predicate_lower),
-            function_on_both_sides: function_on_both_sides(&predicate_lower),
+            function_on_join_key: function_on_join_key(&predicate_lower),
             predicate,
         });
     }
@@ -807,7 +829,7 @@ fn extract_joins(text: &str, line_index: &costguard_diagnostics::LineIndex) -> V
                 kind: JoinKind::Comma,
                 predicate: None,
                 has_equality: false,
-                function_on_both_sides: false,
+                function_on_join_key: false,
             }),
     );
     joins
@@ -855,8 +877,8 @@ fn has_equality_predicate(predicate: &str) -> bool {
     equality_regex().is_match(predicate) && !predicate.contains("!=") && !predicate.contains("<>")
 }
 
-fn function_on_both_sides(predicate: &str) -> bool {
-    function_both_sides_regex().is_match(predicate)
+fn function_on_join_key(predicate: &str) -> bool {
+    function_on_join_key_regex().is_match(predicate)
 }
 
 fn extract_ctes(text: &str, line_index: &costguard_diagnostics::LineIndex) -> Vec<CteFeature> {
@@ -988,12 +1010,57 @@ fn equality_regex() -> &'static Regex {
     cached_regex(&RE, r#"(?i)[\w.)"]+\s*=\s*[\w("]"#)
 }
 
-fn function_both_sides_regex() -> &'static Regex {
+fn function_on_join_key_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     cached_regex(
         &RE,
-        r#"(?i)\bon\s+([a-z_][\w]*)\s*\([^=]+=\s*([a-z_][\w]*)\s*\("#,
+        r#"(?i)\bon\s+[^=]*(?:lower|upper|trim|ltrim|rtrim|cast|date|date_trunc|to_char|to_varchar)\s*\([^=]+=[^=]*(?:lower|upper|trim|ltrim|rtrim|cast|date|date_trunc|to_char|to_varchar|\)|\w+\s*\()|=\s*(?:lower|upper|trim|ltrim|rtrim|cast|date|date_trunc|to_char|to_varchar)\s*\("#,
     )
+}
+
+fn non_sargable_predicate_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    cached_regex(
+        &RE,
+        r#"(?i)\bwhere\b[^;\n]*(?:date|date_trunc|timestamp_trunc|datetime|to_date)\s*\(\s*[^)]*(?:block_time|event_time|created_at|updated_at|event_date|ingested_at|_partitiontime|_partitiondate|partition_date|block_date|block_timestamp|block_number|evt_block_time|evt_block_number)"#,
+    )
+}
+
+fn extract_unions_without_all(
+    text: &str,
+    line_index: &costguard_diagnostics::LineIndex,
+) -> Vec<ExpressionFeature> {
+    union_keyword_regex()
+        .find_iter(text)
+        .filter(|matched| !is_union_all(text, matched.end()))
+        .map(|matched| ExpressionFeature {
+            span: line_index.span(matched.start(), matched.end()),
+            key: "union".into(),
+            text: matched.as_str().to_string(),
+        })
+        .collect()
+}
+
+fn is_union_all(text: &str, after_union: usize) -> bool {
+    text[after_union..]
+        .trim_start()
+        .to_ascii_lowercase()
+        .starts_with("all")
+}
+
+fn union_keyword_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    cached_regex(&RE, r#"(?i)\bunion\b"#)
+}
+
+fn count_distinct_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    cached_regex(&RE, r#"(?i)\bcount\s*\(\s*distinct\b"#)
+}
+
+fn wildcard_table_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    cached_regex(&RE, r#"(?i)`[^`]+\*`|from\s+[\w.]+\*|\bevents_\*"#)
 }
 
 fn cte_regex() -> &'static Regex {

@@ -1,3 +1,4 @@
+mod cost_patterns;
 mod dbt;
 mod expressions;
 mod helpers;
