@@ -1,0 +1,6 @@
+version: 2
+
+models:
+  - name: fct_underscore_alias
+  - name: fct_json_omit_quotes
+  - name: fct_join_reserved_alias

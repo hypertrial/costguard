@@ -1,0 +1,46 @@
+{
+  "nodes": {
+    "model.corpus.fct_underscore_alias": {
+      "resource_type": "model",
+      "name": "fct_underscore_alias",
+      "original_file_path": "models/marts/fct_underscore_alias.sql",
+      "config": { "materialized": "table" },
+      "compiled_code": "SELECT current_timestamp AS _updated_at FROM dex.trades",
+      "refs": [],
+      "sources": [["dex", "trades"]],
+      "depends_on": { "nodes": ["source.corpus.dex.trades"] },
+      "columns": {},
+      "tags": []
+    },
+    "model.corpus.fct_json_omit_quotes": {
+      "resource_type": "model",
+      "name": "fct_json_omit_quotes",
+      "original_file_path": "models/marts/fct_json_omit_quotes.sql",
+      "config": { "materialized": "table" },
+      "compiled_code": "SELECT try_cast(json_query(payload, 'lax $.revocable' omit quotes) as boolean) AS is_revocable FROM dex.trades",
+      "refs": [],
+      "sources": [["dex", "trades"]],
+      "depends_on": { "nodes": ["source.corpus.dex.trades"] },
+      "columns": {},
+      "tags": []
+    },
+    "model.corpus.fct_join_reserved_alias": {
+      "resource_type": "model",
+      "name": "fct_join_reserved_alias",
+      "original_file_path": "models/marts/fct_join_reserved_alias.sql",
+      "config": { "materialized": "table" },
+      "compiled_code": "SELECT b.epoch FROM base b LEFT JOIN base start ON start._updated_at = b._updated_at",
+      "refs": [["fct_underscore_alias"]],
+      "sources": [],
+      "depends_on": { "nodes": ["model.corpus.fct_underscore_alias"] },
+      "columns": {},
+      "tags": []
+    }
+  },
+  "sources": {
+    "source.corpus.dex.trades": {
+      "source_name": "dex",
+      "name": "trades"
+    }
+  }
+}

@@ -247,6 +247,7 @@ dependencies = [
  "costguard-platform",
  "regex",
  "serde",
+ "serde_json",
  "sqlparser",
 ]
 

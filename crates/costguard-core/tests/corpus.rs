@@ -109,6 +109,25 @@ fn trino_parse_fixture_uses_compiled_normalization() {
 }
 
 #[test]
+fn spellbook_compiled_parse_fixture_has_zero_compiled_failures() {
+    use costguard_platform::Platform;
+
+    let case_path = corpus_root().join("spellbook_compiled_parse");
+    let config = ScanConfig {
+        root: case_path.clone(),
+        paths: vec![PathBuf::from("models")],
+        platform: Platform::Trino,
+        manifest_path: Some(case_path.join("target/manifest.json")),
+        fail_on: Some(Severity::High),
+        ..ScanConfig::default()
+    };
+    let result = scan(&config).expect("scan spellbook compiled parse case");
+    assert_eq!(result.metrics.sql_parse_total, 3);
+    assert_eq!(result.metrics.sql_parse_compiled_total, 3);
+    assert_eq!(result.metrics.sql_parse_compiled_failures, 0);
+}
+
+#[test]
 fn synthetic_project_scan_smoke() {
     let tempdir = tempfile::tempdir().expect("tempdir");
     let output = std::process::Command::new("python3")

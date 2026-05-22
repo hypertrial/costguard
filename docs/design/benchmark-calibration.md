@@ -17,6 +17,10 @@ cargo test -p costguard-core --test benchmark vendored_baselines_match
 python3 scripts/benchmark_external_repo.py --repo jaffle-shop
 python3 scripts/benchmark_external_repo.py --repo spellbook
 
+# Audit compiled parse failures (Spellbook manifest gate)
+python3 scripts/audit_compiled_parse_failures.py \
+  ~/.cache/costguard/benchmarks/spellbook/target/manifest.json
+
 # Refresh baselines after intentional rule tuning
 python3 scripts/benchmark_external_repo.py --fixture real_world/jaffle_snippets --update-baseline
 python3 scripts/benchmark_external_repo.py --repo spellbook --update-baseline
@@ -39,9 +43,9 @@ Primary parse metrics (`sql_parse_total`, `sql_parse_failures`) count **producti
 
 When a manifest with `compiled_code` is loaded:
 
-- Costguard normalizes compiled SQL (comment stripping, Trino rewrites) before parse attempts.
+- Costguard normalizes compiled SQL (comment stripping, Trino rewrites, GenericDialect fallback) before parse attempts.
 - Headline `sql_parse_failures` uses compiled parse when available, with **stripped-raw fallback** when compiled parse fails (`parsed_compiled || parsed_raw`).
-- `sql_parse_compiled_total` counts models with a compiled attempt; `sql_parse_compiled_failures` counts models where **compiled parse failed** (dialect quality signal, independent of raw fallback).
+- `sql_parse_compiled_total` counts models with a compiled attempt; `sql_parse_compiled_failures` counts models where **compiled parse failed** (dialect quality signal, independent of raw fallback). Spellbook baseline requires **`sql_parse_compiled_failures = 0`**.
 
 External Spellbook benchmarks compile all five subprojects (`dex`, `tokens`, `solana`, `daily_spellbook`, `hourly_spellbook`) — see `dbt_compile_dirs` in [`repos.toml`](../tests/benchmarks/repos.toml) — and scan with `--warehouse trino`.
 
@@ -66,6 +70,7 @@ When an external benchmark surfaces a finding worth keeping:
 | SQLCOST004 | spellbook | investigate remaining | many incrementals still lack `unique_key` and explicit append strategy |
 | parse metrics | spellbook | improved (tier 1) | compile + Trino + model-scoped metrics: ~67% model parse failure rate (5423/8108) |
 | parse metrics | spellbook | improved (P0–P2) | five-subproject compile + Trino normalization + raw fallback: **12%** model parse failure rate (972/8108), `sql_parse_compiled_total` 8001 |
+| parse metrics | spellbook | improved (compiled parse) | Trino dialect + parse-only rewrites + Generic fallback: **`sql_parse_compiled_failures` 0/8001**, headline failures **80/8108** |
 | SQLCOST002 | jaffle-shop | true positive | repeated JSON extraction in staging |
 
 ## PR replay testing

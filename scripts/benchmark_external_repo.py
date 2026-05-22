@@ -378,6 +378,32 @@ def compare_report(report: dict[str, Any], baseline: dict[str, Any]) -> list[str
                 f"{actual['sql_parse_failures']} > baseline {baseline_failures}"
             )
 
+    max_compiled_failures = thresholds.get("max_sql_parse_compiled_failures")
+    if max_compiled_failures is not None:
+        actual_compiled = actual.get("sql_parse_compiled_failures", 0)
+        if actual_compiled > max_compiled_failures:
+            errors.append(
+                "sql_parse_compiled_failures "
+                f"{actual_compiled} > allowed {max_compiled_failures}"
+            )
+
+    baseline_compiled_failures = expected.get("sql_parse_compiled_failures", 0)
+    compiled_delta = thresholds.get("max_sql_parse_compiled_failure_delta")
+    if compiled_delta is not None:
+        actual_compiled = actual.get("sql_parse_compiled_failures", 0)
+        if actual_compiled > baseline_compiled_failures + compiled_delta:
+            errors.append(
+                "sql_parse_compiled_failures regressed "
+                f"{actual_compiled} > baseline {baseline_compiled_failures} + {compiled_delta}"
+            )
+    elif max_compiled_failures is None and baseline_compiled_failures:
+        actual_compiled = actual.get("sql_parse_compiled_failures", 0)
+        if actual_compiled > baseline_compiled_failures:
+            errors.append(
+                "sql_parse_compiled_failures regressed "
+                f"{actual_compiled} > baseline {baseline_compiled_failures}"
+            )
+
     expected_rules = baseline.get("expect_rules", thresholds.get("expect_rules", []))
     actual_rules = set(actual.get("diagnostics_by_rule", {}))
     for rule in expected_rules:

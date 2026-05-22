@@ -32,7 +32,8 @@ impl Dialect for TrinoDialect {
     }
 
     fn is_identifier_start(&self, ch: char) -> bool {
-        self.inner.is_identifier_start(ch)
+        // Trino allows identifiers such as `_updated_at` and `_dstChainId`.
+        ch == '_' || self.inner.is_identifier_start(ch)
     }
 
     fn is_identifier_part(&self, ch: char) -> bool {
@@ -49,5 +50,29 @@ impl Dialect for TrinoDialect {
 
     fn require_interval_qualifier(&self) -> bool {
         self.inner.require_interval_qualifier()
+    }
+
+    fn supports_match_recognize(&self) -> bool {
+        true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlparser::parser::Parser;
+
+    #[test]
+    fn parses_underscore_identifiers() {
+        let dialect = TrinoDialect::default();
+        assert!(Parser::parse_sql(&dialect, "SELECT _updated_at FROM t").is_ok());
+        assert!(Parser::parse_sql(&dialect, "SELECT s._dstChainId FROM s").is_ok());
+    }
+
+    #[test]
+    fn parses_match_recognize() {
+        let dialect = TrinoDialect::default();
+        let sql = "SELECT * FROM t MATCH_RECOGNIZE (PATTERN (A+) DEFINE A AS TRUE)";
+        assert!(Parser::parse_sql(&dialect, sql).is_ok());
     }
 }

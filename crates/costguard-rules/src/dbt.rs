@@ -35,14 +35,9 @@ impl Rule for IncrementalUniqueKeyRule {
             .unique_key
             .as_deref()
             .or(ctx.dbt_model.and_then(|model| model.unique_key.as_deref()));
-        let incremental_strategy = sql
-            .dbt
-            .config
-            .incremental_strategy
-            .as_deref()
-            .or(ctx
-                .dbt_model
-                .and_then(|model| model.incremental_strategy.as_deref()));
+        let incremental_strategy = sql.dbt.config.incremental_strategy.as_deref().or(ctx
+            .dbt_model
+            .and_then(|model| model.incremental_strategy.as_deref()));
         if materialized == Some("incremental") && unique_key.is_none() {
             if incremental_strategy.is_some_and(|strategy| strategy.eq_ignore_ascii_case("append"))
             {

@@ -101,10 +101,7 @@ fn parse_unique_key_value(value: &Value) -> Option<String> {
     match value {
         Value::String(s) => Some(s.clone()),
         Value::Array(values) => {
-            let parts = values
-                .iter()
-                .filter_map(Value::as_str)
-                .collect::<Vec<_>>();
+            let parts = values.iter().filter_map(Value::as_str).collect::<Vec<_>>();
             if parts.is_empty() {
                 None
             } else {
@@ -156,7 +153,12 @@ pub fn parse_dbt_project_text(text: &str) -> DbtProjectFile {
     let mut folder_configs = FolderConfigMap::default();
     if let Some(models) = value.get("models") {
         if let Some(project_node) = resolve_project_models_node(models, project_name.as_deref()) {
-            walk_folder_tree(project_node, "", DbtConfig::default(), &mut folder_configs.configs);
+            walk_folder_tree(
+                project_node,
+                "",
+                DbtConfig::default(),
+                &mut folder_configs.configs,
+            );
         }
     }
 
@@ -220,6 +222,7 @@ pub fn discover_dbt_project_files(root: &Path) -> Vec<DbtProjectFile> {
     files
 }
 
+#[allow(clippy::only_used_in_recursion)]
 fn collect_dbt_project_files(root: &Path, current: &Path, files: &mut Vec<DbtProjectFile>) {
     let entry_path = current.join("dbt_project.yml");
     if entry_path.is_file() {
@@ -283,8 +286,7 @@ pub fn resolve_folder_config_for_model(
     model_path: &Path,
     project_file: &DbtProjectFile,
 ) -> DbtConfig {
-    let folder = resolve_models_relative_path(model_path, &project_file.path)
-        .unwrap_or_default();
+    let folder = resolve_models_relative_path(model_path, &project_file.path).unwrap_or_default();
     resolve_folder_config(&project_file.folder_configs, &folder)
 }
 
@@ -346,7 +348,7 @@ config:
   incremental_strategy: merge
 "#;
         let value: Value = serde_yaml::from_str(yaml).unwrap();
-        let config = parse_config_node(&value.get("config").unwrap());
+        let config = parse_config_node(value.get("config").unwrap());
         assert_eq!(config.materialized.as_deref(), Some("incremental"));
         assert_eq!(config.unique_key.as_deref(), Some("tx_hash"));
         assert_eq!(config.incremental_strategy.as_deref(), Some("merge"));
@@ -397,10 +399,8 @@ models:
     #[test]
     fn resolves_subproject_model_folder_path() {
         let project_path = PathBuf::from("/repo/dbt_subprojects/dex/dbt_project.yml");
-        let model_path =
-            PathBuf::from("/repo/dbt_subprojects/dex/models/marts/fct_trades.sql");
-        let folder =
-            resolve_models_relative_path(&model_path, &project_path).expect("folder path");
+        let model_path = PathBuf::from("/repo/dbt_subprojects/dex/models/marts/fct_trades.sql");
+        let folder = resolve_models_relative_path(&model_path, &project_path).expect("folder path");
         assert_eq!(folder, "marts");
     }
 

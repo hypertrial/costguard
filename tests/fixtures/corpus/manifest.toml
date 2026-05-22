@@ -75,3 +75,9 @@ name = "trino_parse"
 path = "trino_parse"
 expect_rules = []
 forbid_rules = ["SQLCOST005"]
+
+[[case]]
+name = "spellbook_compiled_parse"
+path = "spellbook_compiled_parse"
+expect_rules = []
+forbid_rules = ["SQLCOST005"]

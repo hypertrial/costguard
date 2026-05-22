@@ -5,9 +5,9 @@ use sqlparser::dialect::{
     BigQueryDialect, DatabricksDialect, DuckDbDialect, GenericDialect, PostgreSqlDialect,
     RedshiftSqlDialect, SnowflakeDialect,
 };
-use trino::TrinoDialect;
 use std::fmt;
 use std::str::FromStr;
+use trino::TrinoDialect;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -75,6 +75,9 @@ impl Platform {
     }
 }
 
+pub type Warehouse = Platform;
+pub type SqlDialect = Platform;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -91,6 +94,3 @@ mod tests {
         assert!(Parser::parse_sql(dialect.as_ref(), sql).is_ok());
     }
 }
-
-pub type Warehouse = Platform;
-pub type SqlDialect = Platform;

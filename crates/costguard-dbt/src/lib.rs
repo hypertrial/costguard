@@ -155,7 +155,8 @@ fn config_key_regex(key: &str) -> &'static Regex {
             Regex::new(r#"unique_key\s*=\s*['"]([^'"]+)['"]"#).expect("valid config regex")
         }),
         "incremental_strategy" => INCREMENTAL_STRATEGY.get_or_init(|| {
-            Regex::new(r#"incremental_strategy\s*=\s*['"]([^'"]+)['"]"#).expect("valid config regex")
+            Regex::new(r#"incremental_strategy\s*=\s*['"]([^'"]+)['"]"#)
+                .expect("valid config regex")
         }),
         other => panic!("unsupported config key: {other}"),
     }

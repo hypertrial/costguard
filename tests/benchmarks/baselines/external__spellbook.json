@@ -26,9 +26,9 @@
       "low": 1338,
       "med": 2790
     },
-    "sql_parse_compiled_failures": 865,
+    "sql_parse_compiled_failures": 0,
     "sql_parse_compiled_total": 8001,
-    "sql_parse_failures": 972,
+    "sql_parse_failures": 80,
     "sql_parse_other_failures": 379,
     "sql_parse_other_total": 385,
     "sql_parse_total": 8108
@@ -36,7 +36,8 @@
   "target": "external/spellbook",
   "thresholds": {
     "max_parse_failure_delta": 50,
-    "max_parse_failure_rate": 0.13
+    "max_parse_failure_rate": 0.02,
+    "max_sql_parse_compiled_failures": 0
   },
   "version": 1,
   "warehouse": "trino"

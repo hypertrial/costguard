@@ -71,6 +71,7 @@ Metrics to capture:
 | --- | --- |
 | Total files scanned | scanner correctness |
 | SQL/Jinja parse failure rate | robustness |
+| `sql_parse_compiled_failures` | Trino compiled SQL dialect quality (Spellbook gate: 0) |
 | Diagnostics per rule | noisy-rule detection |
 | High-severity false positives | MVP quality |
 | Runtime | Rust performance value |

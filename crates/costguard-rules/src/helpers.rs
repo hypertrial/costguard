@@ -70,13 +70,9 @@ pub(crate) fn has_bounded_incremental_predicate(text: &str) -> bool {
         return true;
     }
 
-    if [
-        " date_trunc(",
-        " minute",
-        " hour",
-    ]
-    .iter()
-    .any(|needle| lower.contains(needle))
+    if [" date_trunc(", " minute", " hour"]
+        .iter()
+        .any(|needle| lower.contains(needle))
     {
         return true;
     }
