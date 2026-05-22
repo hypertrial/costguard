@@ -1,0 +1,25 @@
+{
+  "nodes": {
+    "model.corpus.fct_block_time": {
+      "resource_type": "model",
+      "name": "fct_block_time",
+      "original_file_path": "models/marts/fct_block_time.sql",
+      "config": {
+        "materialized": "incremental",
+        "unique_key": "tx_hash"
+      },
+      "compiled_code": "select tx_hash, block_time from dex.trades where block_time >= date_sub(current_date, interval '3' day) and block_time > (select max(block_time) from fct_block_time)",
+      "refs": [],
+      "sources": [["dex", "trades"]],
+      "depends_on": { "nodes": ["source.corpus.dex.trades"] },
+      "columns": {},
+      "tags": []
+    }
+  },
+  "sources": {
+    "source.corpus.dex.trades": {
+      "source_name": "dex",
+      "name": "trades"
+    }
+  }
+}

@@ -3,8 +3,8 @@ use crate::dbt_graph::enrich_pr_summary;
 use crate::{PrSummary, Project, ScanMetrics, ScanResult};
 use anyhow::{Context, Result};
 use costguard_dbt::{
-    apply_dbt_project_configs, extract_sql_features, merge_yaml_project, parse_manifest,
-    parse_yaml_project, DbtModel, DbtProject,
+    apply_dbt_project_configs, compiled_code_by_model_path, extract_sql_features,
+    merge_yaml_project, parse_manifest, parse_yaml_project, DbtModel, DbtProject,
 };
 use costguard_diagnostics::apply_suppressions;
 use costguard_platform::Platform;
@@ -60,11 +60,17 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
         dbt,
     };
 
+    let compiled_by_path = project
+        .dbt
+        .as_ref()
+        .map(compiled_code_by_model_path)
+        .unwrap_or_default();
     let context_files_ref = context_files.as_deref().unwrap_or(&project.files);
-    let context_sql_documents = analyze_sql_documents(context_files_ref, config.platform);
+    let context_sql_documents =
+        analyze_sql_documents(context_files_ref, config.platform, &compiled_by_path);
     let project_indexes = ProjectIndexes::from_sql_documents(&context_sql_documents);
     let scan_sql_documents = if config.changed_only {
-        analyze_sql_documents(&project.files, config.platform)
+        analyze_sql_documents(&project.files, config.platform, &compiled_by_path)
     } else {
         context_sql_documents.clone()
     };
@@ -246,11 +252,27 @@ fn load_dbt_project(
     }
 }
 
-fn analyze_sql_documents(files: &[ProjectFile], platform: Platform) -> Vec<SqlDocument> {
+fn analyze_sql_documents(
+    files: &[ProjectFile],
+    platform: Platform,
+    compiled_by_path: &HashMap<PathBuf, String>,
+) -> Vec<SqlDocument> {
     files
         .iter()
         .filter(|file| matches!(file.kind, FileKind::Sql | FileKind::DbtSqlModel))
-        .map(|file| analyze_sql(file.path.clone(), &file.text, platform, &file.line_index))
+        .map(|file| {
+            let compiled_code = compiled_by_path
+                .get(&file.root_relative_path)
+                .map(String::as_str);
+            analyze_sql(
+                file.path.clone(),
+                &file.text,
+                platform,
+                &file.line_index,
+                compiled_code,
+                file.kind == FileKind::DbtSqlModel,
+            )
+        })
         .collect()
 }
 
@@ -259,8 +281,26 @@ fn build_scan_metrics(
     diagnostics: &[costguard_diagnostics::Diagnostic],
     counts: ScanCounts,
 ) -> ScanMetrics {
-    let sql_parse_total = sql_documents.len();
-    let sql_parse_failures = sql_documents.iter().filter(|doc| !doc.parsed).count();
+    let model_docs = sql_documents
+        .iter()
+        .filter(|doc| doc.is_dbt_sql_model)
+        .collect::<Vec<_>>();
+    let other_docs = sql_documents
+        .iter()
+        .filter(|doc| !doc.is_dbt_sql_model)
+        .collect::<Vec<_>>();
+    let compiled_docs = model_docs
+        .iter()
+        .filter(|doc| doc.used_compiled_for_parse)
+        .copied()
+        .collect::<Vec<_>>();
+
+    let sql_parse_total = model_docs.len();
+    let sql_parse_failures = model_docs.iter().filter(|doc| !doc.parsed).count();
+    let sql_parse_other_total = other_docs.len();
+    let sql_parse_other_failures = other_docs.iter().filter(|doc| !doc.parsed).count();
+    let sql_parse_compiled_total = compiled_docs.len();
+    let sql_parse_compiled_failures = compiled_docs.iter().filter(|doc| !doc.parsed).count();
     let mut diagnostics_by_rule = BTreeMap::new();
     let mut diagnostics_by_severity = BTreeMap::new();
     for diagnostic in diagnostics {
@@ -275,6 +315,10 @@ fn build_scan_metrics(
         counts,
         sql_parse_total,
         sql_parse_failures,
+        sql_parse_other_total,
+        sql_parse_other_failures,
+        sql_parse_compiled_total,
+        sql_parse_compiled_failures,
         diagnostics_by_rule,
         diagnostics_by_severity,
     }

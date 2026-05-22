@@ -31,7 +31,13 @@ Baselines live in [`tests/benchmarks/baselines/`](../tests/benchmarks/baselines/
 | Target kind | Pass criteria |
 | --- | --- |
 | Vendored | Exact rule counts, parse failure ceiling, forbidden rules |
-| External | Crash-free, parse failures ≤ baseline + delta |
+| External | Crash-free, model parse failures ≤ baseline + delta, optional parse failure rate cap |
+
+### Parse metric semantics
+
+Primary parse metrics (`sql_parse_total`, `sql_parse_failures`) count **production dbt models** only (`models/**/*.sql`). Macros, tests, and other SQL files are tracked separately as `sql_parse_other_total` / `sql_parse_other_failures`. When a manifest with `compiled_code` is loaded, compiled parse attempts are recorded in `sql_parse_compiled_total` / `sql_parse_compiled_failures`.
+
+External Spellbook benchmarks require `dbt compile` (see `compile_dbt = true` in [`repos.toml`](../tests/benchmarks/repos.toml)) and `--warehouse trino`.
 
 Reports are written to `tests/benchmarks/reports/` (gitignored).
 
@@ -50,8 +56,9 @@ When an external benchmark surfaces a finding worth keeping:
 | Rule | Repo | Verdict | Notes |
 | --- | --- | --- | --- |
 | SQLCOST005 | spellbook | fixed | `block_time`, `evt_block_time`, `block_date`, and related needles added |
-| SQLCOST004 | spellbook | partially fixed | schema YAML, nested `dbt_project.yml`, and explicit `incremental_strategy: append` reduce false positives; merge/delete+insert without key still flagged |
+| SQLCOST004 | spellbook | partially fixed | schema YAML, nested `dbt_project.yml`, explicit `incremental_strategy: append`, and compiled Trino parsing reduce false positives |
 | SQLCOST004 | spellbook | investigate remaining | many incrementals still lack `unique_key` and explicit append strategy |
+| parse metrics | spellbook | improved | with `dbt compile`, `--warehouse trino`, and model-scoped metrics: ~67% model parse failure rate (5423/8108), down from ~97% on raw generic parsing |
 | SQLCOST002 | jaffle-shop | true positive | repeated JSON extraction in staging |
 
 ## PR replay testing

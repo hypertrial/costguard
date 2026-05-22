@@ -1,8 +1,11 @@
+mod trino;
+
 use serde::{Deserialize, Serialize};
 use sqlparser::dialect::{
     BigQueryDialect, DatabricksDialect, DuckDbDialect, GenericDialect, PostgreSqlDialect,
     RedshiftSqlDialect, SnowflakeDialect,
 };
+use trino::TrinoDialect;
 use std::fmt;
 use std::str::FromStr;
 
@@ -17,6 +20,7 @@ pub enum Platform {
     Redshift,
     Postgres,
     DuckDB,
+    Trino,
 }
 
 impl FromStr for Platform {
@@ -31,6 +35,7 @@ impl FromStr for Platform {
             "redshift" => Ok(Self::Redshift),
             "postgres" | "postgresql" => Ok(Self::Postgres),
             "duckdb" => Ok(Self::DuckDB),
+            "trino" | "presto" => Ok(Self::Trino),
             other => Err(format!("unknown platform '{other}'")),
         }
     }
@@ -52,6 +57,7 @@ impl Platform {
             Self::Redshift => "redshift",
             Self::Postgres => "postgres",
             Self::DuckDB => "duckdb",
+            Self::Trino => "trino",
         }
     }
 
@@ -64,7 +70,25 @@ impl Platform {
             Self::Redshift => Box::new(RedshiftSqlDialect {}),
             Self::Postgres => Box::new(PostgreSqlDialect {}),
             Self::DuckDB => Box::new(DuckDbDialect {}),
+            Self::Trino => Box::new(TrinoDialect {}),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlparser::parser::Parser;
+
+    #[test]
+    fn trino_dialect_parses_spellbook_style_sql() {
+        let sql = r#"
+            select tx_hash, block_time
+            from dex.trades
+            where block_time >= date_sub(current_date, interval '3' day)
+        "#;
+        let dialect = Platform::Trino.sqlparser_dialect();
+        assert!(Parser::parse_sql(dialect.as_ref(), sql).is_ok());
     }
 }
 

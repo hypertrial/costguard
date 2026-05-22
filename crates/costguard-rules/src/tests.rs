@@ -50,6 +50,8 @@ fn analyze(file: &ProjectFile) -> SqlDocument {
         &file.text,
         Platform::Generic,
         &file.line_index,
+        None,
+        true,
     )
 }
 

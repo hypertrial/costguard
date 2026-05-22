@@ -64,10 +64,14 @@ jobs:
   spellbook:
     if: ${{ inputs.target == 'spellbook' || inputs.target == 'all' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --upgrade pip && pip install dbt-trino
       - uses: actions/cache@v4
         with:
           path: |

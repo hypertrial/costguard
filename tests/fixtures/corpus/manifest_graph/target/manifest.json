@@ -27,6 +27,7 @@
       "name": "fct_daily_graph",
       "original_file_path": "models/marts/fct_daily_graph.sql",
       "config": { "materialized": "table" },
+      "compiled_code": "select event_date, count(*) as event_count from fct_events_graph group by 1",
       "refs": [["fct_events_graph"]],
       "sources": [],
       "depends_on": { "nodes": ["model.corpus.fct_events_graph"] },

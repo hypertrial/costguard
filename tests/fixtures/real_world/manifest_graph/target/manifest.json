@@ -27,6 +27,7 @@
       "name": "fct_daily",
       "original_file_path": "models/marts/fct_daily.sql",
       "config": { "materialized": "table" },
+      "compiled_code": "select event_date, count(*) as event_count from fct_events group by 1",
       "refs": [["fct_events"]],
       "sources": [],
       "depends_on": { "nodes": ["model.realworld.fct_events"] },

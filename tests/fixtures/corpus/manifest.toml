@@ -63,3 +63,9 @@ name = "manifest_graph"
 path = "manifest_graph"
 expect_rules = []
 forbid_rules = ["SQLCOST005"]
+
+[[case]]
+name = "compiled_manifest_parse"
+path = "compiled_manifest_parse"
+expect_rules = []
+forbid_rules = ["SQLCOST005"]

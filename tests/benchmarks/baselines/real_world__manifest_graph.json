@@ -14,7 +14,11 @@
     },
     "diagnostics_by_rule": {},
     "diagnostics_by_severity": {},
+    "sql_parse_compiled_failures": 0,
+    "sql_parse_compiled_total": 1,
     "sql_parse_failures": 0,
+    "sql_parse_other_failures": 0,
+    "sql_parse_other_total": 0,
     "sql_parse_total": 3
   },
   "target": "real_world/manifest_graph",

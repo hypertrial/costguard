@@ -17,7 +17,11 @@
     "diagnostics_by_severity": {
       "med": 2
     },
+    "sql_parse_compiled_failures": 0,
+    "sql_parse_compiled_total": 0,
     "sql_parse_failures": 1,
+    "sql_parse_other_failures": 0,
+    "sql_parse_other_total": 0,
     "sql_parse_total": 1
   },
   "target": "real_world/spellbook_snippets",

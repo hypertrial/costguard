@@ -35,27 +35,31 @@ Initial command set:
 git clone https://github.com/duneanalytics/spellbook.git
 cd spellbook
 
-costguard scan . --warehouse generic
-costguard scan models --warehouse generic --format json > costguard-spellbook.json
-costguard scan dbt_subprojects --warehouse generic
-costguard scan . --warehouse generic --fail-on high
+pip install dbt-trino
+dbt deps
+dbt compile --target dev
+
+costguard scan . --warehouse trino --manifest target/manifest.json
+costguard scan models --warehouse trino --manifest target/manifest.json --format json > costguard-spellbook.json
+costguard scan dbt_subprojects --warehouse trino --manifest target/manifest.json
+costguard scan . --warehouse trino --manifest target/manifest.json --fail-on high
 ```
 
 PR-first output smoke checks after cloning:
 
 ```bash
-costguard pr --base origin/main --warehouse generic --fail-on high --format github
-costguard pr --base origin/main --warehouse generic --fail-on high --format markdown
+costguard pr --base origin/main --warehouse trino --manifest target/manifest.json --fail-on high --format github
+costguard pr --base origin/main --warehouse trino --manifest target/manifest.json --fail-on high --format markdown
 ```
 
-These commands should be run manually or in an explicit benchmark job, not in normal CI.
+These commands should be run manually or in an explicit benchmark job, not in normal CI. The benchmark script runs `dbt compile` automatically when `compile_dbt = true` in `repos.toml`.
 
 Later, if project-directory workflows need targeted checks:
 
 ```bash
-costguard scan dbt_subprojects/dex --warehouse generic
-costguard scan dbt_subprojects/solana --warehouse generic
-costguard scan dbt_subprojects/tokens --warehouse generic
+costguard scan dbt_subprojects/dex --warehouse trino --manifest target/manifest.json
+costguard scan dbt_subprojects/solana --warehouse trino --manifest target/manifest.json
+costguard scan dbt_subprojects/tokens --warehouse trino --manifest target/manifest.json
 ```
 
 Metrics to capture:

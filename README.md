@@ -74,7 +74,9 @@ Use the composite action in [`.github/actions/costguard`](.github/actions/costgu
     format: github
 ```
 
-Inputs: `base`, `warehouse`, `fail-on`, `format` (`github`|`markdown`|`json`|`text`), optional `manifest`, and `working-directory`.
+Inputs: `base`, `warehouse`, `fail-on`, `format` (`github`|`markdown`|`json`|`text`), optional `manifest`, `working-directory`, and dbt compile settings (`compile-dbt`, `dbt-target`, `dbt-project-dir`, `dbt-profiles-dir`, `dbt-adapter-package`).
+
+When `compile-dbt` is enabled (default), the action runs `dbt deps` and `dbt compile` before scanning and automatically passes `--manifest target/manifest.json` when present. Compile uses a dummy local profile (no warehouse connection required). Override `dbt-adapter-package` for non-Trino projects (for example `dbt-postgres` for jaffle-shop).
 
 GitHub-hosted runners require org Actions billing to be enabled for private repositories.
 
@@ -110,6 +112,10 @@ for the product workflow priority.
 ## Configuration
 
 `costguard.toml` is optional. CLI flags override file settings.
+
+Supported `--warehouse` values include `generic`, `snowflake`, `bigquery`, `databricks`, `redshift`, `postgres`, `duckdb`, and `trino` (Presto/Trino SQL via Hive-family parsing). For Dune Spellbook and other Trino dbt projects, use `--warehouse trino`.
+
+For accurate parse metrics on Jinja-heavy dbt models, run `dbt compile` first and pass `--manifest target/manifest.json`. Costguard parses manifest `compiled_code` when present; rule diagnostics remain anchored to raw source lines.
 
 ```toml
 warehouse = "snowflake"

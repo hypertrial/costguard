@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -154,6 +155,175 @@ def clone_repo(repo: dict[str, Any], cache_dir: Path) -> Path:
     return checkout
 
 
+def read_dbt_profile_name(project_dir: Path) -> str:
+    text = (project_dir / "dbt_project.yml").read_text(encoding="utf-8")
+    match = re.search(r"^profile:\s*['\"]?(\w+)['\"]?", text, re.MULTILINE)
+    return match.group(1) if match else "costguard"
+
+
+def write_dummy_profiles(
+    profiles_dir: Path,
+    *,
+    profile_name: str,
+    target: str,
+    profile_type: str,
+) -> None:
+    profiles_dir.mkdir(parents=True, exist_ok=True)
+    profiles_file = profiles_dir / "profiles.yml"
+    if profiles_file.exists():
+        return
+    profiles_file.write_text(
+        f"""{profile_name}:
+  target: {target}
+  outputs:
+    {target}:
+      type: {profile_type}
+      host: localhost
+      port: 8080
+      user: costguard
+      database: costguard
+      schema: costguard
+""",
+        encoding="utf-8",
+    )
+
+
+def venv_python() -> str:
+    for candidate in ("python3.11", "python3.12", sys.executable):
+        completed = subprocess.run(
+            [candidate, "-c", "import sys; raise SystemExit(0 if sys.version_info < (3, 14) else 1)"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if completed.returncode == 0:
+            return candidate
+    return sys.executable
+
+
+def dbt_tools(cache_dir: Path, adapter: str) -> tuple[Path, Path]:
+    venv_dir = cache_dir / ".dbt-venv"
+    if not venv_dir.exists():
+        created = subprocess.run(
+            [venv_python(), "-m", "venv", str(venv_dir)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if created.returncode != 0:
+            raise SystemExit(f"failed to create dbt venv:\n{created.stderr}")
+
+    pip = venv_dir / "bin" / "pip"
+    dbt = venv_dir / "bin" / "dbt"
+    install = subprocess.run(
+        [str(pip), "install", "--upgrade", "pip", adapter],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if install.returncode != 0:
+        raise SystemExit(f"failed to install {adapter}:\n{install.stderr}")
+    return pip, dbt
+
+
+def compile_dbt_project(
+    checkout: Path,
+    project_dir: Path,
+    repo: dict[str, Any],
+    *,
+    dbt: Path,
+) -> Path:
+    if not (project_dir / "dbt_project.yml").exists():
+        raise SystemExit(f"compile_dbt enabled but no dbt_project.yml in {project_dir}")
+
+    target = repo.get("dbt_target", "dev")
+    if (project_dir / "profiles.yml").exists():
+        profiles_dir = project_dir
+    else:
+        profiles_rel = repo.get("dbt_profiles_dir", ".")
+        profiles_dir = (checkout / profiles_rel).resolve()
+        profile_name = read_dbt_profile_name(project_dir)
+        write_dummy_profiles(
+            profiles_dir,
+            profile_name=profile_name,
+            target=target,
+            profile_type=repo.get("dbt_profile_type", "trino"),
+        )
+
+    env = os.environ.copy()
+    env["DBT_PROFILES_DIR"] = str(profiles_dir)
+
+    deps = subprocess.run(
+        [str(dbt), "deps", "--project-dir", str(project_dir)],
+        cwd=checkout,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if deps.returncode != 0:
+        print(f"warning: dbt deps failed for {project_dir}:\n{deps.stderr}", file=sys.stderr)
+
+    compile_proc = subprocess.run(
+        [str(dbt), "compile", "--project-dir", str(project_dir), "--target", target],
+        cwd=checkout,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if compile_proc.returncode != 0:
+        raise SystemExit(
+            f"dbt compile failed for {project_dir} (exit {compile_proc.returncode}):\n"
+            f"{compile_proc.stderr.strip()}"
+        )
+
+    manifest = project_dir / "target" / "manifest.json"
+    if not manifest.exists():
+        raise SystemExit(f"dbt compile succeeded but manifest missing at {manifest}")
+    return manifest
+
+
+def merge_manifests(entries: list[tuple[Path, str]], output: Path) -> None:
+    merged: dict[str, Any] = {"nodes": {}, "sources": {}, "exposures": {}}
+    for manifest_path, prefix in entries:
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        for section in ("nodes", "sources", "exposures"):
+            for key, value in data.get(section, {}).items():
+                if section == "nodes" and value.get("resource_type") == "model":
+                    value = dict(value)
+                    rel_path = value.get("original_file_path") or value.get("path")
+                    if rel_path and prefix:
+                        value["original_file_path"] = str(Path(prefix) / rel_path)
+                merged[section][key] = value
+    output.parent.mkdir(parents=True, exist_ok=True)
+    write_json(output, merged)
+
+
+def compile_dbt_repo(checkout: Path, repo: dict[str, Any], *, cache_dir: Path) -> None:
+    if not repo.get("compile_dbt", False):
+        return
+
+    adapter = repo.get("dbt_adapter", "dbt-trino")
+    _, dbt = dbt_tools(cache_dir, adapter)
+
+    compile_dirs = repo.get("dbt_compile_dirs")
+    if compile_dirs:
+        manifests: list[tuple[Path, str]] = []
+        for rel in compile_dirs:
+            project_dir = (checkout / rel).resolve()
+            manifest = compile_dbt_project(checkout, project_dir, repo, dbt=dbt)
+            manifests.append((manifest, rel))
+        merge_manifests(manifests, checkout / "target" / "manifest.json")
+        return
+
+    project_rel = repo.get("dbt_project_dir", ".")
+    project_dir = (checkout / project_rel).resolve()
+    manifest = compile_dbt_project(checkout, project_dir, repo, dbt=dbt)
+    if project_rel != ".":
+        merge_manifests([(manifest, project_rel)], checkout / "target" / "manifest.json")
+
+
 def build_report(
     target: str,
     *,
@@ -297,6 +467,7 @@ def run_external(
 ) -> int:
     repo = repo_by_name(repo_name)
     checkout = clone_repo(repo, cache_dir)
+    compile_dbt_repo(checkout, repo, cache_dir=cache_dir)
     scan_paths = repo.get("scan_paths", ["."])
     manifest = checkout / "target" / "manifest.json"
     scan_result = run_costguard(
@@ -329,6 +500,12 @@ def run_external(
                 "max_parse_failure_delta": 50,
             },
         }
+        parse_total = report["metrics"].get("sql_parse_total", 0)
+        if parse_total:
+            rate = report["metrics"]["sql_parse_failures"] / parse_total
+            configured_rate = repo.get("max_parse_failure_rate")
+            if configured_rate is not None:
+                baseline["thresholds"]["max_parse_failure_rate"] = max(configured_rate, rate)
         write_json(baseline_file, baseline)
         print(f"updated baseline: {baseline_file}")
         return 0

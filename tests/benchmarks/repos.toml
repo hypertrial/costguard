@@ -10,6 +10,15 @@ fail_on = "critical"
 name = "spellbook"
 url = "https://github.com/duneanalytics/spellbook.git"
 commit = "60f3b3fded8bae7d55780e7f8e6b15b1249d16a6"
-warehouse = "generic"
+warehouse = "trino"
+compile_dbt = true
+dbt_adapter = "dbt-trino"
+dbt_profile_type = "trino"
+dbt_compile_dirs = [
+  "dbt_subprojects/dex",
+  "dbt_subprojects/solana",
+  "dbt_subprojects/tokens",
+]
 scan_paths = [".", "dbt_subprojects/dex", "dbt_subprojects/solana", "dbt_subprojects/tokens"]
 fail_on = "critical"
+max_parse_failure_rate = 0.35

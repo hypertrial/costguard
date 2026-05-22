@@ -26,6 +26,26 @@ inputs:
     description: Directory containing the dbt project
     required: false
     default: .
+  compile-dbt:
+    description: Run dbt compile before scan when dbt_project.yml is present
+    required: false
+    default: "true"
+  dbt-target:
+    description: dbt --target value for compile
+    required: false
+    default: dev
+  dbt-project-dir:
+    description: Directory containing dbt_project.yml (defaults to working-directory)
+    required: false
+    default: ""
+  dbt-profiles-dir:
+    description: Directory for profiles.yml (defaults to dbt-project-dir)
+    required: false
+    default: ""
+  dbt-adapter-package:
+    description: pip package for dbt compile (for example dbt-trino or dbt-postgres)
+    required: false
+    default: dbt-trino
 
 runs:
   using: composite
@@ -37,11 +57,77 @@ runs:
       shell: bash
       run: cargo install --path crates/costguard-cli --locked --force
 
+    - name: Set up Python
+      if: inputs.compile-dbt == 'true'
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Compile dbt project
+      if: inputs.compile-dbt == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        DBT_ADAPTER_PACKAGE: ${{ inputs.dbt-adapter-package }}
+        DBT_TARGET: ${{ inputs.dbt-target }}
+        DBT_PROJECT_DIR_INPUT: ${{ inputs.dbt-project-dir }}
+        DBT_PROFILES_DIR_INPUT: ${{ inputs.dbt-profiles-dir }}
+      run: |
+        set -eo pipefail
+        project_dir="${DBT_PROJECT_DIR_INPUT:-.}"
+        if [ ! -f "${project_dir}/dbt_project.yml" ]; then
+          echo "No dbt_project.yml in ${project_dir}; skipping dbt compile."
+          exit 0
+        fi
+
+        python -m pip install --upgrade pip
+        python -m pip install "${DBT_ADAPTER_PACKAGE}"
+
+        profiles_dir="${DBT_PROFILES_DIR_INPUT:-${project_dir}}"
+        mkdir -p "${profiles_dir}"
+        if [ ! -f "${profiles_dir}/profiles.yml" ]; then
+          profile_name="$(grep -E '^[[:space:]]*profile:' "${project_dir}/dbt_project.yml" | head -n1 | sed -E "s/^[[:space:]]*profile:[[:space:]]*['\"]?([^'\"[:space:]]+)['\"]?/\1/")"
+          if [ -z "${profile_name}" ]; then
+            profile_name="costguard"
+          fi
+          {
+            echo "${profile_name}:"
+            echo "  target: ${DBT_TARGET}"
+            echo "  outputs:"
+            echo "    ${DBT_TARGET}:"
+            echo "      type: trino"
+            echo "      host: localhost"
+            echo "      port: 8080"
+            echo "      user: costguard"
+            echo "      database: costguard"
+            echo "      schema: costguard"
+          } > "${profiles_dir}/profiles.yml"
+          echo "Wrote dummy profiles.yml for profile '${profile_name}'."
+        fi
+
+        export DBT_PROFILES_DIR="${profiles_dir}"
+        set +e
+        dbt deps --project-dir "${project_dir}"
+        deps_status=$?
+        set -e
+        if [ "${deps_status}" -ne 0 ]; then
+          echo "::warning::dbt deps failed (exit ${deps_status}); continuing to compile."
+        fi
+
+        dbt compile --project-dir "${project_dir}" --target "${DBT_TARGET}"
+        if [ ! -f "${project_dir}/target/manifest.json" ]; then
+          echo "::error::dbt compile completed but ${project_dir}/target/manifest.json is missing."
+          exit 1
+        fi
+
     - name: Run costguard pr
       shell: bash
       working-directory: ${{ inputs.working-directory }}
+      env:
+        DBT_PROJECT_DIR_INPUT: ${{ inputs.dbt-project-dir }}
       run: |
         set -eo pipefail
+        project_dir="${DBT_PROJECT_DIR_INPUT:-.}"
         args=(
           pr
           --base "${{ inputs.base }}"
@@ -49,8 +135,12 @@ runs:
           --fail-on "${{ inputs.fail-on }}"
           --format "${{ inputs.format }}"
         )
-        if [ -n "${{ inputs.manifest }}" ]; then
-          args+=(--manifest "${{ inputs.manifest }}")
+        manifest="${{ inputs.manifest }}"
+        if [ -z "${manifest}" ] && [ -f "${project_dir}/target/manifest.json" ]; then
+          manifest="${project_dir}/target/manifest.json"
+        fi
+        if [ -n "${manifest}" ]; then
+          args+=(--manifest "${manifest}")
         fi
         set +e
         output="$(costguard "${args[@]}")"

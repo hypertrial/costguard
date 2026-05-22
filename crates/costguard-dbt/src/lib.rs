@@ -61,6 +61,7 @@ pub struct DbtModel {
     pub materialized: Option<String>,
     pub unique_key: Option<String>,
     pub incremental_strategy: Option<String>,
+    pub compiled_code: Option<String>,
     pub tags: Vec<String>,
     pub columns: Vec<DbtColumn>,
     pub tests: Vec<DbtTest>,
@@ -223,6 +224,12 @@ pub fn parse_manifest_text(text: &str) -> Result<DbtProject> {
                 .get("incremental_strategy")
                 .and_then(Value::as_str)
                 .map(str::to_string);
+            let compiled_code = node
+                .get("compiled_code")
+                .or_else(|| node.get("compiled_sql"))
+                .and_then(Value::as_str)
+                .map(str::to_string)
+                .filter(|code| !code.trim().is_empty());
             let refs = node
                 .get("refs")
                 .and_then(Value::as_array)
@@ -282,6 +289,7 @@ pub fn parse_manifest_text(text: &str) -> Result<DbtProject> {
                     materialized,
                     unique_key,
                     incremental_strategy,
+                    compiled_code,
                     tags,
                     columns,
                     tests: Vec::new(),
@@ -518,6 +526,18 @@ fn merge_model_config_fields(target: &mut DbtModel, source: &DbtModel) {
     }
 }
 
+pub fn compiled_code_by_model_path(project: &DbtProject) -> HashMap<PathBuf, String> {
+    project
+        .models
+        .values()
+        .filter_map(|model| {
+            let path = model.path.as_ref()?;
+            let code = model.compiled_code.as_ref()?;
+            Some((path.clone(), code.clone()))
+        })
+        .collect()
+}
+
 pub fn apply_dbt_project_configs(root: &Path, project: &mut DbtProject) {
     let project_files = discover_dbt_project_files(root);
     for model in project.models.values_mut() {
@@ -744,5 +764,44 @@ models:
         assert_eq!(model.tests[0].name, "unique");
         assert_eq!(model.columns.len(), 2);
         assert_eq!(model.columns[0].tests[0].name, "not_null");
+    }
+
+    #[test]
+    fn parses_manifest_compiled_code_and_path_map() {
+        let manifest = r#"{
+  "nodes": {
+    "model.pkg.fct_block_time": {
+      "resource_type": "model",
+      "name": "fct_block_time",
+      "original_file_path": "models/marts/fct_block_time.sql",
+      "config": { "materialized": "incremental" },
+      "compiled_code": "select tx_hash, block_time from dex.trades"
+    },
+    "model.pkg.legacy_model": {
+      "resource_type": "model",
+      "name": "legacy_model",
+      "original_file_path": "models/marts/legacy_model.sql",
+      "config": { "materialized": "view" },
+      "compiled_sql": "select 1 as id"
+    }
+  }
+}"#;
+        let project = parse_manifest_text(manifest).expect("parse manifest");
+        let compiled = project.models.get("fct_block_time").unwrap();
+        assert_eq!(
+            compiled.compiled_code.as_deref(),
+            Some("select tx_hash, block_time from dex.trades")
+        );
+        let legacy = project.models.get("legacy_model").unwrap();
+        assert_eq!(legacy.compiled_code.as_deref(), Some("select 1 as id"));
+
+        let by_path = compiled_code_by_model_path(&project);
+        assert_eq!(by_path.len(), 2);
+        assert_eq!(
+            by_path
+                .get(&PathBuf::from("models/marts/fct_block_time.sql"))
+                .map(String::as_str),
+            Some("select tx_hash, block_time from dex.trades")
+        );
     }
 }

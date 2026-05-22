@@ -38,6 +38,10 @@ pub struct ScanMetrics {
     pub counts: ScanCounts,
     pub sql_parse_total: usize,
     pub sql_parse_failures: usize,
+    pub sql_parse_other_total: usize,
+    pub sql_parse_other_failures: usize,
+    pub sql_parse_compiled_total: usize,
+    pub sql_parse_compiled_failures: usize,
     pub diagnostics_by_rule: BTreeMap<String, usize>,
     pub diagnostics_by_severity: BTreeMap<String, usize>,
 }

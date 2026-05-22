@@ -9,12 +9,23 @@ use std::sync::{Mutex, OnceLock};
 
 pub use costguard_platform::Platform as SqlDialect;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParseInput {
+    Raw,
+    Compiled,
+}
+
 #[derive(Debug, Clone)]
 pub struct SqlDocument {
     pub path: PathBuf,
     pub raw_sql: String,
     pub platform: Platform,
+    pub is_dbt_sql_model: bool,
     pub parsed: bool,
+    pub parsed_raw: bool,
+    pub parsed_compiled: bool,
+    pub used_compiled_for_parse: bool,
+    pub parse_input: ParseInput,
     pub features: SqlFeatures,
     pub dbt: DbtSqlFeatures,
 }
@@ -77,20 +88,40 @@ pub fn analyze_sql(
     text: &str,
     platform: Platform,
     line_index: &costguard_diagnostics::LineIndex,
+    compiled_code: Option<&str>,
+    is_dbt_sql_model: bool,
 ) -> SqlDocument {
-    let sanitized = strip_jinja(text);
     let dialect = platform.sqlparser_dialect();
-    let parsed = Parser::parse_sql(dialect.as_ref(), &sanitized).is_ok();
+    let sanitized = strip_jinja(text);
+    let parsed_raw = try_parse_sql(dialect.as_ref(), &sanitized);
+    let parsed_compiled = compiled_code
+        .map(|code| try_parse_sql(dialect.as_ref(), code))
+        .unwrap_or(false);
+    let used_compiled_for_parse = compiled_code.is_some();
+    let (parsed, parse_input) = if used_compiled_for_parse {
+        (parsed_compiled, ParseInput::Compiled)
+    } else {
+        (parsed_raw, ParseInput::Raw)
+    };
     let dbt = extract_sql_features(text);
     let features = extract_features(text, line_index);
     SqlDocument {
         path,
         raw_sql: text.to_string(),
         platform,
+        is_dbt_sql_model,
         parsed,
+        parsed_raw,
+        parsed_compiled,
+        used_compiled_for_parse,
+        parse_input,
         features,
         dbt,
     }
+}
+
+fn try_parse_sql(dialect: &dyn sqlparser::dialect::Dialect, text: &str) -> bool {
+    Parser::parse_sql(dialect, text).is_ok()
 }
 
 pub fn strip_jinja(text: &str) -> String {
@@ -418,7 +449,14 @@ mod tests {
     fn extracts_select_star_and_window() {
         let text = "select *, row_number() over () as rn from a cross join b";
         let index = LineIndex::new(text);
-        let doc = analyze_sql(PathBuf::from("x.sql"), text, Platform::Generic, &index);
+        let doc = analyze_sql(
+            PathBuf::from("x.sql"),
+            text,
+            Platform::Generic,
+            &index,
+            None,
+            true,
+        );
         assert_eq!(doc.features.select_stars.len(), 1);
         assert_eq!(doc.features.window_functions.len(), 1);
         assert_eq!(doc.features.joins.len(), 1);
