@@ -113,6 +113,9 @@ mod tests {
             suggestion: None,
             confidence,
             warehouse: None,
+            source_provenance: None,
+            compiled_line: None,
+            compiled_column: None,
         }
     }
 

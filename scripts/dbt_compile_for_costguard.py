@@ -80,7 +80,13 @@ def venv_python() -> str:
     return sys.executable
 
 
-def dbt_tools(cache_dir: Path, adapter: str) -> tuple[Path, Path]:
+def dbt_tools(
+    cache_dir: Path,
+    adapter: str,
+    *,
+    requirements_file: Path | None = None,
+    constraints_file: Path | None = None,
+) -> tuple[Path, Path]:
     venv_dir = cache_dir / ".dbt-venv"
     if not venv_dir.exists():
         created = subprocess.run(
@@ -94,11 +100,32 @@ def dbt_tools(cache_dir: Path, adapter: str) -> tuple[Path, Path]:
 
     pip = venv_dir / "bin" / "pip"
     dbt = venv_dir / "bin" / "dbt"
-    marker = venv_dir / f".installed-{adapter.replace('/', '_')}"
-    if marker.exists() and marker.read_text(encoding="utf-8").strip() == adapter:
+    install_fingerprint = {
+        "adapter": adapter,
+        "requirements_file": str(requirements_file) if requirements_file else "",
+        "constraints_file": str(constraints_file) if constraints_file else "",
+        "requirements_mtime": requirements_file.stat().st_mtime if requirements_file and requirements_file.exists() else "",
+        "constraints_mtime": constraints_file.stat().st_mtime if constraints_file and constraints_file.exists() else "",
+    }
+    marker = venv_dir / f".installed-{hashlib.sha256(json.dumps(install_fingerprint, sort_keys=True).encode('utf-8')).hexdigest()[:16]}"
+    if marker.exists():
         return pip, dbt
+    upgrade = subprocess.run(
+        [str(pip), "install", "--upgrade", "pip"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if upgrade.returncode != 0:
+        raise SystemExit(f"failed to upgrade pip:\n{upgrade.stderr}")
+    install_cmd = [str(pip), "install"]
+    if constraints_file is not None:
+        install_cmd.extend(["-c", str(constraints_file)])
+    if requirements_file is not None:
+        install_cmd.extend(["-r", str(requirements_file)])
+    install_cmd.append(adapter)
     install = subprocess.run(
-        [str(pip), "install", "--upgrade", "pip", adapter],
+        install_cmd,
         capture_output=True,
         text=True,
         check=False,
@@ -139,6 +166,7 @@ def compile_dbt_project(
     profiles_dir: Path | None = None,
     profiles_rel: str = ".",
     continue_on_deps_failure: bool = True,
+    dbt_vars: str = "",
 ) -> Path:
     if not (project_dir / "dbt_project.yml").exists():
         raise SystemExit(f"compile enabled but no dbt_project.yml in {project_dir}")
@@ -175,8 +203,11 @@ def compile_dbt_project(
         else:
             raise SystemExit(message)
 
+    compile_cmd = [str(dbt), "compile", "--project-dir", str(project_dir), "--target", target]
+    if dbt_vars.strip():
+        compile_cmd.extend(["--vars", dbt_vars])
     compile_proc = subprocess.run(
-        [str(dbt), "compile", "--project-dir", str(project_dir), "--target", target],
+        compile_cmd,
         cwd=checkout,
         env=env,
         capture_output=True,
@@ -275,7 +306,7 @@ def compile_jobs(count: int) -> int:
     return max(1, min(count, os.cpu_count() or 4, 5))
 
 
-def _compile_subproject_worker(args: tuple[str, str, str, str, str, str, str, bool]) -> tuple[str, str]:
+def _compile_subproject_worker(args: tuple[str, str, str, str, str, str, str, bool, str]) -> tuple[str, str]:
     (
         checkout_s,
         rel,
@@ -285,6 +316,7 @@ def _compile_subproject_worker(args: tuple[str, str, str, str, str, str, str, bo
         profiles_dir_s,
         profiles_rel,
         continue_on_deps_failure,
+        dbt_vars,
     ) = args
     checkout = Path(checkout_s)
     project_dir = (checkout / rel).resolve()
@@ -298,6 +330,7 @@ def _compile_subproject_worker(args: tuple[str, str, str, str, str, str, str, bo
         profiles_dir=profiles_dir,
         profiles_rel=profiles_rel,
         continue_on_deps_failure=continue_on_deps_failure,
+        dbt_vars=dbt_vars,
     )
     return rel, str(manifest)
 
@@ -312,6 +345,7 @@ def compile_subprojects_parallel(
     profiles_dir: Path | None,
     profiles_rel: str,
     continue_on_deps_failure: bool,
+    dbt_vars: str,
 ) -> list[tuple[Path, str]]:
     profiles_dir_s = str(profiles_dir) if profiles_dir is not None else ""
     worker_args = [
@@ -324,6 +358,7 @@ def compile_subprojects_parallel(
             profiles_dir_s,
             profiles_rel,
             continue_on_deps_failure,
+            dbt_vars,
         )
         for rel in compile_dirs
     ]
@@ -373,9 +408,18 @@ def compile_dbt_for_costguard(
     commit: str | None = None,
     force_compile: bool = False,
     cache_scope: str = "",
+    requirements_file: Path | None = None,
+    constraints_file: Path | None = None,
+    dbt_vars: str = "",
+    use_existing_manifest: bool = False,
 ) -> tuple[Path, str]:
     resolved_profile_type = profile_type or profile_type_from_adapter(adapter_package)
     dirs = compile_dirs or []
+
+    if use_existing_manifest:
+        if manifest_out.exists():
+            return manifest_out, "existing"
+        raise SystemExit(f"use-existing-manifest requested but manifest missing at {manifest_out}")
 
     if (
         not force_compile
@@ -397,7 +441,12 @@ def compile_dbt_for_costguard(
         dbt = Path("dbt")
     else:
         cache = cache_dir or (Path.home() / ".cache" / "costguard" / "dbt-venv")
-        _, dbt = dbt_tools(cache, adapter_package)
+        _, dbt = dbt_tools(
+            cache,
+            adapter_package,
+            requirements_file=requirements_file,
+            constraints_file=constraints_file,
+        )
 
     entries: list[tuple[Path, str]] = []
     if dirs:
@@ -410,6 +459,7 @@ def compile_dbt_for_costguard(
             profiles_dir=profiles_dir,
             profiles_rel=profiles_rel,
             continue_on_deps_failure=continue_on_deps_failure,
+            dbt_vars=dbt_vars,
         )
         merge_manifests(entries, manifest_out)
     else:
@@ -423,6 +473,7 @@ def compile_dbt_for_costguard(
             profiles_dir=profiles_dir,
             profiles_rel=profiles_rel,
             continue_on_deps_failure=continue_on_deps_failure,
+            dbt_vars=dbt_vars,
         )
         try:
             project_rel = str(resolved_project.relative_to(checkout))
@@ -500,6 +551,10 @@ def main() -> int:
     parser.add_argument("--manifest-out", type=Path, default=Path("target/manifest.json"))
     parser.add_argument("--cache-dir", type=Path, default=None)
     parser.add_argument("--use-system-dbt", action="store_true")
+    parser.add_argument("--requirements-file", type=Path, default=None)
+    parser.add_argument("--constraints-file", type=Path, default=None)
+    parser.add_argument("--vars", default="")
+    parser.add_argument("--use-existing-manifest", action="store_true")
     parser.add_argument(
         "--fail-on-deps-failure",
         action="store_true",
@@ -529,6 +584,10 @@ def main() -> int:
         cache_dir=args.cache_dir,
         continue_on_deps_failure=not args.fail_on_deps_failure,
         use_system_dbt=args.use_system_dbt,
+        requirements_file=args.requirements_file,
+        constraints_file=args.constraints_file,
+        dbt_vars=args.vars,
+        use_existing_manifest=args.use_existing_manifest,
     )
     print(f"Wrote manifest to {manifest_out}")
     return 0

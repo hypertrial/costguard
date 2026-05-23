@@ -14,6 +14,9 @@ python3 scripts/dbt_compile_for_costguard.py \
   --project-dir dbt_subprojects/dex \
   --adapter-package dbt-trino \
   --profile-type trino \
+  --requirements-file requirements.txt \
+  --constraints-file constraints.txt \
+  --vars '{days: 7}' \
   --manifest-out target/manifest.json
 
 python3 scripts/dbt_compile_for_costguard.py \
@@ -33,6 +36,11 @@ python3 scripts/dbt_compile_for_costguard.py \
 | `--manifest-out` | Output path for merged or single manifest |
 | `--use-system-dbt` | Use `dbt` from PATH instead of cached venv |
 | `--cache-dir` | Benchmark cache root (manifest fingerprint cache when used from benchmark script) |
+| `--requirements-file` | Optional pip requirements file for dbt dependencies |
+| `--constraints-file` | Optional pip constraints file for reproducible dbt installs |
+| `--vars` | Optional YAML string passed to `dbt compile --vars` |
+| `--fail-on-deps-failure` | Exit when `dbt deps` fails instead of warning and continuing |
+| `--use-existing-manifest` | Skip compile and require `--manifest-out` to already exist |
 
 ## `costguard_tooling.py`
 

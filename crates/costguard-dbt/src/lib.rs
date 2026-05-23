@@ -2,7 +2,7 @@ mod project_config;
 
 use anyhow::{Context, Result};
 use project_config::{
-    apply_folder_config_to_model, discover_dbt_project_files_with_warnings,
+    apply_folder_config_to_model, discover_dbt_project_files_in_roots_with_warnings,
     find_dbt_project_for_model, parse_config_node, resolve_folder_config_for_model,
 };
 pub use project_config::{
@@ -34,6 +34,7 @@ pub struct DbtConfig {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DbtRef {
+    pub package: Option<String>,
     pub name: String,
 }
 
@@ -51,6 +52,14 @@ pub struct DbtProject {
     pub graph: DbtGraph,
 }
 
+impl DbtProject {
+    pub fn model_by_name(&self, name: &str) -> Option<&DbtModel> {
+        let mut matches = self.models.values().filter(|model| model.name == name);
+        let first = matches.next()?;
+        matches.next().is_none().then_some(first)
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DbtGraph {
     pub depends_on: HashMap<String, Vec<String>>,
@@ -58,7 +67,10 @@ pub struct DbtGraph {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DbtModel {
+    pub unique_id: Option<String>,
     pub node_id: Option<String>,
+    pub package_name: Option<String>,
+    pub fqn: Vec<String>,
     pub name: String,
     pub path: Option<PathBuf>,
     pub materialized: Option<String>,
@@ -70,6 +82,15 @@ pub struct DbtModel {
     pub tests: Vec<DbtTest>,
     pub refs: Vec<String>,
     pub sources: Vec<DbtSourceRef>,
+}
+
+impl DbtModel {
+    pub fn identity(&self) -> &str {
+        self.unique_id
+            .as_deref()
+            .or(self.node_id.as_deref())
+            .unwrap_or(&self.name)
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -102,6 +123,7 @@ pub enum MetadataWarningKind {
     DbtProjectParseFailed,
     DbtProjectAmbiguousModels,
     NoManifest,
+    FileSkipped,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -115,9 +137,11 @@ pub fn extract_sql_features(text: &str) -> DbtSqlFeatures {
     let mut features = DbtSqlFeatures::default();
 
     for capture in ref_regex().captures_iter(text) {
-        features.refs.push(DbtRef {
-            name: capture[1].to_string(),
-        });
+        let (package, name) = match capture.get(2) {
+            Some(name) => (Some(capture[1].to_string()), name.as_str().to_string()),
+            None => (None, capture[1].to_string()),
+        };
+        features.refs.push(DbtRef { package, name });
     }
 
     for capture in source_regex().captures_iter(text) {
@@ -182,7 +206,10 @@ fn config_key_regex(key: &str) -> &'static Regex {
 
 fn ref_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r#"ref\s*\(\s*['"]([^'"]+)['"]\s*\)"#).expect("valid regex"))
+    RE.get_or_init(|| {
+        Regex::new(r#"ref\s*\(\s*['"]([^'"]+)['"]\s*(?:,\s*['"]([^'"]+)['"]\s*)?\)"#)
+            .expect("valid regex")
+    })
 }
 
 fn source_regex() -> &'static Regex {
@@ -218,6 +245,18 @@ pub fn parse_manifest_text(text: &str) -> Result<DbtProject> {
                 .and_then(Value::as_str)
                 .unwrap_or(node_id)
                 .to_string();
+            let package_name = node
+                .get("package_name")
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            let fqn = node
+                .get("fqn")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect::<Vec<_>>();
             let path = node
                 .get("original_file_path")
                 .or_else(|| node.get("path"))
@@ -300,9 +339,12 @@ pub fn parse_manifest_text(text: &str) -> Result<DbtProject> {
                 .collect::<Vec<_>>();
             project.graph.depends_on.insert(node_id.clone(), depends_on);
             project.models.insert(
-                name.clone(),
+                node_id.clone(),
                 DbtModel {
+                    unique_id: Some(node_id.clone()),
                     node_id: Some(node_id.clone()),
+                    package_name,
+                    fqn,
                     name,
                     path,
                     materialized,
@@ -512,25 +554,35 @@ fn parse_yaml_value(value: Value) -> DbtProject {
 
 pub fn merge_yaml_project(target: &mut DbtProject, yaml: DbtProject) {
     for (name, yaml_model) in yaml.models {
-        let model = target
+        let matching_keys = target
             .models
-            .entry(name.clone())
-            .or_insert_with(|| DbtModel {
-                name,
-                ..DbtModel::default()
-            });
-        if model.tags.is_empty() {
-            model.tags = yaml_model.tags.clone();
-        } else {
-            for tag in &yaml_model.tags {
-                if !model.tags.contains(tag) {
-                    model.tags.push(tag.clone());
-                }
-            }
+            .iter()
+            .filter_map(|(key, model)| (model.name == yaml_model.name).then_some(key.clone()))
+            .collect::<Vec<_>>();
+        if matching_keys.is_empty() {
+            let key = synthesized_model_id(None, None, &name);
+            target.models.insert(
+                key,
+                DbtModel {
+                    unique_id: Some(synthesized_model_id(None, None, &name)),
+                    name,
+                    tags: yaml_model.tags.clone(),
+                    tests: yaml_model.tests.clone(),
+                    columns: yaml_model.columns.clone(),
+                    materialized: yaml_model.materialized.clone(),
+                    unique_key: yaml_model.unique_key.clone(),
+                    incremental_strategy: yaml_model.incremental_strategy.clone(),
+                    ..DbtModel::default()
+                },
+            );
+            continue;
         }
-        merge_model_config_fields(model, &yaml_model);
-        merge_columns(&mut model.columns, yaml_model.columns);
-        merge_tests(&mut model.tests, yaml_model.tests);
+        for key in matching_keys {
+            let Some(model) = target.models.get_mut(&key) else {
+                continue;
+            };
+            merge_model_metadata(model, &yaml_model);
+        }
     }
     for (name, yaml_source) in yaml.sources {
         let source = target
@@ -549,6 +601,39 @@ pub fn merge_yaml_project(target: &mut DbtProject, yaml: DbtProject) {
     for (name, exposure) in yaml.exposures {
         target.exposures.entry(name).or_insert(exposure);
     }
+}
+
+fn merge_model_metadata(model: &mut DbtModel, yaml_model: &DbtModel) {
+    if model.tags.is_empty() {
+        model.tags = yaml_model.tags.clone();
+    } else {
+        for tag in &yaml_model.tags {
+            if !model.tags.contains(tag) {
+                model.tags.push(tag.clone());
+            }
+        }
+    }
+    merge_model_config_fields(model, yaml_model);
+    merge_columns(&mut model.columns, yaml_model.columns.clone());
+    merge_tests(&mut model.tests, yaml_model.tests.clone());
+}
+
+pub fn synthesized_model_id(package_name: Option<&str>, path: Option<&Path>, name: &str) -> String {
+    if let Some(path) = path {
+        return format!(
+            "model.local.{}",
+            normalize_identifier(&path.to_string_lossy())
+        );
+    }
+    let package = package_name.unwrap_or("local");
+    format!("model.{package}.{}", normalize_identifier(name))
+}
+
+fn normalize_identifier(value: &str) -> String {
+    value
+        .chars()
+        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '_' })
+        .collect()
 }
 
 fn merge_model_config_fields(target: &mut DbtModel, source: &DbtModel) {
@@ -576,7 +661,16 @@ pub fn compiled_code_by_model_path(project: &DbtProject) -> HashMap<PathBuf, Str
 }
 
 pub fn apply_dbt_project_configs(root: &Path, project: &mut DbtProject) -> Vec<MetadataWarning> {
-    let (project_files, warnings) = discover_dbt_project_files_with_warnings(root);
+    apply_dbt_project_configs_in_roots(root, &[root.to_path_buf()], project)
+}
+
+pub fn apply_dbt_project_configs_in_roots(
+    root: &Path,
+    scan_roots: &[PathBuf],
+    project: &mut DbtProject,
+) -> Vec<MetadataWarning> {
+    let (project_files, warnings) =
+        discover_dbt_project_files_in_roots_with_warnings(root, scan_roots);
     for model in project.models.values_mut() {
         let Some(model_path) = model.path.as_ref() else {
             continue;
@@ -669,9 +763,11 @@ mod tests {
 
     #[test]
     fn extracts_dbt_sql_features() {
-        let text = "{{ config(materialized='incremental', unique_key=\"id\") }} select * from {{ ref('stg_orders') }} where {% if is_incremental() %} updated_at > current_date {% endif %}";
+        let text = "{{ config(materialized='incremental', unique_key=\"id\") }} select * from {{ ref('stg_orders') }} join {{ ref('pkg', 'dim_orders') }} using (id) where {% if is_incremental() %} updated_at > current_date {% endif %}";
         let features = extract_sql_features(text);
         assert_eq!(features.refs[0].name, "stg_orders");
+        assert_eq!(features.refs[1].package.as_deref(), Some("pkg"));
+        assert_eq!(features.refs[1].name, "dim_orders");
         assert_eq!(features.config.materialized.as_deref(), Some("incremental"));
         assert_eq!(features.config.unique_key.as_deref(), Some("id"));
         assert!(features.uses_is_incremental);
@@ -714,7 +810,7 @@ exposures:
       - ref('fct_sessions')
 "#;
         let project = parse_yaml_project(yaml);
-        let model = project.models.get("fct_sessions").unwrap();
+        let model = project.model_by_name("fct_sessions").unwrap();
         assert_eq!(model.tags, vec!["mart", "critical"]);
         assert_eq!(model.columns[0].tests[0].name, "not_null");
         assert_eq!(project.sources["raw"].tables, vec!["events"]);
@@ -735,7 +831,7 @@ models:
       incremental_strategy: merge
 "#;
         let project = parse_yaml_project(yaml);
-        let model = project.models.get("fct_sessions").unwrap();
+        let model = project.model_by_name("fct_sessions").unwrap();
         assert_eq!(model.materialized.as_deref(), Some("incremental"));
         assert_eq!(model.unique_key.as_deref(), Some("id"));
         assert_eq!(model.incremental_strategy.as_deref(), Some("merge"));
@@ -764,7 +860,7 @@ models:
         );
 
         merge_yaml_project(&mut target, yaml);
-        let model = target.models.get("fct_sessions").unwrap();
+        let model = target.model_by_name("fct_sessions").unwrap();
         assert_eq!(model.materialized.as_deref(), Some("incremental"));
         assert_eq!(model.unique_key.as_deref(), Some("id"));
         assert_eq!(model.incremental_strategy.as_deref(), Some("merge"));
@@ -805,7 +901,7 @@ models:
         );
 
         merge_yaml_project(&mut target, yaml);
-        let model = target.models.get("fct_sessions").unwrap();
+        let model = target.model_by_name("fct_sessions").unwrap();
         assert_eq!(model.materialized.as_deref(), Some("incremental"));
         assert_eq!(model.tags, vec!["critical"]);
         assert_eq!(model.tests[0].name, "unique");
@@ -820,6 +916,8 @@ models:
     "model.pkg.fct_block_time": {
       "resource_type": "model",
       "name": "fct_block_time",
+      "package_name": "pkg",
+      "fqn": ["pkg", "marts", "fct_block_time"],
       "original_file_path": "models/marts/fct_block_time.sql",
       "config": { "materialized": "incremental" },
       "compiled_code": "select tx_hash, block_time from dex.trades"
@@ -834,12 +932,15 @@ models:
   }
 }"#;
         let project = parse_manifest_text(manifest).expect("parse manifest");
-        let compiled = project.models.get("fct_block_time").unwrap();
+        let compiled = project.model_by_name("fct_block_time").unwrap();
         assert_eq!(
             compiled.compiled_code.as_deref(),
             Some("select tx_hash, block_time from dex.trades")
         );
-        let legacy = project.models.get("legacy_model").unwrap();
+        assert_eq!(compiled.identity(), "model.pkg.fct_block_time");
+        assert_eq!(compiled.package_name.as_deref(), Some("pkg"));
+        assert_eq!(compiled.fqn, vec!["pkg", "marts", "fct_block_time"]);
+        let legacy = project.model_by_name("legacy_model").unwrap();
         assert_eq!(legacy.compiled_code.as_deref(), Some("select 1 as id"));
 
         let by_path = compiled_code_by_model_path(&project);

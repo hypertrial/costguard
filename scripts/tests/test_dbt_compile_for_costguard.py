@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from dbt_compile_for_costguard import (  # noqa: E402
+    compile_dbt_for_costguard,
     manifest_cache_path,
     merge_manifests,
     packages_fingerprint,
@@ -135,6 +136,51 @@ class DbtCompileHelpersTest(unittest.TestCase):
         self.assertTrue(
             (manifest_cache_path(cache_dir, "spellbook", "abc123", "deadbeef") / "meta.json").exists()
         )
+
+    def test_use_existing_manifest_returns_without_compile(self) -> None:
+        tmp = self._temp_dir()
+        manifest = tmp / "target" / "manifest.json"
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text('{"nodes": {}, "sources": {}, "exposures": {}}', encoding="utf-8")
+
+        result, cache_state = compile_dbt_for_costguard(
+            tmp,
+            manifest_out=manifest,
+            use_existing_manifest=True,
+        )
+
+        self.assertEqual(result, manifest)
+        self.assertEqual(cache_state, "existing")
+
+    def test_compile_project_passes_dbt_vars(self) -> None:
+        tmp = self._temp_dir()
+        project = tmp / "proj"
+        project.mkdir()
+        (project / "dbt_project.yml").write_text("name: demo\nprofile: demo\n", encoding="utf-8")
+        dbt = tmp / "dbt"
+        dbt.write_text(
+            "#!/usr/bin/env python3\n"
+            "import pathlib, sys\n"
+            "pathlib.Path('dbt-args.txt').write_text(' '.join(sys.argv[1:]))\n"
+            "if sys.argv[1] == 'compile':\n"
+            "    pathlib.Path(sys.argv[sys.argv.index('--project-dir') + 1], 'target').mkdir(exist_ok=True)\n"
+            "    pathlib.Path(sys.argv[sys.argv.index('--project-dir') + 1], 'target', 'manifest.json').write_text('{\"nodes\": {}}')\n",
+            encoding="utf-8",
+        )
+        dbt.chmod(0o755)
+
+        from dbt_compile_for_costguard import compile_dbt_project  # noqa: E402
+
+        compile_dbt_project(
+            tmp,
+            project,
+            dbt=dbt,
+            target="dev",
+            dbt_vars="{days: 7}",
+            continue_on_deps_failure=False,
+        )
+
+        self.assertIn("--vars {days: 7}", (tmp / "dbt-args.txt").read_text(encoding="utf-8"))
 
     def _temp_dir(self) -> Path:
         import tempfile

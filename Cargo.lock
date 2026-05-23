@@ -184,6 +184,8 @@ dependencies = [
  "ignore",
  "rayon",
  "serde",
+ "serde_yaml",
+ "tempfile",
 ]
 
 [[package]]

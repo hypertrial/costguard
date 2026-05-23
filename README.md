@@ -37,7 +37,7 @@ mdbook serve
 - uses: actions/checkout@v4
   with:
     fetch-depth: 0
-- uses: ./.github/actions/costguard
+- uses: hypertrial/costguard/.github/actions/costguard@v0.1.0
   with:
     base: origin/main
     warehouse: snowflake
@@ -45,6 +45,8 @@ mdbook serve
     min-confidence: high
     format: github
 ```
+
+When developing Costguard itself, use the same action with `install-mode: source` so the workflow builds the checked-out code instead of downloading a release.
 
 Recommended for macro-heavy dbt repos: pair `--fail-on high` with `--min-confidence high` to suppress regex-only findings while keeping AST-confirmed high-risk hits.
 

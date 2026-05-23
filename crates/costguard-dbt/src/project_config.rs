@@ -253,10 +253,20 @@ pub fn discover_dbt_project_files(root: &Path) -> Vec<DbtProjectFile> {
 pub fn discover_dbt_project_files_with_warnings(
     root: &Path,
 ) -> (Vec<DbtProjectFile>, Vec<MetadataWarning>) {
+    discover_dbt_project_files_in_roots_with_warnings(root, &[root.to_path_buf()])
+}
+
+pub fn discover_dbt_project_files_in_roots_with_warnings(
+    root: &Path,
+    scan_roots: &[PathBuf],
+) -> (Vec<DbtProjectFile>, Vec<MetadataWarning>) {
     let mut files = Vec::new();
     let mut warnings = Vec::new();
-    collect_dbt_project_files(root, root, &mut files, &mut warnings);
+    for scan_root in scan_roots {
+        collect_dbt_project_files(root, scan_root, &mut files, &mut warnings);
+    }
     files.sort_by(|left, right| left.path.cmp(&right.path));
+    files.dedup_by(|left, right| left.path == right.path);
     (files, warnings)
 }
 

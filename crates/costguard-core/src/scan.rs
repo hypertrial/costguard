@@ -3,14 +3,17 @@ use crate::dbt_graph::enrich_pr_summary;
 use crate::{FileParseStatus, PrSummary, Project, ScanMetrics, ScanResult};
 use anyhow::{Context, Result};
 use costguard_dbt::{
-    apply_dbt_project_configs, compiled_code_by_model_path, extract_sql_features,
-    merge_yaml_project, parse_manifest, parse_yaml_project_with_warnings, DbtModel, DbtProject,
-    MetadataWarning, MetadataWarningKind,
+    apply_dbt_project_configs_in_roots, compiled_code_by_model_path, extract_sql_features,
+    merge_yaml_project, parse_manifest, parse_yaml_project_with_warnings, synthesized_model_id,
+    DbtModel, DbtProject, MetadataWarning, MetadataWarningKind,
 };
 use costguard_diagnostics::{apply_suppressions, Diagnostic, Severity};
 use costguard_platform::Platform;
 use costguard_rules::{ProjectIndexes, RuleMetadata, RuleRegistry};
-use costguard_scanner::{discover, read_existing_paths, FileKind, ProjectFile, ScanCounts};
+use costguard_scanner::{
+    discover_with_options, read_existing_paths_with_options, DiscoveryOptions, FileKind,
+    ProjectFile, ScanCounts, SkippedFile,
+};
 use costguard_sql::{analyze_sql, SqlDocument};
 use rayon::prelude::*;
 use std::collections::{BTreeMap, HashMap};
@@ -27,44 +30,42 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
         .root
         .canonicalize()
         .with_context(|| format!("failed to resolve root {}", config.root.display()))?;
-    let ignored = ignored_paths(&root, &config.ignore);
-    let (mut files, mut context_files, pr_summary) = if config.changed_only {
+    let discovery_options = DiscoveryOptions::with_ignore(config.ignore.clone());
+    let (files, context_files, pr_summary, skipped_files) = if config.changed_only {
         if !costguard_git::is_git_repository(&root) {
             anyhow::bail!("{} is not a git repository", root.display());
         }
         let base = config.base_branch.as_deref().unwrap_or("main");
         let changed_files = costguard_git::changed_files(&root, base)
             .with_context(|| format!("failed to resolve changed files against base '{base}'"))?;
-        let files = read_existing_paths(&root, &changed_files)?;
-        let context_files = discover(&root, &config.paths)?
+        let changed_discovery =
+            read_existing_paths_with_options(&root, &changed_files, &discovery_options)?;
+        let context_discovery = discover_with_options(&root, &config.paths, &discovery_options)?;
+        let context_files = context_discovery
+            .files
             .into_iter()
             .filter(is_dbt_context_file)
             .collect::<Vec<_>>();
+        let mut skipped_files = changed_discovery.skipped_files;
+        skipped_files.extend(context_discovery.skipped_files);
         (
-            files,
+            changed_discovery.files,
             Some(context_files),
             Some(PrSummary {
                 changed_files,
                 ..PrSummary::default()
             }),
+            skipped_files,
         )
     } else {
-        let files = discover(&root, &config.paths)?;
-        (files, None, None)
+        let discovery = discover_with_options(&root, &config.paths, &discovery_options)?;
+        (discovery.files, None, None, discovery.skipped_files)
     };
-
-    if !ignored.is_empty() {
-        files.retain(|file| !is_ignored(file, &ignored));
-        if let Some(context_files) = context_files.as_mut() {
-            context_files.retain(|file| !is_ignored(file, &ignored));
-        }
-    }
 
     let counts = ScanCounts::from_files(&files);
     let context_for_dbt = context_files.as_deref().unwrap_or(&files);
     let dbt_load = load_dbt_project(&root, config, context_for_dbt)?;
     let metadata_only = dbt_load.metadata_only;
-    let metadata_warnings_count = dbt_load.warnings.len();
     let yaml_parse_failures = dbt_load
         .warnings
         .iter()
@@ -81,7 +82,9 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
             )
         })
         .count();
-    let metadata_diagnostics = metadata_diagnostics(&root, &dbt_load.warnings);
+    let mut metadata_warnings = dbt_load.warnings;
+    metadata_warnings.extend(file_skip_warnings(&skipped_files));
+    let metadata_diagnostics = metadata_diagnostics(&root, &metadata_warnings);
     let dbt = dbt_load.project;
     let project = Project {
         root: root.clone(),
@@ -141,7 +144,7 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
         &diagnostics,
         counts,
         metadata_only,
-        metadata_warnings_count,
+        metadata_warnings.len(),
         yaml_parse_failures,
         dbt_project_parse_failures,
     );
@@ -164,30 +167,26 @@ pub fn rules() -> Vec<RuleMetadata> {
     RuleRegistry::default_rules().metadata()
 }
 
-fn ignored_paths(root: &Path, ignore: &[PathBuf]) -> Vec<PathBuf> {
-    ignore
-        .iter()
-        .map(|path| {
-            if path.is_absolute() {
-                path.clone()
-            } else {
-                root.join(path)
-            }
-        })
-        .collect()
-}
-
-fn is_ignored(file: &ProjectFile, ignored: &[PathBuf]) -> bool {
-    ignored
-        .iter()
-        .any(|ignored_path| file.path.starts_with(ignored_path))
-}
-
 fn is_dbt_context_file(file: &ProjectFile) -> bool {
     matches!(
         file.kind,
         FileKind::DbtSqlModel | FileKind::DbtYaml | FileKind::ManifestJson
     )
+}
+
+fn file_skip_warnings(skipped_files: &[SkippedFile]) -> Vec<MetadataWarning> {
+    skipped_files
+        .iter()
+        .map(|file| MetadataWarning {
+            kind: MetadataWarningKind::FileSkipped,
+            path: Some(file.path.clone()),
+            message: format!(
+                "skipped {}: {}",
+                file.root_relative_path.display(),
+                file.reason
+            ),
+        })
+        .collect()
 }
 
 fn load_dbt_project(
@@ -262,11 +261,15 @@ fn load_dbt_project(
             .and_then(|stem| stem.to_str())
             .unwrap_or_default()
             .to_string();
+        let model_key = find_model_key_for_file(&project, &file.root_relative_path, &name)
+            .unwrap_or_else(|| synthesized_model_id(None, Some(&file.root_relative_path), &name));
         let model = project
             .models
-            .entry(name.clone())
+            .entry(model_key.clone())
             .or_insert_with(|| DbtModel {
-                name,
+                unique_id: Some(model_key.clone()),
+                node_id: Some(model_key.clone()),
+                name: name.clone(),
                 path: Some(file.root_relative_path.clone()),
                 ..DbtModel::default()
             });
@@ -287,13 +290,16 @@ fn load_dbt_project(
             model.refs = features
                 .refs
                 .into_iter()
-                .map(|reference| reference.name)
+                .map(|reference| match reference.package {
+                    Some(package) => format!("{package}.{}", reference.name),
+                    None => reference.name,
+                })
                 .collect();
         }
         if model.sources.is_empty() {
             model.sources = features.sources;
         }
-        let dependency_key = model.node_id.clone().unwrap_or_else(|| model.name.clone());
+        let dependency_key = model.identity().to_string();
         let dependencies = model.refs.clone();
         project
             .graph
@@ -302,7 +308,11 @@ fn load_dbt_project(
             .or_insert(dependencies);
     }
 
-    warnings.extend(apply_dbt_project_configs(root, &mut project));
+    warnings.extend(apply_dbt_project_configs_in_roots(
+        root,
+        &scan_roots(root, &config.paths),
+        &mut project,
+    ));
 
     let metadata_only = !loaded_manifest && has_dbt_files;
     let project = if project.models.is_empty() {
@@ -316,6 +326,50 @@ fn load_dbt_project(
         warnings,
         metadata_only,
     })
+}
+
+fn scan_roots(root: &Path, paths: &[PathBuf]) -> Vec<PathBuf> {
+    if paths.is_empty() {
+        return vec![root.to_path_buf()];
+    }
+    let mut roots = paths
+        .iter()
+        .map(|path| {
+            if path.is_absolute() {
+                path.clone()
+            } else {
+                root.join(path)
+            }
+        })
+        .flat_map(|path| {
+            let mut roots = vec![path.clone()];
+            if path.file_name().and_then(|name| name.to_str()) == Some("models") {
+                if let Some(parent) = path.parent() {
+                    roots.push(parent.to_path_buf());
+                }
+            }
+            roots
+        })
+        .collect::<Vec<_>>();
+    roots.sort();
+    roots.dedup();
+    roots
+}
+
+fn find_model_key_for_file(project: &DbtProject, path: &Path, name: &str) -> Option<String> {
+    if let Some((key, _)) = project
+        .models
+        .iter()
+        .find(|(_, model)| model.path.as_deref() == Some(path))
+    {
+        return Some(key.clone());
+    }
+    let matches = project
+        .models
+        .iter()
+        .filter_map(|(key, model)| (model.name == name).then_some(key.clone()))
+        .collect::<Vec<_>>();
+    (matches.len() == 1).then(|| matches[0].clone())
 }
 
 fn metadata_diagnostics(root: &Path, warnings: &[MetadataWarning]) -> Vec<Diagnostic> {
@@ -342,6 +396,11 @@ fn metadata_warning_to_diagnostic(root: &Path, warning: &MetadataWarning) -> Dia
             "SQLCOST025",
             Severity::Low,
             "fix dbt_project.yml syntax or project name alignment for folder config",
+        ),
+        MetadataWarningKind::FileSkipped => (
+            "SQLCOST025",
+            Severity::Low,
+            "narrow scan paths, ignore generated files, or raise the scan size limit in a future config version",
         ),
     };
     let path = warning

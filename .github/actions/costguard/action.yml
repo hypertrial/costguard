@@ -22,6 +22,14 @@ inputs:
     description: Output format (github, markdown, json, text)
     required: false
     default: github
+  install-mode:
+    description: Install mode for the costguard CLI (release or source)
+    required: false
+    default: release
+  version:
+    description: Costguard release version to install when install-mode=release (defaults to action ref when available)
+    required: false
+    default: ""
   manifest:
     description: Optional explicit dbt manifest path
     required: false
@@ -62,14 +70,36 @@ inputs:
     description: Path for merged manifest output relative to working-directory
     required: false
     default: target/manifest.json
+  dbt-requirements-file:
+    description: Optional pip requirements file for dbt dependencies
+    required: false
+    default: ""
+  dbt-constraints-file:
+    description: Optional pip constraints file for dbt dependencies
+    required: false
+    default: ""
+  dbt-vars:
+    description: Optional YAML string passed to dbt compile --vars
+    required: false
+    default: ""
+  fail-on-deps-failure:
+    description: Fail when dbt deps fails instead of warning and continuing
+    required: false
+    default: "false"
+  use-existing-manifest:
+    description: Skip dbt compile and use manifest-output or manifest input as an existing artifact
+    required: false
+    default: "false"
 
 runs:
   using: composite
   steps:
     - name: Install Rust toolchain
+      if: inputs.install-mode == 'source'
       uses: dtolnay/rust-toolchain@stable
 
     - name: Cache cargo build
+      if: inputs.install-mode == 'source'
       uses: actions/cache@v4
       with:
         path: |
@@ -81,19 +111,52 @@ runs:
           ${{ runner.os }}-costguard-action-
 
     - name: Build costguard CLI
+      if: inputs.install-mode == 'source'
       shell: bash
       run: |
         cargo build --release -p costguard-cli --locked
         echo "${GITHUB_WORKSPACE}/target/release" >> "$GITHUB_PATH"
 
+    - name: Install costguard release
+      if: inputs.install-mode == 'release'
+      shell: bash
+      env:
+        VERSION_INPUT: ${{ inputs.version }}
+        ACTION_REF: ${{ github.action_ref }}
+      run: |
+        set -eo pipefail
+        version="${VERSION_INPUT:-${ACTION_REF:-}}"
+        if [ -z "$version" ] || [ "$version" = "__run" ]; then
+          echo "A release version is required when install-mode=release." >&2
+          exit 2
+        fi
+        os="$(uname -s)"
+        arch="$(uname -m)"
+        case "${os}-${arch}" in
+          Linux-x86_64) target="x86_64-unknown-linux-gnu" ;;
+          Darwin-arm64) target="aarch64-apple-darwin" ;;
+          Darwin-x86_64) target="x86_64-apple-darwin" ;;
+          MINGW*-x86_64|MSYS*-x86_64) target="x86_64-pc-windows-msvc" ;;
+          *) echo "Unsupported runner platform: ${os}-${arch}" >&2; exit 2 ;;
+        esac
+        asset="costguard-${target}.tar.gz"
+        base_url="https://github.com/hypertrial/costguard/releases/download/${version}"
+        tmp="$(mktemp -d)"
+        curl -fsSL "${base_url}/${asset}" -o "${tmp}/${asset}"
+        curl -fsSL "${base_url}/${asset}.sha256" -o "${tmp}/${asset}.sha256"
+        (cd "$tmp" && shasum -a 256 -c "${asset}.sha256")
+        mkdir -p "${RUNNER_TEMP}/costguard-bin"
+        tar -xzf "${tmp}/${asset}" -C "${RUNNER_TEMP}/costguard-bin"
+        echo "${RUNNER_TEMP}/costguard-bin" >> "$GITHUB_PATH"
+
     - name: Set up Python
-      if: inputs.compile-dbt == 'true'
+      if: inputs.compile-dbt == 'true' && inputs.use-existing-manifest != 'true'
       uses: actions/setup-python@v5
       with:
         python-version: "3.11"
 
     - name: Compile dbt project
-      if: inputs.compile-dbt == 'true'
+      if: inputs.compile-dbt == 'true' && inputs.use-existing-manifest != 'true'
       shell: bash
       env:
         DBT_ADAPTER_PACKAGE: ${{ inputs.dbt-adapter-package }}
@@ -102,6 +165,10 @@ runs:
         DBT_PROFILES_DIR_INPUT: ${{ inputs.dbt-profiles-dir }}
         DBT_PROFILE_TYPE_INPUT: ${{ inputs.dbt-profile-type }}
         DBT_COMPILE_DIRS_INPUT: ${{ inputs.dbt-compile-dirs }}
+        DBT_REQUIREMENTS_FILE_INPUT: ${{ inputs.dbt-requirements-file }}
+        DBT_CONSTRAINTS_FILE_INPUT: ${{ inputs.dbt-constraints-file }}
+        DBT_VARS_INPUT: ${{ inputs.dbt-vars }}
+        FAIL_ON_DEPS_FAILURE_INPUT: ${{ inputs.fail-on-deps-failure }}
         MANIFEST_OUTPUT_INPUT: ${{ inputs.manifest-output }}
         WORKING_DIRECTORY_INPUT: ${{ inputs.working-directory }}
       run: |
@@ -119,7 +186,15 @@ runs:
         fi
 
         python -m pip install --upgrade pip
-        python -m pip install "${DBT_ADAPTER_PACKAGE}"
+        install_args=()
+        if [ -n "${DBT_CONSTRAINTS_FILE_INPUT}" ]; then
+          install_args+=(-c "${repo_root}/${DBT_CONSTRAINTS_FILE_INPUT}")
+        fi
+        if [ -n "${DBT_REQUIREMENTS_FILE_INPUT}" ]; then
+          install_args+=(-r "${repo_root}/${DBT_REQUIREMENTS_FILE_INPUT}")
+        fi
+        install_args+=("${DBT_ADAPTER_PACKAGE}")
+        python -m pip install "${install_args[@]}"
 
         args=(
           python3 "${GITHUB_WORKSPACE}/scripts/dbt_compile_for_costguard.py"
@@ -139,6 +214,12 @@ runs:
           args+=(--compile-dirs "${compile_dirs}")
         else
           args+=(--project-dir "${project_dir}")
+        fi
+        if [ -n "${DBT_VARS_INPUT}" ]; then
+          args+=(--vars "${DBT_VARS_INPUT}")
+        fi
+        if [ "${FAIL_ON_DEPS_FAILURE_INPUT}" = "true" ]; then
+          args+=(--fail-on-deps-failure)
         fi
         "${args[@]}"
 

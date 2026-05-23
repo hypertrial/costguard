@@ -11,3 +11,7 @@ costguard-diagnostics = { path = "../costguard-diagnostics" }
 ignore.workspace = true
 rayon.workspace = true
 serde.workspace = true
+serde_yaml.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

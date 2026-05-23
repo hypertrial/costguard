@@ -10,6 +10,7 @@ Structured scan result:
 
 ```json
 {
+  "schema_version": 1,
   "metrics": { "...": "..." },
   "diagnostics": [ "..." ],
   "files": [ "..." ],
@@ -19,8 +20,9 @@ Structured scan result:
 
 | Field | Present when | Description |
 | --- | --- | --- |
+| `schema_version` | Always | Stable JSON schema version for downstream consumers |
 | `metrics` | Always | Scan counters including parse metrics (see [Parse metrics](parse-metrics.md)) |
-| `diagnostics` | Always | Array of findings with `rule_id`, `severity`, `message`, `path`, `line`, `confidence` |
+| `diagnostics` | Always | Array of findings with `rule_id`, `severity`, `message`, `path`, `line`, `confidence`; compiled-only unmapped findings include `source_provenance`, `compiled_line`, and `compiled_column` |
 | `files` | Always | Per-model parse metadata (`parse_input`, `parsed_raw`, `parsed_compiled`, `feature_extraction_used_ast`) |
 | `pr_summary` | PR mode | Changed files, optional downstream blast radius |
 
@@ -31,6 +33,8 @@ Emits workflow commands for annotations:
 ```text
 ::error file=path,line=N,title=RULE_ID::message
 ```
+
+Compiled-only unmapped diagnostics annotate the raw model path at line 1 and include the compiled SQL location in the annotation message.
 
 ## Markdown (`markdown`)
 

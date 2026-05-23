@@ -64,6 +64,7 @@ When raw Jinja fails but compiled SQL parses, Costguard can extract AST shape fe
 Headline parse success (`parsed`) and AST feature extraction can diverge:
 
 - Compiled parse success alone does **not** enable AST extraction unless raw parse also succeeds, **except** when compiled AST fallback is used for macro-heavy models with manifest `compiled_code`.
+- Findings produced only from compiled AST fallback are marked `compiled_unmapped` in JSON when Costguard cannot map the compiled location back to a raw dbt source line.
 - Shape rules such as SQLCOST016–019 set `confidence: low` when AST extraction was not used.
 
 ## Audit gate

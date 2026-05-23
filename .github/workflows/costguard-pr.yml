@@ -17,3 +17,4 @@ jobs:
           fail-on: high
           min-confidence: high
           format: github
+          install-mode: source

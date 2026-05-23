@@ -12,15 +12,11 @@
       "sql": 2,
       "yaml": 2
     },
-    "dbt_project_parse_failures": 1,
-    "diagnostics_by_rule": {
-      "SQLCOST025": 1
-    },
-    "diagnostics_by_severity": {
-      "low": 1
-    },
+    "dbt_project_parse_failures": 0,
+    "diagnostics_by_rule": {},
+    "diagnostics_by_severity": {},
     "metadata_only_scan": false,
-    "metadata_warnings": 1,
+    "metadata_warnings": 0,
     "sql_parse_compiled_failures": 0,
     "sql_parse_compiled_total": 2,
     "sql_parse_failures": 0,
@@ -31,9 +27,7 @@
   },
   "target": "real_world/multi_dbt",
   "thresholds": {
-    "exact_diagnostics_by_rule": {
-      "SQLCOST025": 1
-    },
+    "exact_diagnostics_by_rule": {},
     "max_sql_parse_failures": 0
   },
   "version": 1,

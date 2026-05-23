@@ -75,6 +75,23 @@ pub struct Span {
     pub byte_end: usize,
     pub line: usize,
     pub column: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_provenance: Option<SourceProvenance>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SourceProvenance {
+    Raw,
+    Compiled,
+    CompiledUnmapped,
+}
+
+impl Span {
+    pub fn with_source_provenance(mut self, source: SourceProvenance) -> Self {
+        self.source_provenance = Some(source);
+        self
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -94,6 +111,12 @@ pub struct Diagnostic {
     pub confidence: Confidence,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub warehouse: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_provenance: Option<SourceProvenance>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub compiled_line: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub compiled_column: Option<usize>,
 }
 
 impl Diagnostic {
@@ -104,7 +127,23 @@ impl Diagnostic {
         span: Option<Span>,
         message: impl Into<String>,
     ) -> Self {
-        let (line, column) = span.map(|s| (s.line, s.column)).unwrap_or((1, 1));
+        let source_provenance = span.and_then(|s| s.source_provenance);
+        let (line, column) = if source_provenance == Some(SourceProvenance::CompiledUnmapped) {
+            (1, 1)
+        } else {
+            span.map(|s| (s.line, s.column)).unwrap_or((1, 1))
+        };
+        let compiled_line = (source_provenance == Some(SourceProvenance::CompiledUnmapped))
+            .then(|| span.map(|s| s.line))
+            .flatten();
+        let compiled_column = (source_provenance == Some(SourceProvenance::CompiledUnmapped))
+            .then(|| span.map(|s| s.column))
+            .flatten();
+        let span = if source_provenance == Some(SourceProvenance::CompiledUnmapped) {
+            None
+        } else {
+            span
+        };
         Self {
             rule_id: rule_id.into(),
             severity,
@@ -117,6 +156,9 @@ impl Diagnostic {
             suggestion: None,
             confidence: Confidence::High,
             warehouse: None,
+            source_provenance,
+            compiled_line,
+            compiled_column,
         }
     }
 
@@ -173,6 +215,7 @@ impl LineIndex {
             byte_end,
             line,
             column,
+            source_provenance: None,
         }
     }
 }

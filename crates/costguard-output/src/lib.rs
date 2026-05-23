@@ -5,6 +5,7 @@ use serde::Serialize;
 
 #[derive(Debug, Serialize)]
 struct JsonOutput<'a> {
+    schema_version: u8,
     metrics: &'a costguard_core::ScanMetrics,
     diagnostics: &'a [Diagnostic],
     files: &'a [costguard_core::FileParseStatus],
@@ -16,6 +17,7 @@ pub fn render(result: &ScanResult, format: OutputFormat) -> Result<String> {
     match format {
         OutputFormat::Text => Ok(render_text(result)),
         OutputFormat::Json => Ok(serde_json::to_string_pretty(&JsonOutput {
+            schema_version: 1,
             metrics: &result.metrics,
             diagnostics: &result.diagnostics,
             files: &result.file_parse_status,
@@ -139,7 +141,7 @@ fn render_github(result: &ScanResult) -> String {
             diagnostic.column,
             escape_github_property(&diagnostic.rule_id),
             escape_github_property(diagnostic.severity.label()),
-            escape_github_message(&diagnostic.message)
+            escape_github_message(&github_message(diagnostic))
         ));
     }
     if let Some(summary) = &result.pr_summary {
@@ -149,6 +151,16 @@ fn render_github(result: &ScanResult) -> String {
         ));
     }
     output
+}
+
+fn github_message(diagnostic: &Diagnostic) -> String {
+    if let (Some(line), Some(column)) = (diagnostic.compiled_line, diagnostic.compiled_column) {
+        return format!(
+            "{} (compiled SQL location: line {line}, column {column})",
+            diagnostic.message
+        );
+    }
+    diagnostic.message.clone()
 }
 
 fn render_markdown(result: &ScanResult) -> String {
@@ -262,7 +274,7 @@ fn escape_markdown(value: &str) -> String {
 mod tests {
     use super::*;
     use costguard_core::{ScanMetrics, ScanResult};
-    use costguard_diagnostics::{Confidence, Diagnostic, Severity};
+    use costguard_diagnostics::{Confidence, Diagnostic, Severity, SourceProvenance};
     use costguard_scanner::ScanCounts;
     use std::collections::BTreeMap;
     use std::path::PathBuf;
@@ -281,6 +293,9 @@ mod tests {
                 suggestion: None,
                 confidence: Confidence::High,
                 warehouse: None,
+                source_provenance: None,
+                compiled_line: None,
+                compiled_column: None,
             }]
         } else {
             Vec::new()
@@ -371,9 +386,37 @@ mod tests {
 
         let rendered = render(&result, OutputFormat::Json).expect("json render");
         let value: serde_json::Value = serde_json::from_str(&rendered).expect("parse json");
+        assert_eq!(value["schema_version"], 1);
         assert_eq!(value["metrics"]["sql_parse_total"], 3);
         assert_eq!(value["metrics"]["sql_parse_failures"], 1);
         assert_eq!(value["metrics"]["diagnostics_by_rule"]["SQLCOST005"], 1);
         assert_eq!(value["diagnostics"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn json_output_includes_compiled_provenance() {
+        let mut result = sample_result(true);
+        result.diagnostics[0].source_provenance = Some(SourceProvenance::CompiledUnmapped);
+        result.diagnostics[0].compiled_line = Some(12);
+        result.diagnostics[0].compiled_column = Some(4);
+
+        let rendered = render(&result, OutputFormat::Json).expect("json render");
+        let value: serde_json::Value = serde_json::from_str(&rendered).expect("parse json");
+        assert_eq!(
+            value["diagnostics"][0]["source_provenance"],
+            "compiled_unmapped"
+        );
+        assert_eq!(value["diagnostics"][0]["compiled_line"], 12);
+        assert_eq!(value["diagnostics"][0]["compiled_column"], 4);
+    }
+
+    #[test]
+    fn github_output_mentions_compiled_location() {
+        let mut result = sample_result(true);
+        result.diagnostics[0].source_provenance = Some(SourceProvenance::CompiledUnmapped);
+        result.diagnostics[0].compiled_line = Some(12);
+        result.diagnostics[0].compiled_column = Some(4);
+        let rendered = render_github(&result);
+        assert!(rendered.contains("compiled SQL location: line 12"));
     }
 }

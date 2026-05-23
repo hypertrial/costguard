@@ -17,13 +17,13 @@ costguard pr --base origin/main --warehouse snowflake --fail-on high --min-confi
 
 ## GitHub Action
 
-Use the composite action at [`.github/actions/costguard`](https://github.com/hypertrial/costguard/tree/main/.github/actions/costguard):
+Use the published composite action:
 
 ```yaml
 - uses: actions/checkout@v4
   with:
     fetch-depth: 0
-- uses: ./.github/actions/costguard
+- uses: hypertrial/costguard/.github/actions/costguard@v0.1.0
   with:
     base: origin/main
     warehouse: snowflake
@@ -32,13 +32,23 @@ Use the composite action at [`.github/actions/costguard`](https://github.com/hyp
     format: github
 ```
 
-Inputs: `base`, `warehouse`, `fail-on`, `min-confidence`, `format` (`github` \| `markdown` \| `json` \| `text`), optional `manifest`, `working-directory`, and dbt compile settings (`compile-dbt`, `dbt-target`, `dbt-project-dir`, `dbt-profiles-dir`, `dbt-adapter-package`, `dbt-profile-type`, `dbt-compile-dirs`, `manifest-output`).
+For Costguard contributor workflows that need to run the checked-out source instead of a release binary, add:
+
+```yaml
+    install-mode: source
+```
+
+Inputs: `base`, `warehouse`, `fail-on`, `min-confidence`, `format` (`github` \| `markdown` \| `json` \| `text`), optional `manifest`, `working-directory`, release install settings (`install-mode`, `version`), and dbt compile settings (`compile-dbt`, `dbt-target`, `dbt-project-dir`, `dbt-profiles-dir`, `dbt-adapter-package`, `dbt-profile-type`, `dbt-compile-dirs`, `manifest-output`, `dbt-requirements-file`, `dbt-constraints-file`, `dbt-vars`, `fail-on-deps-failure`, `use-existing-manifest`).
 
 Pair `fail-on: high` with `min-confidence: high` on macro-heavy dbt projects so PR gates keep AST-confirmed findings and ignore regex-only noise (for example SQLCOST012 comma joins detected without a successful parse).
 
 When `compile-dbt` is enabled (default), the action runs the shared [`dbt_compile_for_costguard.py`](../../scripts/dbt_compile_for_costguard.py) helper (same logic as the Spellbook benchmark harness): `dbt deps`, `dbt compile`, optional multi-subproject manifest merge, then passes `--manifest` when present. Compile uses a dummy local profile (no warehouse connection). Set `dbt-profile-type` or derive it from `dbt-adapter-package` (for example `dbt-postgres` → `postgres`).
 
+Enterprise dbt repos should pin dbt dependencies with `dbt-requirements-file` or `dbt-constraints-file`, pass required compile variables through `dbt-vars`, and set `fail-on-deps-failure: true` when package resolution must be enforced. If another workflow already uploads `target/manifest.json`, set `use-existing-manifest: true` and provide `manifest` or `manifest-output` to run Costguard in artifact-only mode.
+
 For monorepos with multiple dbt subprojects (Spellbook-style), set `dbt-compile-dirs` to a comma- or newline-separated list and `manifest-output` to the merged root manifest path (default `target/manifest.json`).
+
+For dbt Cloud or private-package workflows, let your existing authenticated dbt job produce a manifest artifact, download it before this action, and run with `use-existing-manifest: true`. Costguard does not require warehouse credentials.
 
 ## CI output formats
 
@@ -56,7 +66,7 @@ See [Output formats](reference/output.md) for the JSON schema.
 
 ## Manifest and compiled SQL
 
-For Jinja-heavy dbt models, run `dbt compile` first (or enable compile in the Action). Costguard loads `compiled_code` from the manifest for parse metrics while rule diagnostics stay anchored to raw source lines.
+For Jinja-heavy dbt models, run `dbt compile` first (or enable compile in the Action). Costguard loads `compiled_code` from the manifest for parse metrics. When a finding is only available from compiled SQL and cannot be mapped back to raw source, JSON output marks it as `source_provenance: "compiled_unmapped"` and includes the compiled line and column.
 
 If `--manifest` is omitted, Costguard auto-loads `target/manifest.json` when that file exists in the scan root.
 

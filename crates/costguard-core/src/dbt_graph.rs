@@ -1,5 +1,5 @@
 use crate::{PrSummary, Project};
-use costguard_dbt::DbtProject;
+use costguard_dbt::{DbtModel, DbtProject};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
@@ -8,7 +8,7 @@ pub(crate) fn enrich_pr_summary(mut summary: PrSummary, project: &Project) -> Pr
         return summary;
     };
     let changed_set: HashSet<PathBuf> = summary.changed_files.iter().cloned().collect();
-    summary.changed_models = dbt
+    let changed_model_ids = dbt
         .models
         .values()
         .filter(|model| {
@@ -17,21 +17,22 @@ pub(crate) fn enrich_pr_summary(mut summary: PrSummary, project: &Project) -> Pr
                 .as_ref()
                 .is_some_and(|path| changed_set.contains(path))
         })
-        .map(|model| model.name.clone())
-        .collect();
-    summary.changed_models.sort();
+        .map(|model| model.identity().to_string())
+        .collect::<Vec<_>>();
 
     let graph = DbtDependencyGraph::from_project(dbt);
-    summary.affected_downstream = graph.transitive_downstream(&summary.changed_models);
+    summary.changed_models = graph.labels_for(&changed_model_ids);
+    summary.changed_models.sort();
+
+    let downstream_ids = graph.transitive_downstream(&changed_model_ids);
+    summary.affected_downstream = graph.labels_for(&downstream_ids);
     summary.affected_downstream.sort();
-    summary.affected_exposures = graph.affected_exposures(
-        &summary
-            .changed_models
-            .iter()
-            .chain(summary.affected_downstream.iter())
-            .cloned()
-            .collect::<Vec<_>>(),
-    );
+    let affected_ids = changed_model_ids
+        .iter()
+        .chain(downstream_ids.iter())
+        .cloned()
+        .collect::<Vec<_>>();
+    summary.affected_exposures = graph.affected_exposures(&affected_ids);
     summary.affected_exposures.sort();
 
     if !summary.changed_models.is_empty() {
@@ -49,35 +50,58 @@ pub(crate) fn enrich_pr_summary(mut summary: PrSummary, project: &Project) -> Pr
 struct DbtDependencyGraph {
     reverse_dependencies: HashMap<String, Vec<String>>,
     exposure_dependencies: HashMap<String, Vec<String>>,
+    labels: HashMap<String, String>,
 }
 
 impl DbtDependencyGraph {
     fn from_project(project: &DbtProject) -> Self {
-        let node_to_model_name = project
+        let name_counts = project
             .models
             .values()
-            .filter_map(|model| {
-                model
-                    .node_id
-                    .as_ref()
-                    .map(|node_id| (node_id.clone(), model.name.clone()))
+            .fold(HashMap::new(), |mut counts, model| {
+                *counts.entry(model.name.clone()).or_insert(0usize) += 1;
+                counts
+            });
+        let labels = project
+            .models
+            .values()
+            .map(|model| {
+                (
+                    model.identity().to_string(),
+                    display_label(model, &name_counts),
+                )
             })
             .collect::<HashMap<_, _>>();
+        let name_to_ids = project.models.values().fold(
+            HashMap::<String, Vec<String>>::new(),
+            |mut map, model| {
+                map.entry(model.name.clone())
+                    .or_default()
+                    .push(model.identity().to_string());
+                if let Some(package) = &model.package_name {
+                    map.entry(format!("{package}.{}", model.name))
+                        .or_default()
+                        .push(model.identity().to_string());
+                }
+                map
+            },
+        );
         let mut reverse_dependencies: HashMap<String, Vec<String>> = HashMap::new();
 
         for model in project.models.values() {
-            let dependent = model.name.clone();
+            let dependent = model.identity().to_string();
             for reference in &model.refs {
+                let reference = normalize_dependency_id(reference, &labels, &name_to_ids);
                 reverse_dependencies
-                    .entry(reference.clone())
+                    .entry(reference)
                     .or_default()
                     .push(dependent.clone());
             }
-            let graph_key = model.node_id.as_ref().unwrap_or(&model.name);
+            let graph_key = model.identity();
             if let Some(depends_on) = project.graph.depends_on.get(graph_key) {
                 for dependency in depends_on {
                     let dependency_name =
-                        normalize_dependency_name(dependency, &node_to_model_name);
+                        normalize_dependency_id(dependency, &labels, &name_to_ids);
                     reverse_dependencies
                         .entry(dependency_name)
                         .or_default()
@@ -101,7 +125,7 @@ impl DbtDependencyGraph {
                         .depends_on
                         .iter()
                         .map(|dependency| {
-                            normalize_dependency_name(dependency, &node_to_model_name)
+                            normalize_dependency_id(dependency, &labels, &name_to_ids)
                         })
                         .collect::<Vec<_>>(),
                 )
@@ -111,13 +135,14 @@ impl DbtDependencyGraph {
         Self {
             reverse_dependencies,
             exposure_dependencies,
+            labels,
         }
     }
 
-    fn transitive_downstream(&self, changed_models: &[String]) -> Vec<String> {
-        let changed = changed_models.iter().cloned().collect::<HashSet<_>>();
+    fn transitive_downstream(&self, changed_model_ids: &[String]) -> Vec<String> {
+        let changed = changed_model_ids.iter().cloned().collect::<HashSet<_>>();
         let mut seen = HashSet::new();
-        let mut stack = changed_models.to_vec();
+        let mut stack = changed_model_ids.to_vec();
         while let Some(model) = stack.pop() {
             if let Some(dependents) = self.reverse_dependencies.get(&model) {
                 for dependent in dependents {
@@ -133,8 +158,8 @@ impl DbtDependencyGraph {
         downstream
     }
 
-    fn affected_exposures(&self, affected_models: &[String]) -> Vec<String> {
-        let affected = affected_models.iter().cloned().collect::<HashSet<_>>();
+    fn affected_exposures(&self, affected_model_ids: &[String]) -> Vec<String> {
+        let affected = affected_model_ids.iter().cloned().collect::<HashSet<_>>();
         let mut exposures = self
             .exposure_dependencies
             .iter()
@@ -148,28 +173,52 @@ impl DbtDependencyGraph {
         exposures.sort();
         exposures
     }
+
+    fn labels_for(&self, ids: &[String]) -> Vec<String> {
+        ids.iter()
+            .map(|id| self.labels.get(id).cloned().unwrap_or_else(|| id.clone()))
+            .collect()
+    }
 }
 
-fn normalize_dependency_name(
+fn display_label(model: &DbtModel, name_counts: &HashMap<String, usize>) -> String {
+    if name_counts.get(&model.name).copied().unwrap_or(0) > 1 {
+        if let Some(package) = &model.package_name {
+            return format!("{package}.{}", model.name);
+        }
+    }
+    model.name.clone()
+}
+
+fn normalize_dependency_id(
     dependency: &str,
-    node_to_model_name: &HashMap<String, String>,
+    known_ids: &HashMap<String, String>,
+    name_to_ids: &HashMap<String, Vec<String>>,
 ) -> String {
-    if let Some(name) = node_to_model_name.get(dependency) {
-        return name.clone();
+    if known_ids.contains_key(dependency) {
+        return dependency.to_string();
     }
     let trimmed = dependency.trim();
     if let Some(inner) = trimmed
         .strip_prefix("ref(")
         .and_then(|value| value.strip_suffix(')'))
     {
-        return inner.trim_matches(['"', '\'']).to_string();
+        return normalize_dependency_id(inner.trim_matches(['"', '\'']), known_ids, name_to_ids);
     }
-    trimmed
-        .rsplit('.')
-        .next()
-        .unwrap_or(trimmed)
-        .trim_matches(['"', '\''])
-        .to_string()
+    let cleaned = trimmed.trim_matches(['"', '\'']).to_string();
+    if let Some(ids) = name_to_ids.get(&cleaned) {
+        if ids.len() == 1 {
+            return ids[0].clone();
+        }
+    }
+    if let Some(last) = cleaned.rsplit('.').next() {
+        if let Some(ids) = name_to_ids.get(last) {
+            if ids.len() == 1 {
+                return ids[0].clone();
+            }
+        }
+    }
+    cleaned
 }
 
 #[cfg(test)]
@@ -279,5 +328,56 @@ mod tests {
             &project,
         );
         assert_eq!(summary.affected_downstream, vec!["b", "c"]);
+    }
+
+    #[test]
+    fn pr_summary_uses_unique_ids_for_duplicate_model_names() {
+        let mut dbt = DbtProject::default();
+        for (package, path) in [
+            ("alpha", "alpha/models/orders.sql"),
+            ("beta", "beta/models/orders.sql"),
+        ] {
+            let id = format!("model.{package}.orders");
+            dbt.models.insert(
+                id.clone(),
+                DbtModel {
+                    unique_id: Some(id.clone()),
+                    node_id: Some(id),
+                    package_name: Some(package.into()),
+                    name: "orders".into(),
+                    path: Some(PathBuf::from(path)),
+                    ..DbtModel::default()
+                },
+            );
+        }
+        dbt.models.insert(
+            "model.beta.order_rollup".into(),
+            DbtModel {
+                unique_id: Some("model.beta.order_rollup".into()),
+                node_id: Some("model.beta.order_rollup".into()),
+                package_name: Some("beta".into()),
+                name: "order_rollup".into(),
+                path: Some(PathBuf::from("beta/models/order_rollup.sql")),
+                ..DbtModel::default()
+            },
+        );
+        dbt.graph.depends_on.insert(
+            "model.beta.order_rollup".into(),
+            vec!["model.beta.orders".into()],
+        );
+        let project = Project {
+            root: PathBuf::from("."),
+            files: Vec::new(),
+            dbt: Some(dbt),
+        };
+        let summary = enrich_pr_summary(
+            PrSummary {
+                changed_files: vec![PathBuf::from("beta/models/orders.sql")],
+                ..PrSummary::default()
+            },
+            &project,
+        );
+        assert_eq!(summary.changed_models, vec!["beta.orders"]);
+        assert_eq!(summary.affected_downstream, vec!["order_rollup"]);
     }
 }

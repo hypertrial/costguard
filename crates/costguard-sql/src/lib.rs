@@ -2,7 +2,7 @@ mod features;
 mod strip;
 
 use costguard_dbt::{extract_sql_features, DbtSqlFeatures};
-use costguard_diagnostics::Span;
+use costguard_diagnostics::{SourceProvenance, Span};
 use costguard_platform::Platform;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -172,9 +172,46 @@ fn compiled_ast_features(
         &compiled_index,
     );
     (
-        features::merge_shape_features(regex_features, ast_features, true),
+        features::merge_shape_features(regex_features, mark_compiled_unmapped(ast_features), true),
         true,
     )
+}
+
+fn mark_compiled_unmapped(mut features: SqlFeatures) -> SqlFeatures {
+    for feature in features
+        .select_stars
+        .iter_mut()
+        .chain(features.order_by_clauses.iter_mut())
+        .chain(features.distincts.iter_mut())
+        .chain(features.json_extractions.iter_mut())
+        .chain(features.regex_calls.iter_mut())
+        .chain(features.normalization_calls.iter_mut())
+        .chain(features.cte_references.iter_mut())
+        .chain(features.non_sargable_predicates.iter_mut())
+        .chain(features.unions_without_all.iter_mut())
+        .chain(features.count_distincts.iter_mut())
+        .chain(features.wildcard_table_scans.iter_mut())
+    {
+        feature.span = feature
+            .span
+            .with_source_provenance(SourceProvenance::CompiledUnmapped);
+    }
+    for join in &mut features.joins {
+        join.span = join
+            .span
+            .with_source_provenance(SourceProvenance::CompiledUnmapped);
+    }
+    for window in &mut features.window_functions {
+        window.span = window
+            .span
+            .with_source_provenance(SourceProvenance::CompiledUnmapped);
+    }
+    for cte in &mut features.ctes {
+        cte.span = cte
+            .span
+            .with_source_provenance(SourceProvenance::CompiledUnmapped);
+    }
+    features
 }
 
 fn try_parse_sql_error(
@@ -1481,7 +1518,7 @@ fn cte_regex() -> &'static Regex {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use costguard_diagnostics::LineIndex;
+    use costguard_diagnostics::{LineIndex, SourceProvenance};
 
     #[test]
     fn extracts_select_star_and_window() {
@@ -1612,6 +1649,32 @@ mod tests {
         assert!(!doc.parsed_raw);
         assert!(doc.feature_extraction_used_ast);
         assert!(doc.features.non_sargable_predicates.is_empty());
+    }
+
+    #[test]
+    fn compiled_ast_features_are_marked_unmapped() {
+        let raw = "{% set cols = ['id'] %} select {{ cols | join(', ') }} from a";
+        let compiled = "select * from a cross join b";
+        let index = LineIndex::new(raw);
+        let doc = analyze_sql(
+            PathBuf::from("models/marts/jinja.sql"),
+            raw,
+            Platform::Generic,
+            &index,
+            Some(compiled),
+            true,
+        );
+        assert!(doc.feature_extraction_used_ast);
+        let join = doc
+            .features
+            .joins
+            .iter()
+            .find(|join| join.kind == JoinKind::Cross)
+            .expect("compiled cross join");
+        assert_eq!(
+            join.span.source_provenance,
+            Some(SourceProvenance::CompiledUnmapped)
+        );
     }
 
     #[test]
