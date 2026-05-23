@@ -30,7 +30,8 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
         .root
         .canonicalize()
         .with_context(|| format!("failed to resolve root {}", config.root.display()))?;
-    let discovery_options = DiscoveryOptions::with_ignore(config.ignore.clone());
+    let discovery_options =
+        DiscoveryOptions::from_scan(config.ignore.clone(), config.max_file_bytes);
     let (files, context_files, pr_summary, skipped_files) = if config.changed_only {
         if !costguard_git::is_git_repository(&root) {
             anyhow::bail!("{} is not a git repository", root.display());
@@ -398,9 +399,9 @@ fn metadata_warning_to_diagnostic(root: &Path, warning: &MetadataWarning) -> Dia
             "fix dbt_project.yml syntax or project name alignment for folder config",
         ),
         MetadataWarningKind::FileSkipped => (
-            "SQLCOST025",
+            "SQLCOST026",
             Severity::Low,
-            "narrow scan paths, ignore generated files, or raise the scan size limit in a future config version",
+            "narrow scan paths, ignore generated files, or raise [scan].max_file_bytes in costguard.toml",
         ),
     };
     let path = warning

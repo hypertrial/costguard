@@ -46,6 +46,23 @@ python3 scripts/dbt_compile_for_costguard.py \
 
 Shared helper for locating/building the CLI. Benchmark and doc scripts default to **release** builds (`COSTGUARD_BUILD_PROFILE=release`; set `debug` for local debugging). Skips rebuild when the binary is newer than Rust sources under `crates/`.
 
+## `verify_release_assets.py`
+
+Builds a host-platform release tarball using the same layout as [`.github/workflows/release.yml`](../../.github/workflows/release.yml), verifies the `.sha256` checksum, and smoke-tests the extracted `costguard rules --format json` binary. CI runs this after every release build so packaging stays aligned with the GitHub Action `install-mode: release` downloader.
+
+```bash
+python3 scripts/verify_release_assets.py
+```
+
+### Cutting `v0.1.0` (operator checklist)
+
+1. Merge the release-readiness PR to `main`.
+2. Ensure GitHub Actions billing allows workflow runs.
+3. Tag and push: `git tag v0.1.0 && git push origin v0.1.0`.
+4. Confirm the **release** workflow uploads four `costguard-*.tar.gz` assets and matching `.sha256` files.
+5. Smoke-test consumer install with `uses: hypertrial/costguard/.github/actions/costguard@v0.1.0` and default `install-mode: release` on `ubuntu-latest`.
+6. Rollback: delete the GitHub release and tag if assets are bad; docs stay pinned until you re-tag.
+
 Unit tests:
 
 ```bash

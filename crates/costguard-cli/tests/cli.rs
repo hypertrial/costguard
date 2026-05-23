@@ -238,6 +238,27 @@ fn scan_config_ignore_excludes_paths() {
     assert!(stdout.contains("SQLCOST001"), "{stdout}");
 }
 
+#[test]
+fn scan_config_max_file_bytes_skips_large_files() {
+    let tempdir = tempfile::tempdir().expect("tempdir");
+    let root = tempdir.path();
+    fs::create_dir_all(root.join("models")).expect("models dir");
+    fs::write(root.join("models/large.sql"), "select 1\nselect 2\n").expect("write sql");
+    fs::write(root.join("costguard.toml"), "[scan]\nmax_file_bytes = 4\n").expect("write config");
+
+    let output = Command::new(bin())
+        .arg("scan")
+        .arg("--fail-on")
+        .arg("critical")
+        .current_dir(root)
+        .output()
+        .expect("run costguard");
+    assert_eq!(output.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("SQLCOST026"), "{stdout}");
+    assert!(!stdout.contains("SQLCOST001"), "{stdout}");
+}
+
 fn git(root: &std::path::Path, args: &[&str]) {
     let output = Command::new("git")
         .args(args)

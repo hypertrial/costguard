@@ -38,6 +38,7 @@ pub struct ScanConfig {
     pub format: OutputFormat,
     pub manifest_path: Option<PathBuf>,
     pub ignore: Vec<PathBuf>,
+    pub max_file_bytes: Option<u64>,
     pub base_branch: Option<String>,
     pub changed_only: bool,
     pub fail_on: Option<Severity>,
@@ -54,6 +55,7 @@ impl Default for ScanConfig {
             format: OutputFormat::Text,
             manifest_path: None,
             ignore: Vec::new(),
+            max_file_bytes: None,
             base_branch: None,
             changed_only: false,
             fail_on: Some(Severity::High),
@@ -77,6 +79,7 @@ pub struct FileConfig {
 pub struct ScanSection {
     pub paths: Option<Vec<PathBuf>>,
     pub ignore: Option<Vec<PathBuf>>,
+    pub max_file_bytes: Option<u64>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -113,6 +116,9 @@ pub fn apply_file_config(mut config: ScanConfig, file_config: FileConfig) -> Res
         }
         if let Some(ignore) = scan.ignore {
             config.ignore = ignore;
+        }
+        if let Some(max_file_bytes) = scan.max_file_bytes {
+            config.max_file_bytes = Some(max_file_bytes);
         }
     }
     if let Some(output) = file_config.output {
@@ -153,5 +159,21 @@ mod tests {
             "markdown".parse::<OutputFormat>().unwrap(),
             OutputFormat::Markdown
         );
+    }
+
+    #[test]
+    fn max_file_bytes_applies_from_file_config() {
+        let config = apply_file_config(
+            ScanConfig::default(),
+            toml::from_str(
+                r#"
+[scan]
+max_file_bytes = 1024
+"#,
+            )
+            .expect("parse config"),
+        )
+        .expect("apply config");
+        assert_eq!(config.max_file_bytes, Some(1024));
     }
 }

@@ -28,6 +28,14 @@ class ActionContractTest(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/costguard-pr.yml").read_text(encoding="utf-8")
         self.assertIn("install-mode: source", workflow)
 
+    def test_release_action_and_workflow_share_asset_contract(self) -> None:
+        action = (ROOT / ".github/actions/costguard/action.yml").read_text(encoding="utf-8")
+        release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.assertIn('asset="costguard-${target}.tar.gz"', action)
+        self.assertIn('asset="costguard-${{ matrix.target }}.tar.gz"', release)
+        self.assertIn("releases/download/${version}", action)
+        self.assertIn('.sha256"', action)
+
 
 if __name__ == "__main__":
     unittest.main()

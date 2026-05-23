@@ -34,6 +34,7 @@ python3 scripts/generate_rule_docs.py
 | info | `SQLCOST023` | Scan without dbt manifest | [SQLCOST023](../../rules/SQLCOST023.md) |
 | low | `SQLCOST024` | Schema YAML parse failure | [SQLCOST024](../../rules/SQLCOST024.md) |
 | low | `SQLCOST025` | dbt_project.yml metadata issue | [SQLCOST025](../../rules/SQLCOST025.md) |
+| low | `SQLCOST026` | File skipped during scan | [SQLCOST026](../../rules/SQLCOST026.md) |
 
 ## Descriptions
 
@@ -236,4 +237,12 @@ Fix guidance: [SQLCOST024.md](../../rules/SQLCOST024.md)
 Reports when dbt_project.yml failed to parse or has an ambiguous models block.
 
 Fix guidance: [SQLCOST025.md](../../rules/SQLCOST025.md)
+
+### `SQLCOST026` — File skipped during scan
+
+**Severity:** low
+
+Reports when a SQL or dbt file exceeds the configured scan size limit and was not loaded.
+
+Fix guidance: [SQLCOST026.md](../../rules/SQLCOST026.md)
 <!-- generated:rules:end -->

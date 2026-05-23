@@ -128,6 +128,32 @@ fn spellbook_compiled_parse_fixture_has_zero_compiled_failures() {
 }
 
 #[test]
+fn skipped_file_emits_sqlcost026() {
+    let case_path = corpus_root().join("file_skipped");
+    let config = ScanConfig {
+        root: case_path,
+        paths: vec![PathBuf::from("models")],
+        max_file_bytes: Some(4),
+        fail_on: Some(Severity::High),
+        ..ScanConfig::default()
+    };
+    let result = scan(&config).expect("scan file_skipped case");
+    let rule_ids: std::collections::HashSet<_> = result
+        .diagnostics
+        .iter()
+        .map(|diagnostic| diagnostic.rule_id.as_str())
+        .collect();
+    assert!(
+        rule_ids.contains("SQLCOST026"),
+        "expected SQLCOST026; got {rule_ids:?}"
+    );
+    assert!(
+        !rule_ids.contains("SQLCOST025"),
+        "SQLCOST025 must not be used for skipped files; got {rule_ids:?}"
+    );
+}
+
+#[test]
 fn synthetic_project_scan_smoke() {
     let tempdir = tempfile::tempdir().expect("tempdir");
     let output = std::process::Command::new("python3")

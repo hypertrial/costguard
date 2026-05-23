@@ -54,7 +54,7 @@ See [Quick start (PR check)](docs/book/getting-started/quick-start.md) for input
 
 ## What it detects
 
-Costguard ships 25 SQLCOST rules for incremental safety, join risk, warehouse cost patterns, and dbt anti-patterns. See the [rule catalog](docs/book/rules/index.md) for severity and fix guidance.
+Costguard ships 26 SQLCOST rules for incremental safety, join risk, warehouse cost patterns, and dbt anti-patterns. See the [rule catalog](docs/book/rules/index.md) for severity and fix guidance.
 
 ## Benchmark smoke tests
 

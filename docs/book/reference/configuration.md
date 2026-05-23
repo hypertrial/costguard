@@ -41,6 +41,7 @@ severity = "high"
 | --- | --- | --- |
 | `paths` | string array | Subdirectories/files to scan (empty = entire root) |
 | `ignore` | string array | Paths to skip (relative to root) |
+| `max_file_bytes` | integer | Maximum file size to load during discovery (default 5242880; `0` uses the built-in default) |
 
 ## `[output]`
 

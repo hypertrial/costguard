@@ -26,6 +26,7 @@ jobs:
       - run: cargo clippy --all-targets --all-features -- -D warnings
       - run: cargo build -p costguard-cli
       - run: cargo build --release -p costguard-cli
+      - run: python3 scripts/verify_release_assets.py
       - run: python3 -m unittest discover -s scripts/tests -p 'test_*.py'
       - run: python3 scripts/validate_fp_registry.py
       - run: python3 scripts/benchmark_external_repo.py --all-vendored

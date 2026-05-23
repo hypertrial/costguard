@@ -53,9 +53,13 @@ pub struct DiscoveryOptions {
 
 impl DiscoveryOptions {
     pub fn with_ignore(ignore: Vec<PathBuf>) -> Self {
+        Self::from_scan(ignore, None)
+    }
+
+    pub fn from_scan(ignore: Vec<PathBuf>, max_file_bytes: Option<u64>) -> Self {
         Self {
             ignore,
-            max_file_bytes: DEFAULT_MAX_FILE_BYTES,
+            max_file_bytes: max_file_bytes.unwrap_or(0),
         }
     }
 }

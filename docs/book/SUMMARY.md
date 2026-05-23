@@ -46,6 +46,7 @@
 - [SQLCOST023](../rules/SQLCOST023.md)
 - [SQLCOST024](../rules/SQLCOST024.md)
 - [SQLCOST025](../rules/SQLCOST025.md)
+- [SQLCOST026](../rules/SQLCOST026.md)
 
 # Design
 

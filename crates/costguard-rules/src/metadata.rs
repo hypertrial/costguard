@@ -4,6 +4,7 @@ use costguard_diagnostics::{Diagnostic, Severity};
 pub(crate) struct MetadataOnlyScanRule;
 pub(crate) struct YamlParseFailedRule;
 pub(crate) struct DbtProjectMetadataRule;
+pub(crate) struct FileSkippedRule;
 
 impl Rule for MetadataOnlyScanRule {
     fn id(&self) -> &'static str {
@@ -50,6 +51,24 @@ impl Rule for DbtProjectMetadataRule {
     }
     fn description(&self) -> &'static str {
         "Reports when dbt_project.yml failed to parse or has an ambiguous models block."
+    }
+    fn default_severity(&self) -> Severity {
+        Severity::Low
+    }
+    fn check(&self, _ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
+        Vec::new()
+    }
+}
+
+impl Rule for FileSkippedRule {
+    fn id(&self) -> &'static str {
+        "SQLCOST026"
+    }
+    fn name(&self) -> &'static str {
+        "File skipped during scan"
+    }
+    fn description(&self) -> &'static str {
+        "Reports when a SQL or dbt file exceeds the configured scan size limit and was not loaded."
     }
     fn default_severity(&self) -> Severity {
         Severity::Low

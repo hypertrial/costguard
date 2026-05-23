@@ -109,6 +109,7 @@ impl RuleRegistry {
                 Box::new(crate::metadata::MetadataOnlyScanRule),
                 Box::new(crate::metadata::YamlParseFailedRule),
                 Box::new(crate::metadata::DbtProjectMetadataRule),
+                Box::new(crate::metadata::FileSkippedRule),
             ],
         }
     }
