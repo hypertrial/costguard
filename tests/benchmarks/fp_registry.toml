@@ -170,6 +170,22 @@ corpus_case = "cte_inner_from"
 notes = "inner CTE FROM clauses must not be treated as outer comma joins"
 
 [[finding]]
+rule = "SQLCOST012"
+repo = "spellbook"
+bucket = "cross_join_explicit"
+verdict = "fp"
+corpus_case = "cross_join_date_spine"
+notes = "cross join to date spine CTEs is intentional for incremental windows"
+
+[[finding]]
+rule = "SQLCOST017"
+repo = "spellbook"
+bucket = "cast_on_key"
+verdict = "fp"
+corpus_case = "join_key_date_trunc_minute"
+notes = "minute/hour/day bucket columns joined to date_trunc on event time are acceptable"
+
+[[finding]]
 rule = "SQLCOST017"
 repo = "spellbook"
 bucket = "cast_on_key"

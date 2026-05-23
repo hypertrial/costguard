@@ -150,7 +150,9 @@ pub fn classify(path: &Path, root: &Path) -> FileKind {
         return FileKind::ManifestJson;
     }
     match extension.as_str() {
-        "sql" if relative.contains("models/") => FileKind::DbtSqlModel,
+        "sql" if relative.contains("models/") && !relative.contains("/macros/") => {
+            FileKind::DbtSqlModel
+        }
         "sql" => FileKind::Sql,
         "yml" | "yaml" => FileKind::DbtYaml,
         "py" => FileKind::Python,
@@ -167,6 +169,17 @@ mod tests {
         assert_eq!(
             classify(Path::new("/r/models/marts/fct.sql"), Path::new("/r")),
             FileKind::DbtSqlModel
+        );
+    }
+
+    #[test]
+    fn macro_models_sql_is_generic_sql() {
+        assert_eq!(
+            classify(
+                Path::new("/r/dbt_subprojects/dex/macros/models/decoding/evm.sql"),
+                Path::new("/r")
+            ),
+            FileKind::Sql
         );
     }
 }

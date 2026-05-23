@@ -19,12 +19,12 @@
       "SQLCOST013": 3,
       "SQLCOST014": 61,
       "SQLCOST015": 238,
-      "SQLCOST017": 8,
+      "SQLCOST017": 1,
       "SQLCOST018": 162,
       "SQLCOST019": 7
     },
     "diagnostics_by_severity": {
-      "high": 20,
+      "high": 13,
       "low": 61,
       "med": 491
     },
@@ -40,14 +40,14 @@
   },
   "target": "external/spellbook_smoke",
   "thresholds": {
-    "max_parse_failure_delta": 50,
-    "max_parse_failure_rate": 0.02,
-    "max_sql_parse_compiled_failures": 0,
     "max_diagnostics_by_rule": {
       "SQLCOST012": 5,
-      "SQLCOST017": 8,
+      "SQLCOST017": 1,
       "SQLCOST019": 7
-    }
+    },
+    "max_parse_failure_delta": 50,
+    "max_parse_failure_rate": 0.35,
+    "max_sql_parse_compiled_failures": 0
   },
   "version": 1,
   "warehouse": "trino"

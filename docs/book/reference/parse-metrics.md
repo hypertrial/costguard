@@ -8,7 +8,7 @@ Primary fields in JSON output and benchmark baselines:
 
 | Metric | Description |
 | --- | --- |
-| `sql_parse_total` | Production dbt models scanned (`models/**/*.sql`) |
+| `sql_parse_total` | Production dbt models scanned (`models/**/*.sql`, excluding `macros/models/**` macro templates) |
 | `sql_parse_failures` | Models where headline parse failed |
 | `sql_parse_compiled_total` | Models with a compiled SQL parse attempt (manifest present) |
 | `sql_parse_compiled_failures` | Models where **compiled-only** parse failed |

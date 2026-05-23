@@ -896,10 +896,37 @@ fn extract_joins(
 
 fn is_exempt_cross_join_suffix(after: &str) -> bool {
     let lower = after.trim_start().to_ascii_lowercase();
-    lower.starts_with("unnest(")
+    if lower.starts_with("unnest(")
         || lower.starts_with("unnest (")
         || lower.starts_with("table(")
         || lower.starts_with("table (")
+    {
+        return true;
+    }
+    cross_join_table_name(after).is_some_and(|name| is_date_spine_table_name(&name))
+}
+
+fn cross_join_table_name(after: &str) -> Option<String> {
+    let trimmed = after.trim_start();
+    let mut end = trimmed.len();
+    for (idx, ch) in trimmed.char_indices() {
+        if ch.is_whitespace() || ch == '(' {
+            end = idx;
+            break;
+        }
+    }
+    let name = trimmed.get(..end)?.trim();
+    if name.is_empty() {
+        return None;
+    }
+    Some(name.to_ascii_lowercase())
+}
+
+fn is_date_spine_table_name(name: &str) -> bool {
+    matches!(
+        name,
+        "check_date" | "date_spine" | "time_seq" | "calendar" | "dates" | "time_dimension"
+    )
 }
 
 fn mask_string_literals(text: &str) -> String {
@@ -998,18 +1025,31 @@ fn is_comma_join_false_positive(text: &str) -> bool {
 }
 
 fn looks_like_subquery_comma_fp(text: &str) -> bool {
-    let lower = text.to_ascii_lowercase();
-    let trimmed = lower.trim_start();
+    let trimmed = text.trim_start();
     if !trimmed.starts_with('(') {
         return false;
     }
-    let Some(select_idx) = trimmed.find("select") else {
-        return false;
-    };
-    let Some(comma_idx) = trimmed.find(',') else {
-        return false;
-    };
-    select_idx < comma_idx
+    let lower = trimmed.to_ascii_lowercase();
+    let mut depth = 0usize;
+    let mut select_before_comma = false;
+    for (idx, ch) in trimmed.char_indices() {
+        match ch {
+            '(' => depth += 1,
+            ')' => {
+                if depth == 1 {
+                    return false;
+                }
+                depth = depth.saturating_sub(1);
+            }
+            ',' if depth == 1 => return select_before_comma,
+            _ => {
+                if depth == 1 && !select_before_comma && lower[idx..].starts_with("select") {
+                    select_before_comma = true;
+                }
+            }
+        }
+    }
+    false
 }
 
 fn find_join_clause_end(text: &str) -> Option<usize> {
@@ -1056,14 +1096,31 @@ fn has_equality_predicate(predicate: &str) -> bool {
 
 fn function_on_join_key(predicate: &str) -> bool {
     let lower = predicate.to_ascii_lowercase();
-    if is_symmetric_normalization_predicate(&lower) {
+    if is_symmetric_normalization_predicate(&lower) || is_time_bucket_join_predicate(&lower) {
         return false;
     }
     function_on_join_key_regex().is_match(predicate)
 }
 
+fn is_time_bucket_join_predicate(predicate: &str) -> bool {
+    let lower = predicate.to_ascii_lowercase();
+    if !lower.contains('=') {
+        return false;
+    }
+    time_bucket_column_re().is_match(&lower) && date_trunc_join_re().is_match(&lower)
+}
+
 fn is_symmetric_normalization_predicate(predicate: &str) -> bool {
-    for func in ["lower", "upper", "trim", "ltrim", "rtrim"] {
+    for func in [
+        "lower",
+        "upper",
+        "trim",
+        "ltrim",
+        "rtrim",
+        "date_trunc",
+        "coalesce",
+        "cast",
+    ] {
         let pattern = format!(r"{func}\s*\([^)]+\)\s*=\s*{func}\s*\(");
         if Regex::new(&pattern)
             .map(|re| re.is_match(predicate))
@@ -1229,6 +1286,25 @@ fn function_on_join_key_regex() -> &'static Regex {
         &RE,
         r#"(?i)\bon\s+[^=]*(?:lower|upper|trim|ltrim|rtrim|cast|date|date_trunc|to_char|to_varchar)\s*\([^=]+=[^=]*(?:lower|upper|trim|ltrim|rtrim|cast|date|date_trunc|to_char|to_varchar|\)|\w+\s*\()|=\s*(?:lower|upper|trim|ltrim|rtrim|cast|date|date_trunc|to_char|to_varchar)\s*\("#,
     )
+}
+
+static TIME_BUCKET_COLUMN_RE: OnceLock<Regex> = OnceLock::new();
+static DATE_TRUNC_JOIN_RE: OnceLock<Regex> = OnceLock::new();
+
+fn time_bucket_column_re() -> &'static Regex {
+    TIME_BUCKET_COLUMN_RE.get_or_init(|| {
+        Regex::new(
+            r#"(?i)\b(?:minute|hour|day|date|week|month|block_date|block_day|evt_block_date)\b"#,
+        )
+        .expect("time bucket column regex")
+    })
+}
+
+fn date_trunc_join_re() -> &'static Regex {
+    DATE_TRUNC_JOIN_RE.get_or_init(|| {
+        Regex::new(r#"(?i)\b(?:date_trunc|timestamp_trunc|datetime|date)\s*\("#)
+            .expect("date trunc join regex")
+    })
 }
 
 fn non_sargable_predicate_regex() -> &'static Regex {
@@ -1484,6 +1560,63 @@ select * from unit_test where diff_count > 0
             .joins
             .iter()
             .any(|join| matches!(join.kind, JoinKind::Cross | JoinKind::Comma)));
+    }
+
+    #[test]
+    fn cross_join_date_spine_is_not_flagged() {
+        let text = "select t.hash from {{ source('ethereum','transactions') }} t cross join check_date cd on true";
+        let index = LineIndex::new(text);
+        let doc = analyze_sql(
+            PathBuf::from("models/marts/fct.sql"),
+            text,
+            Platform::Trino,
+            &index,
+            None,
+            true,
+        );
+        assert!(!doc
+            .features
+            .joins
+            .iter()
+            .any(|join| join.kind == JoinKind::Cross));
+    }
+
+    #[test]
+    fn minute_date_trunc_join_is_not_function_wrapped_key() {
+        let text = "select p.price from prices p join logs le on p.minute = date_trunc('minute', le.block_time)";
+        let index = LineIndex::new(text);
+        let doc = analyze_sql(
+            PathBuf::from("models/marts/fct.sql"),
+            text,
+            Platform::Trino,
+            &index,
+            None,
+            true,
+        );
+        assert!(!doc
+            .features
+            .joins
+            .iter()
+            .any(|join| join.function_on_join_key));
+    }
+
+    #[test]
+    fn inner_subquery_comma_is_not_comma_join() {
+        let text = "select * from (select a.id, b.id from inner_a a, inner_b b) derived";
+        let index = LineIndex::new(text);
+        let doc = analyze_sql(
+            PathBuf::from("models/marts/fct.sql"),
+            text,
+            Platform::Trino,
+            &index,
+            None,
+            true,
+        );
+        assert!(!doc
+            .features
+            .joins
+            .iter()
+            .any(|join| join.kind == JoinKind::Comma));
     }
 
     #[test]

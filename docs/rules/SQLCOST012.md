@@ -6,7 +6,9 @@ Detects `CROSS JOIN` and comma joins without a documented allow comment.
 
 `CROSS JOIN UNNEST(...)`, `CROSS JOIN TABLE(...)`, and similar table-function cross joins are **intentional Trino idioms** and are not flagged.
 
-Comma-join detection uses the **outermost query `FROM`** (paren depth 0), so inner CTE `FROM` clauses are not treated as cross joins.
+Cross joins to date-spine CTEs such as `check_date` or `time_seq` are **intentional** for incremental window scans.
+
+Comma-join detection uses the **outermost query `FROM`** (paren depth 0), so inner CTE `FROM` clauses and commas inside derived subqueries are not treated as cross joins.
 
 ## Fix
 

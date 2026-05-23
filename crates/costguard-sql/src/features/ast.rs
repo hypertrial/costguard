@@ -456,9 +456,19 @@ fn is_exempt_cross_join_target(factor: &TableFactor) -> bool {
                 "unnest" | "flatten" | "table"
             )
         }
-        TableFactor::Table { name, .. } => object_name_last(name) == "unnest",
+        TableFactor::Table { name, .. } => {
+            let table = object_name_last(name);
+            table == "unnest" || is_date_spine_table(&table)
+        }
         _ => false,
     }
+}
+
+fn is_date_spine_table(name: &str) -> bool {
+    matches!(
+        name,
+        "check_date" | "date_spine" | "time_seq" | "calendar" | "dates" | "time_dimension"
+    )
 }
 
 fn object_name_last(name: &ObjectName) -> String {
@@ -522,7 +532,7 @@ fn join_predicate_has_function_on_key(expr: &Expr) -> bool {
             op: BinaryOperator::Eq,
             right,
         } => {
-            if is_symmetric_normalization_eq(left, right) {
+            if is_symmetric_normalization_eq(left, right) || is_time_bucket_join_eq(left, right) {
                 return false;
             }
             is_function_wrapped_join_key(left) || is_function_wrapped_join_key(right)
@@ -542,13 +552,63 @@ fn is_symmetric_normalization_eq(left: &Expr, right: &Expr) -> bool {
         (Expr::Function(left_fn), Expr::Function(right_fn)) => {
             let left_name = function_name(left_fn);
             let right_name = function_name(right_fn);
+            if left_name != right_name {
+                return false;
+            }
             matches!(
                 left_name.as_str(),
-                "lower" | "upper" | "trim" | "ltrim" | "rtrim"
-            ) && left_name == right_name
+                "lower" | "upper" | "trim" | "ltrim" | "rtrim" | "date_trunc" | "coalesce" | "cast"
+            )
         }
+        (Expr::Cast { .. }, Expr::Cast { .. }) => true,
         _ => false,
     }
+}
+
+fn is_time_bucket_join_eq(left: &Expr, right: &Expr) -> bool {
+    is_time_bucket_column_expr(left) && is_time_truncation_expr(right)
+        || is_time_bucket_column_expr(right) && is_time_truncation_expr(left)
+}
+
+fn is_time_bucket_column_expr(expr: &Expr) -> bool {
+    expr_column_name(expr).is_some_and(|name| is_time_bucket_column_name(&name))
+}
+
+fn is_time_truncation_expr(expr: &Expr) -> bool {
+    match expr {
+        Expr::Function(function) => matches!(
+            function_name(function).as_str(),
+            "date_trunc" | "timestamp_trunc" | "date" | "datetime"
+        ),
+        Expr::Cast { expr: inner, .. } => !matches!(inner.as_ref(), Expr::Value(_)),
+        Expr::Nested(inner) => is_time_truncation_expr(inner),
+        _ => false,
+    }
+}
+
+fn expr_column_name(expr: &Expr) -> Option<String> {
+    match expr {
+        Expr::Identifier(ident) => Some(ident.value.to_ascii_lowercase()),
+        Expr::CompoundIdentifier(parts) => {
+            parts.last().map(|ident| ident.value.to_ascii_lowercase())
+        }
+        _ => None,
+    }
+}
+
+fn is_time_bucket_column_name(name: &str) -> bool {
+    matches!(
+        name,
+        "minute"
+            | "hour"
+            | "day"
+            | "date"
+            | "week"
+            | "month"
+            | "block_date"
+            | "block_day"
+            | "evt_block_date"
+    )
 }
 
 fn is_function_wrapped_join_key(expr: &Expr) -> bool {

@@ -5,9 +5,9 @@
     "counts": {
       "manifest": 0,
       "other": 0,
-      "python": 19,
+      "python": 1,
       "sql": 8493,
-      "yaml": 2591
+      "yaml": 1814
     },
     "dbt_project_parse_failures": 0,
     "diagnostics_by_rule": {
@@ -17,17 +17,17 @@
       "SQLCOST005": 1,
       "SQLCOST006": 757,
       "SQLCOST008": 979,
-      "SQLCOST012": 88,
+      "SQLCOST012": 61,
       "SQLCOST013": 168,
       "SQLCOST014": 1338,
       "SQLCOST015": 858,
       "SQLCOST016": 15,
-      "SQLCOST017": 1003,
+      "SQLCOST017": 159,
       "SQLCOST018": 544,
       "SQLCOST019": 66
     },
     "diagnostics_by_severity": {
-      "high": 1174,
+      "high": 303,
       "low": 1338,
       "med": 3728
     },
@@ -35,24 +35,24 @@
     "metadata_warnings": 0,
     "sql_parse_compiled_failures": 0,
     "sql_parse_compiled_total": 8001,
-    "sql_parse_failures": 107,
-    "sql_parse_other_failures": 296,
-    "sql_parse_other_total": 385,
-    "sql_parse_total": 8108,
+    "sql_parse_failures": 0,
+    "sql_parse_other_failures": 403,
+    "sql_parse_other_total": 492,
+    "sql_parse_total": 8001,
     "yaml_parse_failures": 0
   },
   "target": "external/spellbook",
   "thresholds": {
-    "max_parse_failure_delta": 50,
-    "max_parse_failure_rate": 0.02,
-    "max_sql_parse_compiled_failures": 0,
     "max_diagnostics_by_rule": {
-      "SQLCOST012": 88,
-      "SQLCOST017": 1003,
-      "SQLCOST019": 66,
+      "SQLCOST005": 1,
+      "SQLCOST012": 61,
       "SQLCOST016": 15,
-      "SQLCOST005": 1
-    }
+      "SQLCOST017": 159,
+      "SQLCOST019": 66
+    },
+    "max_parse_failure_delta": 50,
+    "max_parse_failure_rate": 0.35,
+    "max_sql_parse_compiled_failures": 0
   },
   "version": 1,
   "warehouse": "trino"

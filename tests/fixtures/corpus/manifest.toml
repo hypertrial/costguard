@@ -189,3 +189,15 @@ name = "cte_inner_from"
 path = "cte_inner_from"
 expect_rules = []
 forbid_rules = ["SQLCOST012"]
+
+[[case]]
+name = "join_key_date_trunc_minute"
+path = "join_key_date_trunc_minute"
+expect_rules = []
+forbid_rules = ["SQLCOST017"]
+
+[[case]]
+name = "cross_join_date_spine"
+path = "cross_join_date_spine"
+expect_rules = []
+forbid_rules = ["SQLCOST012"]

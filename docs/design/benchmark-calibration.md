@@ -67,7 +67,7 @@ Machine-readable FP contracts live in [`tests/benchmarks/fp_registry.toml`](../.
 
 ### Parse metric semantics
 
-Primary parse metrics (`sql_parse_total`, `sql_parse_failures`) count **production dbt models** only (`models/**/*.sql`). Macros, tests, and other SQL files are tracked separately as `sql_parse_other_total` / `sql_parse_other_failures`.
+Primary parse metrics (`sql_parse_total`, `sql_parse_failures`) count **production dbt models** only (`models/**/*.sql`, excluding `macros/models/**` macro templates). Macros, tests, and other SQL files are tracked separately as `sql_parse_other_total` / `sql_parse_other_failures`.
 
 When a manifest with `compiled_code` is loaded:
 
@@ -98,14 +98,16 @@ When an external benchmark surfaces a finding worth keeping:
 | SQLCOST004 | spellbook | investigate remaining | many incrementals still lack `unique_key` and explicit append strategy |
 | parse metrics | spellbook | improved (tier 1) | compile + Trino + model-scoped metrics: ~67% model parse failure rate (5423/8108) |
 | parse metrics | spellbook | improved (P0–P2) | five-subproject compile + Trino normalization + raw fallback: **12%** model parse failure rate (972/8108), `sql_parse_compiled_total` 8001 |
-| parse metrics | spellbook | improved (compiled parse) | Trino dialect + parse-only rewrites + Generic fallback: **`sql_parse_compiled_failures` 0/8001**, headline failures **107/8108** |
+| parse metrics | spellbook | improved (compiled parse) | Trino dialect + parse-only rewrites + Generic fallback: **`sql_parse_compiled_failures` 0/8001**; model-scoped **`sql_parse_failures` 0/8001** after pass 3 |
 | SQLCOST002 | jaffle-shop | true positive | repeated JSON extraction in staging |
 | SQLCOST012 | spellbook | fixed (2026-05 pass 2) | **804 → 88** after depth-0 FROM targeting (ignore inner CTE FROM comma FPs) |
 | SQLCOST005 | spellbook | fixed (2026-05 pass 2) | **247 → 1** after full-file `incremental_predicate` / config macro recognition |
 | SQLCOST016 | spellbook | fixed (2026-05) | **281 → 15** after staging exempt, date_trunc whitelist, compiled AST extraction; registry + corpus `partition_date_trunc_bound` |
-| SQLCOST017 | spellbook | mixed (2026-05) | symmetric lower/trim exempt + staging exempt; compiled AST increases AST-confirmed hits **819 → 1003** (more accurate, use `--min-confidence high` for PR gates) |
+| SQLCOST017 | spellbook | fixed (2026-05 pass 3) | **1003 → 159** after time-bucket `date_trunc` joins, symmetric `date_trunc`/`coalesce`, and macro SQL reclassification |
 | SQLCOST019 | spellbook | fixed (2026-05) | **374 → 66** after whole-scope partition predicate check + CTE/JOIN ON corpus fixtures |
-| parse metrics | spellbook | high severity | **2133 → 1174** after pass 2 (below ≤1800 target) |
+| parse metrics | spellbook | high severity | **1174 → 303** after pass 3 |
+| parse metrics | spellbook | model parse failures | **107 → 0** after excluding `macros/models/**/*.sql` from model-scoped parse metrics |
+| SQLCOST012 | spellbook | fixed (2026-05 pass 3) | **88 → 61** after date-spine cross join exempt + derived-subquery comma FP depth fix |
 | SQLCOST016–019 | spellbook | gated | Spellbook baseline uses `max_diagnostics_by_rule` ceilings (counts may shrink, not grow); **smoke** gate runs on `push` to `main`, full Spellbook is manual dispatch |
 
 ## PR replay testing
