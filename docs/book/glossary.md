@@ -27,6 +27,9 @@ Canonical terminology for Costguard documentation. Prefer these definitions in R
 | **Compiled parse** | Parse attempt on manifest `compiled_code` after normalization |
 | **`sql_parse_compiled_failures`** | Compiled-only failures; Spellbook gate requires `0` |
 | **`sql_parse_other_*`** | Parse metrics for non-model SQL (macros, tests, etc.) |
+| **Feature extraction mode** | AST-based shape features when SQL parses; regex fallback otherwise (`feature_extraction_used_ast`) |
+| **FP registry** | Machine-readable false-positive contracts in `tests/benchmarks/fp_registry.toml` |
+| **Max-count ceiling** | External baseline `max_diagnostics_by_rule` — rule counts may shrink, not grow |
 
 ## Benchmark layers (canonical)
 

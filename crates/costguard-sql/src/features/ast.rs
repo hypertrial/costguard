@@ -521,7 +521,12 @@ fn join_predicate_has_function_on_key(expr: &Expr) -> bool {
             left,
             op: BinaryOperator::Eq,
             right,
-        } => is_function_wrapped_join_key(left) || is_function_wrapped_join_key(right),
+        } => {
+            if is_symmetric_normalization_eq(left, right) {
+                return false;
+            }
+            is_function_wrapped_join_key(left) || is_function_wrapped_join_key(right)
+        }
         Expr::BinaryOp {
             left,
             op: BinaryOperator::And,
@@ -532,13 +537,45 @@ fn join_predicate_has_function_on_key(expr: &Expr) -> bool {
     }
 }
 
+fn is_symmetric_normalization_eq(left: &Expr, right: &Expr) -> bool {
+    match (left, right) {
+        (Expr::Function(left_fn), Expr::Function(right_fn)) => {
+            let left_name = function_name(left_fn);
+            let right_name = function_name(right_fn);
+            matches!(
+                left_name.as_str(),
+                "lower" | "upper" | "trim" | "ltrim" | "rtrim"
+            ) && left_name == right_name
+        }
+        _ => false,
+    }
+}
+
 fn is_function_wrapped_join_key(expr: &Expr) -> bool {
     match expr {
-        Expr::Function(function) => is_join_key_normalization_function(function),
-        Expr::Cast { .. } => true,
+        Expr::Function(function) => {
+            is_join_key_normalization_function(function) && !function_wraps_literal(function)
+        }
+        Expr::Cast { expr: inner, .. } => {
+            !matches!(inner.as_ref(), Expr::Value(_)) && is_function_wrapped_join_key(inner)
+        }
         Expr::Nested(inner) => is_function_wrapped_join_key(inner),
         _ => false,
     }
+}
+
+fn function_wraps_literal(function: &Function) -> bool {
+    function.args.args().iter().all(|arg| {
+        matches!(
+            arg,
+            sqlparser::ast::FunctionArg::Unnamed(sqlparser::ast::FunctionArgExpr::Expr(
+                Expr::Value(_)
+            )) | sqlparser::ast::FunctionArg::Named {
+                arg: sqlparser::ast::FunctionArgExpr::Expr(Expr::Value(_)),
+                ..
+            }
+        )
+    })
 }
 
 fn is_join_key_normalization_function(function: &Function) -> bool {
@@ -573,7 +610,11 @@ fn is_non_sargable_filter(expr: &Expr) -> bool {
             expr: inner,
             data_type,
             ..
-        } => is_date_like_type(data_type) && expr_contains_partition_column(inner),
+        } => {
+            is_date_like_type(data_type)
+                && expr_contains_partition_column(inner)
+                && !matches!(inner.as_ref(), Expr::Value(_))
+        }
         Expr::Nested(inner) => is_non_sargable_filter(inner),
         _ => false,
     }
@@ -583,7 +624,7 @@ fn is_sargability_breaking_function(function: &Function) -> bool {
     let name = function_name(function);
     matches!(
         name.as_str(),
-        "date" | "date_trunc" | "timestamp_trunc" | "datetime" | "to_date" | "trunc" | "cast"
+        "date" | "timestamp_trunc" | "datetime" | "to_date" | "trunc" | "cast"
     )
 }
 
@@ -648,6 +689,8 @@ fn is_partition_column_name(name: &str) -> bool {
         "block_num",
         "evt_block_time",
         "evt_block_number",
+        "evt_block_date",
+        "block_day",
     ]
     .iter()
     .any(|needle| lower == *needle || lower.ends_with(&format!("_{needle}")))

@@ -5,6 +5,7 @@ use costguard_dbt::{extract_sql_features, DbtSqlFeatures};
 use costguard_diagnostics::Span;
 use costguard_platform::Platform;
 use regex::Regex;
+use serde::{Deserialize, Serialize};
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
 use std::collections::HashMap;
@@ -13,7 +14,8 @@ use std::sync::{Mutex, OnceLock};
 
 pub use costguard_platform::Platform as SqlDialect;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ParseInput {
     Raw,
     Compiled,
@@ -125,7 +127,7 @@ pub fn analyze_sql(
         (parsed_raw, ParseInput::Raw)
     };
     let dbt = extract_sql_features(text);
-    let regex_features = extract_features(text, line_index, parsed_raw);
+    let regex_features = extract_features(text, &sanitized, line_index, parsed_raw);
     let (features, feature_extraction_used_ast) = if let Some(stmts) = &statements {
         let ast_features =
             features::extract_shape_features_ast(stmts, &sanitized, text, &strip_map, line_index);
@@ -133,6 +135,8 @@ pub fn analyze_sql(
             features::merge_shape_features(regex_features, ast_features, parsed_raw),
             parsed_raw,
         )
+    } else if parsed_compiled {
+        compiled_ast_features(compiled_code.unwrap_or_default(), platform, regex_features)
     } else {
         (regex_features, false)
     };
@@ -150,6 +154,31 @@ pub fn analyze_sql(
         dbt,
         feature_extraction_used_ast,
     }
+}
+
+fn compiled_ast_features(
+    compiled: &str,
+    platform: Platform,
+    regex_features: SqlFeatures,
+) -> (SqlFeatures, bool) {
+    let dialect = platform.sqlparser_dialect();
+    let normalized = normalize_for_parse(compiled, platform);
+    let compiled_index = costguard_diagnostics::LineIndex::new(compiled);
+    let strip_map = strip::JinjaStripMap::identity(normalized.len());
+    let Ok(stmts) = Parser::parse_sql(dialect.as_ref(), &normalized) else {
+        return (regex_features, false);
+    };
+    let ast_features = features::extract_shape_features_ast(
+        &stmts,
+        &normalized,
+        compiled,
+        &strip_map,
+        &compiled_index,
+    );
+    (
+        features::merge_shape_features(regex_features, ast_features, true),
+        true,
+    )
 }
 
 fn try_parse_sql(dialect: &dyn sqlparser::dialect::Dialect, text: &str) -> bool {
@@ -724,6 +753,7 @@ pub(crate) fn from_clause_tables_start(lower: &str) -> Option<usize> {
 
 fn extract_features(
     text: &str,
+    comma_text: &str,
     line_index: &costguard_diagnostics::LineIndex,
     parsed_raw: bool,
 ) -> SqlFeatures {
@@ -740,7 +770,7 @@ fn extract_features(
     features.normalization_calls =
         matches_as_features(text, line_index, normalization_regex(), normalize);
     features.window_functions = extract_windows(text, line_index);
-    features.joins = extract_joins(text, line_index, parsed_raw);
+    features.joins = extract_joins(text, comma_text, line_index, parsed_raw);
     features.ctes = extract_ctes(text, line_index);
     features.cte_references = extract_cte_references(text, line_index, &features.ctes);
     features.non_sargable_predicates =
@@ -806,6 +836,7 @@ fn extract_windows(
 
 fn extract_joins(
     text: &str,
+    comma_text: &str,
     line_index: &costguard_diagnostics::LineIndex,
     parsed_raw: bool,
 ) -> Vec<JoinFeature> {
@@ -855,7 +886,7 @@ fn extract_joins(
         });
     }
 
-    joins.extend(extract_comma_joins(join_text, line_index));
+    joins.extend(extract_comma_joins(comma_text, line_index));
     joins
 }
 
@@ -896,20 +927,81 @@ fn extract_comma_joins(
     text: &str,
     line_index: &costguard_diagnostics::LineIndex,
 ) -> Vec<JoinFeature> {
-    if is_leading_derived_comma_fp(text) {
+    let lower = text.to_ascii_lowercase();
+    let Some(from_start) = from_clause_tables_start(&lower) else {
+        return Vec::new();
+    };
+    let tail = text.get(from_start..).unwrap_or_default();
+    if is_comma_join_false_positive(tail) {
         return Vec::new();
     }
-    comma_join_regex()
-        .find_iter(text)
-        .filter(|matched| !matched.as_str().to_ascii_lowercase().contains("source("))
-        .map(|matched| JoinFeature {
-            span: line_index.span(matched.start(), matched.end()),
+    if let Some(comma_rel) = find_top_level_comma_after_from(tail) {
+        let span_start = from_start;
+        let span_end = from_start + comma_rel + 1;
+        let span_text = text.get(span_start..span_end).unwrap_or_default();
+        if span_text.to_ascii_lowercase().contains("source(") {
+            return Vec::new();
+        }
+        return vec![JoinFeature {
+            span: line_index.span(span_start, span_end),
             kind: JoinKind::Comma,
             predicate: None,
             has_equality: false,
             function_on_join_key: false,
-        })
-        .collect()
+        }];
+    }
+    Vec::new()
+}
+
+fn find_top_level_comma_after_from(text: &str) -> Option<usize> {
+    let mut depth = 0usize;
+    let mut i = 0usize;
+    let bytes = text.as_bytes();
+    while i < bytes.len() {
+        let ch = text[i..].chars().next()?;
+        if ch == '(' {
+            depth += 1;
+        } else if ch == ')' {
+            depth = depth.saturating_sub(1);
+        } else if ch == ',' && depth == 0 {
+            let tail = text[i + 1..].trim_start();
+            if tail
+                .chars()
+                .next()
+                .is_some_and(|first| first.is_ascii_alphabetic() || first == '(' || first == '_')
+            {
+                return Some(i);
+            }
+            return None;
+        } else if depth == 0 {
+            let lower_tail = text[i..].to_ascii_lowercase();
+            if lower_tail.starts_with(" where ")
+                || lower_tail.starts_with(" group by ")
+                || lower_tail.starts_with(" order by ")
+                || lower_tail.starts_with(" limit ")
+                || lower_tail.starts_with("\nwhere ")
+            {
+                return None;
+            }
+        }
+        i += ch.len_utf8();
+    }
+    None
+}
+
+fn is_comma_join_false_positive(text: &str) -> bool {
+    is_leading_derived_comma_fp(&format!("from{text}")) || looks_like_subquery_comma_fp(text)
+}
+
+fn looks_like_subquery_comma_fp(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    let trimmed = lower.trim_start();
+    if !trimmed.starts_with('(') {
+        return false;
+    }
+    let select_idx = trimmed.find("select").unwrap_or(usize::MAX);
+    let comma_idx = trimmed.find(',').unwrap_or(usize::MAX);
+    select_idx < comma_idx
 }
 
 fn find_join_clause_end(text: &str) -> Option<usize> {
@@ -955,7 +1047,24 @@ fn has_equality_predicate(predicate: &str) -> bool {
 }
 
 fn function_on_join_key(predicate: &str) -> bool {
+    let lower = predicate.to_ascii_lowercase();
+    if is_symmetric_normalization_predicate(&lower) {
+        return false;
+    }
     function_on_join_key_regex().is_match(predicate)
+}
+
+fn is_symmetric_normalization_predicate(predicate: &str) -> bool {
+    for func in ["lower", "upper", "trim", "ltrim", "rtrim"] {
+        let pattern = format!(r"{func}\s*\([^)]+\)\s*=\s*{func}\s*\(");
+        if Regex::new(&pattern)
+            .map(|re| re.is_match(predicate))
+            .unwrap_or(false)
+        {
+            return true;
+        }
+    }
+    false
 }
 
 fn extract_ctes(text: &str, line_index: &costguard_diagnostics::LineIndex) -> Vec<CteFeature> {
@@ -1072,11 +1181,6 @@ fn join_regex() -> &'static Regex {
     cached_regex(&RE, r#"(?is)\b(?:(left|right|full|inner|cross)\s+)?join\b"#)
 }
 
-fn comma_join_regex() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    cached_regex(&RE, r#"(?is)\bfrom\s+[^;\n]+,\s*[^;\n]+"#)
-}
-
 fn is_leading_derived_comma_fp(text: &str) -> bool {
     let lower = text.to_ascii_lowercase();
     let Some(from_idx) = from_clause_tables_start(&lower) else {
@@ -1123,7 +1227,7 @@ fn non_sargable_predicate_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     cached_regex(
         &RE,
-        r#"(?i)\bwhere\b[^;\n]*(?:date|date_trunc|timestamp_trunc|datetime|to_date)\s*\(\s*[^)]*(?:block_time|event_time|created_at|updated_at|event_date|ingested_at|_partitiontime|_partitiondate|partition_date|block_date|block_timestamp|block_number|evt_block_time|evt_block_number)"#,
+        r#"(?i)\bwhere\b[^;\n]*(?:timestamp_trunc|datetime|to_date)\s*\(\s*[^)]*(?:block_time|event_time|created_at|updated_at|event_date|ingested_at|_partitiontime|_partitiondate|partition_date|block_date|block_timestamp|block_number|evt_block_time|evt_block_number|evt_block_date|block_day)"#,
     )
 }
 
@@ -1284,6 +1388,25 @@ mod tests {
             doc.parsed_raw,
             doc.features.joins
         );
+    }
+
+    #[test]
+    fn compiled_ast_fallback_uses_compiled_sql_when_raw_unparseable() {
+        let raw = "{% set cols = ['id'] %} select {{ cols | join(', ') }} from t where date_trunc('day', block_time) >= current_date";
+        let compiled = "select id from t where date_trunc('day', block_time) >= current_date";
+        let index = LineIndex::new(raw);
+        let doc = analyze_sql(
+            PathBuf::from("models/marts/jinja.sql"),
+            raw,
+            Platform::Trino,
+            &index,
+            Some(compiled),
+            true,
+        );
+        assert!(doc.parsed_compiled);
+        assert!(!doc.parsed_raw);
+        assert!(doc.feature_extraction_used_ast);
+        assert!(doc.features.non_sargable_predicates.is_empty());
     }
 
     #[test]

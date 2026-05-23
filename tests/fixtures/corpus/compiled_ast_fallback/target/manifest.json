@@ -1,0 +1,10 @@
+{
+  "nodes": {
+    "model.compiled_ast_fallback.jinja_model": {
+      "resource_type": "model",
+      "name": "jinja_model",
+      "original_file_path": "models/marts/jinja_model.sql",
+      "compiled_code": "select id, block_time from stg_events where date_trunc('day', block_time) >= current_date - interval '7' day"
+    }
+  }
+}

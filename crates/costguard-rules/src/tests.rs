@@ -103,7 +103,7 @@ fn sql_rules_have_positive_coverage() {
         (
             "SQLCOST017",
             "models/marts/fct.sql",
-            "select * from events e join users u on lower(e.email) = lower(u.email)",
+            "select * from events e join users u on lower(e.email) = u.user_id",
         ),
         (
             "SQLCOST018",

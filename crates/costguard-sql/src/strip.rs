@@ -30,6 +30,16 @@ impl JinjaStripMap {
         }
         None
     }
+
+    pub fn identity(text_len: usize) -> Self {
+        Self {
+            segments: vec![StripSegment {
+                sanitized_start: 0,
+                sanitized_end: text_len,
+                raw_start: 0,
+            }],
+        }
+    }
 }
 
 pub fn strip_jinja(text: &str) -> String {

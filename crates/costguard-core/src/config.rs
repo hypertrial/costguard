@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use costguard_diagnostics::Severity;
+use costguard_diagnostics::{Confidence, Severity};
 use costguard_platform::Platform;
 use costguard_rules::RuleOverrides;
 use serde::{Deserialize, Serialize};
@@ -41,6 +41,7 @@ pub struct ScanConfig {
     pub base_branch: Option<String>,
     pub changed_only: bool,
     pub fail_on: Option<Severity>,
+    pub min_confidence: Option<Confidence>,
     pub rule_overrides: RuleOverrides,
 }
 
@@ -56,6 +57,7 @@ impl Default for ScanConfig {
             base_branch: None,
             changed_only: false,
             fail_on: Some(Severity::High),
+            min_confidence: None,
             rule_overrides: RuleOverrides::default(),
         }
     }
@@ -81,6 +83,7 @@ pub struct ScanSection {
 pub struct OutputSection {
     pub format: Option<String>,
     pub fail_on: Option<String>,
+    pub min_confidence: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -118,6 +121,9 @@ pub fn apply_file_config(mut config: ScanConfig, file_config: FileConfig) -> Res
         }
         if let Some(fail_on) = output.fail_on {
             config.fail_on = Some(fail_on.parse().map_err(anyhow::Error::msg)?);
+        }
+        if let Some(min_confidence) = output.min_confidence {
+            config.min_confidence = Some(min_confidence.parse().map_err(anyhow::Error::msg)?);
         }
     }
     if let Some(dbt) = file_config.dbt {

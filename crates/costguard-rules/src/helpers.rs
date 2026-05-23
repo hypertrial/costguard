@@ -63,6 +63,8 @@ pub(crate) fn has_bounded_incremental_predicate(text: &str) -> bool {
         "block_number",
         "block_num",
         "evt_block_number",
+        "evt_block_date",
+        "block_day",
     ]
     .iter()
     .any(|needle| lower.contains(needle))
@@ -127,11 +129,7 @@ fn source_read_lacks_local_partition_predicate(text: &str) -> bool {
 }
 
 fn source_scope_lacks_partition_predicate(scope: &str) -> bool {
-    let lower = scope.to_ascii_lowercase();
-    let Some(where_idx) = lower.rfind("where") else {
-        return true;
-    };
-    !has_bounded_incremental_predicate(&lower[where_idx..])
+    !has_bounded_incremental_predicate(scope)
 }
 
 pub(crate) fn incremental_predicate_suggestion(warehouse: Warehouse) -> &'static str {

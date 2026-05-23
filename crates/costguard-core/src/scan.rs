@@ -1,6 +1,6 @@
 use crate::config::ScanConfig;
 use crate::dbt_graph::enrich_pr_summary;
-use crate::{PrSummary, Project, ScanMetrics, ScanResult};
+use crate::{FileParseStatus, PrSummary, Project, ScanMetrics, ScanResult};
 use anyhow::{Context, Result};
 use costguard_dbt::{
     apply_dbt_project_configs, compiled_code_by_model_path, extract_sql_features,
@@ -134,6 +134,7 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
     });
 
     let pr_summary = pr_summary.map(|summary| enrich_pr_summary(summary, &project));
+    let file_parse_status = build_file_parse_status(&context_sql_documents);
     let metrics = build_scan_metrics(
         &context_sql_documents,
         &diagnostics,
@@ -147,6 +148,7 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
         diagnostics,
         counts: metrics.counts.clone(),
         metrics,
+        file_parse_status,
         pr_summary,
     })
 }
@@ -374,6 +376,21 @@ fn analyze_sql_documents(
                 compiled_code,
                 file.kind == FileKind::DbtSqlModel,
             )
+        })
+        .collect()
+}
+
+fn build_file_parse_status(sql_documents: &[SqlDocument]) -> Vec<FileParseStatus> {
+    sql_documents
+        .iter()
+        .filter(|doc| doc.is_dbt_sql_model)
+        .map(|doc| FileParseStatus {
+            path: doc.path.clone(),
+            parse_input: doc.parse_input,
+            parsed: doc.parsed,
+            parsed_raw: doc.parsed_raw,
+            parsed_compiled: doc.parsed_compiled,
+            feature_extraction_used_ast: doc.feature_extraction_used_ast,
         })
         .collect()
 }

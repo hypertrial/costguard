@@ -95,9 +95,14 @@ fn main() {
             .err()
             .unwrap_or_else(|| "unknown parse error".to_string());
         let signature = error_signature(&error);
+        let original_file_path = node["original_file_path"]
+            .as_str()
+            .or_else(|| node["path"].as_str())
+            .unwrap_or("");
         *bucket_counts.entry(signature.clone()).or_default() += 1;
         failures.push(serde_json::json!({
             "model": name,
+            "original_file_path": original_file_path,
             "error": error,
             "error_signature": signature,
             "snippet": snippet_for_error(&normalized, &error),

@@ -135,3 +135,45 @@ name = "config_precedence_conflict"
 path = "config_precedence_conflict"
 expect_rules = []
 forbid_rules = ["SQLCOST004"]
+
+[[case]]
+name = "join_key_symmetric_lower"
+path = "join_key_symmetric_lower"
+expect_rules = []
+forbid_rules = ["SQLCOST017"]
+
+[[case]]
+name = "join_key_staging"
+path = "join_key_staging"
+expect_rules = []
+forbid_rules = ["SQLCOST017"]
+
+[[case]]
+name = "join_key_wrapped"
+path = "join_key_wrapped"
+expect_rules = ["SQLCOST017"]
+forbid_rules = []
+
+[[case]]
+name = "incremental_source_join_on_bound"
+path = "incremental_source_join_on_bound"
+expect_rules = []
+forbid_rules = ["SQLCOST019"]
+
+[[case]]
+name = "incremental_source_cte_bound"
+path = "incremental_source_cte_bound"
+expect_rules = []
+forbid_rules = ["SQLCOST019"]
+
+[[case]]
+name = "partition_date_trunc_bound"
+path = "partition_date_trunc_bound"
+expect_rules = []
+forbid_rules = ["SQLCOST016"]
+
+[[case]]
+name = "compiled_ast_fallback"
+path = "compiled_ast_fallback"
+expect_rules = []
+forbid_rules = ["SQLCOST016"]

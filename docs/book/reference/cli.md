@@ -29,6 +29,7 @@ costguard scan [PATHS...] [OPTIONS]
 | Flag | Default | Notes |
 | --- | --- | --- |
 | `--fail-on` | `high` (via config default) | Severities: `info`, `low`, `medium`, `med`, `high`, `critical`, `crit` |
+| `--min-confidence` | unset | Optional floor: `low`, `medium`/`med`, `high`. Recommended for noisy repos: `--fail-on high --min-confidence high` |
 
 ## `explain`
 
@@ -48,6 +49,7 @@ costguard pr [OPTIONS]
 | --- | --- | --- |
 | `--base` | `main` | Git ref for changed-file detection; CI examples use `origin/main` |
 | `--fail-on` | `high` | Same severity values as `scan` |
+| `--min-confidence` | unset | Same confidence values as `scan` |
 
 Invalid git bases and non-git directories fail the check instead of silently scanning zero files.
 

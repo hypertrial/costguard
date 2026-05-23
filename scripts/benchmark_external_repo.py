@@ -257,6 +257,14 @@ def compare_report(report: dict[str, Any], baseline: dict[str, Any]) -> list[str
                     f"rule {rule} count {actual_count} != expected {count}"
                 )
 
+    max_rules = thresholds.get("max_diagnostics_by_rule", {})
+    for rule, ceiling in max_rules.items():
+        actual_count = actual.get("diagnostics_by_rule", {}).get(rule, 0)
+        if actual_count > ceiling:
+            errors.append(
+                f"rule {rule} count {actual_count} > max {ceiling}"
+            )
+
     return errors
 
 

@@ -201,6 +201,11 @@ impl Rule for CrossJoinRule {
             .iter()
             .filter(|join| matches!(join.kind, JoinKind::Cross | JoinKind::Comma))
             .map(|join| {
+                let confidence = if sql.feature_extraction_used_ast {
+                    Confidence::High
+                } else {
+                    Confidence::Low
+                };
                 diagnostic(
                     ctx,
                     self.id(),
@@ -214,6 +219,7 @@ impl Rule for CrossJoinRule {
                 .with_suggestion(
                     "add a join predicate, or document intent with 'costguard: allow cross-join'.",
                 )
+                .with_confidence(confidence)
             })
             .collect()
     }

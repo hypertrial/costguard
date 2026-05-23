@@ -12,6 +12,7 @@ Structured scan result:
 {
   "metrics": { "...": "..." },
   "diagnostics": [ "..." ],
+  "files": [ "..." ],
   "pr_summary": { "...": "..." }
 }
 ```
@@ -20,6 +21,7 @@ Structured scan result:
 | --- | --- | --- |
 | `metrics` | Always | Scan counters including parse metrics (see [Parse metrics](parse-metrics.md)) |
 | `diagnostics` | Always | Array of findings with `rule_id`, `severity`, `message`, `path`, `line`, `confidence` |
+| `files` | Always | Per-model parse metadata (`parse_input`, `parsed_raw`, `parsed_compiled`, `feature_extraction_used_ast`) |
 | `pr_summary` | PR mode | Changed files, optional downstream blast radius |
 
 ## GitHub (`github`)

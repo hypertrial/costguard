@@ -15,7 +15,7 @@ pub use costguard_platform::Platform;
 pub use costguard_rules::{Rule, RuleContext, RuleMetadata, RuleOverrides, Warehouse};
 pub use costguard_scanner::{FileKind as ProjectFileKind, ProjectFile as ScannedProjectFile};
 pub use costguard_sql::{
-    CteFeature, ExpressionFeature, JoinFeature, SqlDialect, SqlFeatures, WindowFeature,
+    CteFeature, ExpressionFeature, JoinFeature, ParseInput, SqlDialect, SqlFeatures, WindowFeature,
 };
 pub use scan::{explain, rules, scan};
 
@@ -50,22 +50,38 @@ pub struct ScanMetrics {
     pub diagnostics_by_severity: BTreeMap<String, usize>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct FileParseStatus {
+    pub path: PathBuf,
+    pub parse_input: costguard_sql::ParseInput,
+    pub parsed: bool,
+    pub parsed_raw: bool,
+    pub parsed_compiled: bool,
+    pub feature_extraction_used_ast: bool,
+}
+
 #[derive(Debug, Clone)]
 pub struct ScanResult {
     pub diagnostics: Vec<Diagnostic>,
     pub counts: ScanCounts,
     pub metrics: ScanMetrics,
+    pub file_parse_status: Vec<FileParseStatus>,
     pub pr_summary: Option<PrSummary>,
 }
 
 impl ScanResult {
-    pub fn should_fail(&self, fail_on: Option<costguard_diagnostics::Severity>) -> bool {
+    pub fn should_fail(
+        &self,
+        fail_on: Option<costguard_diagnostics::Severity>,
+        min_confidence: Option<costguard_diagnostics::Confidence>,
+    ) -> bool {
         let Some(threshold) = fail_on else {
             return false;
         };
-        self.diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.severity >= threshold)
+        self.diagnostics.iter().any(|diagnostic| {
+            diagnostic.severity >= threshold
+                && min_confidence.is_none_or(|mc| diagnostic.confidence >= mc)
+        })
     }
 }
 
@@ -76,4 +92,58 @@ pub struct PrSummary {
     pub affected_downstream: Vec<String>,
     pub affected_exposures: Vec<String>,
     pub recommended_dbt_command: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use costguard_diagnostics::{Confidence, Severity};
+    use std::path::PathBuf;
+
+    fn diagnostic(severity: Severity, confidence: Confidence) -> Diagnostic {
+        Diagnostic {
+            rule_id: "SQLCOST012".into(),
+            severity,
+            path: PathBuf::from("models/a.sql"),
+            line: 1,
+            column: 1,
+            span: None,
+            message: "test".into(),
+            risk: None,
+            suggestion: None,
+            confidence,
+            warehouse: None,
+        }
+    }
+
+    fn result_with(diagnostics: Vec<Diagnostic>) -> ScanResult {
+        ScanResult {
+            diagnostics,
+            counts: ScanCounts::default(),
+            metrics: ScanMetrics {
+                counts: ScanCounts::default(),
+                sql_parse_total: 0,
+                sql_parse_failures: 0,
+                sql_parse_other_total: 0,
+                sql_parse_other_failures: 0,
+                sql_parse_compiled_total: 0,
+                sql_parse_compiled_failures: 0,
+                metadata_warnings: 0,
+                yaml_parse_failures: 0,
+                dbt_project_parse_failures: 0,
+                metadata_only_scan: false,
+                diagnostics_by_rule: BTreeMap::new(),
+                diagnostics_by_severity: BTreeMap::new(),
+            },
+            file_parse_status: Vec::new(),
+            pr_summary: None,
+        }
+    }
+
+    #[test]
+    fn should_fail_respects_min_confidence() {
+        let result = result_with(vec![diagnostic(Severity::High, Confidence::Low)]);
+        assert!(result.should_fail(Some(Severity::High), None));
+        assert!(!result.should_fail(Some(Severity::High), Some(Confidence::High)));
+    }
 }

@@ -20,10 +20,14 @@ python3 scripts/benchmark_external_repo.py --repo spellbook
 
 # Audit compiled parse failures (Spellbook manifest gate)
 python3 scripts/audit_compiled_parse_failures.py \
-  ~/.cache/costguard/benchmarks/spellbook/target/manifest.json
+  ~/.cache/costguard/benchmarks/spellbook/target/manifest.json --json
 
 # Bucket rule diagnostics for triage (requires cached Spellbook checkout + manifest)
 python3 scripts/bucket_rule_diagnostics.py --repo spellbook --rule SQLCOST012
+python3 scripts/bucket_rule_diagnostics.py --repo spellbook --rule SQLCOST017 --join-audit /tmp/audit.json
+
+# Validate false-positive registry against corpus forbid_rules contracts
+python3 scripts/validate_fp_registry.py
 
 # Refresh baselines after intentional rule tuning
 python3 scripts/benchmark_external_repo.py --fixture real_world/jaffle_snippets --update-baseline
@@ -39,7 +43,18 @@ Baselines live in [`tests/benchmarks/baselines/`](../../tests/benchmarks/baselin
 | Target kind | Pass criteria |
 | --- | --- |
 | Vendored | Exact rule counts, parse failure ceiling, forbidden rules |
-| External | Crash-free, model parse failures ≤ baseline + delta, optional parse failure rate cap |
+| External | Crash-free, model parse failures ≤ baseline + delta, optional parse failure rate cap, `max_diagnostics_by_rule` ceilings on triaged rules |
+
+### False-positive registry
+
+Machine-readable FP contracts live in [`tests/benchmarks/fp_registry.toml`](../../tests/benchmarks/fp_registry.toml). Each `verdict = "fp"` entry must map to a corpus case with matching `forbid_rules`. CI runs `python3 scripts/validate_fp_registry.py`.
+
+### Cross-reference workflow
+
+1. Run Spellbook benchmark and inspect `tests/benchmarks/reports/external__spellbook.json`.
+2. Bucket noisy rules with `scripts/bucket_rule_diagnostics.py` (supports `--parse-input-filter`, `--join-audit`).
+3. Audit parse failures with `audit_compiled_parse_failures.py --json` (items include `original_file_path`).
+4. Extract corpus fixtures, register in `fp_registry.toml`, and refresh baselines.
 
 ### Parse metric semantics
 
@@ -74,11 +89,13 @@ When an external benchmark surfaces a finding worth keeping:
 | SQLCOST004 | spellbook | investigate remaining | many incrementals still lack `unique_key` and explicit append strategy |
 | parse metrics | spellbook | improved (tier 1) | compile + Trino + model-scoped metrics: ~67% model parse failure rate (5423/8108) |
 | parse metrics | spellbook | improved (P0–P2) | five-subproject compile + Trino normalization + raw fallback: **12%** model parse failure rate (972/8108), `sql_parse_compiled_total` 8001 |
-| parse metrics | spellbook | improved (compiled parse) | Trino dialect + parse-only rewrites + Generic fallback: **`sql_parse_compiled_failures` 0/8001**, headline failures **80/8108** |
+| parse metrics | spellbook | improved (compiled parse) | Trino dialect + parse-only rewrites + Generic fallback: **`sql_parse_compiled_failures` 0/8001**, headline failures **107/8108** |
 | SQLCOST002 | jaffle-shop | true positive | repeated JSON extraction in staging |
-| SQLCOST012 | spellbook | fixed (2026-05) | **1868 → 815** after UNNEST/table-function cross-join exempt, literal masking, derived-subquery comma FP skip; bucket triage via `scripts/bucket_rule_diagnostics.py` |
-| SQLCOST012 | spellbook | true positive (remaining) | explicit `CROSS JOIN` between relations (~119 in pre-fix bucket sample) and legacy comma-join regex matches |
-| SQLCOST016–019 | spellbook | informational | first Spellbook baseline capture: 016=281, 017=819, 018=516, 019=374; no CI gate on exact counts |
+| SQLCOST012 | spellbook | fixed (2026-05) | **1868 → 804** after UNNEST/table-function exempt, literal masking, derived-subquery comma FP skip, depth-aware comma detection |
+| SQLCOST016 | spellbook | fixed (2026-05) | **281 → 15** after staging exempt, date_trunc whitelist, compiled AST extraction; registry + corpus `partition_date_trunc_bound` |
+| SQLCOST017 | spellbook | mixed (2026-05) | symmetric lower/trim exempt + staging exempt; compiled AST increases AST-confirmed hits **819 → 1003** (more accurate, use `--min-confidence high` for PR gates) |
+| SQLCOST019 | spellbook | fixed (2026-05) | **374 → 63** after whole-scope partition predicate check + CTE/JOIN ON corpus fixtures |
+| SQLCOST016–019 | spellbook | gated | Spellbook baseline uses `max_diagnostics_by_rule` ceilings (counts may shrink, not grow) |
 
 ## PR replay testing
 

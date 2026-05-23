@@ -52,6 +52,7 @@ struct BaselineThresholds {
     #[allow(dead_code)]
     max_parse_failure_delta: Option<usize>,
     exact_diagnostics_by_rule: Option<BTreeMap<String, usize>>,
+    max_diagnostics_by_rule: Option<BTreeMap<String, usize>>,
 }
 
 fn repo_root() -> PathBuf {
@@ -119,6 +120,17 @@ fn compare_baseline(baseline: &BaselineFile, result: &costguard_core::ScanResult
             assert_eq!(
                 actual_count, *expected_count,
                 "target {} rule {rule} count mismatch",
+                baseline.target
+            );
+        }
+    }
+
+    if let Some(max_rules) = &baseline.thresholds.max_diagnostics_by_rule {
+        for (rule, ceiling) in max_rules {
+            let actual_count = actual.diagnostics_by_rule.get(rule).copied().unwrap_or(0);
+            assert!(
+                actual_count <= *ceiling,
+                "target {} rule {rule} count {actual_count} > max {ceiling}",
                 baseline.target
             );
         }

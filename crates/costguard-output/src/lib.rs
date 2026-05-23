@@ -7,6 +7,7 @@ use serde::Serialize;
 struct JsonOutput<'a> {
     metrics: &'a costguard_core::ScanMetrics,
     diagnostics: &'a [Diagnostic],
+    files: &'a [costguard_core::FileParseStatus],
     #[serde(skip_serializing_if = "Option::is_none")]
     pr_summary: Option<&'a PrSummary>,
 }
@@ -17,6 +18,7 @@ pub fn render(result: &ScanResult, format: OutputFormat) -> Result<String> {
         OutputFormat::Json => Ok(serde_json::to_string_pretty(&JsonOutput {
             metrics: &result.metrics,
             diagnostics: &result.diagnostics,
+            files: &result.file_parse_status,
             pr_summary: result.pr_summary.as_ref(),
         })?),
         OutputFormat::Github => Ok(render_github(result)),
@@ -301,6 +303,7 @@ mod tests {
                 diagnostics_by_rule: BTreeMap::new(),
                 diagnostics_by_severity: BTreeMap::new(),
             },
+            file_parse_status: Vec::new(),
             pr_summary: Some(PrSummary {
                 changed_models: vec!["a".into()],
                 affected_downstream: vec!["b".into()],

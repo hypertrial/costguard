@@ -19,4 +19,6 @@ CROSS JOIN b
 
 Both `-- costguard: allow cross-join` and bare `costguard: allow cross-join` are accepted.
 
+Regex-only comma/cross join detection emits `confidence: low`. Use `--min-confidence high` to suppress regex-only hits in PR gates.
+
 See [Suppressions](../book/reference/suppressions.md).

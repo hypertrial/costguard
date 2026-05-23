@@ -26,6 +26,9 @@ impl Rule for NonSargablePredicateRule {
         let Some(sql) = ctx.sql else {
             return Vec::new();
         };
+        if is_staging_model(&ctx.file.root_relative_path) {
+            return Vec::new();
+        }
         sql.features
             .non_sargable_predicates
             .iter()
@@ -71,6 +74,9 @@ impl Rule for FunctionWrappedJoinKeyRule {
         let Some(sql) = ctx.sql else {
             return Vec::new();
         };
+        if is_staging_model(&ctx.file.root_relative_path) {
+            return Vec::new();
+        }
         sql.features
             .joins
             .iter()

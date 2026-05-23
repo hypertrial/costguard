@@ -37,6 +37,8 @@ struct ScanArgs {
     manifest: Option<PathBuf>,
     #[arg(long)]
     fail_on: Option<String>,
+    #[arg(long)]
+    min_confidence: Option<String>,
 }
 
 #[derive(Debug, Parser)]
@@ -66,6 +68,8 @@ struct PrArgs {
     manifest: Option<PathBuf>,
     #[arg(long)]
     fail_on: Option<String>,
+    #[arg(long)]
+    min_confidence: Option<String>,
 }
 
 #[derive(Debug, Parser)]
@@ -113,11 +117,13 @@ fn run() -> Result<u8> {
             };
             let result = scan(&config)?;
             print!("{}", render(&result, config.format)?);
-            Ok(if result.should_fail(config.fail_on) {
-                1
-            } else {
-                0
-            })
+            Ok(
+                if result.should_fail(config.fail_on, config.min_confidence) {
+                    1
+                } else {
+                    0
+                },
+            )
         }
         Command::Explain(args) => {
             let config = match config_from_explain_args(&args).context("configuration error") {
@@ -126,11 +132,13 @@ fn run() -> Result<u8> {
             };
             let result = explain(&config, &args.path)?;
             print!("{}", render(&result, config.format)?);
-            Ok(if result.should_fail(config.fail_on) {
-                1
-            } else {
-                0
-            })
+            Ok(
+                if result.should_fail(config.fail_on, config.min_confidence) {
+                    1
+                } else {
+                    0
+                },
+            )
         }
         Command::Pr(args) => {
             let config = match config_from_pr_args(args).context("configuration error") {
@@ -139,11 +147,13 @@ fn run() -> Result<u8> {
             };
             let result = scan(&config)?;
             print!("{}", render(&result, config.format)?);
-            Ok(if result.should_fail(config.fail_on) {
-                1
-            } else {
-                0
-            })
+            Ok(
+                if result.should_fail(config.fail_on, config.min_confidence) {
+                    1
+                } else {
+                    0
+                },
+            )
         }
         Command::Rules(args) => {
             let format = args
@@ -183,6 +193,7 @@ fn config_from_scan_args(args: ScanArgs) -> Result<ScanConfig> {
         args.format,
         args.manifest,
         args.fail_on,
+        args.min_confidence,
     )?;
     validate_config(&config)?;
     Ok(config)
@@ -196,6 +207,7 @@ fn config_from_explain_args(args: &ExplainArgs) -> Result<ScanConfig> {
         args.dialect.clone(),
         args.format,
         args.manifest.clone(),
+        None,
         None,
     )?;
     validate_config(&config)?;
@@ -213,6 +225,7 @@ fn config_from_pr_args(args: PrArgs) -> Result<ScanConfig> {
         args.format,
         args.manifest,
         args.fail_on,
+        args.min_confidence,
     )?;
     validate_config(&config)?;
     Ok(config)
@@ -225,6 +238,7 @@ fn apply_common_flags(
     format: Option<FormatArg>,
     manifest: Option<PathBuf>,
     fail_on: Option<String>,
+    min_confidence: Option<String>,
 ) -> Result<()> {
     if let Some(warehouse) = warehouse {
         config.platform = warehouse.parse::<Platform>().map_err(anyhow::Error::msg)?;
@@ -239,6 +253,9 @@ fn apply_common_flags(
     }
     if let Some(fail_on) = fail_on {
         config.fail_on = Some(fail_on.parse::<Severity>().map_err(anyhow::Error::msg)?);
+    }
+    if let Some(min_confidence) = min_confidence {
+        config.min_confidence = Some(min_confidence.parse().map_err(anyhow::Error::msg)?);
     }
     Ok(())
 }

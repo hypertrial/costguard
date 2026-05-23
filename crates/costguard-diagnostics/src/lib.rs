@@ -42,13 +42,26 @@ impl FromStr for Severity {
     }
 }
 
+impl FromStr for Confidence {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "low" => Ok(Self::Low),
+            "medium" | "med" => Ok(Self::Medium),
+            "high" => Ok(Self::High),
+            other => Err(format!("unknown confidence '{other}'")),
+        }
+    }
+}
+
 impl fmt::Display for Severity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.label())
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Confidence {
     Low,

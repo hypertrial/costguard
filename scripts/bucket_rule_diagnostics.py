@@ -11,7 +11,7 @@ import subprocess
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -26,6 +26,15 @@ REPOS_TOML = ROOT / "tests" / "benchmarks" / "repos.toml"
 CROSS_JOIN_RE = re.compile(r"(?i)\bcross\s+join\b")
 CROSS_JOIN_UNNEST_RE = re.compile(r"(?i)\bcross\s+join\s+(?:unnest|table)\s*\(")
 FROM_COMMA_RE = re.compile(r"(?i)\bfrom\b")
+JOIN_ON_RE = re.compile(r"(?i)\bon\b")
+LOWER_TRIM_RE = re.compile(r"(?i)\b(?:lower|upper|trim|ltrim|rtrim)\s*\(")
+CAST_RE = re.compile(r"(?i)\bcast\s*\(")
+COALESCE_RE = re.compile(r"(?i)\bcoalesce\s*\(")
+HASH_RE = re.compile(r"(?i)\b(?:keccak|sha256|md5|hash)\s*\(")
+DATE_TRUNC_RE = re.compile(r"(?i)\bdate_trunc\s*\(")
+BLOCK_TIME_RE = re.compile(r"(?i)\b(?:block_time|evt_block_time|evt_block_date|block_date)\b")
+SOURCE_RE = re.compile(r"(?i)\bsource\s*\(")
+IS_INCREMENTAL_RE = re.compile(r"(?i)is_incremental\s*\(")
 
 
 def mask_literals_and_comments(text: str) -> str:
@@ -113,6 +122,68 @@ def classify_sqlcost012(sql: str) -> str:
     return "other"
 
 
+def classify_sqlcost017(sql: str) -> str:
+    masked = mask_literals_and_comments(sql).lower()
+    if re.search(r"(?i)lower\s*\([^)]+\)\s*=\s*lower\s*\(", masked):
+        return "symmetric_normalize"
+    if CAST_RE.search(masked):
+        return "cast_on_key"
+    if COALESCE_RE.search(masked) and JOIN_ON_RE.search(masked):
+        return "coalesce_key"
+    if HASH_RE.search(masked) and JOIN_ON_RE.search(masked):
+        return "hash_bytes"
+    if LOWER_TRIM_RE.search(masked) and JOIN_ON_RE.search(masked):
+        return "lower_trim"
+    return "other"
+
+
+def classify_sqlcost016(sql: str) -> str:
+    masked = mask_literals_and_comments(sql).lower()
+    if DATE_TRUNC_RE.search(masked) and BLOCK_TIME_RE.search(masked):
+        return "date_trunc_filter"
+    if CAST_RE.search(masked) and BLOCK_TIME_RE.search(masked):
+        return "cast_partition"
+    if BLOCK_TIME_RE.search(masked):
+        return "function_on_block_time"
+    return "other"
+
+
+def classify_sqlcost019(sql: str) -> str:
+    masked = mask_literals_and_comments(sql).lower()
+    if not IS_INCREMENTAL_RE.search(masked) or not SOURCE_RE.search(masked):
+        return "other"
+    if BLOCK_TIME_RE.search(masked):
+        if "where" in masked and BLOCK_TIME_RE.search(masked.split("where", 1)[-1]):
+            return "block_time_in_incremental"
+        if JOIN_ON_RE.search(masked) and BLOCK_TIME_RE.search(masked):
+            return "block_time_in_source_scope"
+    if "with " in masked and SOURCE_RE.search(masked):
+        return "macro_wrapped"
+    return "no_where_on_source"
+
+
+def classify_sqlcost005(sql: str) -> str:
+    masked = mask_literals_and_comments(sql).lower()
+    if not IS_INCREMENTAL_RE.search(masked):
+        return "other"
+    if BLOCK_TIME_RE.search(masked):
+        return "block_time_present"
+    if DATE_TRUNC_RE.search(masked):
+        return "date_trunc_present"
+    if "not in (select" in masked or "except select" in masked:
+        return "anti_join_pattern"
+    return "missing_predicate"
+
+
+CLASSIFIERS: dict[str, Callable[[str], str]] = {
+    "SQLCOST012": classify_sqlcost012,
+    "SQLCOST016": classify_sqlcost016,
+    "SQLCOST017": classify_sqlcost017,
+    "SQLCOST019": classify_sqlcost019,
+    "SQLCOST005": classify_sqlcost005,
+}
+
+
 def costguard_binary() -> Path:
     target_dir = Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target"))
     binary = target_dir / "debug" / "costguard"
@@ -184,6 +255,25 @@ def load_manifest_sql(manifest_path: Path) -> dict[str, str]:
     return compiled
 
 
+def load_audit_by_path(audit_json: Path) -> dict[str, dict[str, Any]]:
+    payload = json.loads(audit_json.read_text(encoding="utf-8"))
+    by_path: dict[str, dict[str, Any]] = {}
+    for item in payload.get("items", []):
+        path = str(item.get("original_file_path", "")).replace("\\", "/")
+        if path:
+            by_path[path] = item
+    return by_path
+
+
+def parse_status_by_path(scan_payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    by_path: dict[str, dict[str, Any]] = {}
+    for entry in scan_payload.get("files", []):
+        path = str(entry.get("path", "")).replace("\\", "/")
+        if path:
+            by_path[path] = entry
+    return by_path
+
+
 def read_sql_for_diagnostic(
     checkout: Path,
     diagnostic: dict[str, Any],
@@ -204,25 +294,52 @@ def bucket_diagnostics(
     compiled_by_path: dict[str, str],
     rule_id: str,
     limit: int | None,
+    parse_status: dict[str, dict[str, Any]],
+    audit_by_path: dict[str, dict[str, Any]],
+    parse_input_filter: str | None,
 ) -> dict[str, Any]:
     filtered = [d for d in diagnostics if d.get("rule_id") == rule_id]
+    if parse_input_filter is not None:
+        filtered = [
+            d
+            for d in filtered
+            if parse_status.get(str(d.get("path", "")).replace("\\", "/"), {}).get(
+                "parse_input"
+            )
+            == parse_input_filter
+        ]
     if limit is not None:
         filtered = filtered[:limit]
 
+    classifier = CLASSIFIERS.get(rule_id, lambda _sql: "other")
     buckets: Counter[str] = Counter()
     examples: dict[str, list[dict[str, str]]] = defaultdict(list)
 
     for diagnostic in filtered:
+        rel_path = str(diagnostic.get("path", "")).replace("\\", "/")
         sql = read_sql_for_diagnostic(checkout, diagnostic, compiled_by_path)
-        bucket = classify_sqlcost012(sql) if rule_id == "SQLCOST012" else "other"
+        bucket = classifier(sql)
         buckets[bucket] += 1
         if len(examples[bucket]) < 5:
-            rel_path = str(diagnostic.get("path", ""))
             line = str(diagnostic.get("line", ""))
-            snippet = sql[max(0, (diagnostic.get("line", 1) - 1) * 40) :][:240].replace("\n", " ")
-            examples[bucket].append(
-                {"path": rel_path, "line": line, "snippet": snippet}
+            snippet = sql[max(0, (diagnostic.get("line", 1) - 1) * 40) :][:240].replace(
+                "\n", " "
             )
+            example: dict[str, str] = {
+                "path": rel_path,
+                "line": line,
+                "snippet": snippet,
+            }
+            parse_entry = parse_status.get(rel_path, {})
+            if parse_entry:
+                example["parse_input"] = str(parse_entry.get("parse_input", ""))
+                example["feature_extraction_used_ast"] = str(
+                    parse_entry.get("feature_extraction_used_ast", "")
+                )
+            audit_entry = audit_by_path.get(rel_path)
+            if audit_entry:
+                example["error_signature"] = str(audit_entry.get("error_signature", ""))
+            examples[bucket].append(example)
 
     return {
         "rule_id": rule_id,
@@ -247,6 +364,17 @@ def main() -> None:
     )
     parser.add_argument("--rule", default="SQLCOST012", help="Rule id to bucket")
     parser.add_argument("--limit", type=int, default=None, help="Max diagnostics to classify")
+    parser.add_argument(
+        "--parse-input-filter",
+        default=None,
+        help="Filter diagnostics to files with this parse_input value",
+    )
+    parser.add_argument(
+        "--join-audit",
+        type=Path,
+        default=None,
+        help="Optional audit_compiled_parse --json output",
+    )
     parser.add_argument("--json-out", type=Path, default=None, help="Write JSON report")
     args = parser.parse_args()
 
@@ -265,12 +393,17 @@ def main() -> None:
         manifest=manifest,
     )
     compiled_by_path = load_manifest_sql(manifest)
+    audit_by_path = load_audit_by_path(args.join_audit) if args.join_audit else {}
+    parse_status = parse_status_by_path(payload)
     report = bucket_diagnostics(
         payload.get("diagnostics", []),
         checkout,
         compiled_by_path,
         args.rule,
         args.limit,
+        parse_status,
+        audit_by_path,
+        args.parse_input_filter,
     )
 
     print(f"Rule {args.rule}: {report['total']} diagnostics")

@@ -1,0 +1,163 @@
+# Machine-readable false-positive registry.
+# Each verdict = "fp" entry must have a matching corpus case with forbid_rules.
+
+[[finding]]
+rule = "SQLCOST005"
+repo = "spellbook"
+bucket = "block_time_predicate"
+verdict = "fp"
+corpus_case = "incremental_block_time"
+notes = "block_time and related partition columns exempt incremental predicate rule"
+
+[[finding]]
+rule = "SQLCOST005"
+repo = "spellbook"
+bucket = "date_predicate"
+verdict = "fp"
+corpus_case = "incremental_date"
+notes = "updated_at-style predicates satisfy incremental bound requirement"
+
+[[finding]]
+rule = "SQLCOST005"
+repo = "spellbook"
+bucket = "unique_key_predicate"
+verdict = "fp"
+corpus_case = "incremental_key"
+notes = "incremental models with bounded key predicates are exempt"
+
+[[finding]]
+rule = "SQLCOST004"
+repo = "spellbook"
+bucket = "append_strategy"
+verdict = "fp"
+corpus_case = "incremental_append"
+notes = "append-only incrementals exempt from unique_key requirement"
+
+[[finding]]
+rule = "SQLCOST004"
+repo = "spellbook"
+bucket = "yaml_unique_key"
+verdict = "fp"
+corpus_case = "incremental_yaml_config"
+notes = "unique_key from schema YAML satisfies incremental safety"
+
+[[finding]]
+rule = "SQLCOST004"
+repo = "spellbook"
+bucket = "dbt_project_unique_key"
+verdict = "fp"
+corpus_case = "incremental_dbt_project"
+notes = "nested dbt_project.yml folder defaults provide unique_key"
+
+[[finding]]
+rule = "SQLCOST012"
+repo = "spellbook"
+bucket = "cross_join_unnest"
+verdict = "fp"
+corpus_case = "cross_join_unnest"
+notes = "UNNEST and table-function cross joins are intentional in Spellbook"
+
+[[finding]]
+rule = "SQLCOST012"
+repo = "spellbook"
+bucket = "string_literal_fp"
+verdict = "fp"
+corpus_case = "cross_join_string"
+notes = "CROSS JOIN text inside string literals must not fire"
+
+[[finding]]
+rule = "SQLCOST012"
+repo = "spellbook"
+bucket = "subquery_comma_fp"
+verdict = "fp"
+corpus_case = "cross_join_subquery_fp"
+notes = "comma after derived subquery is not a cross join"
+
+[[finding]]
+rule = "SQLCOST012"
+repo = "jaffle-shop"
+bucket = "cross_join_explicit"
+verdict = "tp"
+corpus_case = "ast_shape"
+notes = "explicit cross join in downstream model is a true positive"
+
+[[finding]]
+rule = "SQLCOST012"
+repo = "jaffle-shop"
+bucket = "comma_join"
+verdict = "tp"
+corpus_case = "cross_join_comma"
+notes = "legacy comma join between dbt refs is a true positive"
+
+[[finding]]
+rule = "SQLCOST002"
+repo = "jaffle-shop"
+bucket = "repeated_json"
+verdict = "tp"
+corpus_case = "repeated_json"
+notes = "repeated JSON extraction in one file is a true positive"
+
+[[finding]]
+rule = "SQLCOST017"
+repo = "spellbook"
+bucket = "symmetric_normalize"
+verdict = "fp"
+corpus_case = "join_key_symmetric_lower"
+notes = "symmetric lower/upper normalization on both join sides is acceptable"
+
+[[finding]]
+rule = "SQLCOST017"
+repo = "spellbook"
+bucket = "lower_trim"
+verdict = "fp"
+corpus_case = "join_key_staging"
+notes = "normalization in staging models is expected"
+
+[[finding]]
+rule = "SQLCOST019"
+repo = "spellbook"
+bucket = "block_time_in_source_scope"
+verdict = "fp"
+corpus_case = "incremental_source_join_on_bound"
+notes = "partition predicate in JOIN ON satisfies source-side bound"
+
+[[finding]]
+rule = "SQLCOST019"
+repo = "spellbook"
+bucket = "block_time_in_incremental"
+verdict = "fp"
+corpus_case = "incremental_source_cte_bound"
+notes = "bounded predicate in source CTE satisfies incremental source read"
+
+[[finding]]
+rule = "SQLCOST016"
+repo = "spellbook"
+bucket = "date_trunc_filter"
+verdict = "fp"
+corpus_case = "partition_date_trunc_bound"
+notes = "bounded date_trunc comparison on partition column is acceptable"
+
+[[finding]]
+rule = "SQLCOST016"
+repo = "spellbook"
+bucket = "date_trunc_filter"
+verdict = "fp"
+corpus_case = "compiled_ast_fallback"
+notes = "compiled SQL AST extraction avoids regex false positives on jinja-heavy models"
+
+[[finding]]
+rule = "SQLCOST005"
+repo = "spellbook"
+bucket = "missing_predicate"
+verdict = "tp"
+corpus_case = "incremental_missing"
+notes = "incremental without pruning predicate is a true positive"
+
+[[finding]]
+rule = "SQLCOST017"
+repo = "spellbook"
+bucket = "cast_on_key"
+verdict = "tp"
+corpus_case = "join_key_wrapped"
+notes = "asymmetric function-wrapped join key remains a true positive"
+

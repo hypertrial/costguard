@@ -45,6 +45,27 @@ When a manifest with `compiled_code` is loaded:
 
 Spellbook external baseline requires **`sql_parse_compiled_failures = 0`**.
 
+## Per-file parse metadata (JSON output)
+
+JSON scan output includes a `files` array with per-model parse metadata:
+
+| Field | Description |
+| --- | --- |
+| `path` | Model file path |
+| `parse_input` | `raw`, `compiled`, or `compiled_with_raw_fallback` |
+| `parsed_raw` | Whether stripped raw/Jinja SQL parsed |
+| `parsed_compiled` | Whether compiled SQL parsed |
+| `feature_extraction_used_ast` | Whether shape features used AST extraction |
+
+When raw Jinja fails but compiled SQL parses, Costguard can extract AST shape features from compiled SQL to reduce regex false positives.
+
+## Feature extraction vs headline parse
+
+Headline parse success (`parsed`) and AST feature extraction can diverge:
+
+- Compiled parse success alone does **not** enable AST extraction unless raw parse also succeeds, **except** when compiled AST fallback is used for macro-heavy models with manifest `compiled_code`.
+- Shape rules such as SQLCOST016–019 set `confidence: low` when AST extraction was not used.
+
 ## Audit gate
 
 Audit compiled parse failures against a merged manifest:

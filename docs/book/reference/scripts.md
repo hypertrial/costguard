@@ -82,6 +82,7 @@ Audit compiled SQL parse failures from a dbt manifest (Spellbook gate).
 ```bash
 python3 scripts/audit_compiled_parse_failures.py path/to/manifest.json
 python3 scripts/audit_compiled_parse_failures.py path/to/manifest.json --bucket
+python3 scripts/audit_compiled_parse_failures.py path/to/manifest.json --json
 ```
 
 Builds and runs the `audit-compiled-parse` binary from `costguard-sql`.
@@ -118,15 +119,34 @@ costguard scan /tmp/costguard-synthetic-10k --warehouse generic --fail-on critic
 
 ## `bucket_rule_diagnostics.py`
 
-Bucket per-file diagnostics for external-repo triage after running the Spellbook benchmark:
+Bucket per-file diagnostics for external-repo triage after running the Spellbook benchmark. Classifiers are registered for `SQLCOST012`, `SQLCOST016`, `SQLCOST017`, `SQLCOST019`, and `SQLCOST005`.
 
 ```bash
 python3 scripts/bucket_rule_diagnostics.py --repo spellbook --rule SQLCOST012
-python3 scripts/bucket_rule_diagnostics.py --repo spellbook --rule SQLCOST012 \
-  --json-out triage/sqlcost012.json
+python3 scripts/bucket_rule_diagnostics.py --repo spellbook --rule SQLCOST017 \
+  --join-audit /tmp/audit.json --parse-input-filter compiled_with_raw_fallback \
+  --json-out triage/sqlcost017.json
 ```
 
+| Flag | Description |
+| --- | --- |
+| `--repo` | External repo key (default `spellbook`) |
+| `--rule` | Rule id to bucket |
+| `--limit` | Max diagnostics to classify |
+| `--cache` | Benchmark cache root |
+| `--join-audit` | Attach audit JSON error signatures by file path |
+| `--parse-input-filter` | Filter to files with a given `parse_input` from scan JSON |
+| `--json-out` | Write bucket report JSON |
+
 Requires a cached checkout with `target/manifest.json` from `benchmark_external_repo.py --repo spellbook`.
+
+## `validate_fp_registry.py`
+
+Validate [`tests/benchmarks/fp_registry.toml`](../../tests/benchmarks/fp_registry.toml) against corpus `forbid_rules` contracts:
+
+```bash
+python3 scripts/validate_fp_registry.py
+```
 
 ## `generate_rule_docs.py`
 
