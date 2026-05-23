@@ -116,6 +116,18 @@ python3 scripts/generate_synthetic_dbt.py /tmp/costguard-synthetic-10k --models 
 costguard scan /tmp/costguard-synthetic-10k --warehouse generic --fail-on critical
 ```
 
+## `bucket_rule_diagnostics.py`
+
+Bucket per-file diagnostics for external-repo triage after running the Spellbook benchmark:
+
+```bash
+python3 scripts/bucket_rule_diagnostics.py --repo spellbook --rule SQLCOST012
+python3 scripts/bucket_rule_diagnostics.py --repo spellbook --rule SQLCOST012 \
+  --json-out triage/sqlcost012.json
+```
+
+Requires a cached checkout with `target/manifest.json` from `benchmark_external_repo.py --repo spellbook`.
+
 ## `generate_rule_docs.py`
 
 Regenerate the mdBook rule catalog from `costguard rules --format json`:

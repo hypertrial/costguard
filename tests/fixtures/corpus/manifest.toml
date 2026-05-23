@@ -89,6 +89,30 @@ expect_rules = ["SQLCOST012"]
 forbid_rules = []
 
 [[case]]
+name = "cross_join_unnest"
+path = "cross_join_unnest"
+expect_rules = []
+forbid_rules = ["SQLCOST012"]
+
+[[case]]
+name = "cross_join_comma"
+path = "cross_join_comma"
+expect_rules = ["SQLCOST012"]
+forbid_rules = []
+
+[[case]]
+name = "cross_join_string"
+path = "cross_join_string"
+expect_rules = []
+forbid_rules = ["SQLCOST012"]
+
+[[case]]
+name = "cross_join_subquery_fp"
+path = "cross_join_subquery_fp"
+expect_rules = []
+forbid_rules = ["SQLCOST012"]
+
+[[case]]
 name = "metadata_only"
 path = "metadata_only"
 expect_rules = ["SQLCOST023"]

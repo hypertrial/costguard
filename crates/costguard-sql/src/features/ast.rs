@@ -218,6 +218,17 @@ fn extract_join(
         },
         _ => (None, false, false),
     };
+    if matches!(kind, JoinKind::Cross) && is_exempt_cross_join_target(&join.relation) {
+        extract_table_factor(
+            &join.relation,
+            sanitized,
+            raw,
+            strip_map,
+            line_index,
+            features,
+        );
+        return;
+    }
     if let Some(span) = find_clause_span(sanitized, raw, strip_map, line_index, needle) {
         features.joins.push(JoinFeature {
             span,
@@ -436,6 +447,45 @@ fn extract_cte_references_from_names(
     references
 }
 
+fn is_exempt_cross_join_target(factor: &TableFactor) -> bool {
+    match factor {
+        TableFactor::UNNEST { .. } | TableFactor::TableFunction { .. } => true,
+        TableFactor::Function { name, .. } => {
+            matches!(
+                object_name_last(name).as_str(),
+                "unnest" | "flatten" | "table"
+            )
+        }
+        TableFactor::Table { name, .. } => object_name_last(name) == "unnest",
+        _ => false,
+    }
+}
+
+fn object_name_last(name: &ObjectName) -> String {
+    name.0
+        .last()
+        .map(|ident| ident.value.to_ascii_lowercase())
+        .unwrap_or_default()
+}
+
+fn merge_join_features(base: &[JoinFeature], ast: &[JoinFeature]) -> Vec<JoinFeature> {
+    let mut merged: Vec<JoinFeature> = base
+        .iter()
+        .filter(|join| join.kind != JoinKind::Cross)
+        .cloned()
+        .collect();
+    merged.extend(ast.iter().cloned());
+    dedupe_join_features(merged)
+}
+
+fn dedupe_join_features(joins: Vec<JoinFeature>) -> Vec<JoinFeature> {
+    let mut seen = std::collections::HashSet::new();
+    joins
+        .into_iter()
+        .filter(|join| seen.insert((join.span.byte_start, join.span.byte_end, join.kind as u8)))
+        .collect()
+}
+
 fn find_clause_span(
     sanitized: &str,
     raw: &str,
@@ -632,9 +682,6 @@ pub fn merge_shape_features(mut base: SqlFeatures, ast: SqlFeatures, parsed: boo
     if !ast.distincts.is_empty() {
         base.distincts = ast.distincts;
     }
-    if !ast.joins.is_empty() {
-        base.joins = ast.joins;
-    }
     if !ast.window_functions.is_empty() {
         base.window_functions = ast.window_functions;
     }
@@ -656,6 +703,7 @@ pub fn merge_shape_features(mut base: SqlFeatures, ast: SqlFeatures, parsed: boo
     if !ast.wildcard_table_scans.is_empty() {
         base.wildcard_table_scans = ast.wildcard_table_scans;
     }
+    base.joins = merge_join_features(&base.joins, &ast.joins);
     base
 }
 

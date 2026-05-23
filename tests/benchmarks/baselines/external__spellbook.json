@@ -15,17 +15,21 @@
       "SQLCOST003": 20,
       "SQLCOST004": 1,
       "SQLCOST005": 247,
-      "SQLCOST006": 516,
+      "SQLCOST006": 460,
       "SQLCOST008": 826,
-      "SQLCOST012": 1868,
+      "SQLCOST012": 815,
       "SQLCOST013": 168,
       "SQLCOST014": 1338,
-      "SQLCOST015": 858
+      "SQLCOST015": 858,
+      "SQLCOST016": 281,
+      "SQLCOST017": 819,
+      "SQLCOST018": 516,
+      "SQLCOST019": 374
     },
     "diagnostics_by_severity": {
-      "high": 2116,
+      "high": 2537,
       "low": 1338,
-      "med": 2790
+      "med": 3250
     },
     "metadata_only_scan": false,
     "metadata_warnings": 0,

@@ -4,6 +4,8 @@
 
 Detects `CROSS JOIN` and comma joins without a documented allow comment.
 
+`CROSS JOIN UNNEST(...)`, `CROSS JOIN TABLE(...)`, and similar table-function cross joins are **intentional Trino idioms** and are not flagged.
+
 ## Fix
 
 Add a join predicate, or document intentional use:

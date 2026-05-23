@@ -125,7 +125,7 @@ pub fn analyze_sql(
         (parsed_raw, ParseInput::Raw)
     };
     let dbt = extract_sql_features(text);
-    let regex_features = extract_features(text, line_index);
+    let regex_features = extract_features(text, line_index, parsed_raw);
     let (features, feature_extraction_used_ast) = if let Some(stmts) = &statements {
         let ast_features =
             features::extract_shape_features_ast(stmts, &sanitized, text, &strip_map, line_index);
@@ -706,7 +706,27 @@ pub fn strip_jinja(text: &str) -> String {
     strip::strip_jinja(text)
 }
 
-fn extract_features(text: &str, line_index: &costguard_diagnostics::LineIndex) -> SqlFeatures {
+pub(crate) fn from_clause_tables_start(lower: &str) -> Option<usize> {
+    let mut best: Option<(usize, usize)> = None;
+    for pattern in [" from ", "\nfrom ", "\r\nfrom ", "\tfrom "] {
+        if let Some(idx) = lower.find(pattern) {
+            let start = idx + pattern.len();
+            if best.is_none_or(|(best_idx, _)| idx < best_idx) {
+                best = Some((idx, start));
+            }
+        }
+    }
+    if best.is_none() && lower.starts_with("from ") {
+        return Some(5);
+    }
+    best.map(|(_, start)| start)
+}
+
+fn extract_features(
+    text: &str,
+    line_index: &costguard_diagnostics::LineIndex,
+    parsed_raw: bool,
+) -> SqlFeatures {
     let mut features = SqlFeatures::default();
     features.select_stars = matches_as_features(text, line_index, select_star_regex(), normalize);
     features.order_by_clauses =
@@ -720,7 +740,7 @@ fn extract_features(text: &str, line_index: &costguard_diagnostics::LineIndex) -
     features.normalization_calls =
         matches_as_features(text, line_index, normalization_regex(), normalize);
     features.window_functions = extract_windows(text, line_index);
-    features.joins = extract_joins(text, line_index);
+    features.joins = extract_joins(text, line_index, parsed_raw);
     features.ctes = extract_ctes(text, line_index);
     features.cte_references = extract_cte_references(text, line_index, &features.ctes);
     features.non_sargable_predicates =
@@ -784,9 +804,18 @@ fn extract_windows(
         .collect()
 }
 
-fn extract_joins(text: &str, line_index: &costguard_diagnostics::LineIndex) -> Vec<JoinFeature> {
+fn extract_joins(
+    text: &str,
+    line_index: &costguard_diagnostics::LineIndex,
+    parsed_raw: bool,
+) -> Vec<JoinFeature> {
+    let join_text = if parsed_raw {
+        text
+    } else {
+        &mask_string_literals(text)
+    };
     let mut joins = Vec::new();
-    for capture in join_regex().captures_iter(text) {
+    for capture in join_regex().captures_iter(join_text) {
         let Some(matched) = capture.get(0) else {
             continue;
         };
@@ -801,11 +830,17 @@ fn extract_joins(text: &str, line_index: &costguard_diagnostics::LineIndex) -> V
             Some("cross") => JoinKind::Cross,
             _ => JoinKind::Inner,
         };
+        if parsed_raw && kind == JoinKind::Cross {
+            continue;
+        }
         let after_start = matched.end();
-        let after_end = find_join_clause_end(&text[after_start..])
+        let after_end = find_join_clause_end(&join_text[after_start..])
             .map(|offset| after_start + offset)
-            .unwrap_or(text.len());
-        let after = &text[after_start..after_end];
+            .unwrap_or(join_text.len());
+        let after = &join_text[after_start..after_end];
+        if kind == JoinKind::Cross && is_exempt_cross_join_suffix(after) {
+            continue;
+        }
         let predicate = extract_on_predicate(after);
         let predicate_lower = predicate
             .as_deref()
@@ -820,19 +855,61 @@ fn extract_joins(text: &str, line_index: &costguard_diagnostics::LineIndex) -> V
         });
     }
 
-    joins.extend(
-        comma_join_regex()
-            .find_iter(text)
-            .filter(|matched| !matched.as_str().to_ascii_lowercase().contains("source("))
-            .map(|matched| JoinFeature {
-                span: line_index.span(matched.start(), matched.end()),
-                kind: JoinKind::Comma,
-                predicate: None,
-                has_equality: false,
-                function_on_join_key: false,
-            }),
-    );
+    joins.extend(extract_comma_joins(join_text, line_index));
     joins
+}
+
+fn is_exempt_cross_join_suffix(after: &str) -> bool {
+    let lower = after.trim_start().to_ascii_lowercase();
+    lower.starts_with("unnest(")
+        || lower.starts_with("unnest (")
+        || lower.starts_with("table(")
+        || lower.starts_with("table (")
+}
+
+fn mask_string_literals(text: &str) -> String {
+    let mut output = String::with_capacity(text.len());
+    let mut in_single = false;
+    let mut in_double = false;
+
+    for ch in text.chars() {
+        if !in_double && ch == '\'' {
+            in_single = !in_single;
+            output.push(' ');
+            continue;
+        }
+        if !in_single && ch == '"' {
+            in_double = !in_double;
+            output.push(' ');
+            continue;
+        }
+        if in_single || in_double {
+            output.push(' ');
+        } else {
+            output.push(ch);
+        }
+    }
+    output
+}
+
+fn extract_comma_joins(
+    text: &str,
+    line_index: &costguard_diagnostics::LineIndex,
+) -> Vec<JoinFeature> {
+    if is_leading_derived_comma_fp(text) {
+        return Vec::new();
+    }
+    comma_join_regex()
+        .find_iter(text)
+        .filter(|matched| !matched.as_str().to_ascii_lowercase().contains("source("))
+        .map(|matched| JoinFeature {
+            span: line_index.span(matched.start(), matched.end()),
+            kind: JoinKind::Comma,
+            predicate: None,
+            has_equality: false,
+            function_on_join_key: false,
+        })
+        .collect()
 }
 
 fn find_join_clause_end(text: &str) -> Option<usize> {
@@ -1000,6 +1077,30 @@ fn comma_join_regex() -> &'static Regex {
     cached_regex(&RE, r#"(?is)\bfrom\s+[^;\n]+,\s*[^;\n]+"#)
 }
 
+fn is_leading_derived_comma_fp(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    let Some(from_idx) = from_clause_tables_start(&lower) else {
+        return false;
+    };
+    let tail = lower.get(from_idx..).unwrap_or_default().trim_start();
+    if !tail.starts_with('(') {
+        return false;
+    }
+    let mut depth = 0usize;
+    for (byte_idx, ch) in tail.char_indices() {
+        if ch == '(' {
+            depth += 1;
+        } else if ch == ')' {
+            depth -= 1;
+            if depth == 0 {
+                let after = tail.get(byte_idx + 1..).unwrap_or_default().trim_start();
+                return after.starts_with(',');
+            }
+        }
+    }
+    false
+}
+
 fn on_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     cached_regex(&RE, r#"(?is)\bon\b\s*(?P<predicate>.*)"#)
@@ -1160,6 +1261,90 @@ mod tests {
     fn trino_parses_asof_left_join() {
         let sql = "SELECT hs.hour FROM hour_spine hs ASOF LEFT JOIN sparse_ohlcv s ON s.market_id = hs.market_id";
         assert!(try_parse_compiled_sql(sql, Platform::Trino));
+    }
+
+    #[test]
+    fn plain_comma_join_is_flagged() {
+        let text = "select a.id, b.id from stg_a a, stg_b b";
+        let index = LineIndex::new(text);
+        let doc = analyze_sql(
+            PathBuf::from("x.sql"),
+            text,
+            Platform::Generic,
+            &index,
+            None,
+            true,
+        );
+        assert!(
+            doc.features
+                .joins
+                .iter()
+                .any(|join| join.kind == JoinKind::Comma),
+            "expected comma join; parsed_raw={} joins={:?}",
+            doc.parsed_raw,
+            doc.features.joins
+        );
+    }
+
+    #[test]
+    fn dbt_comma_join_with_refs_is_flagged() {
+        let text = "select a.id, b.id\nfrom {{ ref('stg_a') }} a, {{ ref('stg_b') }} b\n";
+        let index = LineIndex::new(text);
+        let doc = analyze_sql(
+            PathBuf::from("x.sql"),
+            text,
+            Platform::Generic,
+            &index,
+            None,
+            true,
+        );
+        assert!(
+            doc.features
+                .joins
+                .iter()
+                .any(|join| join.kind == JoinKind::Comma),
+            "expected comma join; parsed_raw={} joins={:?}",
+            doc.parsed_raw,
+            doc.features.joins
+        );
+    }
+
+    #[test]
+    fn cross_join_unnest_is_not_flagged() {
+        let text = "SELECT t.x FROM arr CROSS JOIN UNNEST(arr) AS t(x)";
+        let index = LineIndex::new(text);
+        let doc = analyze_sql(
+            PathBuf::from("x.sql"),
+            text,
+            Platform::Trino,
+            &index,
+            None,
+            true,
+        );
+        assert!(!doc
+            .features
+            .joins
+            .iter()
+            .any(|join| matches!(join.kind, JoinKind::Cross | JoinKind::Comma)));
+    }
+
+    #[test]
+    fn string_literal_cross_join_is_not_flagged_when_sql_parses() {
+        let text = "select 'cross join in string' as note from t";
+        let index = LineIndex::new(text);
+        let doc = analyze_sql(
+            PathBuf::from("x.sql"),
+            text,
+            Platform::Generic,
+            &index,
+            None,
+            true,
+        );
+        assert!(!doc
+            .features
+            .joins
+            .iter()
+            .any(|join| matches!(join.kind, JoinKind::Cross | JoinKind::Comma)));
     }
 
     #[test]

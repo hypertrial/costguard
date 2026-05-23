@@ -22,6 +22,9 @@ python3 scripts/benchmark_external_repo.py --repo spellbook
 python3 scripts/audit_compiled_parse_failures.py \
   ~/.cache/costguard/benchmarks/spellbook/target/manifest.json
 
+# Bucket rule diagnostics for triage (requires cached Spellbook checkout + manifest)
+python3 scripts/bucket_rule_diagnostics.py --repo spellbook --rule SQLCOST012
+
 # Refresh baselines after intentional rule tuning
 python3 scripts/benchmark_external_repo.py --fixture real_world/jaffle_snippets --update-baseline
 python3 scripts/benchmark_external_repo.py --repo spellbook --update-baseline
@@ -73,6 +76,9 @@ When an external benchmark surfaces a finding worth keeping:
 | parse metrics | spellbook | improved (P0–P2) | five-subproject compile + Trino normalization + raw fallback: **12%** model parse failure rate (972/8108), `sql_parse_compiled_total` 8001 |
 | parse metrics | spellbook | improved (compiled parse) | Trino dialect + parse-only rewrites + Generic fallback: **`sql_parse_compiled_failures` 0/8001**, headline failures **80/8108** |
 | SQLCOST002 | jaffle-shop | true positive | repeated JSON extraction in staging |
+| SQLCOST012 | spellbook | fixed (2026-05) | **1868 → 815** after UNNEST/table-function cross-join exempt, literal masking, derived-subquery comma FP skip; bucket triage via `scripts/bucket_rule_diagnostics.py` |
+| SQLCOST012 | spellbook | true positive (remaining) | explicit `CROSS JOIN` between relations (~119 in pre-fix bucket sample) and legacy comma-join regex matches |
+| SQLCOST016–019 | spellbook | informational | first Spellbook baseline capture: 016=281, 017=819, 018=516, 019=374; no CI gate on exact counts |
 
 ## PR replay testing
 
