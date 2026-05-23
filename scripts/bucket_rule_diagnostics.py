@@ -97,7 +97,65 @@ def has_top_level_comma_after_from(masked: str) -> bool:
 
 
 def looks_like_subquery_comma_fp(masked: str) -> bool:
-    return bool(re.search(r"(?is)\bfrom\s*\(\s*select[^)]*,", masked))
+    trimmed = masked.strip()
+    if not trimmed.lower().startswith("("):
+        return False
+    lower = trimmed.lower()
+    select_idx = lower.find("select")
+    comma_idx = lower.find(",")
+    if select_idx == -1 or comma_idx == -1:
+        return False
+    return select_idx < comma_idx
+
+
+def has_comma_join_in_table_list(tail: str) -> bool:
+    depth = 0
+    i = 0
+    while i < len(tail):
+        ch = tail[i]
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth = max(depth - 1, 0)
+        elif ch == "," and depth == 0:
+            rest = tail[i + 1 :].lstrip()
+            if rest and (rest[0].isalpha() or rest[0] == "(" or rest[0] == "_"):
+                return True
+            return False
+        if depth == 0:
+            lower_tail = tail[i : i + 12].lower()
+            if lower_tail.startswith(
+                (" where ", " group by ", " order by ", " limit ", "\nwhere ")
+            ):
+                return False
+        i += 1
+    return False
+
+
+def from_clause_tables_tail(masked: str) -> str | None:
+    lower = masked.lower()
+    patterns = [" from ", "\nfrom ", "\r\nfrom ", "\tfrom "]
+    depth = 0
+    last_start: int | None = None
+    i = 0
+    while i < len(lower):
+        ch = lower[i]
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth = max(depth - 1, 0)
+        elif depth == 0:
+            if lower.startswith("from ", i):
+                last_start = i + 5
+            else:
+                for pattern in patterns:
+                    if lower.startswith(pattern, i):
+                        last_start = i + len(pattern)
+                        break
+        i += 1
+    if last_start is None:
+        return None
+    return masked[last_start:]
 
 
 def classify_sqlcost012(sql: str) -> str:
@@ -110,13 +168,14 @@ def classify_sqlcost012(sql: str) -> str:
     if CROSS_JOIN_UNNEST_RE.search(lower):
         return "cross_join_unnest"
 
-    if looks_like_subquery_comma_fp(masked):
+    from_tail = from_clause_tables_tail(masked)
+    if from_tail and looks_like_subquery_comma_fp(from_tail):
         return "subquery_comma_fp"
 
     if CROSS_JOIN_RE.search(lower):
         return "cross_join_explicit"
 
-    if has_top_level_comma_after_from(masked):
+    if from_tail and has_comma_join_in_table_list(from_tail):
         return "comma_join"
 
     return "other"

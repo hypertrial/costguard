@@ -85,12 +85,7 @@ impl Rule for IncrementalPredicateRule {
         if materialized != Some("incremental") || !sql.dbt.uses_is_incremental {
             return Vec::new();
         }
-        let predicate_scope = sql
-            .dbt
-            .incremental_block
-            .as_deref()
-            .unwrap_or(&ctx.file.text);
-        if has_bounded_incremental_predicate(predicate_scope) {
+        if has_bounded_incremental_predicate(&ctx.file.text) {
             return Vec::new();
         }
         vec![diagnostic(

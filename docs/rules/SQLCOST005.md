@@ -13,6 +13,7 @@ Inside the incremental block:
 - time bucketing such as `date_trunc(`, `minute`, `hour`
 - key-bounded anti-join patterns such as `where id not in (select id from {{ this }})`
 - max-key lookups such as `> (select max(updated_at) from {{ this }})`
+- dbt `incremental_predicate(...)` macro calls and `incremental_predicates` config entries (Spellbook merge pruning)
 
 ## Fix
 

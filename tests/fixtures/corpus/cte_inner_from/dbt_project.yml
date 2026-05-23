@@ -1,0 +1,5 @@
+name: cte_inner_from
+version: 1.0.0
+config-version: 2
+
+model-paths: ["models"]

@@ -736,19 +736,31 @@ pub fn strip_jinja(text: &str) -> String {
 }
 
 pub(crate) fn from_clause_tables_start(lower: &str) -> Option<usize> {
-    let mut best: Option<(usize, usize)> = None;
-    for pattern in [" from ", "\nfrom ", "\r\nfrom ", "\tfrom "] {
-        if let Some(idx) = lower.find(pattern) {
-            let start = idx + pattern.len();
-            if best.is_none_or(|(best_idx, _)| idx < best_idx) {
-                best = Some((idx, start));
+    let patterns = [" from ", "\nfrom ", "\r\nfrom ", "\tfrom "];
+    let mut depth = 0usize;
+    let mut last_at_depth_zero: Option<usize> = None;
+    let mut i = 0usize;
+    while i < lower.len() {
+        let ch = lower[i..].chars().next().unwrap();
+        if ch == '(' {
+            depth += 1;
+        } else if ch == ')' {
+            depth = depth.saturating_sub(1);
+        } else if depth == 0 {
+            if lower[i..].starts_with("from ") {
+                last_at_depth_zero = Some(i + 5);
+            } else {
+                for pattern in patterns {
+                    if lower[i..].starts_with(pattern) {
+                        last_at_depth_zero = Some(i + pattern.len());
+                        break;
+                    }
+                }
             }
         }
+        i += ch.len_utf8();
     }
-    if best.is_none() && lower.starts_with("from ") {
-        return Some(5);
-    }
-    best.map(|(_, start)| start)
+    last_at_depth_zero
 }
 
 fn extract_features(
@@ -999,8 +1011,12 @@ fn looks_like_subquery_comma_fp(text: &str) -> bool {
     if !trimmed.starts_with('(') {
         return false;
     }
-    let select_idx = trimmed.find("select").unwrap_or(usize::MAX);
-    let comma_idx = trimmed.find(',').unwrap_or(usize::MAX);
+    let Some(select_idx) = trimmed.find("select") else {
+        return false;
+    };
+    let Some(comma_idx) = trimmed.find(',') else {
+        return false;
+    };
     select_idx < comma_idx
 }
 
@@ -1407,6 +1423,33 @@ mod tests {
         assert!(!doc.parsed_raw);
         assert!(doc.feature_extraction_used_ast);
         assert!(doc.features.non_sargable_predicates.is_empty());
+    }
+
+    #[test]
+    fn cte_inner_from_is_not_comma_join() {
+        let text = r#"
+with model_count as (
+    select count(*) as count_a from {{ model }}
+)
+select * from unit_test where diff_count > 0
+"#;
+        let index = LineIndex::new(text);
+        let doc = analyze_sql(
+            PathBuf::from("macros/equal_rowcount.sql"),
+            text,
+            Platform::Generic,
+            &index,
+            None,
+            true,
+        );
+        assert!(
+            !doc.features
+                .joins
+                .iter()
+                .any(|join| join.kind == JoinKind::Comma),
+            "expected no comma join; joins={:?}",
+            doc.features.joins
+        );
     }
 
     #[test]

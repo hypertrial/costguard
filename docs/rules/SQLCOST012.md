@@ -6,6 +6,8 @@ Detects `CROSS JOIN` and comma joins without a documented allow comment.
 
 `CROSS JOIN UNNEST(...)`, `CROSS JOIN TABLE(...)`, and similar table-function cross joins are **intentional Trino idioms** and are not flagged.
 
+Comma-join detection uses the **outermost query `FROM`** (paren depth 0), so inner CTE `FROM` clauses are not treated as cross joins.
+
 ## Fix
 
 Add a join predicate, or document intentional use:

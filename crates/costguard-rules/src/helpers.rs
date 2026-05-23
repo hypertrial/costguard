@@ -65,6 +65,7 @@ pub(crate) fn has_bounded_incremental_predicate(text: &str) -> bool {
         "evt_block_number",
         "evt_block_date",
         "block_day",
+        "dbt_internal_dest",
     ]
     .iter()
     .any(|needle| lower.contains(needle))
@@ -85,6 +86,7 @@ pub(crate) fn has_bounded_incremental_predicate(text: &str) -> bool {
         "> (select max(",
         "except select",
         "where id not in",
+        "incremental_predicate(",
     ]
     .iter()
     .any(|needle| lower.contains(needle))

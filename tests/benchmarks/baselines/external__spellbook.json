@@ -14,20 +14,20 @@
       "SQLCOST002": 402,
       "SQLCOST003": 20,
       "SQLCOST004": 1,
-      "SQLCOST005": 247,
+      "SQLCOST005": 1,
       "SQLCOST006": 757,
       "SQLCOST008": 979,
-      "SQLCOST012": 804,
+      "SQLCOST012": 88,
       "SQLCOST013": 168,
       "SQLCOST014": 1338,
       "SQLCOST015": 858,
       "SQLCOST016": 15,
       "SQLCOST017": 1003,
       "SQLCOST018": 544,
-      "SQLCOST019": 63
+      "SQLCOST019": 66
     },
     "diagnostics_by_severity": {
-      "high": 2133,
+      "high": 1174,
       "low": 1338,
       "med": 3728
     },
@@ -47,11 +47,11 @@
     "max_parse_failure_rate": 0.02,
     "max_sql_parse_compiled_failures": 0,
     "max_diagnostics_by_rule": {
-      "SQLCOST012": 804,
+      "SQLCOST012": 88,
       "SQLCOST017": 1003,
-      "SQLCOST019": 63,
+      "SQLCOST019": 66,
       "SQLCOST016": 15,
-      "SQLCOST005": 247
+      "SQLCOST005": 1
     }
   },
   "version": 1,

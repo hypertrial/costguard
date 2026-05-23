@@ -13,10 +13,12 @@ on:
           - jaffle-shop
           - spellbook
           - all
+  push:
+    branches: [main]
 
 jobs:
   vendored:
-    if: ${{ inputs.target == 'vendored' || inputs.target == 'all' }}
+    if: ${{ github.event_name == 'push' || inputs.target == 'vendored' || inputs.target == 'all' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -35,7 +37,7 @@ jobs:
       - run: python3 scripts/benchmark_external_repo.py --all-vendored
 
   jaffle-shop:
-    if: ${{ inputs.target == 'jaffle-shop' || inputs.target == 'all' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.target == 'jaffle-shop' || inputs.target == 'all') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -62,7 +64,7 @@ jobs:
           path: tests/benchmarks/reports/external__jaffle-shop.json
 
   spellbook:
-    if: ${{ inputs.target == 'spellbook' || inputs.target == 'all' }}
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.target == 'spellbook' || inputs.target == 'all')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:

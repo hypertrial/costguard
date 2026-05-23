@@ -351,6 +351,11 @@ def run_external(
 
     baseline_file = baseline_path(target)
     if update_baseline or not baseline_file.exists():
+        existing_thresholds = {}
+        if baseline_file.exists():
+            existing_thresholds = json.loads(baseline_file.read_text(encoding="utf-8")).get(
+                "thresholds", {}
+            )
         baseline = {
             "version": 1,
             "target": target,
@@ -359,7 +364,13 @@ def run_external(
             "commit": repo["commit"],
             "metrics": report["metrics"],
             "thresholds": {
-                "max_parse_failure_delta": 50,
+                "max_parse_failure_delta": existing_thresholds.get("max_parse_failure_delta", 50),
+                "max_sql_parse_compiled_failures": existing_thresholds.get(
+                    "max_sql_parse_compiled_failures", 0
+                ),
+                "max_diagnostics_by_rule": existing_thresholds.get(
+                    "max_diagnostics_by_rule", {}
+                ),
             },
         }
         parse_total = report["metrics"].get("sql_parse_total", 0)
@@ -368,6 +379,17 @@ def run_external(
             configured_rate = repo.get("max_parse_failure_rate")
             if configured_rate is not None:
                 baseline["thresholds"]["max_parse_failure_rate"] = max(configured_rate, rate)
+            elif "max_parse_failure_rate" in existing_thresholds:
+                baseline["thresholds"]["max_parse_failure_rate"] = existing_thresholds[
+                    "max_parse_failure_rate"
+                ]
+        max_rules = baseline["thresholds"].get("max_diagnostics_by_rule", {})
+        if max_rules:
+            for rule, _ in list(max_rules.items()):
+                actual = report["metrics"].get("diagnostics_by_rule", {}).get(rule)
+                if actual is not None:
+                    max_rules[rule] = actual
+            baseline["thresholds"]["max_diagnostics_by_rule"] = max_rules
         write_json(baseline_file, baseline)
         print(f"updated baseline: {baseline_file}")
         return 0

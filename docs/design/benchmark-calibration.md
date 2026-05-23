@@ -34,7 +34,7 @@ python3 scripts/benchmark_external_repo.py --fixture real_world/jaffle_snippets 
 python3 scripts/benchmark_external_repo.py --repo spellbook --update-baseline
 ```
 
-GitHub Actions: run the **benchmark** workflow manually (`workflow_dispatch`) with target `vendored`, `jaffle-shop`, `spellbook`, or `all`.
+GitHub Actions: run the **benchmark** workflow manually (`workflow_dispatch`) with target `vendored`, `jaffle-shop`, `spellbook`, or `all`. The **Spellbook** job also runs automatically on every push to `main` (vendored runs on push too).
 
 ## Baseline files
 
@@ -91,11 +91,13 @@ When an external benchmark surfaces a finding worth keeping:
 | parse metrics | spellbook | improved (P0–P2) | five-subproject compile + Trino normalization + raw fallback: **12%** model parse failure rate (972/8108), `sql_parse_compiled_total` 8001 |
 | parse metrics | spellbook | improved (compiled parse) | Trino dialect + parse-only rewrites + Generic fallback: **`sql_parse_compiled_failures` 0/8001**, headline failures **107/8108** |
 | SQLCOST002 | jaffle-shop | true positive | repeated JSON extraction in staging |
-| SQLCOST012 | spellbook | fixed (2026-05) | **1868 → 804** after UNNEST/table-function exempt, literal masking, derived-subquery comma FP skip, depth-aware comma detection |
+| SQLCOST012 | spellbook | fixed (2026-05 pass 2) | **804 → 88** after depth-0 FROM targeting (ignore inner CTE FROM comma FPs) |
+| SQLCOST005 | spellbook | fixed (2026-05 pass 2) | **247 → 1** after full-file `incremental_predicate` / config macro recognition |
 | SQLCOST016 | spellbook | fixed (2026-05) | **281 → 15** after staging exempt, date_trunc whitelist, compiled AST extraction; registry + corpus `partition_date_trunc_bound` |
 | SQLCOST017 | spellbook | mixed (2026-05) | symmetric lower/trim exempt + staging exempt; compiled AST increases AST-confirmed hits **819 → 1003** (more accurate, use `--min-confidence high` for PR gates) |
-| SQLCOST019 | spellbook | fixed (2026-05) | **374 → 63** after whole-scope partition predicate check + CTE/JOIN ON corpus fixtures |
-| SQLCOST016–019 | spellbook | gated | Spellbook baseline uses `max_diagnostics_by_rule` ceilings (counts may shrink, not grow) |
+| SQLCOST019 | spellbook | fixed (2026-05) | **374 → 66** after whole-scope partition predicate check + CTE/JOIN ON corpus fixtures |
+| parse metrics | spellbook | high severity | **2133 → 1174** after pass 2 (below ≤1800 target) |
+| SQLCOST016–019 | spellbook | gated | Spellbook baseline uses `max_diagnostics_by_rule` ceilings (counts may shrink, not grow); Spellbook job runs on `push` to `main` |
 
 ## PR replay testing
 

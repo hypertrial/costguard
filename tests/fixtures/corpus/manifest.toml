@@ -177,3 +177,15 @@ name = "compiled_ast_fallback"
 path = "compiled_ast_fallback"
 expect_rules = []
 forbid_rules = ["SQLCOST016"]
+
+[[case]]
+name = "incremental_config_predicates"
+path = "incremental_config_predicates"
+expect_rules = []
+forbid_rules = ["SQLCOST005"]
+
+[[case]]
+name = "cte_inner_from"
+path = "cte_inner_from"
+expect_rules = []
+forbid_rules = ["SQLCOST012"]

@@ -246,6 +246,22 @@ fn append_incremental_without_unique_key_does_not_fire_sqlcost004() {
 }
 
 #[test]
+fn incremental_config_predicates_do_not_fire_sqlcost005() {
+    let file = sql_file(
+        "models/marts/bridges.sql",
+        "{{ config(materialized='incremental', unique_key=['transfer_id'], incremental_predicates=[incremental_predicate('DBT_INTERNAL_DEST.evt_block_time')]) }}
+with source_data as (select evt_block_time from {{ source('dex', 'trades') }})
+select * from source_data
+{% if is_incremental() %}
+where {{ incremental_predicate('p.minute') }}
+{% endif %}",
+    );
+    let doc = analyze(&file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(!ids.contains(&"SQLCOST005".to_string()));
+}
+
+#[test]
 fn block_time_incremental_predicate_does_not_fire_sqlcost005() {
     let file = sql_file(
         "models/marts/dex_trades.sql",

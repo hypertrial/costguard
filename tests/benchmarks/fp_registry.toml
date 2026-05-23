@@ -149,9 +149,25 @@ notes = "compiled SQL AST extraction avoids regex false positives on jinja-heavy
 rule = "SQLCOST005"
 repo = "spellbook"
 bucket = "missing_predicate"
+verdict = "fp"
+corpus_case = "incremental_config_predicates"
+notes = "dbt incremental_predicates config and incremental_predicate macro satisfy merge pruning"
+
+[[finding]]
+rule = "SQLCOST005"
+repo = "spellbook"
+bucket = "missing_predicate"
 verdict = "tp"
 corpus_case = "incremental_missing"
 notes = "incremental without pruning predicate is a true positive"
+
+[[finding]]
+rule = "SQLCOST012"
+repo = "spellbook"
+bucket = "comma_join"
+verdict = "fp"
+corpus_case = "cte_inner_from"
+notes = "inner CTE FROM clauses must not be treated as outer comma joins"
 
 [[finding]]
 rule = "SQLCOST017"
