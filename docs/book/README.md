@@ -23,7 +23,7 @@ cargo install --path crates/costguard-cli
 ## Quick start
 
 ```bash
-costguard pr --base origin/main --warehouse snowflake --fail-on high
+costguard pr --base origin/main --warehouse snowflake --fail-on high --min-confidence high
 ```
 
 The CLI default for `--base` is `main`. In CI, prefer `origin/main` after `actions/checkout` with `fetch-depth: 0`.

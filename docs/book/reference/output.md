@@ -46,8 +46,8 @@ Suppress only intentional exceptions with `-- costguard: disable-next-line=RULE`
 
 | Code | Meaning |
 | --- | --- |
-| `0` | No diagnostics at or above `--fail-on` / `fail_on` |
-| `1` | One or more diagnostics at or above threshold |
+| `0` | No diagnostics at or above `--fail-on` / `fail_on` (and `--min-confidence` / `min_confidence` when set) |
+| `1` | One or more diagnostics at or above severity threshold with confidence at or above the optional floor |
 | `2` | Configuration error (invalid config, missing manifest path) |
 | `3` | Runtime error |
 

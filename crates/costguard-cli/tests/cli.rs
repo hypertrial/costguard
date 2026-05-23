@@ -292,3 +292,41 @@ fn pr_mode_fails_for_invalid_base_ref() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("does-not-exist"), "{stderr}");
 }
+
+#[test]
+fn scan_min_confidence_suppresses_low_confidence_high_severity() {
+    let path = fixture("min_confidence_low_comma.sql");
+    let without_floor = Command::new(bin())
+        .arg("scan")
+        .arg(&path)
+        .arg("--warehouse")
+        .arg("generic")
+        .arg("--fail-on")
+        .arg("high")
+        .output()
+        .expect("run costguard");
+    assert_eq!(
+        without_floor.status.code(),
+        Some(1),
+        "expected fail without min-confidence:\n{}",
+        String::from_utf8_lossy(&without_floor.stdout)
+    );
+
+    let with_floor = Command::new(bin())
+        .arg("scan")
+        .arg(&path)
+        .arg("--warehouse")
+        .arg("generic")
+        .arg("--fail-on")
+        .arg("high")
+        .arg("--min-confidence")
+        .arg("high")
+        .output()
+        .expect("run costguard");
+    assert_eq!(
+        with_floor.status.code(),
+        Some(0),
+        "expected pass with min-confidence high:\n{}",
+        String::from_utf8_lossy(&with_floor.stdout)
+    );
+}

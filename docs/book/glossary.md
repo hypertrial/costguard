@@ -17,6 +17,7 @@ Canonical terminology for Costguard documentation. Prefer these definitions in R
 | **`warehouse`** | Preferred config/CLI key for SQL dialect selection (`Platform` enum) |
 | **`dialect`** | Config/CLI alias for `warehouse`; ignored when `warehouse` is set |
 | **`fail-on`** | Minimum diagnostic severity that causes exit code `1` |
+| **`min-confidence`** | Optional confidence floor paired with `fail-on`; finding must meet both thresholds to fail |
 | **Severity order** | `info` < `low` < `medium` < `high` < `critical` (aliases: `med`, `crit`) |
 
 ## Parse metrics

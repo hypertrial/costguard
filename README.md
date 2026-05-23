@@ -8,7 +8,7 @@ Runs locally as a fast Rust CLI. No warehouse credentials required.
 
 ```bash
 cargo install --path crates/costguard-cli
-costguard pr --base origin/main --warehouse snowflake --fail-on high
+costguard pr --base origin/main --warehouse snowflake --fail-on high --min-confidence high
 ```
 
 ## Documentation
@@ -42,8 +42,11 @@ mdbook serve
     base: origin/main
     warehouse: snowflake
     fail-on: high
+    min-confidence: high
     format: github
 ```
+
+Recommended for macro-heavy dbt repos: pair `--fail-on high` with `--min-confidence high` to suppress regex-only findings while keeping AST-confirmed high-risk hits.
 
 See [Quick start (PR check)](docs/book/getting-started/quick-start.md) for inputs and dbt compile behavior.
 
@@ -84,7 +87,7 @@ Full schema: [Configuration](docs/book/reference/configuration.md).
 | Code | Meaning |
 | --- | --- |
 | `0` | Pass |
-| `1` | Findings at or above `--fail-on` |
+| `1` | Findings at or above `--fail-on` with confidence at or above `--min-confidence` when set |
 | `2` | Config error |
 | `3` | Runtime error |
 

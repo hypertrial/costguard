@@ -38,7 +38,7 @@ Use-case priority:
 The MVP should optimize this command:
 
 ```bash
-costguard pr --base origin/main --warehouse snowflake --fail-on high
+costguard pr --base origin/main --warehouse snowflake --fail-on high --min-confidence high
 ```
 
 > **Note:** CLI default for `--base` is `main`. CI examples use `origin/main` after checkout with `fetch-depth: 0`.
@@ -46,9 +46,9 @@ costguard pr --base origin/main --warehouse snowflake --fail-on high
 CI-oriented output formats:
 
 ```bash
-costguard pr --base origin/main --warehouse snowflake --fail-on high --format github
-costguard pr --base origin/main --warehouse snowflake --fail-on high --format markdown
-costguard pr --base origin/main --warehouse snowflake --fail-on high --format json
+costguard pr --base origin/main --warehouse snowflake --fail-on high --min-confidence high --format github
+costguard pr --base origin/main --warehouse snowflake --fail-on high --min-confidence high --format markdown
+costguard pr --base origin/main --warehouse snowflake --fail-on high --min-confidence high --format json
 ```
 
 `github` emits annotation commands. `markdown` emits a PR-summary-oriented report.
@@ -86,11 +86,14 @@ Fix these issues or suppress with:
 -- costguard: disable-next-line=SQLCOST005
 ```
 
-MVP pass/fail should be based on risk severity:
+MVP pass/fail should be based on risk severity **and** diagnostic confidence on macro-heavy repos:
 
 ```bash
 --fail-on high
+--min-confidence high
 ```
+
+Use both flags together in PR checks. `--fail-on high` alone still fails on regex-only shape findings (low confidence) when raw SQL does not parse; `--min-confidence high` keeps AST-confirmed high-risk hits and suppresses that noise.
 
 Do not make dollar thresholds the MVP. True cost estimation needs warehouse metadata,
 table sizes, query history, pricing models, partitioning/clustering stats, cache behavior,

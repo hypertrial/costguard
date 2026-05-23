@@ -15,4 +15,5 @@ jobs:
           base: origin/${{ github.base_ref }}
           warehouse: generic
           fail-on: high
+          min-confidence: high
           format: github
