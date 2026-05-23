@@ -67,6 +67,8 @@ cargo test -p costguard-core --test corpus
 
 Layer definitions: [Benchmark tiers](docs/book/contributing/benchmark-tiers.md).
 
+While GitHub Actions CI is unavailable, run the full local gate with `./scripts/ci_local.sh`.
+
 ## Configuration sketch
 
 ```toml

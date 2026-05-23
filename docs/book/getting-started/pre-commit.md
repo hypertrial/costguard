@@ -1,22 +1,46 @@
-# Pre-commit (planned)
+# Pre-commit hook
 
-Costguard is designed to support optional pre-commit hooks for fast local feedback before push. This is a **secondary workflow** relative to the GitHub PR check.
+Costguard ships an optional [pre-commit](https://pre-commit.com/) hook for fast local feedback before push. This is a **secondary workflow** relative to the GitHub PR check.
 
-## Current status
+## Install (consumer repos)
 
-A packaged pre-commit hook is **not shipped yet**. There is no `.pre-commit-config.yaml` in this repository.
+Add to `.pre-commit-config.yaml`:
 
-## Recommended approach today
-
-1. Run `costguard pr --base origin/main` locally before opening a PR, or
-2. Rely on the [GitHub Action](quick-start.md) as the primary gate.
-
-## Future hook sketch
-
-When implemented, a typical hook would run changed SQL/dbt files only:
-
-```bash
-costguard pr --base HEAD~1 --warehouse snowflake --fail-on high
+```yaml
+repos:
+  - repo: https://github.com/hypertrial/costguard
+    rev: v0.1.0
+    hooks:
+      - id: costguard-pr
 ```
 
-Track progress in the [PR check workflow design doc](../design/pr-check-primary-workflow.md) use-case priority table (pre-commit is priority 3).
+Then:
+
+```bash
+pip install pre-commit
+pre-commit install
+pre-commit install --hook-type pre-push
+```
+
+Install `costguard` on your PATH (for example `cargo install --path crates/costguard-cli`) or build the release binary locally.
+
+## Environment overrides
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `COSTGUARD_BASE` | `HEAD~1` | Git base ref for changed-file detection |
+| `COSTGUARD_WAREHOUSE` | `snowflake` | Warehouse platform |
+| `COSTGUARD_FAIL_ON` | `high` | Minimum failing severity |
+| `COSTGUARD_MIN_CONFIDENCE` | `high` | Confidence floor for fail logic |
+
+## Dogfooding in this repo
+
+This repository includes [`.pre-commit-config.yaml`](../../.pre-commit-config.yaml) pointing at the local hook script for development.
+
+While GitHub Actions CI is unavailable, run the full local gate with:
+
+```bash
+./scripts/ci_local.sh
+```
+
+Track workflow priority in the [PR check workflow design doc](../design/pr-check-primary-workflow.md) (pre-commit is priority 3).

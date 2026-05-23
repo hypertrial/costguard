@@ -6,7 +6,7 @@
 
 - [Quick start (PR check)](getting-started/quick-start.md)
 - [Local scan and explain](getting-started/local-scan.md)
-- [Pre-commit (planned)](getting-started/pre-commit.md)
+- [Pre-commit hook](getting-started/pre-commit.md)
 
 # Reference
 

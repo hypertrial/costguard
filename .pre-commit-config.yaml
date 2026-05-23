@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: costguard-pr
+        name: costguard pr
+        entry: scripts/pre_commit_costguard.sh
+        language: script
+        pass_filenames: false
+        stages: [pre-commit, pre-push]

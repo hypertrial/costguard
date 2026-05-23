@@ -1,0 +1,7 @@
+- id: costguard-pr
+  name: costguard pr (changed SQL/dbt)
+  description: Run costguard PR check on changed files
+  entry: scripts/pre_commit_costguard.sh
+  language: script
+  pass_filenames: false
+  stages: [pre-commit, pre-push]

@@ -54,14 +54,51 @@ Builds a host-platform release tarball using the same layout as [`.github/workfl
 python3 scripts/verify_release_assets.py
 ```
 
-### Cutting `v0.1.0` (operator checklist)
+## `publish_release_local.py`
 
-1. Merge the release-readiness PR to `main`.
-2. Ensure GitHub Actions billing allows workflow runs.
-3. Tag and push: `git tag v0.1.0 && git push origin v0.1.0`.
-4. Confirm the **release** workflow uploads four `costguard-*.tar.gz` assets and matching `.sha256` files.
-5. Smoke-test consumer install with `uses: hypertrial/costguard/.github/actions/costguard@v0.1.0` and default `install-mode: release` on `ubuntu-latest`.
-6. Rollback: delete the GitHub release and tag if assets are bad; docs stay pinned until you re-tag.
+Strict local release publisher for when GitHub Actions credits are unavailable. Builds **all four** release targets, packages tarballs + `.sha256` sidecars, smoke-tests assets runnable on the build host (other targets verify archive layout only), and optionally uploads with `gh release upload`.
+
+```bash
+./scripts/publish_release_local.sh --package-only --workdir dist/release
+./scripts/publish_release_local.sh --publish --version v0.1.0 --workdir dist/release
+```
+
+| Flag | Description |
+| --- | --- |
+| `--package-only` | Build and verify assets only |
+| `--publish` | Upload assets with `gh` after all four targets pass |
+| `--version` | Release tag (default `v0.1.0`) |
+| `--workdir` | Output directory (default `dist/release`) |
+| `--notes-file` | Optional release notes for `gh release create` |
+
+### Cross-compile toolchain matrix (strict all-target builds)
+
+| Target | Typical build host | Setup |
+| --- | --- | --- |
+| `aarch64-apple-darwin` | Apple Silicon Mac | Native |
+| `x86_64-apple-darwin` | macOS | `rustup target add x86_64-apple-darwin` |
+| `x86_64-unknown-linux-gnu` | macOS/Linux | `rustup target add x86_64-unknown-linux-gnu`, install [Zig](https://ziglang.org/download/), and `cargo install cargo-zigbuild` |
+| `x86_64-pc-windows-msvc` | macOS/Linux | `rustup target add x86_64-pc-windows-msvc`, `cargo install cargo-xwin`, and `cargo xwin cache xwin` |
+
+### No Actions credits (operator checklist)
+
+1. Install the cross toolchains from the matrix above.
+2. Package locally: `./scripts/publish_release_local.sh --package-only --workdir dist/release`
+3. Spot-check host packaging: `python3 scripts/verify_release_assets.py`
+4. Publish: `./scripts/publish_release_local.sh --publish --version v0.1.0 --workdir dist/release`
+5. Verify: `gh release view v0.1.0`
+6. Smoke-test consumer install with `uses: hypertrial/costguard/.github/actions/costguard@v0.1.0` and default `install-mode: release`.
+
+When Actions billing is restored, tag pushes can still use [`.github/workflows/release.yml`](../../.github/workflows/release.yml).
+
+## `ci_local.sh`
+
+Local mirror of [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) for development when GitHub Actions is unavailable:
+
+```bash
+./scripts/ci_local.sh
+./scripts/ci_local.sh --spellbook-smoke
+```
 
 Unit tests:
 
