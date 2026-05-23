@@ -101,7 +101,7 @@ Builds and runs the `audit-compiled-parse` binary from `costguard-sql`.
 Not installed by `cargo install --path crates/costguard-cli`. Build explicitly:
 
 ```bash
-cargo build -p costguard-sql --bin audit-compiled-parse
+cargo build -p costguard-sql --bin audit-compiled-parse --features audit-bin
 ./target/debug/audit-compiled-parse [--bucket] [--model NAME] [--json] MANIFEST.json
 ```
 

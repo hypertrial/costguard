@@ -57,6 +57,7 @@
 
 - [Benchmark tiers](contributing/benchmark-tiers.md)
 - [Corpus and vendored fixtures](contributing/corpus-fixtures.md)
+- [Dependencies](contributing/dependencies.md)
 
 # Glossary
 

@@ -1,16 +1,28 @@
 use anyhow::{Context, Result};
 use std::collections::BTreeSet;
+use std::error::Error;
+use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
-use thiserror::Error;
 
-#[derive(Debug, Error)]
-#[error("git {command} failed with status {status}: {stderr}")]
+#[derive(Debug)]
 pub struct GitCommandError {
     pub command: String,
     pub status: i32,
     pub stderr: String,
 }
+
+impl fmt::Display for GitCommandError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "git {} failed with status {}: {}",
+            self.command, self.status, self.stderr
+        )
+    }
+}
+
+impl Error for GitCommandError {}
 
 impl GitCommandError {
     fn from_output(command: &str, status: ExitStatus, stderr: &[u8]) -> Self {

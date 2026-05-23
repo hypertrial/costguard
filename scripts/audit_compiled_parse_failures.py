@@ -16,7 +16,7 @@ def audit_binary() -> Path:
     target_dir = Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target"))
     binary = target_dir / "debug" / "audit-compiled-parse"
     build = subprocess.run(
-        ["cargo", "build", "-q", "-p", "costguard-sql", "--bin", "audit-compiled-parse"],
+        ["cargo", "build", "-q", "-p", "costguard-sql", "--bin", "audit-compiled-parse", "--features", "audit-bin"],
         cwd=ROOT,
         check=False,
     )

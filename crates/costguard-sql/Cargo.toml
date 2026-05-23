@@ -11,9 +11,13 @@ costguard-diagnostics = { path = "../costguard-diagnostics" }
 costguard-platform = { path = "../costguard-platform" }
 regex.workspace = true
 serde.workspace = true
-serde_json.workspace = true
+serde_json = { workspace = true, optional = true }
 sqlparser.workspace = true
+
+[features]
+audit-bin = ["serde_json"]
 
 [[bin]]
 name = "audit-compiled-parse"
 path = "src/bin/audit_compiled_parse.rs"
+required-features = ["audit-bin"]
