@@ -9,10 +9,14 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from dbt_compile_for_costguard import (  # noqa: E402
+    manifest_cache_path,
     merge_manifests,
+    packages_fingerprint,
     parse_compile_dirs,
     profile_type_from_adapter,
     read_dbt_profile_name,
+    restore_manifest_cache,
+    store_manifest_cache,
     write_dummy_profiles,
 )
 
@@ -92,6 +96,44 @@ class DbtCompileHelpersTest(unittest.TestCase):
         self.assertEqual(
             merged["nodes"]["model.beta.two"]["original_file_path"],
             "beta/models/two.sql",
+        )
+
+    def test_packages_fingerprint_stable(self) -> None:
+        tmp = self._temp_dir()
+        project = tmp / "dbt_subprojects" / "tokens"
+        project.mkdir(parents=True)
+        packages = project / "packages.yml"
+        packages.write_text("packages:\n  - package: dbt-labs/dbt_utils\n", encoding="utf-8")
+        first = packages_fingerprint(tmp, ["dbt_subprojects/tokens"], "dbt-trino")
+        second = packages_fingerprint(tmp, ["dbt_subprojects/tokens"], "dbt-trino")
+        self.assertEqual(first, second)
+        self.assertNotEqual(
+            packages_fingerprint(tmp, ["dbt_subprojects/tokens"], "dbt-trino", cache_scope="smoke"),
+            packages_fingerprint(tmp, ["dbt_subprojects/tokens"], "dbt-trino", cache_scope="full"),
+        )
+
+    def test_manifest_cache_roundtrip(self) -> None:
+        tmp = self._temp_dir()
+        cache_dir = tmp / "cache"
+        manifest_out = tmp / "checkout" / "target" / "manifest.json"
+        manifest_out.parent.mkdir(parents=True)
+        manifest_out.write_text('{"nodes": {}, "sources": {}, "exposures": {}}', encoding="utf-8")
+        store_manifest_cache(
+            cache_dir,
+            "spellbook",
+            "abc123",
+            "deadbeef",
+            manifest_out,
+            compile_dirs=["dbt_subprojects/tokens"],
+            adapter_package="dbt-trino",
+        )
+        restored = tmp / "checkout" / "target" / "manifest-restored.json"
+        self.assertTrue(
+            restore_manifest_cache(cache_dir, "spellbook", "abc123", "deadbeef", restored)
+        )
+        self.assertEqual(restored.read_text(encoding="utf-8"), manifest_out.read_text(encoding="utf-8"))
+        self.assertTrue(
+            (manifest_cache_path(cache_dir, "spellbook", "abc123", "deadbeef") / "meta.json").exists()
         )
 
     def _temp_dir(self) -> Path:

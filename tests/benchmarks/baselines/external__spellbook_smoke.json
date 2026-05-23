@@ -1,0 +1,54 @@
+{
+  "commit": "60f3b3fded8bae7d55780e7f8e6b15b1249d16a6",
+  "kind": "external",
+  "metrics": {
+    "counts": {
+      "manifest": 0,
+      "other": 0,
+      "python": 1,
+      "sql": 1076,
+      "yaml": 279
+    },
+    "dbt_project_parse_failures": 0,
+    "diagnostics_by_rule": {
+      "SQLCOST002": 27,
+      "SQLCOST003": 3,
+      "SQLCOST006": 29,
+      "SQLCOST008": 29,
+      "SQLCOST012": 5,
+      "SQLCOST013": 3,
+      "SQLCOST014": 61,
+      "SQLCOST015": 238,
+      "SQLCOST017": 8,
+      "SQLCOST018": 162,
+      "SQLCOST019": 7
+    },
+    "diagnostics_by_severity": {
+      "high": 20,
+      "low": 61,
+      "med": 491
+    },
+    "metadata_only_scan": false,
+    "metadata_warnings": 0,
+    "sql_parse_compiled_failures": 0,
+    "sql_parse_compiled_total": 1008,
+    "sql_parse_failures": 0,
+    "sql_parse_other_failures": 59,
+    "sql_parse_other_total": 68,
+    "sql_parse_total": 1008,
+    "yaml_parse_failures": 0
+  },
+  "target": "external/spellbook_smoke",
+  "thresholds": {
+    "max_parse_failure_delta": 50,
+    "max_parse_failure_rate": 0.02,
+    "max_sql_parse_compiled_failures": 0,
+    "max_diagnostics_by_rule": {
+      "SQLCOST012": 5,
+      "SQLCOST017": 8,
+      "SQLCOST019": 7
+    }
+  },
+  "version": 1,
+  "warehouse": "trino"
+}

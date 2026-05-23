@@ -37,9 +37,10 @@ Pinned clones defined in [`tests/benchmarks/repos.toml`](../../tests/benchmarks/
 ```bash
 python3 scripts/benchmark_external_repo.py --repo jaffle-shop
 python3 scripts/benchmark_external_repo.py --repo spellbook
+python3 scripts/benchmark_external_repo.py --repo spellbook --smoke
 ```
 
-GitHub Actions: run the **benchmark** workflow manually (`workflow_dispatch`).
+GitHub Actions: **Spellbook smoke** runs on push to `main`; full external benchmarks use **benchmark** workflow (`workflow_dispatch`).
 
 ### Defaults by context
 

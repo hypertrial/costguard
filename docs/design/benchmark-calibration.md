@@ -17,6 +17,10 @@ cargo test -p costguard-core --test benchmark vendored_baselines_match
 # External repos (network + clone cache)
 python3 scripts/benchmark_external_repo.py --repo jaffle-shop
 python3 scripts/benchmark_external_repo.py --repo spellbook
+python3 scripts/benchmark_external_repo.py --repo spellbook --smoke
+
+# Force recompile (bypass manifest cache)
+python3 scripts/benchmark_external_repo.py --repo spellbook --force-compile
 
 # Audit compiled parse failures (Spellbook manifest gate)
 python3 scripts/audit_compiled_parse_failures.py \
@@ -34,7 +38,12 @@ python3 scripts/benchmark_external_repo.py --fixture real_world/jaffle_snippets 
 python3 scripts/benchmark_external_repo.py --repo spellbook --update-baseline
 ```
 
-GitHub Actions: run the **benchmark** workflow manually (`workflow_dispatch`) with target `vendored`, `jaffle-shop`, `spellbook`, or `all`. The **Spellbook** job also runs automatically on every push to `main` (vendored runs on push too).
+GitHub Actions:
+
+- **Push to `main`:** [`benchmark.yml`](../../.github/workflows/benchmark.yml) runs **Spellbook smoke** (`tokens` subproject + `dbt_macros`) only. Vendored baselines run in [`ci.yml`](../../.github/workflows/ci.yml).
+- **Manual:** run the **benchmark** workflow (`workflow_dispatch`) with target `vendored`, `jaffle-shop`, `spellbook-smoke`, `spellbook`, or `all`. Full Spellbook (five subprojects) is **dispatch-only**.
+
+Benchmark scripts build the CLI in **release** mode by default (`COSTGUARD_BUILD_PROFILE=release`). dbt manifests are cached under `{cache}/manifests/{repo}/{commit}/{packages_fp}/` and skipped on warm runs unless `--force-compile` is passed.
 
 ## Baseline files
 
@@ -97,7 +106,7 @@ When an external benchmark surfaces a finding worth keeping:
 | SQLCOST017 | spellbook | mixed (2026-05) | symmetric lower/trim exempt + staging exempt; compiled AST increases AST-confirmed hits **819 → 1003** (more accurate, use `--min-confidence high` for PR gates) |
 | SQLCOST019 | spellbook | fixed (2026-05) | **374 → 66** after whole-scope partition predicate check + CTE/JOIN ON corpus fixtures |
 | parse metrics | spellbook | high severity | **2133 → 1174** after pass 2 (below ≤1800 target) |
-| SQLCOST016–019 | spellbook | gated | Spellbook baseline uses `max_diagnostics_by_rule` ceilings (counts may shrink, not grow); Spellbook job runs on `push` to `main` |
+| SQLCOST016–019 | spellbook | gated | Spellbook baseline uses `max_diagnostics_by_rule` ceilings (counts may shrink, not grow); **smoke** gate runs on `push` to `main`, full Spellbook is manual dispatch |
 
 ## PR replay testing
 

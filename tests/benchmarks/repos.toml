@@ -21,8 +21,10 @@ dbt_compile_dirs = [
   "dbt_subprojects/daily_spellbook",
   "dbt_subprojects/hourly_spellbook",
 ]
+smoke_compile_dirs = ["dbt_subprojects/tokens"]
+smoke_scan_paths = ["dbt_macros", "dbt_subprojects/tokens"]
 scan_paths = [
-  ".",
+  "dbt_macros",
   "dbt_subprojects/dex",
   "dbt_subprojects/solana",
   "dbt_subprojects/tokens",

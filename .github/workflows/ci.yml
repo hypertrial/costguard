@@ -23,9 +23,12 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --all-features -- -D warnings
       - run: cargo build -p costguard-cli
+      - run: cargo build --release -p costguard-cli
       - run: python3 -m unittest discover -s scripts/tests -p 'test_*.py'
       - run: python3 scripts/validate_fp_registry.py
       - run: python3 scripts/benchmark_external_repo.py --all-vendored
+        env:
+          COSTGUARD_BUILD_PROFILE: release
       - run: python3 scripts/generate_rule_docs.py --check
       - uses: peaceiris/actions-mdbook@v2
         with:

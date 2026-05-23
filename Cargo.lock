@@ -161,6 +161,7 @@ dependencies = [
  "costguard-rules",
  "costguard-scanner",
  "costguard-sql",
+ "rayon",
  "serde",
  "serde_json",
  "tempfile",

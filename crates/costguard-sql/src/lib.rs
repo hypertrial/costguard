@@ -105,12 +105,8 @@ pub fn analyze_sql(
 ) -> SqlDocument {
     let dialect = platform.sqlparser_dialect();
     let (sanitized, strip_map) = strip::strip_jinja_with_map(text);
-    let parsed_raw = try_parse_sql(dialect.as_ref(), &sanitized);
-    let statements = if parsed_raw {
-        Parser::parse_sql(dialect.as_ref(), &sanitized).ok()
-    } else {
-        None
-    };
+    let statements = Parser::parse_sql(dialect.as_ref(), &sanitized).ok();
+    let parsed_raw = statements.is_some();
     let parsed_compiled = compiled_code
         .map(|code| try_parse_compiled_sql(code, platform))
         .unwrap_or(false);
@@ -179,10 +175,6 @@ fn compiled_ast_features(
         features::merge_shape_features(regex_features, ast_features, true),
         true,
     )
-}
-
-fn try_parse_sql(dialect: &dyn sqlparser::dialect::Dialect, text: &str) -> bool {
-    Parser::parse_sql(dialect, text).is_ok()
 }
 
 fn try_parse_sql_error(

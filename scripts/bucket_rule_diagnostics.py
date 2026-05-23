@@ -16,6 +16,8 @@ from typing import Any, Callable
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
+from costguard_tooling import costguard_binary  # noqa: E402
+
 try:
     import tomllib
 except ModuleNotFoundError:
@@ -241,22 +243,6 @@ CLASSIFIERS: dict[str, Callable[[str], str]] = {
     "SQLCOST019": classify_sqlcost019,
     "SQLCOST005": classify_sqlcost005,
 }
-
-
-def costguard_binary() -> Path:
-    target_dir = Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target"))
-    binary = target_dir / "debug" / "costguard"
-    if not binary.exists():
-        build = subprocess.run(
-            ["cargo", "build", "-q", "-p", "costguard-cli"],
-            cwd=ROOT,
-            check=False,
-        )
-        if build.returncode != 0:
-            raise SystemExit("failed to build costguard-cli")
-    if not binary.exists():
-        raise SystemExit(f"costguard binary not found at {binary}")
-    return binary
 
 
 def load_repo(name: str) -> dict[str, Any]:

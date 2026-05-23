@@ -12,6 +12,7 @@ use costguard_platform::Platform;
 use costguard_rules::{ProjectIndexes, RuleMetadata, RuleRegistry};
 use costguard_scanner::{discover, read_existing_paths, FileKind, ProjectFile, ScanCounts};
 use costguard_sql::{analyze_sql, SqlDocument};
+use rayon::prelude::*;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
@@ -361,8 +362,8 @@ fn analyze_sql_documents(
     platform: Platform,
     compiled_by_path: &HashMap<PathBuf, String>,
 ) -> Vec<SqlDocument> {
-    files
-        .iter()
+    let mut documents = files
+        .par_iter()
         .filter(|file| matches!(file.kind, FileKind::Sql | FileKind::DbtSqlModel))
         .map(|file| {
             let compiled_code = compiled_by_path
@@ -377,7 +378,9 @@ fn analyze_sql_documents(
                 file.kind == FileKind::DbtSqlModel,
             )
         })
-        .collect()
+        .collect::<Vec<_>>();
+    documents.sort_by(|left, right| left.path.cmp(&right.path));
+    documents
 }
 
 fn build_file_parse_status(sql_documents: &[SqlDocument]) -> Vec<FileParseStatus> {

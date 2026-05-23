@@ -6,7 +6,7 @@ For Spellbook, the script compiles five subprojects and **merges** their manifes
 
 ## `dbt_compile_for_costguard.py`
 
-Shared dbt compile and manifest merge helper used by the GitHub Action and `benchmark_external_repo.py`.
+Shared dbt compile and manifest merge helper used by the GitHub Action and `benchmark_external_repo.py`. Subproject compiles run in parallel when multiple `--compile-dirs` are provided (`COSTGUARD_DBT_COMPILE_JOBS=1` forces serial). Manifest outputs are cached per repo commit and packages fingerprint when `--cache-dir` is set from the benchmark script.
 
 ```bash
 python3 scripts/dbt_compile_for_costguard.py \
@@ -32,6 +32,11 @@ python3 scripts/dbt_compile_for_costguard.py \
 | `--profile-type` | Dummy profile adapter type (defaults from adapter package) |
 | `--manifest-out` | Output path for merged or single manifest |
 | `--use-system-dbt` | Use `dbt` from PATH instead of cached venv |
+| `--cache-dir` | Benchmark cache root (manifest fingerprint cache when used from benchmark script) |
+
+## `costguard_tooling.py`
+
+Shared helper for locating/building the CLI. Benchmark and doc scripts default to **release** builds (`COSTGUARD_BUILD_PROFILE=release`; set `debug` for local debugging). Skips rebuild when the binary is newer than Rust sources under `crates/`.
 
 Unit tests:
 
@@ -51,10 +56,12 @@ python3 scripts/benchmark_external_repo.py --fixture real_world/jaffle_snippets
 # External (network + clone cache)
 python3 scripts/benchmark_external_repo.py --repo jaffle-shop
 python3 scripts/benchmark_external_repo.py --repo spellbook
+python3 scripts/benchmark_external_repo.py --repo spellbook --smoke
 
 # Refresh baselines after intentional rule tuning
 python3 scripts/benchmark_external_repo.py --fixture real_world/jaffle_snippets --update-baseline
 python3 scripts/benchmark_external_repo.py --repo spellbook --update-baseline
+python3 scripts/benchmark_external_repo.py --repo spellbook --smoke --update-baseline
 ```
 
 Common flags:
@@ -65,9 +72,11 @@ Common flags:
 | `--fixture` | Vendored fixture path under `tests/fixtures/` |
 | `--all-vendored` | Run all vendored baselines |
 | `--update-baseline` | Write report metrics to baseline JSON |
+| `--smoke` | Run repo smoke profile (`smoke_*` keys in `repos.toml`; Spellbook: `tokens` + `dbt_macros`) |
+| `--force-compile` | Bypass cached dbt manifest and recompile |
 | `--warehouse` | Override scan warehouse (defaults per target) |
 
-For Spellbook, the script compiles five subprojects and **merges** their manifests into `target/manifest.json` at the repo root before scanning.
+Reports include `compile_cache: hit|miss|skip` when dbt compile is enabled. Benchmark scripts use release CLI builds via `costguard_tooling.py`.
 
 Validate vendored baselines in Rust:
 

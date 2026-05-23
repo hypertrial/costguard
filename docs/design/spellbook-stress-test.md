@@ -10,6 +10,7 @@ Use the repo benchmark script instead of ad-hoc clone commands:
 
 ```bash
 python3 scripts/benchmark_external_repo.py --repo spellbook
+python3 scripts/benchmark_external_repo.py --repo spellbook --smoke
 python3 scripts/benchmark_external_repo.py --repo jaffle-shop
 python3 scripts/benchmark_external_repo.py --all-vendored
 ```
@@ -28,7 +29,10 @@ Pinned commits and scan paths are defined in
 Baselines live in [`tests/benchmarks/baselines/`](../../tests/benchmarks/baselines/).
 See [`benchmark-calibration.md`](benchmark-calibration.md) for the triage loop and [Benchmark tiers](../book/contributing/benchmark-tiers.md) for the canonical four-layer model.
 
-GitHub Actions: run the **benchmark** workflow (`workflow_dispatch`) with target `spellbook`.
+GitHub Actions:
+
+- **Push to `main`:** Spellbook **smoke** benchmark (`tokens` + root macros) in [`benchmark.yml`](../../.github/workflows/benchmark.yml).
+- **Manual:** run the **benchmark** workflow (`workflow_dispatch`) with target `spellbook` for the full five-subproject gate.
 
 Why Spellbook:
 

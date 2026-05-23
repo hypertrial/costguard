@@ -14,6 +14,7 @@ costguard-platform = { path = "../costguard-platform" }
 costguard-rules = { path = "../costguard-rules" }
 costguard-scanner = { path = "../costguard-scanner" }
 costguard-sql = { path = "../costguard-sql" }
+rayon.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true

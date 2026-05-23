@@ -12,8 +12,6 @@ import time
 from pathlib import Path
 from typing import Any
 
-from dbt_compile_for_costguard import compile_dbt_repo, write_json
-
 try:
     import tomllib
 except ModuleNotFoundError:
@@ -22,6 +20,9 @@ except ModuleNotFoundError:
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
+
+from costguard_tooling import costguard_binary  # noqa: E402
+from dbt_compile_for_costguard import compile_dbt_repo, write_json  # noqa: E402
 FIXTURES = ROOT / "tests" / "fixtures"
 BASELINES = ROOT / "tests" / "benchmarks" / "baselines"
 REPORTS = ROOT / "tests" / "benchmarks" / "reports"
@@ -43,23 +44,6 @@ def repo_by_name(name: str) -> dict[str, Any]:
 def baseline_path(target: str) -> Path:
     safe = target.replace("/", "__")
     return BASELINES / f"{safe}.json"
-
-
-def costguard_binary() -> Path:
-    target_dir = Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target"))
-    binary = target_dir / "debug" / "costguard"
-    build = subprocess.run(
-        ["cargo", "build", "-q", "-p", "costguard-cli"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if build.returncode != 0:
-        raise SystemExit(f"failed to build costguard-cli:\n{build.stderr}")
-    if not binary.exists():
-        raise SystemExit(f"costguard binary not found at {binary}")
-    return binary
 
 
 def run_costguard(
@@ -163,8 +147,9 @@ def build_report(
     warehouse: str,
     scan_result: dict[str, Any],
     kind: str,
+    compile_cache: str | None = None,
 ) -> dict[str, Any]:
-    return {
+    report = {
         "version": 1,
         "target": target,
         "kind": kind,
@@ -174,6 +159,9 @@ def build_report(
         "exit_code": scan_result["exit_code"],
         "diagnostics_count": scan_result["diagnostics_count"],
     }
+    if compile_cache is not None:
+        report["compile_cache"] = compile_cache
+    return report
 
 
 def compare_report(report: dict[str, Any], baseline: dict[str, Any]) -> list[str]:
@@ -326,11 +314,24 @@ def run_external(
     *,
     update_baseline: bool,
     cache_dir: Path,
+    smoke: bool = False,
+    force_compile: bool = False,
 ) -> int:
     repo = repo_by_name(repo_name)
     checkout = clone_repo(repo, cache_dir)
-    compile_dbt_repo(checkout, repo, cache_dir=cache_dir)
-    scan_paths = repo.get("scan_paths", ["."])
+    compile_cache = compile_dbt_repo(
+        checkout,
+        repo,
+        cache_dir=cache_dir,
+        smoke=smoke,
+        force_compile=force_compile,
+    )
+    if smoke:
+        scan_paths = repo.get("smoke_scan_paths", repo.get("scan_paths", ["."]))
+        target = f"external/{repo_name}_smoke"
+    else:
+        scan_paths = repo.get("scan_paths", ["."])
+        target = f"external/{repo_name}"
     manifest = checkout / "target" / "manifest.json"
     scan_result = run_costguard(
         checkout,
@@ -339,12 +340,12 @@ def run_external(
         fail_on=repo.get("fail_on", "critical"),
         manifest=manifest if manifest.exists() else None,
     )
-    target = f"external/{repo_name}"
     report = build_report(
         target,
         warehouse=repo.get("warehouse", "generic"),
         scan_result=scan_result,
         kind="external",
+        compile_cache=compile_cache,
     )
     report["commit"] = repo["commit"]
     write_json(REPORTS / f"{target.replace('/', '__')}.json", report)
@@ -403,7 +404,8 @@ def run_external(
 
     print(
         f"PASS {target} ({report['runtime_ms']} ms, "
-        f"{report['metrics']['sql_parse_failures']} parse failures)"
+        f"{report['metrics']['sql_parse_failures']} parse failures"
+        f"{f', compile_cache={compile_cache}' if compile_cache != 'skip' else ''})"
     )
     return 0
 
@@ -431,6 +433,16 @@ def main() -> int:
         action="store_true",
         help="write or refresh baseline JSON",
     )
+    parser.add_argument(
+        "--smoke",
+        action="store_true",
+        help="run repo smoke profile (requires smoke_* keys in repos.toml)",
+    )
+    parser.add_argument(
+        "--force-compile",
+        action="store_true",
+        help="bypass cached dbt manifest and recompile",
+    )
     args = parser.parse_args()
 
     if args.all_vendored:
@@ -456,6 +468,8 @@ def main() -> int:
         args.repo,
         update_baseline=args.update_baseline,
         cache_dir=Path(args.cache),
+        smoke=args.smoke,
+        force_compile=args.force_compile,
     )
 
 

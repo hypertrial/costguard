@@ -4,11 +4,14 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -91,6 +94,9 @@ def dbt_tools(cache_dir: Path, adapter: str) -> tuple[Path, Path]:
 
     pip = venv_dir / "bin" / "pip"
     dbt = venv_dir / "bin" / "dbt"
+    marker = venv_dir / f".installed-{adapter.replace('/', '_')}"
+    if marker.exists() and marker.read_text(encoding="utf-8").strip() == adapter:
+        return pip, dbt
     install = subprocess.run(
         [str(pip), "install", "--upgrade", "pip", adapter],
         capture_output=True,
@@ -99,6 +105,7 @@ def dbt_tools(cache_dir: Path, adapter: str) -> tuple[Path, Path]:
     )
     if install.returncode != 0:
         raise SystemExit(f"failed to install {adapter}:\n{install.stderr}")
+    marker.write_text(adapter, encoding="utf-8")
     return pip, dbt
 
 
@@ -188,6 +195,155 @@ def compile_dbt_project(
     return manifest
 
 
+def packages_fingerprint(
+    checkout: Path,
+    compile_dirs: list[str],
+    adapter_package: str,
+    *,
+    cache_scope: str = "",
+) -> str:
+    digest = hashlib.sha256()
+    digest.update(adapter_package.encode("utf-8"))
+    if cache_scope:
+        digest.update(cache_scope.encode("utf-8"))
+    for rel in sorted(compile_dirs):
+        root = checkout / rel
+        if not root.exists():
+            continue
+        for pattern in ("packages.yml", "package-lock.yml"):
+            for path in sorted(root.rglob(pattern)):
+                digest.update(str(path.relative_to(checkout)).encode("utf-8"))
+                digest.update(path.read_bytes())
+    return digest.hexdigest()[:16]
+
+
+def manifest_cache_path(
+    cache_dir: Path,
+    repo_name: str,
+    commit: str,
+    packages_fp: str,
+) -> Path:
+    return cache_dir / "manifests" / repo_name / commit / packages_fp
+
+
+def restore_manifest_cache(
+    cache_dir: Path,
+    repo_name: str,
+    commit: str,
+    packages_fp: str,
+    manifest_out: Path,
+) -> bool:
+    cached = manifest_cache_path(cache_dir, repo_name, commit, packages_fp) / "manifest.json"
+    if not cached.exists():
+        return False
+    manifest_out.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(cached, manifest_out)
+    return True
+
+
+def store_manifest_cache(
+    cache_dir: Path,
+    repo_name: str,
+    commit: str,
+    packages_fp: str,
+    manifest_out: Path,
+    *,
+    compile_dirs: list[str],
+    adapter_package: str,
+) -> None:
+    cache_root = manifest_cache_path(cache_dir, repo_name, commit, packages_fp)
+    cache_root.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(manifest_out, cache_root / "manifest.json")
+    write_json(
+        cache_root / "meta.json",
+        {
+            "repo": repo_name,
+            "commit": commit,
+            "packages_fp": packages_fp,
+            "compile_dirs": compile_dirs,
+            "adapter_package": adapter_package,
+        },
+    )
+
+
+def compile_jobs(count: int) -> int:
+    forced = os.environ.get("COSTGUARD_DBT_COMPILE_JOBS", "").strip()
+    if forced == "1":
+        return 1
+    if forced.isdigit():
+        return max(1, min(int(forced), count))
+    return max(1, min(count, os.cpu_count() or 4, 5))
+
+
+def _compile_subproject_worker(args: tuple[str, str, str, str, str, str, str, bool]) -> tuple[str, str]:
+    (
+        checkout_s,
+        rel,
+        dbt_s,
+        target,
+        profile_type,
+        profiles_dir_s,
+        profiles_rel,
+        continue_on_deps_failure,
+    ) = args
+    checkout = Path(checkout_s)
+    project_dir = (checkout / rel).resolve()
+    profiles_dir = Path(profiles_dir_s) if profiles_dir_s else None
+    manifest = compile_dbt_project(
+        checkout,
+        project_dir,
+        dbt=Path(dbt_s),
+        target=target,
+        profile_type=profile_type,
+        profiles_dir=profiles_dir,
+        profiles_rel=profiles_rel,
+        continue_on_deps_failure=continue_on_deps_failure,
+    )
+    return rel, str(manifest)
+
+
+def compile_subprojects_parallel(
+    checkout: Path,
+    compile_dirs: list[str],
+    *,
+    dbt: Path,
+    target: str,
+    profile_type: str,
+    profiles_dir: Path | None,
+    profiles_rel: str,
+    continue_on_deps_failure: bool,
+) -> list[tuple[Path, str]]:
+    profiles_dir_s = str(profiles_dir) if profiles_dir is not None else ""
+    worker_args = [
+        (
+            str(checkout),
+            rel,
+            str(dbt),
+            target,
+            profile_type,
+            profiles_dir_s,
+            profiles_rel,
+            continue_on_deps_failure,
+        )
+        for rel in compile_dirs
+    ]
+    jobs = compile_jobs(len(worker_args))
+    entries: list[tuple[Path, str]] = []
+    if jobs == 1 or len(worker_args) == 1:
+        for args in worker_args:
+            rel, manifest_s = _compile_subproject_worker(args)
+            entries.append((Path(manifest_s), rel))
+        return entries
+
+    with ProcessPoolExecutor(max_workers=jobs) as pool:
+        futures = [pool.submit(_compile_subproject_worker, args) for args in worker_args]
+        for future in as_completed(futures):
+            rel, manifest_s = future.result()
+            entries.append((Path(manifest_s), rel))
+    entries.sort(key=lambda item: item[1])
+    return entries
+
+
 def parse_compile_dirs(raw: str) -> list[str]:
     if not raw.strip():
         return []
@@ -213,8 +369,29 @@ def compile_dbt_for_costguard(
     cache_dir: Path | None = None,
     continue_on_deps_failure: bool = True,
     use_system_dbt: bool = False,
-) -> Path:
+    repo_name: str | None = None,
+    commit: str | None = None,
+    force_compile: bool = False,
+    cache_scope: str = "",
+) -> tuple[Path, str]:
     resolved_profile_type = profile_type or profile_type_from_adapter(adapter_package)
+    dirs = compile_dirs or []
+
+    if (
+        not force_compile
+        and cache_dir is not None
+        and repo_name
+        and commit
+        and dirs
+    ):
+        packages_fp = packages_fingerprint(
+            checkout,
+            dirs,
+            adapter_package,
+            cache_scope=cache_scope,
+        )
+        if restore_manifest_cache(cache_dir, repo_name, commit, packages_fp, manifest_out):
+            return manifest_out, "hit"
 
     if use_system_dbt:
         dbt = Path("dbt")
@@ -223,55 +400,78 @@ def compile_dbt_for_costguard(
         _, dbt = dbt_tools(cache, adapter_package)
 
     entries: list[tuple[Path, str]] = []
-    dirs = compile_dirs or []
     if dirs:
-        for rel in dirs:
-            subproject = (checkout / rel).resolve()
-            manifest = compile_dbt_project(
-                checkout,
-                subproject,
-                dbt=dbt,
-                target=target,
-                profile_type=resolved_profile_type,
-                profiles_dir=profiles_dir,
-                profiles_rel=profiles_rel,
-                continue_on_deps_failure=continue_on_deps_failure,
-            )
-            entries.append((manifest, rel))
+        entries = compile_subprojects_parallel(
+            checkout,
+            dirs,
+            dbt=dbt,
+            target=target,
+            profile_type=resolved_profile_type,
+            profiles_dir=profiles_dir,
+            profiles_rel=profiles_rel,
+            continue_on_deps_failure=continue_on_deps_failure,
+        )
         merge_manifests(entries, manifest_out)
-        return manifest_out
-
-    resolved_project = project_dir or checkout
-    manifest = compile_dbt_project(
-        checkout,
-        resolved_project,
-        dbt=dbt,
-        target=target,
-        profile_type=resolved_profile_type,
-        profiles_dir=profiles_dir,
-        profiles_rel=profiles_rel,
-        continue_on_deps_failure=continue_on_deps_failure,
-    )
-    try:
-        project_rel = str(resolved_project.relative_to(checkout))
-    except ValueError:
-        project_rel = ""
-    if project_rel and project_rel != ".":
-        merge_manifests([(manifest, project_rel)], manifest_out)
     else:
-        write_json(manifest_out, json.loads(manifest.read_text(encoding="utf-8")))
-    return manifest_out
+        resolved_project = project_dir or checkout
+        manifest = compile_dbt_project(
+            checkout,
+            resolved_project,
+            dbt=dbt,
+            target=target,
+            profile_type=resolved_profile_type,
+            profiles_dir=profiles_dir,
+            profiles_rel=profiles_rel,
+            continue_on_deps_failure=continue_on_deps_failure,
+        )
+        try:
+            project_rel = str(resolved_project.relative_to(checkout))
+        except ValueError:
+            project_rel = ""
+        if project_rel and project_rel != ".":
+            merge_manifests([(manifest, project_rel)], manifest_out)
+        else:
+            write_json(manifest_out, json.loads(manifest.read_text(encoding="utf-8")))
+
+    if cache_dir is not None and repo_name and commit and dirs:
+        packages_fp = packages_fingerprint(
+            checkout,
+            dirs,
+            adapter_package,
+            cache_scope=cache_scope,
+        )
+        store_manifest_cache(
+            cache_dir,
+            repo_name,
+            commit,
+            packages_fp,
+            manifest_out,
+            compile_dirs=dirs,
+            adapter_package=adapter_package,
+        )
+    return manifest_out, "miss"
 
 
-def compile_dbt_repo(checkout: Path, repo: dict[str, Any], *, cache_dir: Path) -> None:
+def compile_dbt_repo(
+    checkout: Path,
+    repo: dict[str, Any],
+    *,
+    cache_dir: Path,
+    smoke: bool = False,
+    force_compile: bool = False,
+) -> str:
     if not repo.get("compile_dbt", False):
-        return
+        return "skip"
 
-    compile_dbt_for_costguard(
+    compile_dirs = repo.get("dbt_compile_dirs")
+    if smoke:
+        compile_dirs = repo.get("smoke_compile_dirs") or compile_dirs
+
+    _, compile_cache = compile_dbt_for_costguard(
         checkout,
-        compile_dirs=repo.get("dbt_compile_dirs"),
+        compile_dirs=compile_dirs,
         project_dir=(checkout / repo.get("dbt_project_dir", ".")).resolve()
-        if not repo.get("dbt_compile_dirs")
+        if not compile_dirs
         else None,
         manifest_out=checkout / "target" / "manifest.json",
         adapter_package=repo.get("dbt_adapter", "dbt-trino"),
@@ -279,7 +479,12 @@ def compile_dbt_repo(checkout: Path, repo: dict[str, Any], *, cache_dir: Path) -
         target=repo.get("dbt_target", "dev"),
         profiles_rel=repo.get("dbt_profiles_dir", "."),
         cache_dir=cache_dir,
+        repo_name=repo["name"],
+        commit=repo["commit"],
+        force_compile=force_compile,
+        cache_scope="smoke" if smoke else "",
     )
+    return compile_cache
 
 
 def main() -> int:

@@ -11,26 +11,13 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
 OUTPUT = ROOT / "docs" / "book" / "rules" / "index.md"
 GENERATED_START = "<!-- generated:rules:start -->"
 GENERATED_END = "<!-- generated:rules:end -->"
 
 
-def costguard_binary() -> Path:
-    target_dir = Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target"))
-    binary = target_dir / "debug" / "costguard"
-    if binary.exists():
-        return binary
-    build = subprocess.run(
-        ["cargo", "build", "-q", "-p", "costguard-cli"],
-        cwd=ROOT,
-        check=False,
-    )
-    if build.returncode != 0:
-        raise SystemExit("failed to build costguard-cli")
-    if not binary.exists():
-        raise SystemExit(f"costguard binary not found at {binary}")
-    return binary
+from costguard_tooling import costguard_binary
 
 
 def fetch_rules() -> list[dict[str, str]]:
