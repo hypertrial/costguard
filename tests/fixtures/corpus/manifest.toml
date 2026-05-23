@@ -201,3 +201,21 @@ name = "cross_join_date_spine"
 path = "cross_join_date_spine"
 expect_rules = []
 forbid_rules = ["SQLCOST012"]
+
+[[case]]
+name = "coalesce_null_safe_join"
+path = "coalesce_null_safe_join"
+expect_rules = []
+forbid_rules = ["SQLCOST017"]
+
+[[case]]
+name = "macro_group_by_not_comma"
+path = "macro_group_by_not_comma"
+expect_rules = []
+forbid_rules = ["SQLCOST012"]
+
+[[case]]
+name = "cross_join_date_ranges"
+path = "cross_join_date_ranges"
+expect_rules = []
+forbid_rules = ["SQLCOST012"]

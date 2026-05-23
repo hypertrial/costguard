@@ -178,6 +178,30 @@ corpus_case = "cross_join_date_spine"
 notes = "cross join to date spine CTEs is intentional for incremental windows"
 
 [[finding]]
+rule = "SQLCOST012"
+repo = "spellbook"
+bucket = "comma_join"
+verdict = "fp"
+corpus_case = "macro_group_by_not_comma"
+notes = "explicit JOIN macros must not treat GROUP BY commas as comma joins"
+
+[[finding]]
+rule = "SQLCOST012"
+repo = "spellbook"
+bucket = "cross_join_explicit"
+verdict = "fp"
+corpus_case = "cross_join_date_ranges"
+notes = "cross join to date_ranges CTE is intentional for windowed scans"
+
+[[finding]]
+rule = "SQLCOST017"
+repo = "spellbook"
+bucket = "coalesce_key"
+verdict = "fp"
+corpus_case = "coalesce_null_safe_join"
+notes = "coalesce(left.col, right.col) = dim.col null-safe joins after full outer merge are acceptable"
+
+[[finding]]
 rule = "SQLCOST017"
 repo = "spellbook"
 bucket = "cast_on_key"

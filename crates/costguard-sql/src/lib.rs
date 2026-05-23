@@ -728,6 +728,10 @@ pub fn strip_jinja(text: &str) -> String {
 }
 
 pub(crate) fn from_clause_tables_start(lower: &str) -> Option<usize> {
+    from_clause_tables_start_masked(&mask_line_and_jinja_comments(lower))
+}
+
+fn from_clause_tables_start_masked(lower: &str) -> Option<usize> {
     let patterns = [" from ", "\nfrom ", "\r\nfrom ", "\tfrom "];
     let mut depth = 0usize;
     let mut last_at_depth_zero: Option<usize> = None;
@@ -753,6 +757,74 @@ pub(crate) fn from_clause_tables_start(lower: &str) -> Option<usize> {
         i += ch.len_utf8();
     }
     last_at_depth_zero
+}
+
+fn mask_line_and_jinja_comments(text: &str) -> String {
+    let lower = text.to_ascii_lowercase();
+    let mut output = String::with_capacity(text.len());
+    let mut i = 0usize;
+    while i < text.len() {
+        if lower[i..].starts_with("--") {
+            let start = i;
+            while i < text.len() && text.as_bytes()[i] != b'\n' {
+                i += 1;
+            }
+            output.push_str(&" ".repeat(i.saturating_sub(start)));
+            if i < text.len() {
+                output.push('\n');
+                i += 1;
+            }
+            continue;
+        }
+        if lower[i..].starts_with("{#") {
+            if let Some(rel) = lower[i..].find("#}") {
+                let end = i + rel + 2;
+                output.push_str(&" ".repeat(end.saturating_sub(i)));
+                i = end;
+                continue;
+            }
+        }
+        let ch = text[i..].chars().next().expect("char");
+        output.push(ch);
+        i += ch.len_utf8();
+    }
+    output
+}
+
+fn at_from_table_list_boundary(lower: &str, index: usize) -> bool {
+    [
+        " where ",
+        " group by ",
+        " order by ",
+        " having ",
+        " limit ",
+        "\nwhere ",
+        "\ngroup by ",
+        "\norder by ",
+        "\nhaving ",
+        "\nlimit ",
+    ]
+    .iter()
+    .any(|boundary| lower[index..].starts_with(boundary))
+}
+
+fn at_explicit_join_boundary(lower: &str, index: usize) -> bool {
+    [
+        " inner join ",
+        " left join ",
+        " right join ",
+        " full join ",
+        " cross join ",
+        " join ",
+        "\ninner join ",
+        "\nleft join ",
+        "\nright join ",
+        "\nfull join ",
+        "\ncross join ",
+        "\njoin ",
+    ]
+    .iter()
+    .any(|boundary| lower[index..].starts_with(boundary))
 }
 
 fn extract_features(
@@ -925,7 +997,13 @@ fn cross_join_table_name(after: &str) -> Option<String> {
 fn is_date_spine_table_name(name: &str) -> bool {
     matches!(
         name,
-        "check_date" | "date_spine" | "time_seq" | "calendar" | "dates" | "time_dimension"
+        "check_date"
+            | "date_spine"
+            | "time_seq"
+            | "calendar"
+            | "dates"
+            | "time_dimension"
+            | "date_ranges"
     )
 }
 
@@ -958,11 +1036,12 @@ fn extract_comma_joins(
     text: &str,
     line_index: &costguard_diagnostics::LineIndex,
 ) -> Vec<JoinFeature> {
-    let lower = text.to_ascii_lowercase();
-    let Some(from_start) = from_clause_tables_start(&lower) else {
+    let masked = mask_line_and_jinja_comments(text);
+    let lower = masked.to_ascii_lowercase();
+    let Some(from_start) = from_clause_tables_start_masked(&lower) else {
         return Vec::new();
     };
-    let tail = text.get(from_start..).unwrap_or_default();
+    let tail = masked.get(from_start..).unwrap_or_default();
     if is_comma_join_false_positive(tail) {
         return Vec::new();
     }
@@ -985,35 +1064,48 @@ fn extract_comma_joins(
 }
 
 fn find_top_level_comma_after_from(text: &str) -> Option<usize> {
-    let mut depth = 0usize;
+    let masked = mask_line_and_jinja_comments(text);
+    let lower = masked.to_ascii_lowercase();
+    let mut paren_depth = 0usize;
+    let mut bracket_depth = 0usize;
+    let mut past_table_list = false;
+    let mut saw_explicit_join = false;
     let mut i = 0usize;
-    let bytes = text.as_bytes();
-    while i < bytes.len() {
-        let ch = text[i..].chars().next()?;
-        if ch == '(' {
-            depth += 1;
-        } else if ch == ')' {
-            depth = depth.saturating_sub(1);
-        } else if ch == ',' && depth == 0 {
-            let tail = text[i + 1..].trim_start();
-            if tail
-                .chars()
-                .next()
-                .is_some_and(|first| first.is_ascii_alphabetic() || first == '(' || first == '_')
-            {
-                return Some(i);
-            }
+    while i < masked.len() {
+        if past_table_list {
             return None;
-        } else if depth == 0 {
-            let lower_tail = text[i..].to_ascii_lowercase();
-            if lower_tail.starts_with(" where ")
-                || lower_tail.starts_with(" group by ")
-                || lower_tail.starts_with(" order by ")
-                || lower_tail.starts_with(" limit ")
-                || lower_tail.starts_with("\nwhere ")
-            {
+        }
+        if paren_depth == 0 && bracket_depth == 0 {
+            if at_explicit_join_boundary(&lower, i) {
+                saw_explicit_join = true;
+            }
+            if at_from_table_list_boundary(&lower, i) {
+                past_table_list = true;
+            }
+        }
+        let ch = masked[i..].chars().next()?;
+        if past_table_list {
+            i += ch.len_utf8();
+            continue;
+        }
+        match ch {
+            '(' => paren_depth += 1,
+            ')' => paren_depth = paren_depth.saturating_sub(1),
+            '[' => bracket_depth += 1,
+            ']' => bracket_depth = bracket_depth.saturating_sub(1),
+            ',' if paren_depth == 0 && bracket_depth == 0 => {
+                if saw_explicit_join {
+                    return None;
+                }
+                let tail = masked[i + 1..].trim_start();
+                if tail.chars().next().is_some_and(|first| {
+                    first.is_ascii_alphabetic() || first == '(' || first == '_'
+                }) {
+                    return Some(i);
+                }
                 return None;
             }
+            _ => {}
         }
         i += ch.len_utf8();
     }
@@ -1099,7 +1191,36 @@ fn function_on_join_key(predicate: &str) -> bool {
     if is_symmetric_normalization_predicate(&lower) || is_time_bucket_join_predicate(&lower) {
         return false;
     }
-    function_on_join_key_regex().is_match(predicate)
+    let parts: Vec<&str> = lower.split(" and ").collect();
+    if parts.is_empty() {
+        return function_on_join_key_regex().is_match(predicate);
+    }
+    parts.iter().any(|part| {
+        let part = part.trim();
+        !is_coalesce_null_safe_join_predicate(part) && function_on_join_key_regex().is_match(part)
+    })
+}
+
+fn coalesce_null_safe_join_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    cached_regex(
+        &RE,
+        r"(?i)coalesce\s*\(\s*(?:\w+\.)?(\w+)\s*,\s*(?:\w+\.)?(\w+)\s*\)\s*=\s*(?:\w+\.)?(\w+)\b",
+    )
+}
+
+fn is_coalesce_null_safe_join_predicate(predicate: &str) -> bool {
+    let Some(captures) = coalesce_null_safe_join_re().captures(predicate) else {
+        return false;
+    };
+    let (Some(left), Some(right), Some(key)) = (
+        captures.get(1).map(|m| m.as_str()),
+        captures.get(2).map(|m| m.as_str()),
+        captures.get(3).map(|m| m.as_str()),
+    ) else {
+        return false;
+    };
+    left == right && left == key
 }
 
 fn is_time_bucket_join_predicate(predicate: &str) -> bool {
@@ -1598,6 +1719,102 @@ select * from unit_test where diff_count > 0
             .joins
             .iter()
             .any(|join| join.function_on_join_key));
+    }
+
+    #[test]
+    fn explicit_join_with_group_by_commas_are_not_comma_joins() {
+        let text = "select s.id from basic_yak_swaps s inner join logs l on l.tx_hash = s.tx_hash group by s.id, s.block_number";
+        let index = LineIndex::new(text);
+        let doc = analyze_sql(
+            PathBuf::from("macros/yield_yak.sql"),
+            text,
+            Platform::Trino,
+            &index,
+            None,
+            false,
+        );
+        assert!(!doc
+            .features
+            .joins
+            .iter()
+            .any(|join| join.kind == JoinKind::Comma));
+    }
+
+    #[test]
+    fn group_by_commas_are_not_comma_joins() {
+        let text =
+            "select strategy, sum(shares) as shares, date from daily_share group by strategy, date";
+        let index = LineIndex::new(text);
+        let doc = analyze_sql(
+            PathBuf::from("models/marts/fct.sql"),
+            text,
+            Platform::Trino,
+            &index,
+            None,
+            true,
+        );
+        assert!(!doc
+            .features
+            .joins
+            .iter()
+            .any(|join| join.kind == JoinKind::Comma));
+    }
+
+    #[test]
+    fn jinja_comment_from_is_not_comma_join() {
+        let text = "{# Read from addresses_daily #}\nselect d.address from addresses_daily as d\ngroup by d.address";
+        let index = LineIndex::new(text);
+        let doc = analyze_sql(
+            PathBuf::from("macros/addresses_stg_transfers_agg.sql"),
+            text,
+            Platform::Trino,
+            &index,
+            None,
+            false,
+        );
+        assert!(!doc
+            .features
+            .joins
+            .iter()
+            .any(|join| join.kind == JoinKind::Comma));
+    }
+
+    #[test]
+    fn coalesce_null_safe_join_is_not_function_wrapped_key() {
+        let text = "select 1 from transfers tr full outer join executed_txs et on tr.address = et.address left join ffb on coalesce(tr.address, et.address) = ffb.address";
+        let index = LineIndex::new(text);
+        let doc = analyze_sql(
+            PathBuf::from("models/staging/stg_info.sql"),
+            text,
+            Platform::Trino,
+            &index,
+            None,
+            true,
+        );
+        assert!(!doc
+            .features
+            .joins
+            .iter()
+            .any(|join| join.function_on_join_key));
+    }
+
+    #[test]
+    fn cross_join_date_ranges_is_not_flagged() {
+        let text = "select t.hash from transactions t cross join date_ranges dr where t.block_time between dr.start_time and dr.end_time";
+        let index = LineIndex::new(text);
+        let doc = analyze_sql(
+            PathBuf::from("models/marts/fct.sql"),
+            text,
+            Platform::Trino,
+            &index,
+            None,
+            true,
+        );
+        assert!(!doc
+            .features
+            .joins
+            .iter()
+            .any(|join| join.kind == JoinKind::Cross));
     }
 
     #[test]

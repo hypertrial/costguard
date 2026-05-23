@@ -467,7 +467,13 @@ fn is_exempt_cross_join_target(factor: &TableFactor) -> bool {
 fn is_date_spine_table(name: &str) -> bool {
     matches!(
         name,
-        "check_date" | "date_spine" | "time_seq" | "calendar" | "dates" | "time_dimension"
+        "check_date"
+            | "date_spine"
+            | "time_seq"
+            | "calendar"
+            | "dates"
+            | "time_dimension"
+            | "date_ranges"
     )
 }
 
@@ -532,7 +538,10 @@ fn join_predicate_has_function_on_key(expr: &Expr) -> bool {
             op: BinaryOperator::Eq,
             right,
         } => {
-            if is_symmetric_normalization_eq(left, right) || is_time_bucket_join_eq(left, right) {
+            if is_symmetric_normalization_eq(left, right)
+                || is_time_bucket_join_eq(left, right)
+                || is_coalesce_null_safe_join_eq(left, right)
+            {
                 return false;
             }
             is_function_wrapped_join_key(left) || is_function_wrapped_join_key(right)
@@ -563,6 +572,45 @@ fn is_symmetric_normalization_eq(left: &Expr, right: &Expr) -> bool {
         (Expr::Cast { .. }, Expr::Cast { .. }) => true,
         _ => false,
     }
+}
+
+fn is_coalesce_null_safe_join_eq(left: &Expr, right: &Expr) -> bool {
+    coalesce_null_safe_side(left, right) || coalesce_null_safe_side(right, left)
+}
+
+fn coalesce_null_safe_side(coalesce_side: &Expr, other: &Expr) -> bool {
+    let Expr::Function(function) = coalesce_side else {
+        return false;
+    };
+    if function_name(function) != "coalesce" {
+        return false;
+    }
+    let Some(key) = expr_column_name(other) else {
+        return false;
+    };
+    let args = function_arg_exprs(function);
+    args.len() >= 2
+        && args
+            .iter()
+            .all(|arg| expr_column_name(arg).as_deref() == Some(key.as_str()))
+}
+
+fn function_arg_exprs(function: &Function) -> Vec<&Expr> {
+    use sqlparser::ast::{FunctionArg, FunctionArgExpr, FunctionArguments};
+    let FunctionArguments::List(list) = &function.args else {
+        return Vec::new();
+    };
+    list.args
+        .iter()
+        .filter_map(|arg| match arg {
+            FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => Some(expr),
+            FunctionArg::Named {
+                arg: FunctionArgExpr::Expr(expr),
+                ..
+            } => Some(expr),
+            _ => None,
+        })
+        .collect()
 }
 
 fn is_time_bucket_join_eq(left: &Expr, right: &Expr) -> bool {

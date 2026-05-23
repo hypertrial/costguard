@@ -17,17 +17,17 @@
       "SQLCOST005": 1,
       "SQLCOST006": 757,
       "SQLCOST008": 979,
-      "SQLCOST012": 61,
+      "SQLCOST012": 25,
       "SQLCOST013": 168,
       "SQLCOST014": 1338,
       "SQLCOST015": 858,
       "SQLCOST016": 15,
-      "SQLCOST017": 159,
+      "SQLCOST017": 139,
       "SQLCOST018": 544,
       "SQLCOST019": 66
     },
     "diagnostics_by_severity": {
-      "high": 303,
+      "high": 247,
       "low": 1338,
       "med": 3728
     },
@@ -45,9 +45,9 @@
   "thresholds": {
     "max_diagnostics_by_rule": {
       "SQLCOST005": 1,
-      "SQLCOST012": 61,
+      "SQLCOST012": 25,
       "SQLCOST016": 15,
-      "SQLCOST017": 159,
+      "SQLCOST017": 139,
       "SQLCOST019": 66
     },
     "max_parse_failure_delta": 50,
