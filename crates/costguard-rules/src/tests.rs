@@ -259,6 +259,18 @@ where {{ incremental_predicate('p.minute') }}
     let doc = analyze(&file);
     let ids = run_for_file(&file, &[doc]);
     assert!(!ids.contains(&"SQLCOST005".to_string()));
+    assert!(!ids.contains(&"SQLCOST004".to_string()));
+}
+
+#[test]
+fn inline_array_unique_key_does_not_fire_sqlcost004() {
+    let file = sql_file(
+        "models/marts/fct.sql",
+        "{{ config(materialized='incremental', unique_key=['account_id', 'event_date']) }} select id from t",
+    );
+    let doc = analyze(&file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(!ids.contains(&"SQLCOST004".to_string()));
 }
 
 #[test]

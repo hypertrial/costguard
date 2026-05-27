@@ -6,6 +6,7 @@ use sqlparser::ast::{
     JoinConstraint, JoinOperator, ObjectName, Query, Select, SelectItem, SetExpr, SetOperator,
     SetQuantifier, Statement, TableFactor, TableWithJoins, WindowSpec, WindowType, With,
 };
+use std::collections::HashMap;
 
 pub fn extract_shape_features_ast(
     statements: &[Statement],
@@ -15,30 +16,23 @@ pub fn extract_shape_features_ast(
     line_index: &LineIndex,
 ) -> SqlFeatures {
     let mut features = SqlFeatures::default();
+    let mut finder = SpanFinder::new(sanitized, raw, strip_map, line_index);
     for statement in statements {
         if let Statement::Query(query) = statement {
-            extract_query(query, sanitized, raw, strip_map, line_index, &mut features);
+            extract_query(query, &mut finder, &mut features);
         }
     }
-    features.cte_references =
-        extract_cte_references_from_names(&features.ctes, sanitized, raw, strip_map, line_index);
+    features.cte_references = extract_cte_references_from_names(&features.ctes, &finder);
     features
 }
 
-fn extract_query(
-    query: &Query,
-    sanitized: &str,
-    raw: &str,
-    strip_map: &JinjaStripMap,
-    line_index: &LineIndex,
-    features: &mut SqlFeatures,
-) {
+fn extract_query(query: &Query, finder: &mut SpanFinder<'_>, features: &mut SqlFeatures) {
     if let Some(with) = &query.with {
-        extract_with(with, sanitized, raw, strip_map, line_index, features);
+        extract_with(with, finder, features);
     }
-    extract_set_expr(&query.body, sanitized, raw, strip_map, line_index, features);
+    extract_set_expr(&query.body, finder, features);
     if query.order_by.is_some() {
-        if let Some(span) = find_clause_span(sanitized, raw, strip_map, line_index, "order by") {
+        if let Some(span) = finder.find_next("order by") {
             features.order_by_clauses.push(ExpressionFeature {
                 span,
                 key: "order by".into(),
@@ -48,37 +42,19 @@ fn extract_query(
     }
 }
 
-fn extract_with(
-    with: &With,
-    sanitized: &str,
-    raw: &str,
-    strip_map: &JinjaStripMap,
-    line_index: &LineIndex,
-    features: &mut SqlFeatures,
-) {
+fn extract_with(with: &With, finder: &mut SpanFinder<'_>, features: &mut SqlFeatures) {
     for cte in &with.cte_tables {
         let name = cte.alias.name.value.to_ascii_lowercase();
-        if let Some(span) = find_word_span(sanitized, raw, strip_map, line_index, &name) {
+        if let Some(span) = finder.find_word_next(&name) {
             features.ctes.push(CteFeature { name, span });
         }
     }
 }
 
-fn extract_set_expr(
-    body: &SetExpr,
-    sanitized: &str,
-    raw: &str,
-    strip_map: &JinjaStripMap,
-    line_index: &LineIndex,
-    features: &mut SqlFeatures,
-) {
+fn extract_set_expr(body: &SetExpr, finder: &mut SpanFinder<'_>, features: &mut SqlFeatures) {
     match body {
-        SetExpr::Select(select) => {
-            extract_select(select, sanitized, raw, strip_map, line_index, features)
-        }
-        SetExpr::Query(query) => {
-            extract_query(query, sanitized, raw, strip_map, line_index, features)
-        }
+        SetExpr::Select(select) => extract_select(select, finder, features),
+        SetExpr::Query(query) => extract_query(query, finder, features),
         SetExpr::SetOperation {
             op,
             set_quantifier,
@@ -91,8 +67,7 @@ fn extract_set_expr(
                     SetQuantifier::All | SetQuantifier::AllByName
                 )
             {
-                if let Some(span) = find_clause_span(sanitized, raw, strip_map, line_index, "union")
-                {
+                if let Some(span) = finder.find_next("union") {
                     features.unions_without_all.push(ExpressionFeature {
                         span,
                         key: "union".into(),
@@ -100,23 +75,16 @@ fn extract_set_expr(
                     });
                 }
             }
-            extract_set_expr(left, sanitized, raw, strip_map, line_index, features);
-            extract_set_expr(right, sanitized, raw, strip_map, line_index, features);
+            extract_set_expr(left, finder, features);
+            extract_set_expr(right, finder, features);
         }
         _ => {}
     }
 }
 
-fn extract_select(
-    select: &Select,
-    sanitized: &str,
-    raw: &str,
-    strip_map: &JinjaStripMap,
-    line_index: &LineIndex,
-    features: &mut SqlFeatures,
-) {
+fn extract_select(select: &Select, finder: &mut SpanFinder<'_>, features: &mut SqlFeatures) {
     if select.distinct.is_some() {
-        if let Some(span) = find_clause_span(sanitized, raw, strip_map, line_index, "distinct") {
+        if let Some(span) = finder.find_next("distinct") {
             features.distincts.push(ExpressionFeature {
                 span,
                 key: "select distinct".into(),
@@ -126,15 +94,13 @@ fn extract_select(
     }
 
     if let Some(where_expr) = &select.selection {
-        extract_non_sargable_predicates(
-            where_expr, sanitized, raw, strip_map, line_index, features,
-        );
+        extract_non_sargable_predicates(where_expr, finder, features);
     }
 
     for item in &select.projection {
         match item {
             SelectItem::Wildcard(_) | SelectItem::QualifiedWildcard(_, _) => {
-                if let Some(span) = find_clause_span(sanitized, raw, strip_map, line_index, "*") {
+                if let Some(span) = finder.find_next("*") {
                     features.select_stars.push(ExpressionFeature {
                         span,
                         key: "select *".into(),
@@ -143,45 +109,28 @@ fn extract_select(
                 }
             }
             SelectItem::ExprWithAlias { expr, .. } | SelectItem::UnnamedExpr(expr) => {
-                extract_expr(expr, sanitized, raw, strip_map, line_index, features);
+                extract_expr(expr, finder, features);
             }
         }
     }
 
     for table in &select.from {
-        extract_table_with_joins(table, sanitized, raw, strip_map, line_index, features);
+        extract_table_with_joins(table, finder, features);
     }
 }
 
 fn extract_table_with_joins(
     table: &TableWithJoins,
-    sanitized: &str,
-    raw: &str,
-    strip_map: &JinjaStripMap,
-    line_index: &LineIndex,
+    finder: &mut SpanFinder<'_>,
     features: &mut SqlFeatures,
 ) {
-    extract_table_factor(
-        &table.relation,
-        sanitized,
-        raw,
-        strip_map,
-        line_index,
-        features,
-    );
+    extract_table_factor(&table.relation, finder, features);
     for join in &table.joins {
-        extract_join(join, sanitized, raw, strip_map, line_index, features);
+        extract_join(join, finder, features);
     }
 }
 
-fn extract_join(
-    join: &Join,
-    sanitized: &str,
-    raw: &str,
-    strip_map: &JinjaStripMap,
-    line_index: &LineIndex,
-    features: &mut SqlFeatures,
-) {
+fn extract_join(join: &Join, finder: &mut SpanFinder<'_>, features: &mut SqlFeatures) {
     let kind = match &join.join_operator {
         JoinOperator::CrossJoin | JoinOperator::CrossApply => JoinKind::Cross,
         JoinOperator::LeftOuter(_) => JoinKind::Left,
@@ -219,17 +168,10 @@ fn extract_join(
         _ => (None, false, false),
     };
     if matches!(kind, JoinKind::Cross) && is_exempt_cross_join_target(&join.relation) {
-        extract_table_factor(
-            &join.relation,
-            sanitized,
-            raw,
-            strip_map,
-            line_index,
-            features,
-        );
+        extract_table_factor(&join.relation, finder, features);
         return;
     }
-    if let Some(span) = find_clause_span(sanitized, raw, strip_map, line_index, needle) {
+    if let Some(span) = finder.find_next(needle) {
         features.joins.push(JoinFeature {
             span,
             kind,
@@ -238,31 +180,19 @@ fn extract_join(
             function_on_join_key,
         });
     }
-    extract_table_factor(
-        &join.relation,
-        sanitized,
-        raw,
-        strip_map,
-        line_index,
-        features,
-    );
+    extract_table_factor(&join.relation, finder, features);
 }
 
 fn extract_table_factor(
     factor: &TableFactor,
-    sanitized: &str,
-    raw: &str,
-    strip_map: &JinjaStripMap,
-    line_index: &LineIndex,
+    finder: &mut SpanFinder<'_>,
     features: &mut SqlFeatures,
 ) {
     match factor {
         TableFactor::Table { name, .. } => {
-            if table_name_has_wildcard(name) && !text_has_table_suffix_bound(sanitized) {
+            if table_name_has_wildcard(name) && !finder.text_has_table_suffix_bound() {
                 let table_text = name.to_string();
-                if let Some(span) =
-                    find_clause_span(sanitized, raw, strip_map, line_index, &table_text)
-                {
+                if let Some(span) = finder.find_next(&table_text) {
                     features.wildcard_table_scans.push(ExpressionFeature {
                         span,
                         key: table_text.clone(),
@@ -272,44 +202,21 @@ fn extract_table_factor(
             }
         }
         TableFactor::Derived { subquery, .. } => {
-            extract_set_expr(
-                subquery.body.as_ref(),
-                sanitized,
-                raw,
-                strip_map,
-                line_index,
-                features,
-            );
+            extract_set_expr(subquery.body.as_ref(), finder, features);
         }
         TableFactor::NestedJoin {
             table_with_joins, ..
-        } => extract_table_with_joins(
-            table_with_joins,
-            sanitized,
-            raw,
-            strip_map,
-            line_index,
-            features,
-        ),
+        } => extract_table_with_joins(table_with_joins, finder, features),
         _ => {}
     }
 }
 
-fn extract_expr(
-    expr: &Expr,
-    sanitized: &str,
-    raw: &str,
-    strip_map: &JinjaStripMap,
-    line_index: &LineIndex,
-    features: &mut SqlFeatures,
-) {
+fn extract_expr(expr: &Expr, finder: &mut SpanFinder<'_>, features: &mut SqlFeatures) {
     match expr {
         Expr::Function(function) => {
             if is_count_distinct(function) {
                 let snippet = function.to_string();
-                if let Some(span) =
-                    find_clause_span(sanitized, raw, strip_map, line_index, &snippet)
-                {
+                if let Some(span) = finder.find_next(&snippet) {
                     features.count_distincts.push(ExpressionFeature {
                         span,
                         key: "count(distinct".into(),
@@ -317,30 +224,19 @@ fn extract_expr(
                     });
                 }
             }
-            extract_function(function, sanitized, raw, strip_map, line_index, features)
+            extract_function(function, finder, features)
         }
-        Expr::Nested(inner) => extract_expr(inner, sanitized, raw, strip_map, line_index, features),
+        Expr::Nested(inner) => extract_expr(inner, finder, features),
         _ => {}
     }
 }
 
-fn extract_function(
-    function: &Function,
-    sanitized: &str,
-    raw: &str,
-    strip_map: &JinjaStripMap,
-    line_index: &LineIndex,
-    features: &mut SqlFeatures,
-) {
+fn extract_function(function: &Function, finder: &mut SpanFinder<'_>, features: &mut SqlFeatures) {
     if let Some(window) = &function.over {
         match window {
-            WindowType::WindowSpec(spec) => extract_window(
-                spec, function, sanitized, raw, strip_map, line_index, features,
-            ),
+            WindowType::WindowSpec(spec) => extract_window(spec, function, finder, features),
             WindowType::NamedWindow(_) => {
-                if let Some(span) =
-                    find_clause_span(sanitized, raw, strip_map, line_index, "over (")
-                {
+                if let Some(span) = finder.find_next("over (") {
                     features.window_functions.push(WindowFeature {
                         span,
                         text: "over (...)".into(),
@@ -354,21 +250,14 @@ fn extract_function(
 
 fn extract_non_sargable_predicates(
     expr: &Expr,
-    sanitized: &str,
-    raw: &str,
-    strip_map: &JinjaStripMap,
-    line_index: &LineIndex,
+    finder: &mut SpanFinder<'_>,
     features: &mut SqlFeatures,
 ) {
     match expr {
         Expr::BinaryOp { left, op, right } => match op {
             BinaryOperator::And | BinaryOperator::Or => {
-                extract_non_sargable_predicates(
-                    left, sanitized, raw, strip_map, line_index, features,
-                );
-                extract_non_sargable_predicates(
-                    right, sanitized, raw, strip_map, line_index, features,
-                );
+                extract_non_sargable_predicates(left, finder, features);
+                extract_non_sargable_predicates(right, finder, features);
             }
             BinaryOperator::Eq
             | BinaryOperator::NotEq
@@ -379,9 +268,12 @@ fn extract_non_sargable_predicates(
                 for side in [left.as_ref(), right.as_ref()] {
                     if is_non_sargable_filter(side) {
                         let snippet = side.to_string();
-                        if let Some(span) =
-                            find_clause_span(sanitized, raw, strip_map, line_index, &snippet)
-                        {
+                        let raw_after = features
+                            .non_sargable_predicates
+                            .last()
+                            .map(|feature| feature.span.byte_end)
+                            .unwrap_or(0);
+                        if let Some(span) = finder.find_after(raw_after, &snippet) {
                             features.non_sargable_predicates.push(ExpressionFeature {
                                 span,
                                 key: snippet.clone(),
@@ -393,9 +285,7 @@ fn extract_non_sargable_predicates(
             }
             _ => {}
         },
-        Expr::Nested(inner) => {
-            extract_non_sargable_predicates(inner, sanitized, raw, strip_map, line_index, features)
-        }
+        Expr::Nested(inner) => extract_non_sargable_predicates(inner, finder, features),
         _ => {}
     }
 }
@@ -403,20 +293,17 @@ fn extract_non_sargable_predicates(
 fn extract_window(
     window: &WindowSpec,
     function: &Function,
-    sanitized: &str,
-    raw: &str,
-    strip_map: &JinjaStripMap,
-    line_index: &LineIndex,
+    finder: &mut SpanFinder<'_>,
     features: &mut SqlFeatures,
 ) {
-    let snippet = format!("{} over", function.name).to_ascii_lowercase();
-    if let Some(span) = find_clause_span(sanitized, raw, strip_map, line_index, &snippet) {
+    let snippet = function.name.to_string().to_ascii_lowercase();
+    if let Some(span) = finder.find_next(&snippet) {
         features.window_functions.push(WindowFeature {
             span,
             text: snippet,
             has_partition_by: !window.partition_by.is_empty(),
         });
-    } else if let Some(span) = find_clause_span(sanitized, raw, strip_map, line_index, "over (") {
+    } else if let Some(span) = finder.find_next("over (") {
         features.window_functions.push(WindowFeature {
             span,
             text: "over (...)".into(),
@@ -427,21 +314,16 @@ fn extract_window(
 
 fn extract_cte_references_from_names(
     ctes: &[CteFeature],
-    sanitized: &str,
-    raw: &str,
-    strip_map: &JinjaStripMap,
-    line_index: &LineIndex,
+    finder: &SpanFinder<'_>,
 ) -> Vec<ExpressionFeature> {
     let mut references = Vec::new();
     for cte in ctes {
-        if let Some(span) = find_word_span(sanitized, raw, strip_map, line_index, &cte.name) {
-            if span.byte_start != cte.span.byte_start {
-                references.push(ExpressionFeature {
-                    span,
-                    key: cte.name.clone(),
-                    text: cte.name.clone(),
-                });
-            }
+        for span in finder.find_word_all_after(&cte.name, cte.span.byte_end) {
+            references.push(ExpressionFeature {
+                span,
+                key: cte.name.clone(),
+                text: cte.name.clone(),
+            });
         }
     }
     references
@@ -502,29 +384,117 @@ fn dedupe_join_features(joins: Vec<JoinFeature>) -> Vec<JoinFeature> {
         .collect()
 }
 
-fn find_clause_span(
-    sanitized: &str,
-    raw: &str,
-    strip_map: &JinjaStripMap,
-    line_index: &LineIndex,
-    needle: &str,
-) -> Option<Span> {
-    let lower_sanitized = sanitized.to_ascii_lowercase();
-    let lower_needle = needle.to_ascii_lowercase();
-    let start = lower_sanitized.find(&lower_needle)?;
-    let end = start + lower_needle.len();
-    let (raw_start, raw_end) = strip_map.map_sanitized_range(start, end)?;
-    Some(line_index.span(raw_start, raw_end.min(raw.len())))
+struct SpanFinder<'a> {
+    lower_sanitized: String,
+    raw: &'a str,
+    strip_map: &'a JinjaStripMap,
+    line_index: &'a LineIndex,
+    cursors: HashMap<String, usize>,
 }
 
-fn find_word_span(
-    sanitized: &str,
-    raw: &str,
-    strip_map: &JinjaStripMap,
-    line_index: &LineIndex,
-    word: &str,
-) -> Option<Span> {
-    find_clause_span(sanitized, raw, strip_map, line_index, word)
+impl<'a> SpanFinder<'a> {
+    fn new(
+        sanitized: &str,
+        raw: &'a str,
+        strip_map: &'a JinjaStripMap,
+        line_index: &'a LineIndex,
+    ) -> Self {
+        Self {
+            lower_sanitized: sanitized.to_ascii_lowercase(),
+            raw,
+            strip_map,
+            line_index,
+            cursors: HashMap::new(),
+        }
+    }
+
+    fn find_next(&mut self, needle: &str) -> Option<Span> {
+        let lower_needle = needle.to_ascii_lowercase();
+        let start_from = self.cursors.get(&lower_needle).copied().unwrap_or(0);
+        let (start, span) = self.find_sanitized_from(&lower_needle, start_from, |_| true)?;
+        self.cursors
+            .insert(lower_needle.clone(), start + lower_needle.len());
+        Some(span)
+    }
+
+    fn find_after(&self, raw_after: usize, needle: &str) -> Option<Span> {
+        let lower_needle = needle.to_ascii_lowercase();
+        self.find_sanitized_from(&lower_needle, 0, |raw_start| raw_start >= raw_after)
+            .map(|(_, span)| span)
+    }
+
+    fn find_word_next(&mut self, word: &str) -> Option<Span> {
+        let lower_word = word.to_ascii_lowercase();
+        let cursor_key = format!("word:{lower_word}");
+        let start_from = self.cursors.get(&cursor_key).copied().unwrap_or(0);
+        let (start, span) = self.find_sanitized_from(&lower_word, start_from, |raw_start| {
+            self.word_boundaries(raw_start, &lower_word)
+        })?;
+        self.cursors.insert(cursor_key, start + lower_word.len());
+        Some(span)
+    }
+
+    fn find_word_all_after(&self, word: &str, raw_after: usize) -> Vec<Span> {
+        let lower_word = word.to_ascii_lowercase();
+        let mut spans = Vec::new();
+        let mut start_from = 0usize;
+        while let Some((start, span)) =
+            self.find_sanitized_from(&lower_word, start_from, |raw_start| {
+                raw_start >= raw_after && self.word_boundaries(raw_start, &lower_word)
+            })
+        {
+            start_from = start + lower_word.len();
+            spans.push(span);
+        }
+        spans
+    }
+
+    fn text_has_table_suffix_bound(&self) -> bool {
+        self.lower_sanitized.contains("_table_suffix")
+    }
+
+    fn find_sanitized_from<F>(
+        &self,
+        lower_needle: &str,
+        mut start_from: usize,
+        raw_filter: F,
+    ) -> Option<(usize, Span)>
+    where
+        F: Fn(usize) -> bool,
+    {
+        while start_from < self.lower_sanitized.len() {
+            let relative = self.lower_sanitized[start_from..].find(lower_needle)?;
+            let start = start_from + relative;
+            let end = start + lower_needle.len();
+            if let Some((raw_start, raw_end)) = self.strip_map.map_sanitized_range(start, end) {
+                if raw_filter(raw_start) {
+                    return Some((
+                        start,
+                        self.line_index.span(raw_start, raw_end.min(self.raw.len())),
+                    ));
+                }
+            }
+            start_from = end;
+        }
+        None
+    }
+
+    fn word_boundaries(&self, raw_start: usize, word: &str) -> bool {
+        let raw_end = raw_start + word.len();
+        let before = self.raw[..raw_start]
+            .chars()
+            .next_back()
+            .is_none_or(|ch| !is_word_char(ch));
+        let after = self.raw[raw_end..]
+            .chars()
+            .next()
+            .is_none_or(|ch| !is_word_char(ch));
+        before && after
+    }
+}
+
+fn is_word_char(ch: char) -> bool {
+    ch.is_ascii_alphanumeric() || ch == '_'
 }
 
 fn has_equality_predicate(predicate: &str) -> bool {
@@ -813,11 +783,6 @@ fn is_date_like_type(data_type: &DataType) -> bool {
 
 fn table_name_has_wildcard(name: &ObjectName) -> bool {
     name.to_string().contains('*')
-}
-
-fn text_has_table_suffix_bound(text: &str) -> bool {
-    let lower = text.to_ascii_lowercase();
-    lower.contains("_table_suffix")
 }
 
 pub fn merge_shape_features(mut base: SqlFeatures, ast: SqlFeatures, parsed: bool) -> SqlFeatures {

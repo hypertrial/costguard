@@ -151,12 +151,7 @@ pub fn extract_sql_features(text: &str) -> DbtSqlFeatures {
         });
     }
 
-    if let Some(capture) = config_regex().find(text) {
-        let body = capture.as_str();
-        features.config.materialized = extract_config_value(body, "materialized");
-        features.config.unique_key = extract_config_value(body, "unique_key");
-        features.config.incremental_strategy = extract_config_value(body, "incremental_strategy");
-    }
+    apply_inline_configs(text, &mut features.config);
 
     features.uses_is_incremental = text.contains("is_incremental()");
     features.incremental_block = extract_incremental_block(text);
@@ -179,29 +174,210 @@ fn incremental_block_regex() -> &'static Regex {
     })
 }
 
-fn extract_config_value(body: &str, key: &str) -> Option<String> {
-    config_key_regex(key)
-        .captures(body)
-        .and_then(|capture| capture.get(1).map(|value| value.as_str().to_string()))
+fn apply_inline_configs(text: &str, config: &mut DbtConfig) {
+    for body in config_call_bodies(text) {
+        for item in split_top_level_commas(body) {
+            let Some((key, value)) = split_top_level_assignment(item) else {
+                continue;
+            };
+            match key.trim() {
+                "materialized" => {
+                    if let Some(value) = quoted_string(value.trim()) {
+                        config.materialized = Some(value);
+                    }
+                }
+                "unique_key" => {
+                    if let Some(value) = parse_unique_key_literal(value.trim()) {
+                        config.unique_key = Some(value);
+                    }
+                }
+                "incremental_strategy" => {
+                    if let Some(value) = quoted_string(value.trim()) {
+                        config.incremental_strategy = Some(value);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
 }
 
-fn config_key_regex(key: &str) -> &'static Regex {
-    static MATERIALIZED: OnceLock<Regex> = OnceLock::new();
-    static UNIQUE_KEY: OnceLock<Regex> = OnceLock::new();
-    static INCREMENTAL_STRATEGY: OnceLock<Regex> = OnceLock::new();
-    match key {
-        "materialized" => MATERIALIZED.get_or_init(|| {
-            Regex::new(r#"materialized\s*=\s*['"]([^'"]+)['"]"#).expect("valid config regex")
-        }),
-        "unique_key" => UNIQUE_KEY.get_or_init(|| {
-            Regex::new(r#"unique_key\s*=\s*['"]([^'"]+)['"]"#).expect("valid config regex")
-        }),
-        "incremental_strategy" => INCREMENTAL_STRATEGY.get_or_init(|| {
-            Regex::new(r#"incremental_strategy\s*=\s*['"]([^'"]+)['"]"#)
-                .expect("valid config regex")
-        }),
-        other => panic!("unsupported config key: {other}"),
+fn config_call_bodies(text: &str) -> Vec<&str> {
+    let lower = text.to_ascii_lowercase();
+    let mut bodies = Vec::new();
+    let mut index = 0usize;
+    while index < text.len() {
+        if lower[index..].starts_with("config") && is_identifier_boundary(text, index) {
+            let mut open = index + "config".len();
+            while open < text.len() {
+                let ch = text[open..].chars().next().unwrap_or_default();
+                if !ch.is_whitespace() {
+                    break;
+                }
+                open += ch.len_utf8();
+            }
+            if text[open..].starts_with('(') {
+                if let Some(close) = balanced_config_close(text, open) {
+                    bodies.push(&text[open + 1..close]);
+                    index = close + 1;
+                    continue;
+                }
+            }
+        }
+        let ch = text[index..].chars().next().unwrap_or_default();
+        if ch == '\0' {
+            break;
+        }
+        index += ch.len_utf8();
     }
+    bodies
+}
+
+fn is_identifier_boundary(text: &str, index: usize) -> bool {
+    text[..index]
+        .chars()
+        .next_back()
+        .is_none_or(|ch| !is_identifier_char(ch))
+}
+
+fn is_identifier_char(ch: char) -> bool {
+    ch.is_ascii_alphanumeric() || ch == '_'
+}
+
+fn balanced_config_close(text: &str, open: usize) -> Option<usize> {
+    let mut paren_depth = 1usize;
+    let mut bracket_depth = 0usize;
+    let mut brace_depth = 0usize;
+    let mut quote: Option<char> = None;
+    let mut index = open + 1;
+    while index < text.len() {
+        let ch = text[index..].chars().next()?;
+        if let Some(quote_ch) = quote {
+            if ch == '\\' {
+                index += ch.len_utf8();
+                if index < text.len() {
+                    index += text[index..].chars().next()?.len_utf8();
+                }
+                continue;
+            }
+            if ch == quote_ch {
+                let next = index + ch.len_utf8();
+                if text[next..].starts_with(quote_ch) {
+                    index = next + ch.len_utf8();
+                    continue;
+                }
+                quote = None;
+            }
+            index += ch.len_utf8();
+            continue;
+        }
+
+        match ch {
+            '\'' | '"' => quote = Some(ch),
+            '(' => paren_depth += 1,
+            ')' if bracket_depth == 0 && brace_depth == 0 => {
+                paren_depth = paren_depth.saturating_sub(1);
+                if paren_depth == 0 {
+                    return Some(index);
+                }
+            }
+            ')' => paren_depth = paren_depth.saturating_sub(1),
+            '[' => bracket_depth += 1,
+            ']' => bracket_depth = bracket_depth.saturating_sub(1),
+            '{' => brace_depth += 1,
+            '}' => brace_depth = brace_depth.saturating_sub(1),
+            _ => {}
+        }
+        index += ch.len_utf8();
+    }
+    None
+}
+
+fn split_top_level_commas(text: &str) -> Vec<&str> {
+    split_top_level(text, ',')
+}
+
+fn split_top_level_assignment(text: &str) -> Option<(&str, &str)> {
+    split_top_level(text, '=')
+        .split_first()
+        .and_then(|(key, rest)| (rest.len() == 1).then_some((*key, rest[0])))
+}
+
+fn split_top_level(text: &str, delimiter: char) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut start = 0usize;
+    let mut paren_depth = 0usize;
+    let mut bracket_depth = 0usize;
+    let mut brace_depth = 0usize;
+    let mut quote: Option<char> = None;
+    let mut index = 0usize;
+    while index < text.len() {
+        let ch = text[index..].chars().next().unwrap_or_default();
+        if let Some(quote_ch) = quote {
+            if ch == '\\' {
+                index += ch.len_utf8();
+                if index < text.len() {
+                    index += text[index..].chars().next().unwrap_or_default().len_utf8();
+                }
+                continue;
+            }
+            if ch == quote_ch {
+                quote = None;
+            }
+            index += ch.len_utf8();
+            continue;
+        }
+        match ch {
+            '\'' | '"' => quote = Some(ch),
+            '(' => paren_depth += 1,
+            ')' => paren_depth = paren_depth.saturating_sub(1),
+            '[' => bracket_depth += 1,
+            ']' => bracket_depth = bracket_depth.saturating_sub(1),
+            '{' => brace_depth += 1,
+            '}' => brace_depth = brace_depth.saturating_sub(1),
+            _ if ch == delimiter && paren_depth == 0 && bracket_depth == 0 && brace_depth == 0 => {
+                parts.push(text[start..index].trim());
+                start = index + ch.len_utf8();
+            }
+            _ => {}
+        }
+        index += ch.len_utf8();
+    }
+    parts.push(text[start..].trim());
+    parts
+}
+
+fn parse_unique_key_literal(value: &str) -> Option<String> {
+    if let Some(value) = quoted_string(value) {
+        return Some(value);
+    }
+    let inner = value
+        .strip_prefix('[')
+        .and_then(|value| value.strip_suffix(']'))
+        .or_else(|| {
+            value
+                .strip_prefix('(')
+                .and_then(|value| value.strip_suffix(')'))
+        })?;
+    let parts = split_top_level_commas(inner)
+        .into_iter()
+        .map(str::trim)
+        .map(quoted_string)
+        .collect::<Option<Vec<_>>>()?;
+    (!parts.is_empty()).then(|| parts.join(","))
+}
+
+fn quoted_string(value: &str) -> Option<String> {
+    let mut chars = value.chars();
+    let quote = chars.next()?;
+    if quote != '\'' && quote != '"' {
+        return None;
+    }
+    if !value.ends_with(quote) || value.len() < quote.len_utf8() * 2 {
+        return None;
+    }
+    let inner = &value[quote.len_utf8()..value.len() - quote.len_utf8()];
+    Some(inner.to_string())
 }
 
 fn ref_regex() -> &'static Regex {
@@ -218,11 +394,6 @@ fn source_regex() -> &'static Regex {
         Regex::new(r#"source\s*\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*\)"#)
             .expect("valid regex")
     })
-}
-
-fn config_regex() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r#"config\s*\((?s:.*?)\)"#).expect("valid regex"))
 }
 
 pub fn parse_manifest(path: &Path) -> Result<DbtProject> {
@@ -771,6 +942,53 @@ mod tests {
         assert_eq!(features.config.materialized.as_deref(), Some("incremental"));
         assert_eq!(features.config.unique_key.as_deref(), Some("id"));
         assert!(features.uses_is_incremental);
+    }
+
+    #[test]
+    fn extracts_inline_config_array_unique_key() {
+        let text = "{{ config(materialized='incremental', unique_key=['account_id', \"event_date\"], incremental_strategy='merge') }} select 1";
+        let features = extract_sql_features(text);
+        assert_eq!(features.config.materialized.as_deref(), Some("incremental"));
+        assert_eq!(
+            features.config.unique_key.as_deref(),
+            Some("account_id,event_date")
+        );
+        assert_eq!(
+            features.config.incremental_strategy.as_deref(),
+            Some("merge")
+        );
+    }
+
+    #[test]
+    fn extracts_multiline_inline_config_with_nested_calls() {
+        let text = r#"{{
+    config(
+        materialized='incremental',
+        unique_key=['transfer_id'],
+        incremental_predicates=[incremental_predicate('DBT_INTERNAL_DEST.evt_block_time')]
+    )
+}}
+select 1"#;
+        let features = extract_sql_features(text);
+        assert_eq!(features.config.materialized.as_deref(), Some("incremental"));
+        assert_eq!(features.config.unique_key.as_deref(), Some("transfer_id"));
+    }
+
+    #[test]
+    fn ignores_dynamic_inline_config_values_without_panic() {
+        let text =
+            "{{ config(materialized=var('materialization'), unique_key=var('key')) }} select 1";
+        let features = extract_sql_features(text);
+        assert_eq!(features.config.materialized, None);
+        assert_eq!(features.config.unique_key, None);
+    }
+
+    #[test]
+    fn later_inline_config_values_override_earlier_values() {
+        let text = "{{ config(materialized='view', unique_key='old_id') }} {{ config(materialized='incremental', unique_key=['new_id']) }} select 1";
+        let features = extract_sql_features(text);
+        assert_eq!(features.config.materialized.as_deref(), Some("incremental"));
+        assert_eq!(features.config.unique_key.as_deref(), Some("new_id"));
     }
 
     #[test]

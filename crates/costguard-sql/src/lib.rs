@@ -1538,6 +1538,100 @@ mod tests {
     }
 
     #[test]
+    fn ast_join_span_tracks_second_repeated_join() {
+        let text = "select a.id from a join b on a.id = b.id\njoin c on a.id = c.id";
+        let index = LineIndex::new(text);
+        let doc = analyze_sql(
+            PathBuf::from("x.sql"),
+            text,
+            Platform::Generic,
+            &index,
+            None,
+            true,
+        );
+        assert!(doc.features.joins.iter().any(|join| join.span.line == 1));
+        assert!(doc
+            .features
+            .joins
+            .iter()
+            .any(|join| join.span.line == 2 && join.span.column == 1));
+    }
+
+    #[test]
+    fn ast_window_span_tracks_unpartitioned_window() {
+        let text = "select sum(x) over (partition by id) as sx,\nrow_number() over () as rn from t";
+        let index = LineIndex::new(text);
+        let doc = analyze_sql(
+            PathBuf::from("x.sql"),
+            text,
+            Platform::Generic,
+            &index,
+            None,
+            true,
+        );
+        let unpartitioned = doc
+            .features
+            .window_functions
+            .iter()
+            .find(|window| !window.has_partition_by)
+            .expect("unpartitioned window");
+        assert_eq!(unpartitioned.span.line, 2);
+        assert_eq!(unpartitioned.span.column, 1);
+    }
+
+    #[test]
+    fn ast_repeated_select_star_spans_are_distinct() {
+        let text = "select * from (select * from t) nested";
+        let index = LineIndex::new(text);
+        let doc = analyze_sql(
+            PathBuf::from("x.sql"),
+            text,
+            Platform::Generic,
+            &index,
+            None,
+            true,
+        );
+        assert_eq!(doc.features.select_stars.len(), 2);
+        assert!(
+            doc.features.select_stars[0].span.byte_start
+                < doc.features.select_stars[1].span.byte_start
+        );
+    }
+
+    #[test]
+    fn ast_cte_references_do_not_collapse_to_definition() {
+        let text = "with c as (select 1), d as (select * from c) select * from c join c c2 on true";
+        let index = LineIndex::new(text);
+        let doc = analyze_sql(
+            PathBuf::from("x.sql"),
+            text,
+            Platform::Generic,
+            &index,
+            None,
+            true,
+        );
+        let c_definition = doc
+            .features
+            .ctes
+            .iter()
+            .find(|cte| cte.name == "c")
+            .expect("cte c");
+        let c_references = doc
+            .features
+            .cte_references
+            .iter()
+            .filter(|reference| reference.key == "c")
+            .collect::<Vec<_>>();
+        assert!(c_references.len() >= 3, "{c_references:?}");
+        assert!(c_references
+            .iter()
+            .all(|reference| reference.span.byte_start > c_definition.span.byte_start));
+        assert!(c_references
+            .windows(2)
+            .all(|window| window[0].span.byte_start < window[1].span.byte_start));
+    }
+
+    #[test]
     fn normalize_strips_comments_and_try_cast() {
         let sql = "-- header\nSELECT TRY_CAST(x AS bigint) FROM t";
         let normalized = normalize_for_parse(sql, Platform::Trino);
