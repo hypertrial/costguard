@@ -5,15 +5,18 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   rust:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: EmbarkStudios/cargo-deny-action@v2
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
+      - uses: EmbarkStudios/cargo-deny-action@091bd13faf7e96935df105635d17ce9a607bc99d
       - run: python3 scripts/validate_workspace_deps.py
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
           path: |
             ~/.cargo/registry
@@ -33,7 +36,7 @@ jobs:
         env:
           COSTGUARD_BUILD_PROFILE: release
       - run: python3 scripts/generate_rule_docs.py --check
-      - uses: peaceiris/actions-mdbook@v2
+      - uses: peaceiris/actions-mdbook@062dc9e3eab0bad35531417c6bb6c6a7a184764f
         with:
           mdbook-version: "0.4.40"
       - run: mdbook build

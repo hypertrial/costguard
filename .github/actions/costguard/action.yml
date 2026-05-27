@@ -96,11 +96,11 @@ runs:
   steps:
     - name: Install Rust toolchain
       if: inputs.install-mode == 'source'
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
 
     - name: Cache cargo build
       if: inputs.install-mode == 'source'
-      uses: actions/cache@v4
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
       with:
         path: |
           ~/.cargo/registry
@@ -151,7 +151,7 @@ runs:
 
     - name: Set up Python
       if: inputs.compile-dbt == 'true' && inputs.use-existing-manifest != 'true'
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
       with:
         python-version: "3.11"
 
@@ -227,20 +227,26 @@ runs:
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       env:
+        BASE_INPUT: ${{ inputs.base }}
+        WAREHOUSE_INPUT: ${{ inputs.warehouse }}
+        FAIL_ON_INPUT: ${{ inputs.fail-on }}
+        FORMAT_INPUT: ${{ inputs.format }}
+        MIN_CONFIDENCE_INPUT: ${{ inputs.min-confidence }}
+        MANIFEST_INPUT: ${{ inputs.manifest }}
         MANIFEST_OUTPUT_INPUT: ${{ inputs.manifest-output }}
       run: |
         set -eo pipefail
         args=(
           pr
-          --base "${{ inputs.base }}"
-          --warehouse "${{ inputs.warehouse }}"
-          --fail-on "${{ inputs.fail-on }}"
-          --format "${{ inputs.format }}"
+          --base "${BASE_INPUT}"
+          --warehouse "${WAREHOUSE_INPUT}"
+          --fail-on "${FAIL_ON_INPUT}"
+          --format "${FORMAT_INPUT}"
         )
-        if [ -n "${{ inputs.min-confidence }}" ]; then
-          args+=(--min-confidence "${{ inputs.min-confidence }}")
+        if [ -n "${MIN_CONFIDENCE_INPUT}" ]; then
+          args+=(--min-confidence "${MIN_CONFIDENCE_INPUT}")
         fi
-        manifest="${{ inputs.manifest }}"
+        manifest="${MANIFEST_INPUT}"
         if [ -z "${manifest}" ] && [ -f "${MANIFEST_OUTPUT_INPUT}" ]; then
           manifest="${MANIFEST_OUTPUT_INPUT}"
         fi
@@ -251,7 +257,7 @@ runs:
         output="$(costguard "${args[@]}")"
         status=$?
         printf '%s\n' "$output"
-        if [ "${{ inputs.format }}" = "markdown" ] && [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+        if [ "${FORMAT_INPUT}" = "markdown" ] && [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
           printf '%s\n' "$output" >> "$GITHUB_STEP_SUMMARY"
         fi
         exit "$status"

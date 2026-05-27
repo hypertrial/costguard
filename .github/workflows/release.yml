@@ -6,7 +6,7 @@ on:
       - "v*"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -28,8 +28,8 @@ jobs:
             bin: costguard.exe
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
         with:
           targets: ${{ matrix.target }}
       - run: cargo build --release --locked -p costguard-cli --target ${{ matrix.target }}
@@ -42,7 +42,7 @@ jobs:
           cp "target/${{ matrix.target }}/release/${{ matrix.bin }}" "dist/${{ matrix.target }}/"
           tar -czf "$asset" -C "dist/${{ matrix.target }}" "${{ matrix.bin }}"
           shasum -a 256 "$asset" > "${asset}.sha256"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: costguard-${{ matrix.target }}
           path: |
@@ -52,12 +52,14 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           path: dist
           merge-multiple: true
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
         with:
           files: |
             dist/costguard-*.tar.gz
