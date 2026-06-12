@@ -33,6 +33,13 @@ PRECISION_GATES = {
     "overall": 0.80,
     "per_rule_min": 0.70,
 }
+INFRASTRUCTURE_RULES = {
+    "SQLCOST023",
+    "SQLCOST024",
+    "SQLCOST025",
+    "SQLCOST026",
+    "SQLCOST027",
+}
 
 
 def load_fp_registry() -> list[dict[str, Any]]:
@@ -40,23 +47,41 @@ def load_fp_registry() -> list[dict[str, Any]]:
     return data.get("finding", [])
 
 
-def registry_verdict(rule: str, bucket: str) -> str | None:
+def registry_verdict_map() -> dict[tuple[str, str, str], str]:
+    verdicts: dict[tuple[str, str, str], str] = {}
     for entry in load_fp_registry():
-        if entry.get("rule") == rule and entry.get("bucket") == bucket:
-            return entry.get("verdict")
-    return None
+        rule = entry.get("rule")
+        bucket = entry.get("bucket")
+        verdict = entry.get("verdict")
+        repo = entry.get("repo", "spellbook")
+        if not rule or not bucket or not verdict:
+            continue
+        key = (repo, rule, bucket)
+        if key in verdicts and verdicts[key] != verdict:
+            raise SystemExit(
+                f"conflicting fp_registry verdicts for {repo}/{rule}/{bucket}: "
+                f"{verdicts[key]} vs {verdict}"
+            )
+        verdicts[key] = verdict
+    return verdicts
+
+
+def registry_verdict(repo: str, rule: str, bucket: str) -> str | None:
+    verdicts = registry_verdict_map()
+    return verdicts.get((repo, rule, bucket)) or verdicts.get(("spellbook", rule, bucket))
 
 
 def classify_diagnostic(
     diagnostic: dict[str, Any],
     checkout: Path,
     compiled_by_path: dict[str, str],
+    repo: str,
 ) -> tuple[str, str | None]:
     rule_id = diagnostic.get("rule_id", "")
     sql = read_sql_for_diagnostic(checkout, diagnostic, compiled_by_path)
     classifier = CLASSIFIERS.get(rule_id, lambda _sql: "other")
     bucket = classifier(sql)
-    verdict = registry_verdict(rule_id, bucket)
+    verdict = registry_verdict(repo, rule_id, bucket)
     return bucket, verdict
 
 
@@ -80,13 +105,14 @@ def precision_report(
     diagnostics: list[dict[str, Any]],
     checkout: Path,
     compiled_by_path: dict[str, str],
+    repo: str,
 ) -> dict[str, Any]:
     by_rule: dict[str, Counter[str]] = defaultdict(Counter)
     by_severity: Counter[str] = Counter()
     unknown_buckets: Counter[str] = Counter()
 
     for diagnostic in diagnostics:
-        bucket, verdict = classify_diagnostic(diagnostic, checkout, compiled_by_path)
+        bucket, verdict = classify_diagnostic(diagnostic, checkout, compiled_by_path, repo)
         rule_id = diagnostic.get("rule_id", "unknown")
         severity = str(diagnostic.get("severity", "unknown")).lower()
         if verdict is None:
@@ -182,14 +208,18 @@ def main() -> int:
             scan_paths=repo.get("scan_paths", ["."]),
             manifest=manifest,
         )
-    diagnostics = payload.get("diagnostics", [])
+    diagnostics = [
+        diagnostic
+        for diagnostic in payload.get("diagnostics", [])
+        if diagnostic.get("rule_id") not in INFRASTRUCTURE_RULES
+    ]
     manifest = checkout / "target/manifest.json"
     if not manifest.exists():
         raise SystemExit(f"missing manifest at {manifest}; run benchmark first")
     compiled_by_path = load_manifest_sql(manifest)
 
     sampled = sample_diagnostics(diagnostics, sample_size=args.sample_size, seed=args.seed)
-    report = precision_report(sampled, checkout, compiled_by_path)
+    report = precision_report(sampled, checkout, compiled_by_path, args.repo)
 
     print(f"Sampled {report['sample_size']} diagnostics ({report['classified']} classified)")
     if report["high_precision"] is not None:

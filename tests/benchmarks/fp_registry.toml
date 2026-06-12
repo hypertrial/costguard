@@ -117,17 +117,17 @@ notes = "normalization in staging models is expected"
 rule = "SQLCOST019"
 repo = "spellbook"
 bucket = "block_time_in_source_scope"
-verdict = "fp"
-corpus_case = "incremental_source_join_on_bound"
-notes = "partition predicate in JOIN ON satisfies source-side bound"
+verdict = "tp"
+corpus_case = "recall_incremental_unbounded_source"
+notes = "partition predicate in JOIN ON still warrants review but is treated as true positive in Spellbook triage"
 
 [[finding]]
 rule = "SQLCOST019"
 repo = "spellbook"
 bucket = "block_time_in_incremental"
-verdict = "fp"
-corpus_case = "incremental_source_cte_bound"
-notes = "bounded predicate in source CTE satisfies incremental source read"
+verdict = "tp"
+corpus_case = "recall_incremental_unbounded_source"
+notes = "block_time predicates adjacent to incremental source reads remain true positives in Spellbook triage"
 
 [[finding]]
 rule = "SQLCOST016"
@@ -148,7 +148,7 @@ notes = "compiled SQL AST extraction avoids regex false positives on jinja-heavy
 [[finding]]
 rule = "SQLCOST005"
 repo = "spellbook"
-bucket = "missing_predicate"
+bucket = "config_predicate"
 verdict = "fp"
 corpus_case = "incremental_config_predicates"
 notes = "dbt incremental_predicates config and incremental_predicate macro satisfy merge pruning"
@@ -162,9 +162,17 @@ corpus_case = "incremental_missing"
 notes = "incremental without pruning predicate is a true positive"
 
 [[finding]]
+rule = "SQLCOST005"
+repo = "spellbook"
+bucket = "missing_predicate"
+verdict = "tp"
+corpus_case = "recall_incremental_missing_id_predicate"
+notes = "id-only incremental predicate remains a true positive in recall corpus"
+
+[[finding]]
 rule = "SQLCOST012"
 repo = "spellbook"
-bucket = "comma_join"
+bucket = "subquery_comma_fp"
 verdict = "fp"
 corpus_case = "cte_inner_from"
 notes = "inner CTE FROM clauses must not be treated as outer comma joins"
@@ -172,7 +180,7 @@ notes = "inner CTE FROM clauses must not be treated as outer comma joins"
 [[finding]]
 rule = "SQLCOST012"
 repo = "spellbook"
-bucket = "cross_join_explicit"
+bucket = "date_spine_cross_join"
 verdict = "fp"
 corpus_case = "cross_join_date_spine"
 notes = "cross join to date spine CTEs is intentional for incremental windows"
@@ -180,7 +188,7 @@ notes = "cross join to date spine CTEs is intentional for incremental windows"
 [[finding]]
 rule = "SQLCOST012"
 repo = "spellbook"
-bucket = "comma_join"
+bucket = "group_by_comma_fp"
 verdict = "fp"
 corpus_case = "macro_group_by_not_comma"
 notes = "explicit JOIN macros must not treat GROUP BY commas as comma joins"
@@ -188,7 +196,7 @@ notes = "explicit JOIN macros must not treat GROUP BY commas as comma joins"
 [[finding]]
 rule = "SQLCOST012"
 repo = "spellbook"
-bucket = "cross_join_explicit"
+bucket = "date_spine_cross_join"
 verdict = "fp"
 corpus_case = "cross_join_date_ranges"
 notes = "cross join to date_ranges CTE is intentional for windowed scans"
@@ -196,15 +204,7 @@ notes = "cross join to date_ranges CTE is intentional for windowed scans"
 [[finding]]
 rule = "SQLCOST017"
 repo = "spellbook"
-bucket = "coalesce_key"
-verdict = "fp"
-corpus_case = "coalesce_null_safe_join"
-notes = "coalesce(left.col, right.col) = dim.col null-safe joins after full outer merge are acceptable"
-
-[[finding]]
-rule = "SQLCOST017"
-repo = "spellbook"
-bucket = "cast_on_key"
+bucket = "date_trunc_join"
 verdict = "fp"
 corpus_case = "join_key_date_trunc_minute"
 notes = "minute/hour/day bucket columns joined to date_trunc on event time are acceptable"
@@ -220,66 +220,274 @@ notes = "asymmetric function-wrapped join key remains a true positive"
 [[finding]]
 rule = "SQLCOST006"
 repo = "spellbook"
-bucket = "other"
+bucket = "non_equality_join"
 verdict = "tp"
-corpus_case = "ast_shape"
-notes = "unbounded join heuristics on Spellbook are predominantly true positives in sampled triage"
+corpus_case = "recall_unbounded_join_plain"
+notes = "inequality join predicates are true positives in recall corpus"
+
+[[finding]]
+rule = "SQLCOST006"
+repo = "spellbook"
+bucket = "non_equality_join"
+verdict = "tp"
+corpus_case = "recall_unbounded_join_cross_like"
+notes = "cross-like inequality joins remain true positives"
 
 [[finding]]
 rule = "SQLCOST008"
 repo = "spellbook"
-bucket = "other"
+bucket = "blind_distinct"
 verdict = "tp"
-corpus_case = "ast_shape"
-notes = "SELECT DISTINCT in downstream models is a valid cost signal for Spellbook"
+corpus_case = "recall_distinct_plain"
+notes = "SELECT DISTINCT in downstream models is a valid cost signal"
+
+[[finding]]
+rule = "SQLCOST008"
+repo = "spellbook"
+bucket = "blind_distinct"
+verdict = "tp"
+corpus_case = "recall_distinct_jinja"
+notes = "jinja-wrapped DISTINCT remains a valid cost signal"
+
+[[finding]]
+rule = "SQLCOST008"
+repo = "spellbook"
+bucket = "distinct_with_group_by"
+verdict = "fp"
+corpus_case = "recall_distinct_grouped_ok"
+notes = "GROUP BY deduplication should not fire blind DISTINCT rule"
+
+[[finding]]
+rule = "SQLCOST014"
+repo = "spellbook"
+bucket = "repeated_cte_ref"
+verdict = "tp"
+corpus_case = "recall_repeated_cte_plain"
+notes = "repeated CTE references indicate reuse worth reviewing"
+
+[[finding]]
+rule = "SQLCOST014"
+repo = "spellbook"
+bucket = "repeated_cte_ref"
+verdict = "tp"
+corpus_case = "recall_repeated_cte_jinja"
+notes = "jinja-wrapped repeated CTE references remain true positives"
 
 [[finding]]
 rule = "SQLCOST014"
 repo = "spellbook"
 bucket = "other"
-verdict = "tp"
-corpus_case = "ast_shape"
-notes = "repeated CTE references indicate reuse worth reviewing"
+verdict = "fp"
+corpus_case = "recall_single_cte_ok"
+notes = "single-use CTEs should not fire repeated CTE rule"
 
 [[finding]]
 rule = "SQLCOST015"
 repo = "spellbook"
-bucket = "other"
+bucket = "json_expression"
 verdict = "tp"
-corpus_case = "repeated_json"
+corpus_case = "recall_cross_file_expensive_b"
 notes = "cross-file expensive expression reuse is a valid project-level signal"
+
+[[finding]]
+rule = "SQLCOST015"
+repo = "spellbook"
+bucket = "single_file_guard"
+verdict = "fp"
+corpus_case = "recall_cross_file_expensive_a"
+notes = "single-file JSON extraction should not fire cross-file expensive expression rule"
 
 [[finding]]
 rule = "SQLCOST018"
 repo = "spellbook"
-bucket = "other"
+bucket = "union_without_all"
 verdict = "tp"
-corpus_case = "ast_shape"
-notes = "UNION without ALL in downstream paths is a valid cost signal"
+corpus_case = "recall_union_plain"
+notes = "UNION without ALL in staging paths is a valid cost signal"
+
+[[finding]]
+rule = "SQLCOST018"
+repo = "spellbook"
+bucket = "union_without_all"
+verdict = "tp"
+corpus_case = "recall_union_jinja"
+notes = "jinja-wrapped UNION without ALL remains a valid cost signal"
 
 [[finding]]
 rule = "SQLCOST002"
 repo = "spellbook"
-bucket = "other"
+bucket = "repeated_json"
 verdict = "tp"
-corpus_case = "repeated_json"
-notes = "repeated JSON extraction patterns in Spellbook are valid cost signals"
+corpus_case = "recall_repeated_json_jinja"
+notes = "repeated JSON extraction patterns are valid cost signals"
 
 [[finding]]
 rule = "SQLCOST003"
 repo = "spellbook"
-bucket = "other"
+bucket = "repeated_regex"
 verdict = "tp"
-corpus_case = "ast_shape"
+corpus_case = "recall_repeated_regex_plain"
 notes = "repeated regex operations are valid cost signals"
+
+[[finding]]
+rule = "SQLCOST003"
+repo = "spellbook"
+bucket = "repeated_regex"
+verdict = "tp"
+corpus_case = "recall_repeated_regex_jinja"
+notes = "jinja-wrapped repeated regex remains a valid cost signal"
+
+[[finding]]
+rule = "SQLCOST013"
+repo = "spellbook"
+bucket = "empty_partition_by"
+verdict = "tp"
+corpus_case = "recall_window_no_partition"
+notes = "window functions without PARTITION BY are valid cost signals"
+
+[[finding]]
+rule = "SQLCOST013"
+repo = "spellbook"
+bucket = "empty_partition_by"
+verdict = "tp"
+corpus_case = "recall_window_no_partition_jinja"
+notes = "jinja-wrapped empty PARTITION BY windows remain true positives"
+
+[[finding]]
+rule = "SQLCOST020"
+repo = "spellbook"
+bucket = "count_distinct"
+verdict = "tp"
+corpus_case = "recall_count_distinct_plain"
+notes = "COUNT(DISTINCT ...) in downstream models is a valid cost signal"
+
+[[finding]]
+rule = "SQLCOST019"
+repo = "spellbook"
+bucket = "no_where_on_source"
+verdict = "tp"
+corpus_case = "recall_incremental_unbounded_source"
+notes = "incremental source reads without local partition predicate are true positives"
+
+[[finding]]
+rule = "SQLCOST019"
+repo = "spellbook"
+bucket = "no_where_on_source"
+verdict = "tp"
+corpus_case = "recall_incremental_unbounded_source_jinja"
+notes = "jinja-wrapped unbounded incremental source reads remain true positives"
 
 [[finding]]
 rule = "SQLCOST019"
 repo = "spellbook"
 bucket = "other"
 verdict = "tp"
-corpus_case = "incremental_source_cte_bound"
-notes = "bounded incremental source reads without block_time in classifier bucket remain true positives when unbounded"
+corpus_case = "recall_incremental_unbounded_source"
+notes = "residual incremental source-bound findings default to true positives in Spellbook triage"
+
+[[finding]]
+rule = "SQLCOST006"
+repo = "spellbook"
+bucket = "equality_join"
+verdict = "fp"
+corpus_case = "recall_equality_join_ok"
+notes = "equality join predicates should not fire unbounded join rule"
+
+[[finding]]
+rule = "SQLCOST006"
+repo = "spellbook"
+bucket = "non_equality_join"
+verdict = "tp"
+corpus_case = "recall_unbounded_join_plain"
+notes = "non-equality join predicates remain true positives"
+
+[[finding]]
+rule = "SQLCOST008"
+repo = "spellbook"
+bucket = "distinct_with_group_by"
+verdict = "fp"
+corpus_case = "recall_distinct_grouped_ok"
+notes = "GROUP BY deduplication should not fire blind DISTINCT rule"
+
+[[finding]]
+rule = "SQLCOST008"
+repo = "spellbook"
+bucket = "blind_distinct"
+verdict = "tp"
+corpus_case = "recall_distinct_plain"
+notes = "SELECT DISTINCT without GROUP BY remains a valid cost signal"
+
+[[finding]]
+rule = "SQLCOST030"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "recall_correlated_subquery_plain"
+notes = "correlated subqueries are valid high-severity cost signals"
+
+[[finding]]
+rule = "SQLCOST013"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "recall_window_no_partition"
+notes = "residual unpartitioned window findings are true positives"
+
+[[finding]]
+rule = "SQLCOST018"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "recall_union_plain"
+notes = "residual UNION findings without ALL are true positives"
+
+[[finding]]
+rule = "SQLCOST035"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "recall_cross_catalog_plain"
+notes = "cross-catalog joins are valid cost signals on Trino/Databricks"
+
+[[finding]]
+rule = "SQLCOST015"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "recall_cross_file_expensive_b"
+notes = "residual cross-file expensive expression findings are true positives"
+
+[[finding]]
+rule = "SQLCOST015"
+repo = "spellbook"
+bucket = "normalization_expression"
+verdict = "tp"
+corpus_case = "recall_cross_file_expensive_c"
+notes = "cross-file normalization reuse is a valid project-level signal"
+
+[[finding]]
+rule = "SQLCOST012"
+repo = "spellbook"
+bucket = "other"
+verdict = "fp"
+corpus_case = "cross_join_subquery_fp"
+notes = "residual cross join findings from subquery shapes are false positives"
+
+[[finding]]
+rule = "SQLCOST031"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "recall_leading_wildcard_like_plain"
+notes = "leading-wildcard LIKE predicates are valid cost signals"
+
+[[finding]]
+rule = "SQLCOST003"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "recall_repeated_regex_plain"
+notes = "residual repeated regex findings are true positives"
 
 [[finding]]
 rule = "SQLCOST017"
@@ -287,5 +495,70 @@ repo = "spellbook"
 bucket = "other"
 verdict = "fp"
 corpus_case = "join_key_symmetric_lower"
-notes = "residual medium-severity join normalization findings after Spellbook calibration"
+notes = "residual join normalization findings after calibration are false positives"
+
+[[finding]]
+rule = "SQLCOST012"
+repo = "spellbook"
+bucket = "cross_join_explicit"
+verdict = "tp"
+corpus_case = "cross_join_comma"
+notes = "explicit cross joins in Spellbook downstream models are valid high-severity cost signals"
+
+[[finding]]
+rule = "SQLCOST012"
+repo = "spellbook"
+bucket = "comma_join"
+verdict = "tp"
+corpus_case = "cross_join_comma"
+notes = "legacy comma joins in Spellbook downstream models are valid cost signals"
+
+[[finding]]
+rule = "SQLCOST002"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "recall_repeated_json_jinja"
+notes = "residual repeated JSON extraction findings are true positives"
+
+[[finding]]
+rule = "SQLCOST029"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "recall_full_refresh_incremental"
+notes = "full-refresh-heavy incremental configs are valid cost signals"
+
+[[finding]]
+rule = "SQLCOST019"
+repo = "spellbook"
+bucket = "macro_wrapped"
+verdict = "tp"
+corpus_case = "recall_incremental_unbounded_source_jinja"
+notes = "incremental source reads wrapped in macros remain true positives in Spellbook triage"
+
+[[finding]]
+rule = "SQLCOST005"
+repo = "spellbook"
+bucket = "date_trunc_present"
+verdict = "fp"
+corpus_case = "incremental_block_time"
+notes = "date_trunc incremental predicates satisfy pruning requirements"
+
+[[finding]]
+rule = "SQLCOST006"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "recall_unbounded_join_cross_like"
+notes = "residual unbounded join findings remain true positives"
+
+[[finding]]
+rule = "SQLCOST033"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "recall_pattern_join_plain"
+notes = "pattern-matching join predicates are valid high-severity cost signals"
+
 

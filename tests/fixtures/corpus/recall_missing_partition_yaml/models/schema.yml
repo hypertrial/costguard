@@ -1,0 +1,6 @@
+version: 2
+
+models:
+  - name: fct_sales
+    config:
+      materialized: table

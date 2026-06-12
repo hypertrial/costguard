@@ -112,6 +112,14 @@ impl RuleRegistry {
                 Box::new(crate::metadata::DbtProjectMetadataRule),
                 Box::new(crate::metadata::FileSkippedRule),
                 Box::new(crate::metadata::SqlParseFailedRule),
+                Box::new(crate::dbt::MissingPartitionClusterRule),
+                Box::new(crate::dbt::FullRefreshHeavyIncrementalRule),
+                Box::new(crate::cost_patterns::CorrelatedSubqueryRule),
+                Box::new(crate::cost_patterns::LeadingWildcardLikeRule),
+                Box::new(crate::cost_patterns::OrPartitionPredicateRule),
+                Box::new(crate::cost_patterns::PatternMatchingJoinRule),
+                Box::new(crate::cost_patterns::ScalarSubqueryInSelectRule),
+                Box::new(crate::cost_patterns::CrossCatalogJoinRule),
             ],
         }
     }

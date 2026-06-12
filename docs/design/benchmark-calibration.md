@@ -33,6 +33,9 @@ python3 scripts/bucket_rule_diagnostics.py --repo spellbook --rule SQLCOST017 --
 # Validate false-positive registry against corpus forbid_rules contracts
 python3 scripts/validate_fp_registry.py
 
+# Recall coverage gate (>=2 expect_rules and >=1 forbid_rules per behavioral rule)
+python3 scripts/recall_report.py
+
 # Sampled precision report (requires cached Spellbook checkout + manifest)
 python3 scripts/precision_triage.py --repo spellbook --sample-size 200
 
@@ -44,7 +47,7 @@ python3 scripts/benchmark_external_repo.py --repo spellbook --update-baseline
 GitHub Actions:
 
 - **Push to `main`:** [`benchmark.yml`](../../.github/workflows/benchmark.yml) runs **Spellbook smoke** (`tokens` subproject + `dbt_macros`) only. Vendored baselines run in [`ci.yml`](../../.github/workflows/ci.yml).
-- **Manual:** run the **benchmark** workflow (`workflow_dispatch`) with target `vendored`, `jaffle-shop`, `spellbook-smoke`, `spellbook`, or `all`. Full Spellbook (five subprojects) is **dispatch-only**.
+- **Manual:** run the **benchmark** workflow (`workflow_dispatch`) with target `vendored`, `jaffle-shop`, `spellbook-smoke`, `spellbook`, `precision`, or `all`. Full Spellbook (five subprojects) is **dispatch-only**. The `precision` target runs full Spellbook plus `precision_triage.py` gates.
 
 Benchmark scripts build the CLI in **release** mode by default (`COSTGUARD_BUILD_PROFILE=release`). dbt manifests are cached under `{cache}/manifests/{repo}/{commit}/{packages_fp}/` and skipped on warm runs unless `--force-compile` is passed.
 
@@ -70,7 +73,7 @@ Baselines live in [`tests/benchmarks/baselines/`](../../tests/benchmarks/baselin
 
 ### False-positive registry
 
-Machine-readable FP contracts live in [`tests/benchmarks/fp_registry.toml`](../../tests/benchmarks/fp_registry.toml). Each `verdict = "fp"` entry must map to a corpus case with matching `forbid_rules`. CI runs `python3 scripts/validate_fp_registry.py`.
+Machine-readable FP contracts live in [`tests/benchmarks/fp_registry.toml`](../../tests/benchmarks/fp_registry.toml). Each `verdict = "fp"` entry must map to a corpus case with matching `forbid_rules`; each `verdict = "tp"` entry must map to a corpus case with matching `expect_rules`. CI runs `python3 scripts/validate_fp_registry.py` and `python3 scripts/recall_report.py` (minimum positive/negative corpus coverage per behavioral rule).
 
 ### Cross-reference workflow
 

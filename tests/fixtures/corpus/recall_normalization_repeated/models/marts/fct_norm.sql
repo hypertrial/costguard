@@ -1,0 +1,1 @@
+select lower(trim(email)), lower(trim(email)) from users

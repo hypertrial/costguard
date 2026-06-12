@@ -4,7 +4,7 @@ use costguard_diagnostics::{LineIndex, Span};
 use sqlparser::ast::{
     BinaryOperator, DuplicateTreatment, Expr, Function, FunctionArguments, Join, JoinConstraint,
     JoinOperator, ObjectName, Query, Select, SelectItem, SetExpr, SetOperator, SetQuantifier,
-    Statement, TableFactor, TableWithJoins, WindowSpec, WindowType, With,
+    Statement, TableFactor, TableWithJoins, Value, WindowSpec, WindowType, With,
 };
 use std::collections::HashMap;
 
@@ -95,6 +95,14 @@ fn extract_select(select: &Select, finder: &mut SpanFinder<'_>, features: &mut S
 
     if let Some(where_expr) = &select.selection {
         extract_non_sargable_predicates(where_expr, finder, features);
+        extract_leading_wildcard_likes(where_expr, finder, features);
+        extract_or_partition_predicates(where_expr, finder, features);
+        extract_correlated_subqueries_in_expr(
+            where_expr,
+            &collect_table_aliases(select),
+            finder,
+            features,
+        );
     }
 
     for item in &select.projection {
@@ -109,6 +117,7 @@ fn extract_select(select: &Select, finder: &mut SpanFinder<'_>, features: &mut S
                 }
             }
             SelectItem::ExprWithAlias { expr, .. } | SelectItem::UnnamedExpr(expr) => {
+                extract_scalar_subquery_in_select(expr, finder, features);
                 extract_expr(expr, finder, features);
             }
         }
@@ -124,13 +133,22 @@ fn extract_table_with_joins(
     finder: &mut SpanFinder<'_>,
     features: &mut SqlFeatures,
 ) {
+    let mut left_catalog = table_factor_catalog(&table.relation);
     extract_table_factor(&table.relation, finder, features);
     for join in &table.joins {
-        extract_join(join, finder, features);
+        let right_catalog = table_factor_catalog(&join.relation);
+        let cross_catalog = catalogs_differ(left_catalog.as_deref(), right_catalog.as_deref());
+        extract_join(join, finder, features, cross_catalog);
+        left_catalog = right_catalog.or(left_catalog);
     }
 }
 
-fn extract_join(join: &Join, finder: &mut SpanFinder<'_>, features: &mut SqlFeatures) {
+fn extract_join(
+    join: &Join,
+    finder: &mut SpanFinder<'_>,
+    features: &mut SqlFeatures,
+    cross_catalog: bool,
+) {
     let kind = match &join.join_operator {
         JoinOperator::CrossJoin | JoinOperator::CrossApply => JoinKind::Cross,
         JoinOperator::LeftOuter(_) => JoinKind::Left,
@@ -145,28 +163,37 @@ fn extract_join(join: &Join, finder: &mut SpanFinder<'_>, features: &mut SqlFeat
         JoinKind::Full => "full join",
         JoinKind::Inner | JoinKind::Comma => " join",
     };
-    let (predicate, has_equality, function_on_join_key) = match &join.join_operator {
-        JoinOperator::Inner(inner)
-        | JoinOperator::LeftOuter(inner)
-        | JoinOperator::RightOuter(inner)
-        | JoinOperator::FullOuter(inner) => match inner {
-            JoinConstraint::On(expr) => {
-                let predicate = expr.to_string();
-                let predicate_lower = predicate.to_ascii_lowercase();
-                (
-                    Some(predicate),
-                    has_equality_predicate(&predicate_lower),
-                    join_predicate_has_function_on_key(expr),
-                )
-            }
-            JoinConstraint::Using(ids) => {
-                let predicate = format!("USING({ids:?})");
-                (Some(predicate), true, false)
-            }
-            _ => (None, false, false),
-        },
-        _ => (None, false, false),
-    };
+    let (predicate, has_equality, function_on_join_key, pattern_matching) =
+        match &join.join_operator {
+            JoinOperator::Inner(inner)
+            | JoinOperator::LeftOuter(inner)
+            | JoinOperator::RightOuter(inner)
+            | JoinOperator::FullOuter(inner) => match inner {
+                JoinConstraint::On(expr) => {
+                    let predicate = expr.to_string();
+                    let predicate_lower = predicate.to_ascii_lowercase();
+                    extract_leading_wildcard_likes(expr, finder, features);
+                    extract_correlated_subqueries_in_expr(
+                        expr,
+                        &outer_aliases_for_join(&join.relation),
+                        finder,
+                        features,
+                    );
+                    (
+                        Some(predicate.clone()),
+                        has_equality_predicate(&predicate_lower),
+                        join_predicate_has_function_on_key(expr),
+                        predicate_is_pattern_matching(expr),
+                    )
+                }
+                JoinConstraint::Using(ids) => {
+                    let predicate = format!("USING({ids:?})");
+                    (Some(predicate), true, false, false)
+                }
+                _ => (None, false, false, false),
+            },
+            _ => (None, false, false, false),
+        };
     if matches!(kind, JoinKind::Cross) && is_exempt_cross_join_target(&join.relation) {
         extract_table_factor(&join.relation, finder, features);
         return;
@@ -183,6 +210,8 @@ fn extract_join(join: &Join, finder: &mut SpanFinder<'_>, features: &mut SqlFeat
             predicate,
             has_equality,
             function_on_join_key,
+            pattern_matching,
+            cross_catalog,
         });
     }
     extract_table_factor(&join.relation, finder, features);
@@ -842,6 +871,321 @@ fn table_name_has_wildcard(name: &ObjectName) -> bool {
     name.to_string().contains('*')
 }
 
+fn table_factor_catalog(factor: &TableFactor) -> Option<String> {
+    match factor {
+        TableFactor::Table { name, .. } => object_name_catalog(name),
+        TableFactor::Derived { alias, .. } => alias
+            .as_ref()
+            .map(|alias| alias.name.value.to_ascii_lowercase()),
+        _ => None,
+    }
+}
+
+fn object_name_catalog(name: &ObjectName) -> Option<String> {
+    if name.0.len() >= 3 {
+        Some(name.0[0].value.to_ascii_lowercase())
+    } else {
+        None
+    }
+}
+
+fn catalogs_differ(left: Option<&str>, right: Option<&str>) -> bool {
+    match (left, right) {
+        (Some(a), Some(b)) => a != b,
+        _ => false,
+    }
+}
+
+fn collect_table_aliases(select: &Select) -> Vec<String> {
+    let mut aliases = Vec::new();
+    for table in &select.from {
+        collect_aliases_from_table_with_joins(table, &mut aliases);
+    }
+    aliases
+}
+
+fn collect_aliases_from_table_with_joins(table: &TableWithJoins, aliases: &mut Vec<String>) {
+    push_table_factor_alias(&table.relation, aliases);
+    for join in &table.joins {
+        push_table_factor_alias(&join.relation, aliases);
+    }
+}
+
+fn push_table_factor_alias(factor: &TableFactor, aliases: &mut Vec<String>) {
+    match factor {
+        TableFactor::Table { name, alias, .. } => {
+            if let Some(alias) = alias {
+                aliases.push(alias.name.value.to_ascii_lowercase());
+            } else if let Some(table) = name.0.last() {
+                aliases.push(table.value.to_ascii_lowercase());
+            }
+        }
+        TableFactor::Derived {
+            alias: Some(alias), ..
+        } => {
+            aliases.push(alias.name.value.to_ascii_lowercase());
+        }
+        TableFactor::NestedJoin {
+            table_with_joins, ..
+        } => collect_aliases_from_table_with_joins(table_with_joins, aliases),
+        _ => {}
+    }
+}
+
+fn outer_aliases_for_join(factor: &TableFactor) -> Vec<String> {
+    let mut aliases = Vec::new();
+    push_table_factor_alias(factor, &mut aliases);
+    aliases
+}
+
+fn extract_scalar_subquery_in_select(
+    expr: &Expr,
+    finder: &mut SpanFinder<'_>,
+    features: &mut SqlFeatures,
+) {
+    if matches!(expr, Expr::Subquery(_)) {
+        let snippet = expr.to_string();
+        if let Some(span) = finder.find_next(&snippet) {
+            features
+                .scalar_subqueries_in_select
+                .push(ExpressionFeature {
+                    span,
+                    key: "scalar subquery".into(),
+                    text: snippet,
+                });
+        }
+    }
+}
+
+fn extract_correlated_subqueries_in_expr(
+    expr: &Expr,
+    outer_aliases: &[String],
+    finder: &mut SpanFinder<'_>,
+    features: &mut SqlFeatures,
+) {
+    match expr {
+        Expr::Exists { subquery, .. } => {
+            if subquery_references_outer(subquery, outer_aliases) {
+                push_correlated_subquery(subquery, finder, features);
+            }
+        }
+        Expr::InSubquery { subquery, .. } => {
+            if subquery_references_outer(subquery, outer_aliases) {
+                push_correlated_subquery(subquery, finder, features);
+            }
+        }
+        Expr::Subquery(subquery) => {
+            if subquery_references_outer(subquery, outer_aliases) {
+                push_correlated_subquery(subquery, finder, features);
+            }
+        }
+        Expr::BinaryOp { left, right, .. } => {
+            for side in [left.as_ref(), right.as_ref()] {
+                if let Expr::Subquery(subquery) = side {
+                    if subquery_references_outer(subquery, outer_aliases) {
+                        push_correlated_subquery(subquery, finder, features);
+                    }
+                }
+            }
+            extract_correlated_subqueries_in_expr(left, outer_aliases, finder, features);
+            extract_correlated_subqueries_in_expr(right, outer_aliases, finder, features);
+        }
+        Expr::Nested(inner) => {
+            extract_correlated_subqueries_in_expr(inner, outer_aliases, finder, features);
+        }
+        _ => {}
+    }
+}
+
+fn push_correlated_subquery(
+    subquery: &Query,
+    finder: &mut SpanFinder<'_>,
+    features: &mut SqlFeatures,
+) {
+    let snippet = subquery.to_string();
+    if let Some(span) = finder.find_next(&snippet) {
+        features.correlated_subqueries.push(ExpressionFeature {
+            span,
+            key: "correlated subquery".into(),
+            text: snippet,
+        });
+    }
+}
+
+fn subquery_references_outer(subquery: &Query, outer_aliases: &[String]) -> bool {
+    if outer_aliases.is_empty() {
+        return false;
+    }
+    set_expr_references_outer_aliases(subquery.body.as_ref(), outer_aliases)
+}
+
+fn set_expr_references_outer_aliases(body: &SetExpr, outer_aliases: &[String]) -> bool {
+    match body {
+        SetExpr::Select(select) => select_references_outer_aliases(select, outer_aliases),
+        SetExpr::Query(query) => {
+            set_expr_references_outer_aliases(query.body.as_ref(), outer_aliases)
+        }
+        SetExpr::SetOperation { left, right, .. } => {
+            set_expr_references_outer_aliases(left, outer_aliases)
+                || set_expr_references_outer_aliases(right, outer_aliases)
+        }
+        _ => false,
+    }
+}
+
+fn select_references_outer_aliases(select: &Select, outer_aliases: &[String]) -> bool {
+    select
+        .selection
+        .as_ref()
+        .is_some_and(|expr| expr_references_outer_aliases(expr, outer_aliases))
+        || select.projection.iter().any(|item| match item {
+            SelectItem::ExprWithAlias { expr, .. } | SelectItem::UnnamedExpr(expr) => {
+                expr_references_outer_aliases(expr, outer_aliases)
+            }
+            _ => false,
+        })
+}
+
+fn expr_references_outer_aliases(expr: &Expr, outer_aliases: &[String]) -> bool {
+    match expr {
+        Expr::CompoundIdentifier(parts) if parts.len() >= 2 => outer_aliases
+            .iter()
+            .any(|alias| alias == &parts[0].value.to_ascii_lowercase()),
+        Expr::BinaryOp { left, right, .. } => {
+            expr_references_outer_aliases(left, outer_aliases)
+                || expr_references_outer_aliases(right, outer_aliases)
+        }
+        Expr::Nested(inner) => expr_references_outer_aliases(inner, outer_aliases),
+        Expr::Exists { subquery, .. } | Expr::InSubquery { subquery, .. } => {
+            subquery_references_outer(subquery, outer_aliases)
+        }
+        Expr::Subquery(subquery) => subquery_references_outer(subquery, outer_aliases),
+        Expr::Function(function) => function
+            .args
+            .args()
+            .iter()
+            .any(|arg| function_arg_references_outer_aliases(arg, outer_aliases)),
+        _ => false,
+    }
+}
+
+fn function_arg_references_outer_aliases(
+    arg: &sqlparser::ast::FunctionArg,
+    outer_aliases: &[String],
+) -> bool {
+    use sqlparser::ast::{FunctionArg, FunctionArgExpr};
+    match arg {
+        FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))
+        | FunctionArg::Named {
+            arg: FunctionArgExpr::Expr(expr),
+            ..
+        } => expr_references_outer_aliases(expr, outer_aliases),
+        _ => false,
+    }
+}
+
+fn extract_leading_wildcard_likes(
+    expr: &Expr,
+    finder: &mut SpanFinder<'_>,
+    features: &mut SqlFeatures,
+) {
+    match expr {
+        Expr::Like {
+            pattern,
+            negated: false,
+            ..
+        }
+        | Expr::ILike {
+            pattern,
+            negated: false,
+            ..
+        } => {
+            if pattern_starts_with_wildcard(pattern) {
+                let snippet = expr.to_string();
+                if let Some(span) = finder.find_next(&snippet) {
+                    features.leading_wildcard_likes.push(ExpressionFeature {
+                        span,
+                        key: "leading wildcard like".into(),
+                        text: snippet,
+                    });
+                }
+            }
+        }
+        Expr::BinaryOp {
+            left,
+            op: BinaryOperator::And | BinaryOperator::Or,
+            right,
+        } => {
+            extract_leading_wildcard_likes(left, finder, features);
+            extract_leading_wildcard_likes(right, finder, features);
+        }
+        Expr::Nested(inner) => extract_leading_wildcard_likes(inner, finder, features),
+        _ => {}
+    }
+}
+
+fn pattern_starts_with_wildcard(expr: &Expr) -> bool {
+    match expr {
+        Expr::Value(Value::SingleQuotedString(value) | Value::DoubleQuotedString(value)) => {
+            value.starts_with('%') || value.starts_with('_')
+        }
+        Expr::Nested(inner) => pattern_starts_with_wildcard(inner),
+        _ => false,
+    }
+}
+
+fn extract_or_partition_predicates(
+    expr: &Expr,
+    finder: &mut SpanFinder<'_>,
+    features: &mut SqlFeatures,
+) {
+    match expr {
+        Expr::BinaryOp {
+            left,
+            op: BinaryOperator::Or,
+            right,
+        } if expr_contains_partition_column(left) && expr_contains_partition_column(right) => {
+            let snippet = expr.to_string();
+            if let Some(span) = finder.find_next(&snippet) {
+                features.or_partition_predicates.push(ExpressionFeature {
+                    span,
+                    key: "or partition predicate".into(),
+                    text: snippet,
+                });
+            }
+        }
+        Expr::BinaryOp {
+            left,
+            op: BinaryOperator::And | BinaryOperator::Or,
+            right,
+        } => {
+            extract_or_partition_predicates(left, finder, features);
+            extract_or_partition_predicates(right, finder, features);
+        }
+        Expr::Nested(inner) => extract_or_partition_predicates(inner, finder, features),
+        _ => {}
+    }
+}
+
+fn predicate_is_pattern_matching(expr: &Expr) -> bool {
+    match expr {
+        Expr::Like { .. } | Expr::ILike { .. } | Expr::RLike { .. } | Expr::SimilarTo { .. } => {
+            true
+        }
+        Expr::Function(function) => matches!(
+            function_name(function).as_str(),
+            "regexp_like" | "regexp" | "rlike"
+        ),
+        Expr::BinaryOp {
+            left,
+            op: BinaryOperator::And,
+            right,
+        } => predicate_is_pattern_matching(left) || predicate_is_pattern_matching(right),
+        Expr::Nested(inner) => predicate_is_pattern_matching(inner),
+        _ => false,
+    }
+}
+
 pub fn merge_shape_features(mut base: SqlFeatures, ast: SqlFeatures, parsed: bool) -> SqlFeatures {
     if !parsed {
         return base;
@@ -875,6 +1219,18 @@ pub fn merge_shape_features(mut base: SqlFeatures, ast: SqlFeatures, parsed: boo
     }
     if !ast.wildcard_table_scans.is_empty() {
         base.wildcard_table_scans = ast.wildcard_table_scans;
+    }
+    if !ast.correlated_subqueries.is_empty() {
+        base.correlated_subqueries = ast.correlated_subqueries;
+    }
+    if !ast.leading_wildcard_likes.is_empty() {
+        base.leading_wildcard_likes = ast.leading_wildcard_likes;
+    }
+    if !ast.or_partition_predicates.is_empty() {
+        base.or_partition_predicates = ast.or_partition_predicates;
+    }
+    if !ast.scalar_subqueries_in_select.is_empty() {
+        base.scalar_subqueries_in_select = ast.scalar_subqueries_in_select;
     }
     base.joins = merge_join_features(&base.joins, &ast.joins);
     base

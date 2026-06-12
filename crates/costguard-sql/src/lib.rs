@@ -54,6 +54,10 @@ pub struct SqlFeatures {
     pub unions_without_all: Vec<ExpressionFeature>,
     pub count_distincts: Vec<ExpressionFeature>,
     pub wildcard_table_scans: Vec<ExpressionFeature>,
+    pub correlated_subqueries: Vec<ExpressionFeature>,
+    pub leading_wildcard_likes: Vec<ExpressionFeature>,
+    pub or_partition_predicates: Vec<ExpressionFeature>,
+    pub scalar_subqueries_in_select: Vec<ExpressionFeature>,
 }
 
 #[derive(Debug, Clone)]
@@ -70,6 +74,8 @@ pub struct JoinFeature {
     pub predicate: Option<String>,
     pub has_equality: bool,
     pub function_on_join_key: bool,
+    pub pattern_matching: bool,
+    pub cross_catalog: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -191,6 +197,10 @@ fn mark_compiled_unmapped(mut features: SqlFeatures) -> SqlFeatures {
         .chain(features.unions_without_all.iter_mut())
         .chain(features.count_distincts.iter_mut())
         .chain(features.wildcard_table_scans.iter_mut())
+        .chain(features.correlated_subqueries.iter_mut())
+        .chain(features.leading_wildcard_likes.iter_mut())
+        .chain(features.or_partition_predicates.iter_mut())
+        .chain(features.scalar_subqueries_in_select.iter_mut())
     {
         feature.span = feature
             .span
@@ -864,6 +874,45 @@ fn at_explicit_join_boundary(lower: &str, index: usize) -> bool {
     .any(|boundary| lower[index..].starts_with(boundary))
 }
 
+fn leading_wildcard_like_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    cached_regex(&RE, r#"(?i)\b(?:where|on)\b[^;\n]*\blike\s+'[%_][^']*'"#)
+}
+
+fn correlated_subquery_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    cached_regex(
+        &RE,
+        "(?i)\\b(?:where|on)\\b[^;\\n]*(?:exists\\s*\\(|\\(\\s*select\\b)[^;\\n]*\\b\\w+\\.\\w+\\s*=\\s*\\w+\\.\\w+",
+    )
+}
+
+fn scalar_subquery_select_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    cached_regex(&RE, "(?i)\\bselect\\b[^;\\n]*?,\\s*\\(\\s*select\\b")
+}
+
+fn extract_or_partition_predicates(
+    text: &str,
+    line_index: &costguard_diagnostics::LineIndex,
+) -> Vec<ExpressionFeature> {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    let regex = RE.get_or_init(|| {
+        Regex::new(
+            r#"(?i)\bwhere\b[^;\n]*\b(?:block_time|event_date|_partitiontime|_partitiondate|partition_date|evt_block_time|block_date)\b[^;\n]*\bor\b[^;\n]*\b(?:block_time|event_date|_partitiontime|_partitiondate|partition_date|evt_block_time|block_date)\b"#,
+        )
+        .expect("or partition regex")
+    });
+    regex
+        .find_iter(text)
+        .map(|matched| ExpressionFeature {
+            span: line_index.span(matched.start(), matched.end()),
+            key: "or partition predicate".into(),
+            text: matched.as_str().to_string(),
+        })
+        .collect()
+}
+
 fn extract_features(
     text: &str,
     comma_text: &str,
@@ -894,6 +943,17 @@ fn extract_features(
             "count(distinct".into()
         });
     features.wildcard_table_scans = extract_wildcard_table_scans(text, line_index);
+    features.leading_wildcard_likes =
+        matches_as_features(text, line_index, leading_wildcard_like_regex(), normalize);
+    features.or_partition_predicates = extract_or_partition_predicates(text, line_index);
+    features.correlated_subqueries =
+        matches_as_features(text, line_index, correlated_subquery_regex(), |_| {
+            "correlated subquery".into()
+        });
+    features.scalar_subqueries_in_select =
+        matches_as_features(text, line_index, scalar_subquery_select_regex(), |_| {
+            "scalar subquery".into()
+        });
     features
 }
 
@@ -996,11 +1056,56 @@ fn extract_joins(
             has_equality: has_equality_predicate(&predicate_lower),
             function_on_join_key: function_on_join_key(&predicate_lower),
             predicate,
+            pattern_matching: predicate_matches_pattern(&predicate_lower),
+            cross_catalog: cross_catalog_in_predicate(&predicate_lower),
         });
     }
 
     joins.extend(extract_comma_joins(comma_text, line_index));
+    annotate_cross_catalog_joins(&mut joins, join_text);
     joins
+}
+
+fn predicate_matches_pattern(predicate: &str) -> bool {
+    let lower = predicate.to_ascii_lowercase();
+    lower.contains(" like ")
+        || lower.contains(" rlike ")
+        || lower.contains(" regexp_like(")
+        || lower.contains(" regexp ")
+        || lower.contains(" similar to ")
+}
+
+fn cross_catalog_in_predicate(_predicate: &str) -> bool {
+    false
+}
+
+fn annotate_cross_catalog_joins(joins: &mut [JoinFeature], text: &str) {
+    let lower = text.to_ascii_lowercase();
+    for join in joins.iter_mut() {
+        if join.cross_catalog {
+            continue;
+        }
+        let snippet = text
+            .get(join.span.byte_start..join.span.byte_end.min(text.len()))
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        join.cross_catalog = cross_catalog_snippet(&snippet) || cross_catalog_snippet(&lower);
+    }
+}
+
+fn cross_catalog_snippet(text: &str) -> bool {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    let regex = RE.get_or_init(|| {
+        Regex::new(
+            r"(?i)([\w-]+)\.([\w-]+)\.([\w`\-]+)[\s\S]{0,120}?\bjoin\b[\s\S]{0,120}?([\w-]+)\.([\w-]+)\.([\w`\-]+)",
+        )
+        .expect("cross catalog regex")
+    });
+    regex.captures(text).is_some_and(|caps| {
+        caps.get(1)
+            .zip(caps.get(4))
+            .is_some_and(|(left, right)| left.as_str() != right.as_str())
+    })
 }
 
 fn is_exempt_cross_join_suffix(after: &str) -> bool {
@@ -1095,6 +1200,8 @@ fn extract_comma_joins(
             predicate: None,
             has_equality: false,
             function_on_join_key: false,
+            pattern_matching: false,
+            cross_catalog: false,
         }];
     }
     Vec::new()

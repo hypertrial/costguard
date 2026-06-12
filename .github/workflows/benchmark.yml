@@ -8,7 +8,7 @@ on:
         required: true
         default: vendored
         type: choice
-        options: [vendored, jaffle-shop, spellbook-smoke, spellbook, all]
+        options: [vendored, jaffle-shop, spellbook-smoke, spellbook, precision, all]
 
 permissions:
   contents: read
@@ -35,9 +35,14 @@ jobs:
             jaffle-shop) python3 scripts/benchmark_external_repo.py --repo jaffle-shop ;;
             spellbook-smoke) python3 scripts/benchmark_external_repo.py --repo spellbook --smoke ;;
             spellbook) python3 scripts/benchmark_external_repo.py --repo spellbook ;;
+            precision)
+              python3 scripts/benchmark_external_repo.py --repo spellbook
+              python3 scripts/precision_triage.py --repo spellbook --sample-size 200
+              ;;
             all)
               python3 scripts/benchmark_external_repo.py --all-vendored
               python3 scripts/benchmark_external_repo.py --repo jaffle-shop
               python3 scripts/benchmark_external_repo.py --repo spellbook
+              python3 scripts/precision_triage.py --repo spellbook --sample-size 200
               ;;
           esac

@@ -20,7 +20,7 @@ python3 scripts/generate_rule_docs.py
 | low | `SQLCOST009` | Repeated normalization expression | [SQLCOST009](../../rules/SQLCOST009.md) |
 | high | `SQLCOST010` | Python model row-wise operation | [SQLCOST010](../../rules/SQLCOST010.md) |
 | medium | `SQLCOST011` | Source used directly in mart layer | [SQLCOST011](../../rules/SQLCOST011.md) |
-| high | `SQLCOST012` | Cross join without explicit allow comment | [SQLCOST012](../../rules/SQLCOST012.md) |
+| medium | `SQLCOST012` | Cross join without explicit allow comment | [SQLCOST012](../../rules/SQLCOST012.md) |
 | medium | `SQLCOST013` | Unpartitioned window function | [SQLCOST013](../../rules/SQLCOST013.md) |
 | low | `SQLCOST014` | Repeated CTE reference | [SQLCOST014](../../rules/SQLCOST014.md) |
 | medium | `SQLCOST015` | Expensive expression repeated across downstream models | [SQLCOST015](../../rules/SQLCOST015.md) |
@@ -36,6 +36,14 @@ python3 scripts/generate_rule_docs.py
 | low | `SQLCOST025` | dbt_project.yml metadata issue | [SQLCOST025](../../rules/SQLCOST025.md) |
 | low | `SQLCOST026` | File skipped during scan | [SQLCOST026](../../rules/SQLCOST026.md) |
 | info | `SQLCOST027` | SQL parse failure | [SQLCOST027](../../rules/SQLCOST027.md) |
+| high | `SQLCOST028` | Missing partition or cluster config on large mart model | [SQLCOST028](../../rules/SQLCOST028.md) |
+| medium | `SQLCOST029` | Full-refresh-heavy incremental config | [SQLCOST029](../../rules/SQLCOST029.md) |
+| high | `SQLCOST030` | Correlated subquery | [SQLCOST030](../../rules/SQLCOST030.md) |
+| medium | `SQLCOST031` | Leading-wildcard LIKE predicate | [SQLCOST031](../../rules/SQLCOST031.md) |
+| medium | `SQLCOST032` | OR across partition or date predicates | [SQLCOST032](../../rules/SQLCOST032.md) |
+| high | `SQLCOST033` | Pattern-matching join predicate | [SQLCOST033](../../rules/SQLCOST033.md) |
+| medium | `SQLCOST034` | Scalar subquery in SELECT list | [SQLCOST034](../../rules/SQLCOST034.md) |
+| medium | `SQLCOST035` | Cross-catalog join | [SQLCOST035](../../rules/SQLCOST035.md) |
 
 ## Descriptions
 
@@ -129,7 +137,7 @@ Fix guidance: [SQLCOST011.md](../../rules/SQLCOST011.md)
 
 ### `SQLCOST012` — Cross join without explicit allow comment
 
-**Severity:** high
+**Severity:** medium
 
 Detects CROSS JOIN and comma joins.
 
@@ -254,4 +262,68 @@ Fix guidance: [SQLCOST026.md](../../rules/SQLCOST026.md)
 Reports when a dbt model SQL file could not be parsed and rules may fall back to regex heuristics.
 
 Fix guidance: [SQLCOST027.md](../../rules/SQLCOST027.md)
+
+### `SQLCOST028` — Missing partition or cluster config on large mart model
+
+**Severity:** high
+
+Detects incremental or table materialized mart models without partition_by or cluster_by.
+
+Fix guidance: [SQLCOST028.md](../../rules/SQLCOST028.md)
+
+### `SQLCOST029` — Full-refresh-heavy incremental config
+
+**Severity:** medium
+
+Detects incremental models configured with full_refresh or sync_all_columns schema changes.
+
+Fix guidance: [SQLCOST029.md](../../rules/SQLCOST029.md)
+
+### `SQLCOST030` — Correlated subquery
+
+**Severity:** high
+
+Detects correlated subqueries in filters or join predicates.
+
+Fix guidance: [SQLCOST030.md](../../rules/SQLCOST030.md)
+
+### `SQLCOST031` — Leading-wildcard LIKE predicate
+
+**Severity:** medium
+
+Detects LIKE/ILIKE patterns that start with % or _ in filters.
+
+Fix guidance: [SQLCOST031.md](../../rules/SQLCOST031.md)
+
+### `SQLCOST032` — OR across partition or date predicates
+
+**Severity:** medium
+
+Detects OR expressions joining predicates on likely partition or date columns.
+
+Fix guidance: [SQLCOST032.md](../../rules/SQLCOST032.md)
+
+### `SQLCOST033` — Pattern-matching join predicate
+
+**Severity:** high
+
+Detects LIKE, RLIKE, or regexp_like predicates in JOIN ON clauses.
+
+Fix guidance: [SQLCOST033.md](../../rules/SQLCOST033.md)
+
+### `SQLCOST034` — Scalar subquery in SELECT list
+
+**Severity:** medium
+
+Detects per-row scalar subqueries in downstream model projections.
+
+Fix guidance: [SQLCOST034.md](../../rules/SQLCOST034.md)
+
+### `SQLCOST035` — Cross-catalog join
+
+**Severity:** medium
+
+Detects joins between fully qualified tables with different catalog parts.
+
+Fix guidance: [SQLCOST035.md](../../rules/SQLCOST035.md)
 <!-- generated:rules:end -->

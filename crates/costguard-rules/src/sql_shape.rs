@@ -12,6 +12,14 @@ pub(crate) struct CrossJoinRule;
 pub(crate) struct UnpartitionedWindowRule;
 pub(crate) struct RepeatedCteRule;
 
+fn join_has_clear_equality(join: &costguard_sql::JoinFeature) -> bool {
+    join.has_equality
+        || join
+            .predicate
+            .as_ref()
+            .is_some_and(|predicate| predicate.contains('='))
+}
+
 impl Rule for SelectStarRule {
     fn id(&self) -> &'static str {
         "SQLCOST001"
@@ -80,7 +88,7 @@ impl Rule for UnboundedJoinRule {
                 matches!(
                     join.kind,
                     JoinKind::Inner | JoinKind::Left | JoinKind::Right | JoinKind::Full
-                ) && !join.has_equality
+                ) && !join_has_clear_equality(join)
             })
             .map(|join| {
                 diagnostic(
@@ -157,6 +165,9 @@ impl Rule for BlindDistinctRule {
         let Some(sql) = ctx.sql else {
             return Vec::new();
         };
+        if ctx.file.text.to_ascii_lowercase().contains("group by") {
+            return Vec::new();
+        }
         sql.features
             .distincts
             .iter()
@@ -190,7 +201,7 @@ impl Rule for CrossJoinRule {
         "Detects CROSS JOIN and comma joins."
     }
     fn default_severity(&self) -> Severity {
-        Severity::High
+        Severity::Medium
     }
     fn check(&self, ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
         let Some(sql) = ctx.sql else {
@@ -285,7 +296,7 @@ impl Rule for RepeatedCteRule {
         sql.features
             .cte_references
             .iter()
-            .find(|reference| counts.get(reference.key.as_str()).copied().unwrap_or(0) > 1)
+            .find(|reference| counts.get(reference.key.as_str()).copied().unwrap_or(0) >= 3)
             .map_or_else(Vec::new, |reference| {
                 vec![diagnostic(
                     ctx,

@@ -8,6 +8,12 @@ pub(crate) struct FunctionWrappedJoinKeyRule;
 pub(crate) struct UnionWithoutAllRule;
 pub(crate) struct CountDistinctRule;
 pub(crate) struct WildcardTableScanRule;
+pub(crate) struct CorrelatedSubqueryRule;
+pub(crate) struct LeadingWildcardLikeRule;
+pub(crate) struct OrPartitionPredicateRule;
+pub(crate) struct PatternMatchingJoinRule;
+pub(crate) struct ScalarSubqueryInSelectRule;
+pub(crate) struct CrossCatalogJoinRule;
 
 impl Rule for NonSargablePredicateRule {
     fn id(&self) -> &'static str {
@@ -261,6 +267,280 @@ impl Rule for WildcardTableScanRule {
                 )
                 .with_suggestion(
                     "add a _TABLE_SUFFIX between filter or otherwise bound the wildcard scan.",
+                )
+                .with_confidence(confidence)
+            })
+            .collect()
+    }
+}
+
+impl Rule for CorrelatedSubqueryRule {
+    fn id(&self) -> &'static str {
+        "SQLCOST030"
+    }
+    fn name(&self) -> &'static str {
+        "Correlated subquery"
+    }
+    fn description(&self) -> &'static str {
+        "Detects correlated subqueries in filters or join predicates."
+    }
+    fn default_severity(&self) -> Severity {
+        Severity::High
+    }
+    fn check(&self, ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
+        let Some(sql) = ctx.sql else {
+            return Vec::new();
+        };
+        sql.features
+            .correlated_subqueries
+            .iter()
+            .map(|feature| {
+                let confidence = if sql.feature_extraction_used_ast {
+                    Confidence::High
+                } else {
+                    Confidence::Low
+                };
+                diagnostic(
+                    ctx,
+                    self.id(),
+                    self.default_severity(),
+                    Some(feature.span),
+                    "Correlated subquery detected.",
+                )
+                .with_risk(
+                    "correlated subqueries often execute once per outer row and can dominate warehouse cost.",
+                )
+                .with_suggestion(
+                    "rewrite as a join or pre-aggregate/filter the driving set before the subquery.",
+                )
+                .with_confidence(confidence)
+            })
+            .collect()
+    }
+}
+
+impl Rule for LeadingWildcardLikeRule {
+    fn id(&self) -> &'static str {
+        "SQLCOST031"
+    }
+    fn name(&self) -> &'static str {
+        "Leading-wildcard LIKE predicate"
+    }
+    fn description(&self) -> &'static str {
+        "Detects LIKE/ILIKE patterns that start with % or _ in filters."
+    }
+    fn default_severity(&self) -> Severity {
+        Severity::Medium
+    }
+    fn check(&self, ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
+        let Some(sql) = ctx.sql else {
+            return Vec::new();
+        };
+        sql.features
+            .leading_wildcard_likes
+            .iter()
+            .map(|feature| {
+                let confidence = if sql.feature_extraction_used_ast {
+                    Confidence::High
+                } else {
+                    Confidence::Low
+                };
+                diagnostic(
+                    ctx,
+                    self.id(),
+                    self.default_severity(),
+                    Some(feature.span),
+                    "LIKE predicate starts with a wildcard.",
+                )
+                .with_risk("leading wildcards usually prevent index or partition pruning on the filtered column.")
+                .with_suggestion(
+                    "use prefix search, tokenized lookup tables, or search indexes instead of '%value' patterns.",
+                )
+                .with_confidence(confidence)
+            })
+            .collect()
+    }
+}
+
+impl Rule for OrPartitionPredicateRule {
+    fn id(&self) -> &'static str {
+        "SQLCOST032"
+    }
+    fn name(&self) -> &'static str {
+        "OR across partition or date predicates"
+    }
+    fn description(&self) -> &'static str {
+        "Detects OR expressions joining predicates on likely partition or date columns."
+    }
+    fn default_severity(&self) -> Severity {
+        Severity::Medium
+    }
+    fn check(&self, ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
+        let Some(sql) = ctx.sql else {
+            return Vec::new();
+        };
+        sql.features
+            .or_partition_predicates
+            .iter()
+            .map(|feature| {
+                let confidence = if sql.feature_extraction_used_ast {
+                    Confidence::High
+                } else {
+                    Confidence::Low
+                };
+                diagnostic(
+                    ctx,
+                    self.id(),
+                    self.default_severity(),
+                    Some(feature.span),
+                    "Filter ORs together partition or date predicates.",
+                )
+                .with_risk(
+                    "OR across partition keys often forces multiple partition scans or full-table reads.",
+                )
+                .with_suggestion(
+                    "split into UNION ALL branches or rewrite with IN lists on a single partition column.",
+                )
+                .with_confidence(confidence)
+            })
+            .collect()
+    }
+}
+
+impl Rule for PatternMatchingJoinRule {
+    fn id(&self) -> &'static str {
+        "SQLCOST033"
+    }
+    fn name(&self) -> &'static str {
+        "Pattern-matching join predicate"
+    }
+    fn description(&self) -> &'static str {
+        "Detects LIKE, RLIKE, or regexp_like predicates in JOIN ON clauses."
+    }
+    fn default_severity(&self) -> Severity {
+        Severity::High
+    }
+    fn check(&self, ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
+        let Some(sql) = ctx.sql else {
+            return Vec::new();
+        };
+        sql.features
+            .joins
+            .iter()
+            .filter(|join| join.pattern_matching)
+            .map(|join| {
+                let confidence = if sql.feature_extraction_used_ast {
+                    Confidence::High
+                } else {
+                    Confidence::Low
+                };
+                diagnostic(
+                    ctx,
+                    self.id(),
+                    self.default_severity(),
+                    Some(join.span),
+                    "Join predicate uses pattern matching.",
+                )
+                .with_risk(
+                    "pattern joins often devolve into nested loops or cartesian explosions at scale.",
+                )
+                .with_suggestion(
+                    "normalize join keys upstream or use equality joins on tokenized columns.",
+                )
+                .with_confidence(confidence)
+            })
+            .collect()
+    }
+}
+
+impl Rule for ScalarSubqueryInSelectRule {
+    fn id(&self) -> &'static str {
+        "SQLCOST034"
+    }
+    fn name(&self) -> &'static str {
+        "Scalar subquery in SELECT list"
+    }
+    fn description(&self) -> &'static str {
+        "Detects per-row scalar subqueries in downstream model projections."
+    }
+    fn default_severity(&self) -> Severity {
+        Severity::Medium
+    }
+    fn check(&self, ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
+        let Some(sql) = ctx.sql else {
+            return Vec::new();
+        };
+        if !is_downstream_model(&ctx.file.root_relative_path) {
+            return Vec::new();
+        }
+        sql.features
+            .scalar_subqueries_in_select
+            .iter()
+            .map(|feature| {
+                let confidence = if sql.feature_extraction_used_ast {
+                    Confidence::High
+                } else {
+                    Confidence::Low
+                };
+                diagnostic(
+                    ctx,
+                    self.id(),
+                    self.default_severity(),
+                    Some(feature.span),
+                    "Scalar subquery appears in the SELECT list.",
+                )
+                .with_risk(
+                    "per-row scalar subqueries can execute once for every output row in downstream models.",
+                )
+                .with_suggestion("join or pre-aggregate the lookup once, then select the joined column.")
+                .with_confidence(confidence)
+            })
+            .collect()
+    }
+}
+
+impl Rule for CrossCatalogJoinRule {
+    fn id(&self) -> &'static str {
+        "SQLCOST035"
+    }
+    fn name(&self) -> &'static str {
+        "Cross-catalog join"
+    }
+    fn description(&self) -> &'static str {
+        "Detects joins between fully qualified tables with different catalog parts."
+    }
+    fn default_severity(&self) -> Severity {
+        Severity::Medium
+    }
+    fn applies_to(&self, warehouse: Warehouse) -> bool {
+        matches!(warehouse, Warehouse::Trino | Warehouse::Databricks)
+    }
+    fn check(&self, ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
+        let Some(sql) = ctx.sql else {
+            return Vec::new();
+        };
+        sql.features
+            .joins
+            .iter()
+            .filter(|join| join.cross_catalog)
+            .map(|join| {
+                let confidence = if sql.feature_extraction_used_ast {
+                    Confidence::High
+                } else {
+                    Confidence::Low
+                };
+                diagnostic(
+                    ctx,
+                    self.id(),
+                    self.default_severity(),
+                    Some(join.span),
+                    "Join crosses catalogs in fully qualified table names.",
+                )
+                .with_risk(
+                    "cross-catalog joins can force remote reads, extra coordinator work, and brittle query plans.",
+                )
+                .with_suggestion(
+                    "stage remote catalog data locally or join within one catalog when possible.",
                 )
                 .with_confidence(confidence)
             })

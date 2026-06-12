@@ -30,6 +30,10 @@ pub struct DbtConfig {
     pub materialized: Option<String>,
     pub unique_key: Option<String>,
     pub incremental_strategy: Option<String>,
+    pub partition_by: Option<String>,
+    pub cluster_by: Option<String>,
+    pub full_refresh: Option<bool>,
+    pub on_schema_change: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -76,6 +80,10 @@ pub struct DbtModel {
     pub materialized: Option<String>,
     pub unique_key: Option<String>,
     pub incremental_strategy: Option<String>,
+    pub partition_by: Option<String>,
+    pub cluster_by: Option<String>,
+    pub full_refresh: Option<bool>,
+    pub on_schema_change: Option<String>,
     pub compiled_code: Option<String>,
     pub tags: Vec<String>,
     pub columns: Vec<DbtColumn>,
@@ -194,6 +202,26 @@ fn apply_inline_configs(text: &str, config: &mut DbtConfig) {
                 "incremental_strategy" => {
                     if let Some(value) = quoted_string(value.trim()) {
                         config.incremental_strategy = Some(value);
+                    }
+                }
+                "partition_by" => {
+                    if let Some(value) = parse_inline_config_value(value.trim()) {
+                        config.partition_by = Some(value);
+                    }
+                }
+                "cluster_by" => {
+                    if let Some(value) = parse_inline_config_value(value.trim()) {
+                        config.cluster_by = Some(value);
+                    }
+                }
+                "full_refresh" => {
+                    if let Some(value) = parse_bool_literal(value.trim()) {
+                        config.full_refresh = Some(value);
+                    }
+                }
+                "on_schema_change" => {
+                    if let Some(value) = quoted_string(value.trim()) {
+                        config.on_schema_change = Some(value);
                     }
                 }
                 _ => {}
@@ -382,6 +410,21 @@ fn quoted_string(value: &str) -> Option<String> {
     Some(inner.to_string())
 }
 
+fn parse_bool_literal(value: &str) -> Option<bool> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "true" => Some(true),
+        "false" => Some(false),
+        _ => None,
+    }
+}
+
+fn parse_inline_config_value(value: &str) -> Option<String> {
+    quoted_string(value).or_else(|| {
+        let trimmed = value.trim();
+        (!trimmed.is_empty()).then(|| trimmed.to_string())
+    })
+}
+
 fn ref_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
@@ -455,6 +498,15 @@ pub fn parse_manifest_text(text: &str) -> Result<DbtProject> {
                 .get("incremental_strategy")
                 .and_then(Value::as_str)
                 .map(str::to_string);
+            let partition_by = config
+                .get("partition_by")
+                .and_then(parse_config_value_string);
+            let cluster_by = config.get("cluster_by").and_then(parse_config_value_string);
+            let full_refresh = config.get("full_refresh").and_then(Value::as_bool);
+            let on_schema_change = config
+                .get("on_schema_change")
+                .and_then(Value::as_str)
+                .map(str::to_string);
             let compiled_code = node
                 .get("compiled_code")
                 .or_else(|| node.get("compiled_sql"))
@@ -523,6 +575,10 @@ pub fn parse_manifest_text(text: &str) -> Result<DbtProject> {
                     materialized,
                     unique_key,
                     incremental_strategy,
+                    partition_by,
+                    cluster_by,
+                    full_refresh,
+                    on_schema_change,
                     compiled_code,
                     tags,
                     columns,
@@ -667,6 +723,10 @@ fn parse_yaml_value(value: Value) -> DbtProject {
                     materialized: yaml_config.materialized,
                     unique_key: yaml_config.unique_key,
                     incremental_strategy: yaml_config.incremental_strategy,
+                    partition_by: yaml_config.partition_by,
+                    cluster_by: yaml_config.cluster_by,
+                    full_refresh: yaml_config.full_refresh,
+                    on_schema_change: yaml_config.on_schema_change,
                     tags,
                     tests,
                     columns,
@@ -745,6 +805,10 @@ pub fn merge_yaml_project(target: &mut DbtProject, yaml: DbtProject) {
                     materialized: yaml_model.materialized.clone(),
                     unique_key: yaml_model.unique_key.clone(),
                     incremental_strategy: yaml_model.incremental_strategy.clone(),
+                    partition_by: yaml_model.partition_by.clone(),
+                    cluster_by: yaml_model.cluster_by.clone(),
+                    full_refresh: yaml_model.full_refresh,
+                    on_schema_change: yaml_model.on_schema_change.clone(),
                     ..DbtModel::default()
                 },
             );
@@ -818,6 +882,28 @@ fn merge_model_config_fields(target: &mut DbtModel, source: &DbtModel) {
     }
     if target.incremental_strategy.is_none() {
         target.incremental_strategy = source.incremental_strategy.clone();
+    }
+    if target.partition_by.is_none() {
+        target.partition_by = source.partition_by.clone();
+    }
+    if target.cluster_by.is_none() {
+        target.cluster_by = source.cluster_by.clone();
+    }
+    if target.full_refresh.is_none() {
+        target.full_refresh = source.full_refresh;
+    }
+    if target.on_schema_change.is_none() {
+        target.on_schema_change = source.on_schema_change.clone();
+    }
+}
+
+fn parse_config_value_string(value: &Value) -> Option<String> {
+    match value {
+        Value::Null => None,
+        Value::String(s) => Some(s.clone()),
+        Value::Bool(b) => Some(b.to_string()),
+        Value::Number(n) => Some(n.to_string()),
+        other => Some(other.to_string()),
     }
 }
 

@@ -37,6 +37,21 @@ DATE_TRUNC_RE = re.compile(r"(?i)\bdate_trunc\s*\(")
 BLOCK_TIME_RE = re.compile(r"(?i)\b(?:block_time|evt_block_time|evt_block_date|block_date)\b")
 SOURCE_RE = re.compile(r"(?i)\bsource\s*\(")
 IS_INCREMENTAL_RE = re.compile(r"(?i)is_incremental\s*\(")
+DISTINCT_RE = re.compile(r"(?i)\bselect\s+distinct\b")
+GROUP_BY_RE = re.compile(r"(?i)\bgroup\s+by\b")
+UNION_RE = re.compile(r"(?i)\bunion\b(?!\s+all\b)")
+WINDOW_OVER_RE = re.compile(r"(?i)\bover\s*\(\s*\)")
+JSON_EXTRACT_RE = re.compile(r"(?i)\bjson_(?:extract|parse|value)\w*\s*\(")
+REGEX_CALL_RE = re.compile(r"(?i)\b(?:regexp_extract|regexp_replace|regexp_like|rlike)\s*\(")
+COUNT_DISTINCT_RE = re.compile(r"(?i)\bcount\s*\(\s*distinct\b")
+CTE_REF_RE = re.compile(r"(?i)\bwith\s+\w+\s+as\s*\(")
+NON_EQ_JOIN_RE = re.compile(r"(?i)\bon\b[^=]{0,120}(?:<>|!=|>|<|\blike\b|\brlike\b)")
+EQ_JOIN_RE = re.compile(r"(?i)\bon\b[^=]{0,120}=")
+LEADING_WILDCARD_LIKE_RE = re.compile(r"(?i)\b(?:like|ilike)\s+'%")
+OR_PREDICATE_RE = re.compile(r"(?i)\bwhere\b[^;]*\bor\b")
+CORRELATED_SUBQUERY_RE = re.compile(r"(?i)\bwhere\b[^;]*\(\s*select\b")
+SCALAR_SUBQUERY_RE = re.compile(r"(?i)\bselect\b[^;]*\(\s*select\b[^)]+\)\s*(?:,|\bfrom\b)")
+PATTERN_JOIN_RE = re.compile(r"(?i)\bon\b[^;]*(?:like|rlike|regexp_like|regexp_extract)\s*\(")
 
 
 def mask_literals_and_comments(text: str) -> str:
@@ -175,9 +190,13 @@ def classify_sqlcost012(sql: str) -> str:
         return "subquery_comma_fp"
 
     if CROSS_JOIN_RE.search(lower):
+        if "date_spine" in lower or "date_ranges" in lower:
+            return "date_spine_cross_join"
         return "cross_join_explicit"
 
     if from_tail and has_comma_join_in_table_list(from_tail):
+        if "group by" in lower and "from" in lower:
+            return "group_by_comma_fp"
         return "comma_join"
 
     return "other"
@@ -187,6 +206,8 @@ def classify_sqlcost017(sql: str) -> str:
     masked = mask_literals_and_comments(sql).lower()
     if re.search(r"(?i)lower\s*\([^)]+\)\s*=\s*lower\s*\(", masked):
         return "symmetric_normalize"
+    if DATE_TRUNC_RE.search(masked) and JOIN_ON_RE.search(masked):
+        return "date_trunc_join"
     if CAST_RE.search(masked):
         return "cast_on_key"
     if COALESCE_RE.search(masked) and JOIN_ON_RE.search(masked):
@@ -227,6 +248,8 @@ def classify_sqlcost005(sql: str) -> str:
     masked = mask_literals_and_comments(sql).lower()
     if not IS_INCREMENTAL_RE.search(masked):
         return "other"
+    if "incremental_predicate(" in masked:
+        return "config_predicate"
     if BLOCK_TIME_RE.search(masked):
         return "block_time_present"
     if DATE_TRUNC_RE.search(masked):
@@ -236,12 +259,97 @@ def classify_sqlcost005(sql: str) -> str:
     return "missing_predicate"
 
 
+def classify_sqlcost002(sql: str) -> str:
+    masked = mask_literals_and_comments(sql).lower()
+    matches = len(JSON_EXTRACT_RE.findall(masked))
+    if matches >= 2:
+        return "repeated_json"
+    return "other"
+
+
+def classify_sqlcost003(sql: str) -> str:
+    masked = mask_literals_and_comments(sql).lower()
+    if len(REGEX_CALL_RE.findall(masked)) >= 2:
+        return "repeated_regex"
+    return "other"
+
+
+def classify_sqlcost006(sql: str) -> str:
+    masked = mask_literals_and_comments(sql).lower()
+    if NON_EQ_JOIN_RE.search(masked):
+        return "non_equality_join"
+    if EQ_JOIN_RE.search(masked):
+        return "equality_join"
+    return "other"
+
+
+def classify_sqlcost008(sql: str) -> str:
+    masked = mask_literals_and_comments(sql).lower()
+    if not DISTINCT_RE.search(masked):
+        return "other"
+    if GROUP_BY_RE.search(masked):
+        return "distinct_with_group_by"
+    return "blind_distinct"
+
+
+def classify_sqlcost013(sql: str) -> str:
+    masked = mask_literals_and_comments(sql).lower()
+    if WINDOW_OVER_RE.search(masked):
+        return "empty_partition_by"
+    return "other"
+
+
+def classify_sqlcost014(sql: str) -> str:
+    masked = mask_literals_and_comments(sql).lower()
+    if not CTE_REF_RE.search(masked):
+        return "other"
+    cte_names = re.findall(r"(?i)\bwith\s+(\w+)\s+as\s*\(", masked)
+    for name in cte_names:
+        if len(re.findall(rf"\b{re.escape(name.lower())}\b", masked)) > 1:
+            return "repeated_cte_ref"
+    return "other"
+
+
+def classify_sqlcost015(sql: str) -> str:
+    masked = mask_literals_and_comments(sql).lower()
+    if JSON_EXTRACT_RE.search(masked):
+        return "json_expression"
+    if REGEX_CALL_RE.search(masked):
+        return "regex_expression"
+    if LOWER_TRIM_RE.search(masked):
+        return "normalization_expression"
+    return "other"
+
+
+def classify_sqlcost018(sql: str) -> str:
+    masked = mask_literals_and_comments(sql).lower()
+    if UNION_RE.search(masked):
+        return "union_without_all"
+    return "other"
+
+
+def classify_sqlcost020(sql: str) -> str:
+    masked = mask_literals_and_comments(sql).lower()
+    if COUNT_DISTINCT_RE.search(masked):
+        return "count_distinct"
+    return "other"
+
+
 CLASSIFIERS: dict[str, Callable[[str], str]] = {
+    "SQLCOST002": classify_sqlcost002,
+    "SQLCOST003": classify_sqlcost003,
+    "SQLCOST005": classify_sqlcost005,
+    "SQLCOST006": classify_sqlcost006,
+    "SQLCOST008": classify_sqlcost008,
     "SQLCOST012": classify_sqlcost012,
+    "SQLCOST013": classify_sqlcost013,
+    "SQLCOST014": classify_sqlcost014,
+    "SQLCOST015": classify_sqlcost015,
     "SQLCOST016": classify_sqlcost016,
     "SQLCOST017": classify_sqlcost017,
+    "SQLCOST018": classify_sqlcost018,
     "SQLCOST019": classify_sqlcost019,
-    "SQLCOST005": classify_sqlcost005,
+    "SQLCOST020": classify_sqlcost020,
 }
 
 

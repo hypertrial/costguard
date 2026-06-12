@@ -264,9 +264,20 @@ python3 scripts/precision_triage.py --scan-json report.json --json-out triage/pr
 
 Exit code `1` when precision gates fail.
 
+## `recall_report.py`
+
+Validate corpus recall coverage for behavioral rules (SQLCOST001–022 and SQLCOST028–035): at least two `expect_rules` cases and one `forbid_rules` case per rule in [`tests/fixtures/corpus/manifest.toml`](../../../tests/fixtures/corpus/manifest.toml).
+
+```bash
+python3 scripts/recall_report.py
+python3 scripts/recall_report.py --rules SQLCOST030 SQLCOST031
+```
+
+Exit code `1` when any checked rule falls below the minimum case counts.
+
 ## `validate_fp_registry.py`
 
-Validate [`tests/benchmarks/fp_registry.toml`](../../../tests/benchmarks/fp_registry.toml) against corpus `forbid_rules` contracts:
+Validate [`tests/benchmarks/fp_registry.toml`](../../../tests/benchmarks/fp_registry.toml) against corpus contracts (`forbid_rules` for `fp` verdicts, `expect_rules` for `tp` verdicts):
 
 ```bash
 python3 scripts/validate_fp_registry.py

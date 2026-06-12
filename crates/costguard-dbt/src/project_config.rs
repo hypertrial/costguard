@@ -33,6 +33,10 @@ pub fn parse_config_object(map: &serde_json::Map<String, Value>) -> DbtConfig {
             "materialized" => config.materialized = parse_string_value(value),
             "unique_key" => config.unique_key = parse_unique_key_value(value),
             "incremental_strategy" => config.incremental_strategy = parse_string_value(value),
+            "partition_by" => config.partition_by = parse_config_value_string(value),
+            "cluster_by" => config.cluster_by = parse_config_value_string(value),
+            "full_refresh" => config.full_refresh = value.as_bool(),
+            "on_schema_change" => config.on_schema_change = parse_string_value(value),
             _ if key.starts_with('+') => {
                 let stripped = key.trim_start_matches('+');
                 match stripped {
@@ -42,6 +46,10 @@ pub fn parse_config_object(map: &serde_json::Map<String, Value>) -> DbtConfig {
                     "incremental_strategy" => {
                         config.incremental_strategy = parse_string_value(value);
                     }
+                    "partition_by" => config.partition_by = parse_config_value_string(value),
+                    "cluster_by" => config.cluster_by = parse_config_value_string(value),
+                    "full_refresh" => config.full_refresh = value.as_bool(),
+                    "on_schema_change" => config.on_schema_change = parse_string_value(value),
                     _ => {}
                 }
             }
@@ -62,6 +70,18 @@ pub fn merge_config_fill_missing(target: &mut DbtConfig, source: &DbtConfig) {
     if target.incremental_strategy.is_none() {
         target.incremental_strategy = source.incremental_strategy.clone();
     }
+    if target.partition_by.is_none() {
+        target.partition_by = source.partition_by.clone();
+    }
+    if target.cluster_by.is_none() {
+        target.cluster_by = source.cluster_by.clone();
+    }
+    if target.full_refresh.is_none() {
+        target.full_refresh = source.full_refresh;
+    }
+    if target.on_schema_change.is_none() {
+        target.on_schema_change = source.on_schema_change.clone();
+    }
 }
 
 pub fn merge_config_override(mut target: DbtConfig, source: &DbtConfig) -> DbtConfig {
@@ -73,6 +93,18 @@ pub fn merge_config_override(mut target: DbtConfig, source: &DbtConfig) -> DbtCo
     }
     if source.incremental_strategy.is_some() {
         target.incremental_strategy = source.incremental_strategy.clone();
+    }
+    if source.partition_by.is_some() {
+        target.partition_by = source.partition_by.clone();
+    }
+    if source.cluster_by.is_some() {
+        target.cluster_by = source.cluster_by.clone();
+    }
+    if source.full_refresh.is_some() {
+        target.full_refresh = source.full_refresh;
+    }
+    if source.on_schema_change.is_some() {
+        target.on_schema_change = source.on_schema_change.clone();
     }
     target
 }
@@ -86,6 +118,18 @@ fn merge_config(target: &mut DbtConfig, source: &DbtConfig) {
     }
     if source.incremental_strategy.is_some() {
         target.incremental_strategy = source.incremental_strategy.clone();
+    }
+    if source.partition_by.is_some() {
+        target.partition_by = source.partition_by.clone();
+    }
+    if source.cluster_by.is_some() {
+        target.cluster_by = source.cluster_by.clone();
+    }
+    if source.full_refresh.is_some() {
+        target.full_refresh = source.full_refresh;
+    }
+    if source.on_schema_change.is_some() {
+        target.on_schema_change = source.on_schema_change.clone();
     }
 }
 
@@ -112,6 +156,16 @@ fn parse_unique_key_value(value: &Value) -> Option<String> {
     }
 }
 
+fn parse_config_value_string(value: &Value) -> Option<String> {
+    match value {
+        Value::Null => None,
+        Value::String(s) => Some(s.clone()),
+        Value::Bool(b) => Some(b.to_string()),
+        Value::Number(n) => Some(n.to_string()),
+        other => Some(other.to_string()),
+    }
+}
+
 const CONFIG_KEYS: &[&str] = &[
     "config",
     "+config",
@@ -121,6 +175,14 @@ const CONFIG_KEYS: &[&str] = &[
     "+unique_key",
     "incremental_strategy",
     "+incremental_strategy",
+    "partition_by",
+    "+partition_by",
+    "cluster_by",
+    "+cluster_by",
+    "full_refresh",
+    "+full_refresh",
+    "on_schema_change",
+    "+on_schema_change",
     "tags",
     "+tags",
 ];
@@ -376,11 +438,19 @@ pub fn apply_folder_config_to_model(model: &mut DbtModel, folder_config: &DbtCon
         materialized: model.materialized.clone(),
         unique_key: model.unique_key.clone(),
         incremental_strategy: model.incremental_strategy.clone(),
+        partition_by: model.partition_by.clone(),
+        cluster_by: model.cluster_by.clone(),
+        full_refresh: model.full_refresh,
+        on_schema_change: model.on_schema_change.clone(),
     };
     merge_config_fill_missing(&mut config, folder_config);
     model.materialized = config.materialized;
     model.unique_key = config.unique_key;
     model.incremental_strategy = config.incremental_strategy;
+    model.partition_by = config.partition_by;
+    model.cluster_by = config.cluster_by;
+    model.full_refresh = config.full_refresh;
+    model.on_schema_change = config.on_schema_change;
 }
 
 fn normalize_path(path: &Path) -> String {

@@ -93,7 +93,7 @@ fn sql_rules_have_positive_coverage() {
         (
             "SQLCOST014",
             "models/marts/fct.sql",
-            "with c as (select * from t) select * from c join c b on c.id = b.id",
+            "with c as (select * from t) select * from c join c b on c.id = b.id join c c2 on c.id = c2.id",
         ),
         (
             "SQLCOST016",
@@ -135,6 +135,46 @@ select * from filtered",
             "models/marts/model.py",
             "rows = df.collect()",
         ),
+        (
+            "SQLCOST028",
+            "models/marts/fct.sql",
+            "{{ config(materialized='incremental', unique_key='id') }} select id from t",
+        ),
+        (
+            "SQLCOST029",
+            "models/marts/fct.sql",
+            "{{ config(materialized='incremental', unique_key='id', full_refresh=true) }} select id from t",
+        ),
+        (
+            "SQLCOST030",
+            "models/marts/fct.sql",
+            "select id from orders o where exists (select 1 from line_items li where li.order_id = o.id)",
+        ),
+        (
+            "SQLCOST031",
+            "models/marts/fct.sql",
+            "select id from users where email like '%@example.com'",
+        ),
+        (
+            "SQLCOST032",
+            "models/marts/fct.sql",
+            "select id from events where event_date = current_date or block_time >= current_date",
+        ),
+        (
+            "SQLCOST033",
+            "models/marts/fct.sql",
+            "select * from a join b on a.name like b.token",
+        ),
+        (
+            "SQLCOST034",
+            "models/marts/fct.sql",
+            "select id, (select max(amount) from payments p where p.user_id = u.id) from users u",
+        ),
+        (
+            "SQLCOST035",
+            "models/marts/fct.sql",
+            "select * from hive.default.orders o join iceberg.analytics.users u on o.id = u.id",
+        ),
     ];
 
     for (rule_id, path, text) in cases {
@@ -146,15 +186,55 @@ select * from filtered",
         let doc = if path.ends_with(".py") {
             None
         } else {
-            Some(analyze(&file))
+            Some(analyze_for_rule(rule_id, &file))
         };
         let docs = doc.iter().cloned().collect::<Vec<_>>();
-        let ids = run_for_file(&file, &docs);
+        let ids = run_for_rule(rule_id, &file, &docs);
         assert!(
             ids.contains(&rule_id.to_string()),
             "missing {rule_id}: {ids:?}"
         );
     }
+}
+
+fn analyze_for_rule(rule_id: &str, file: &ProjectFile) -> SqlDocument {
+    let platform = match rule_id {
+        "SQLCOST021" | "SQLCOST028" => Platform::BigQuery,
+        "SQLCOST035" => Platform::Trino,
+        _ => Platform::Generic,
+    };
+    analyze_sql(
+        file.path.clone(),
+        &file.text,
+        platform,
+        &file.line_index,
+        None,
+        true,
+    )
+}
+
+fn run_for_rule(rule_id: &str, file: &ProjectFile, docs: &[SqlDocument]) -> Vec<String> {
+    let registry = RuleRegistry::default_rules();
+    let indexes = ProjectIndexes::from_sql_documents(docs);
+    let sql = docs.iter().find(|doc| doc.path == file.path);
+    let warehouse = match rule_id {
+        "SQLCOST021" | "SQLCOST028" => Platform::BigQuery,
+        "SQLCOST035" => Platform::Trino,
+        _ => Platform::Generic,
+    };
+    let diagnostics = registry.run(&RuleContext {
+        warehouse,
+        file,
+        sql,
+        dbt_model: None,
+        all_sql: docs,
+        project_indexes: &indexes,
+        overrides: &RuleOverrides::default(),
+    });
+    apply_suppressions(&file.text, diagnostics)
+        .into_iter()
+        .map(|diagnostic| diagnostic.rule_id)
+        .collect()
 }
 
 #[test]
@@ -209,7 +289,11 @@ fn cross_file_expensive_expression_uses_project_index() {
         "models/marts/b.sql",
         "select json_extract(payload, '$.a') from t",
     );
-    let docs = vec![analyze(&first), analyze(&second)];
+    let third = sql_file(
+        "models/marts/c.sql",
+        "select json_extract(payload, '$.a') from t",
+    );
+    let docs = vec![analyze(&first), analyze(&second), analyze(&third)];
     let ids = run_for_file(&first, &docs);
     assert!(ids.contains(&"SQLCOST015".to_string()));
 }

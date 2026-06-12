@@ -53,6 +53,14 @@
 - [SQLCOST025](../rules/SQLCOST025.md)
 - [SQLCOST026](../rules/SQLCOST026.md)
 - [SQLCOST027](../rules/SQLCOST027.md)
+- [SQLCOST028](../rules/SQLCOST028.md)
+- [SQLCOST029](../rules/SQLCOST029.md)
+- [SQLCOST030](../rules/SQLCOST030.md)
+- [SQLCOST031](../rules/SQLCOST031.md)
+- [SQLCOST032](../rules/SQLCOST032.md)
+- [SQLCOST033](../rules/SQLCOST033.md)
+- [SQLCOST034](../rules/SQLCOST034.md)
+- [SQLCOST035](../rules/SQLCOST035.md)
 
 # Design
 

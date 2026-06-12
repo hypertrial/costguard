@@ -2,13 +2,61 @@ use crate::helpers::{
     diagnostic, has_bounded_incremental_predicate, incremental_predicate_suggestion,
     incremental_source_filter_deferred, normalized_path,
 };
-use crate::registry::{Rule, RuleContext};
+use crate::registry::{Rule, RuleContext, Warehouse};
+use costguard_dbt::DbtConfig;
 use costguard_diagnostics::{Diagnostic, Severity};
 
 pub(crate) struct IncrementalUniqueKeyRule;
 pub(crate) struct IncrementalPredicateRule;
 pub(crate) struct IncrementalSourceBoundRule;
 pub(crate) struct SourceInMartRule;
+pub(crate) struct MissingPartitionClusterRule;
+pub(crate) struct FullRefreshHeavyIncrementalRule;
+
+fn materialized_config<'a>(
+    model: Option<&'a costguard_dbt::DbtModel>,
+    sql_config: &'a DbtConfig,
+) -> Option<&'a str> {
+    model
+        .and_then(|model| model.materialized.as_deref())
+        .or(sql_config.materialized.as_deref())
+}
+
+fn partition_by_config<'a>(
+    model: Option<&'a costguard_dbt::DbtModel>,
+    sql_config: &'a DbtConfig,
+) -> Option<&'a str> {
+    model
+        .and_then(|model| model.partition_by.as_deref())
+        .or(sql_config.partition_by.as_deref())
+}
+
+fn cluster_by_config<'a>(
+    model: Option<&'a costguard_dbt::DbtModel>,
+    sql_config: &'a DbtConfig,
+) -> Option<&'a str> {
+    model
+        .and_then(|model| model.cluster_by.as_deref())
+        .or(sql_config.cluster_by.as_deref())
+}
+
+fn on_schema_change_config<'a>(
+    model: Option<&'a costguard_dbt::DbtModel>,
+    sql_config: &'a DbtConfig,
+) -> Option<&'a str> {
+    model
+        .and_then(|model| model.on_schema_change.as_deref())
+        .or(sql_config.on_schema_change.as_deref())
+}
+
+fn full_refresh_config(
+    model: Option<&costguard_dbt::DbtModel>,
+    sql_config: &DbtConfig,
+) -> Option<bool> {
+    model
+        .and_then(|model| model.full_refresh)
+        .or(sql_config.full_refresh)
+}
 
 impl Rule for IncrementalUniqueKeyRule {
     fn id(&self) -> &'static str {
@@ -177,5 +225,103 @@ impl Rule for SourceInMartRule {
         )
         .with_risk("mart models can inherit raw-source cost and data quality problems.")
         .with_suggestion("route raw sources through staging models first.")]
+    }
+}
+
+impl Rule for MissingPartitionClusterRule {
+    fn id(&self) -> &'static str {
+        "SQLCOST028"
+    }
+    fn name(&self) -> &'static str {
+        "Missing partition or cluster config on large mart model"
+    }
+    fn description(&self) -> &'static str {
+        "Detects incremental or table materialized mart models without partition_by or cluster_by."
+    }
+    fn default_severity(&self) -> Severity {
+        Severity::High
+    }
+    fn applies_to(&self, warehouse: Warehouse) -> bool {
+        matches!(
+            warehouse,
+            Warehouse::BigQuery | Warehouse::Snowflake | Warehouse::Databricks
+        )
+    }
+    fn check(&self, ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
+        let path = normalized_path(&ctx.file.root_relative_path);
+        if !path.contains("marts/") && !path.contains("mart/") {
+            return Vec::new();
+        }
+        let Some(sql) = ctx.sql else {
+            return Vec::new();
+        };
+        let materialized = materialized_config(ctx.dbt_model, &sql.dbt.config);
+        let Some(materialized) = materialized else {
+            return Vec::new();
+        };
+        if materialized != "incremental" && materialized != "table" {
+            return Vec::new();
+        }
+        let has_partition = partition_by_config(ctx.dbt_model, &sql.dbt.config).is_some();
+        let has_cluster = cluster_by_config(ctx.dbt_model, &sql.dbt.config).is_some();
+        if has_partition || has_cluster {
+            return Vec::new();
+        }
+        vec![diagnostic(
+            ctx,
+            self.id(),
+            self.default_severity(),
+            None,
+            "Mart model has no partition_by or cluster_by configuration.",
+        )
+        .with_risk(
+            "large mart tables without partition or cluster hints can scan and shuffle far more data than intended.",
+        )
+        .with_suggestion(
+            "add partition_by and/or cluster_by in model config for warehouse-native pruning.",
+        )]
+    }
+}
+
+impl Rule for FullRefreshHeavyIncrementalRule {
+    fn id(&self) -> &'static str {
+        "SQLCOST029"
+    }
+    fn name(&self) -> &'static str {
+        "Full-refresh-heavy incremental config"
+    }
+    fn description(&self) -> &'static str {
+        "Detects incremental models configured with full_refresh or sync_all_columns schema changes."
+    }
+    fn default_severity(&self) -> Severity {
+        Severity::Medium
+    }
+    fn check(&self, ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
+        let Some(sql) = ctx.sql else {
+            return Vec::new();
+        };
+        let materialized = materialized_config(ctx.dbt_model, &sql.dbt.config);
+        if materialized != Some("incremental") {
+            return Vec::new();
+        }
+        let full_refresh = full_refresh_config(ctx.dbt_model, &sql.dbt.config).unwrap_or(false);
+        let on_schema_change = on_schema_change_config(ctx.dbt_model, &sql.dbt.config);
+        let sync_all_columns =
+            on_schema_change.is_some_and(|value| value.eq_ignore_ascii_case("sync_all_columns"));
+        if !full_refresh && !sync_all_columns {
+            return Vec::new();
+        }
+        let message = if full_refresh {
+            "Incremental model is configured with full_refresh=true."
+        } else {
+            "Incremental model uses on_schema_change=sync_all_columns."
+        };
+        vec![diagnostic(ctx, self.id(), self.default_severity(), None, message)
+            .with_risk(
+                "these settings can force expensive full rebuilds or wide schema rewrites on incremental models.",
+            )
+            .with_suggestion(
+                "prefer bounded incremental merges; use append_new_columns or fail schema changes in production marts.",
+            )]
     }
 }

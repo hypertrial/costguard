@@ -15,25 +15,29 @@
       "SQLCOST003": 17,
       "SQLCOST004": 1,
       "SQLCOST005": 1,
-      "SQLCOST006": 595,
-      "SQLCOST008": 968,
+      "SQLCOST006": 86,
+      "SQLCOST008": 426,
       "SQLCOST012": 25,
       "SQLCOST013": 168,
-      "SQLCOST014": 1377,
-      "SQLCOST015": 866,
+      "SQLCOST014": 831,
+      "SQLCOST015": 774,
       "SQLCOST017": 69,
       "SQLCOST018": 528,
       "SQLCOST019": 65,
-      "SQLCOST026": 1
+      "SQLCOST026": 1,
+      "SQLCOST029": 113,
+      "SQLCOST030": 7,
+      "SQLCOST031": 16,
+      "SQLCOST035": 111
     },
     "diagnostics_by_severity": {
-      "high": 92,
-      "low": 1378,
-      "med": 3604
+      "high": 74,
+      "low": 832,
+      "med": 2726
     },
     "metadata_only_scan": false,
     "metadata_warnings": 1,
-    "new_findings": 5074,
+    "new_findings": 3632,
     "sql_parse_compiled_failures": 0,
     "sql_parse_compiled_total": 8030,
     "sql_parse_failures": 0,
@@ -42,7 +46,7 @@
     "sql_parse_total": 8030,
     "yaml_parse_failures": 0
   },
-  "runtime_ms": 9519,
+  "runtime_ms": 9443,
   "target": "external/spellbook",
   "thresholds": {
     "max_diagnostics_by_rule": {

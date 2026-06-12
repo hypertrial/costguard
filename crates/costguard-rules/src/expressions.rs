@@ -168,7 +168,7 @@ impl Rule for RepeatedExpensiveAcrossFilesRule {
                     .get(feature.key.as_str())
                     .copied()
                     .unwrap_or(0)
-                    > 1
+                    >= 3
             })
             .map_or_else(Vec::new, |feature| {
                 vec![diagnostic(

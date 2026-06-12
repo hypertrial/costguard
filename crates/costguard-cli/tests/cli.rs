@@ -420,7 +420,7 @@ fn scan_min_confidence_suppresses_low_confidence_high_severity() {
         .arg("--warehouse")
         .arg("generic")
         .arg("--fail-on")
-        .arg("high")
+        .arg("med")
         .output()
         .expect("run costguard");
     assert_eq!(
@@ -436,7 +436,7 @@ fn scan_min_confidence_suppresses_low_confidence_high_severity() {
         .arg("--warehouse")
         .arg("generic")
         .arg("--fail-on")
-        .arg("high")
+        .arg("med")
         .arg("--min-confidence")
         .arg("high")
         .output()

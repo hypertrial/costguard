@@ -38,7 +38,7 @@ class PrecisionTriageTests(unittest.TestCase):
             }
         ]
         checkout = ROOT / "tests/fixtures/real_world/spellbook_snippets"
-        report = precision_report(diagnostics, checkout, {})
+        report = precision_report(diagnostics, checkout, {}, "spellbook")
         self.assertEqual(report["sample_size"], 1)
         self.assertIn("passes", report)
 

@@ -1,6 +1,6 @@
 # SQLCOST012: Cross join without explicit allow comment
 
-**Severity:** high
+**Severity:** medium
 
 Detects `CROSS JOIN` and comma joins without a documented allow comment.
 

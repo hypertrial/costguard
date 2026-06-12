@@ -1,5 +1,6 @@
 use costguard_core::{scan, ScanConfig};
 use costguard_diagnostics::Severity;
+use costguard_platform::Platform;
 use serde::Deserialize;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -15,6 +16,8 @@ struct CorpusCase {
     path: String,
     expect_rules: Vec<String>,
     forbid_rules: Vec<String>,
+    platform: Option<String>,
+    manifest_path: Option<String>,
 }
 
 fn corpus_root() -> PathBuf {
@@ -29,10 +32,29 @@ fn load_cases() -> Vec<CorpusCase> {
         .case
 }
 
-fn rule_ids_for_case(case_path: &Path) -> HashSet<String> {
+fn parse_platform(value: Option<&str>) -> Platform {
+    match value.unwrap_or("generic").to_ascii_lowercase().as_str() {
+        "bigquery" | "bq" => Platform::BigQuery,
+        "snowflake" => Platform::Snowflake,
+        "trino" => Platform::Trino,
+        "databricks" => Platform::Databricks,
+        "redshift" => Platform::Redshift,
+        "postgres" | "postgresql" => Platform::Postgres,
+        "duckdb" => Platform::DuckDB,
+        _ => Platform::Generic,
+    }
+}
+
+fn rule_ids_for_case(case_path: &Path, case: &CorpusCase) -> HashSet<String> {
+    let manifest_path = case
+        .manifest_path
+        .as_ref()
+        .map(|relative| case_path.join(relative));
     let config = ScanConfig {
         root: case_path.to_path_buf(),
         paths: vec![PathBuf::from("models")],
+        platform: parse_platform(case.platform.as_deref()),
+        manifest_path,
         fail_on: Some(Severity::High),
         ..ScanConfig::default()
     };
@@ -48,7 +70,7 @@ fn rule_ids_for_case(case_path: &Path) -> HashSet<String> {
 fn corpus_cases_match_expected_rules() {
     for case in load_cases() {
         let case_path = corpus_root().join(&case.path);
-        let rule_ids = rule_ids_for_case(&case_path);
+        let rule_ids = rule_ids_for_case(&case_path, &case);
         for rule in &case.expect_rules {
             assert!(
                 rule_ids.contains(rule),
