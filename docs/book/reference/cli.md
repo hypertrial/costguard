@@ -17,8 +17,10 @@ Source: `crates/costguard-cli/src/main.rs`
 | --- | --- | --- |
 | `--warehouse` | scan, explain, pr | Platform/dialect for SQL parsing heuristics |
 | `--dialect` | scan, explain, pr | Alias for `--warehouse` (config file uses either key) |
-| `--format` | scan, explain, pr, rules | `text`, `json`, `github`, `markdown` (config also accepts `md`) |
+| `--format` | scan, explain, pr, rules | `text`, `json`, `github`, `markdown`, `sarif` (config also accepts `md`) |
 | `--manifest` | scan, explain, pr | Path to dbt `manifest.json` with `compiled_code` |
+| `--baseline` | scan, pr | Finding baseline JSON (grandfather known findings) |
+| `--write-baseline` | scan | Write current findings to a baseline JSON file |
 
 ## `scan`
 
@@ -30,6 +32,8 @@ costguard scan [PATHS...] [OPTIONS]
 | --- | --- | --- |
 | `--fail-on` | `high` (via config default) | Severities: `info`, `low`, `medium`, `med`, `high`, `critical`, `crit` |
 | `--min-confidence` | unset | Optional floor: `low`, `medium`/`med`, `high`. Recommended for noisy repos: `--fail-on high --min-confidence high` |
+| `--baseline` | unset | Suppress findings matching baseline fingerprints |
+| `--write-baseline` | unset | Snapshot findings to a baseline JSON file |
 
 ## `explain`
 
@@ -50,13 +54,14 @@ costguard pr [OPTIONS]
 | `--base` | `main` | Git ref for changed-file detection; CI examples use `origin/main` |
 | `--fail-on` | `high` | Same severity values as `scan` |
 | `--min-confidence` | unset | Same confidence values as `scan` |
+| `--baseline` | unset | Suppress findings matching baseline fingerprints |
 
 Invalid git bases and non-git directories fail the check instead of silently scanning zero files.
 
 ## `rules`
 
 ```bash
-costguard rules [--format text|json|markdown]
+costguard rules [--format text|json|markdown|sarif]
 ```
 
 ## Manifest discovery

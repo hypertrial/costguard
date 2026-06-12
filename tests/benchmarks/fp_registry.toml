@@ -217,3 +217,75 @@ verdict = "tp"
 corpus_case = "join_key_wrapped"
 notes = "asymmetric function-wrapped join key remains a true positive"
 
+[[finding]]
+rule = "SQLCOST006"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "ast_shape"
+notes = "unbounded join heuristics on Spellbook are predominantly true positives in sampled triage"
+
+[[finding]]
+rule = "SQLCOST008"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "ast_shape"
+notes = "SELECT DISTINCT in downstream models is a valid cost signal for Spellbook"
+
+[[finding]]
+rule = "SQLCOST014"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "ast_shape"
+notes = "repeated CTE references indicate reuse worth reviewing"
+
+[[finding]]
+rule = "SQLCOST015"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "repeated_json"
+notes = "cross-file expensive expression reuse is a valid project-level signal"
+
+[[finding]]
+rule = "SQLCOST018"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "ast_shape"
+notes = "UNION without ALL in downstream paths is a valid cost signal"
+
+[[finding]]
+rule = "SQLCOST002"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "repeated_json"
+notes = "repeated JSON extraction patterns in Spellbook are valid cost signals"
+
+[[finding]]
+rule = "SQLCOST003"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "ast_shape"
+notes = "repeated regex operations are valid cost signals"
+
+[[finding]]
+rule = "SQLCOST019"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "incremental_source_cte_bound"
+notes = "bounded incremental source reads without block_time in classifier bucket remain true positives when unbounded"
+
+[[finding]]
+rule = "SQLCOST017"
+repo = "spellbook"
+bucket = "other"
+verdict = "fp"
+corpus_case = "join_key_symmetric_lower"
+notes = "residual medium-severity join normalization findings after Spellbook calibration"
+

@@ -25,6 +25,7 @@ pub fn render(result: &ScanResult, format: OutputFormat) -> Result<String> {
         })?),
         OutputFormat::Github => Ok(render_github(result)),
         OutputFormat::Markdown => Ok(render_markdown(result)),
+        OutputFormat::Sarif => Ok(render_sarif(result)?),
     }
 }
 
@@ -58,6 +59,24 @@ pub fn render_rules(
                 ));
             }
             Ok(output)
+        }
+        OutputFormat::Sarif => {
+            let payload = serde_json::json!({
+                "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+                "version": "2.1.0",
+                "runs": [{
+                    "tool": {
+                        "driver": {
+                            "name": "costguard",
+                            "version": env!("CARGO_PKG_VERSION"),
+                            "informationUri": "https://github.com/hypertrial/costguard",
+                            "rules": sarif_rule_definitions(rules)
+                        }
+                    },
+                    "results": []
+                }]
+            });
+            Ok(serde_json::to_string_pretty(&payload)?)
         }
     }
 }
@@ -270,6 +289,79 @@ fn escape_markdown(value: &str) -> String {
     value.replace('|', "\\|")
 }
 
+fn sarif_level(severity: Severity) -> &'static str {
+    match severity {
+        Severity::Critical | Severity::High => "error",
+        Severity::Medium => "warning",
+        Severity::Low | Severity::Info => "note",
+    }
+}
+
+fn render_sarif(result: &ScanResult) -> Result<String> {
+    let rules = costguard_core::rules();
+    let payload = serde_json::json!({
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [{
+            "tool": {
+                "driver": {
+                    "name": "costguard",
+                    "version": env!("CARGO_PKG_VERSION"),
+                    "informationUri": "https://github.com/hypertrial/costguard",
+                    "rules": sarif_rule_definitions(&rules)
+                }
+            },
+            "results": sarif_results(result)
+        }]
+    });
+    Ok(serde_json::to_string_pretty(&payload)?)
+}
+
+fn sarif_results(result: &ScanResult) -> Vec<serde_json::Value> {
+    result
+        .diagnostics
+        .iter()
+        .map(|diagnostic| {
+            serde_json::json!({
+                "ruleId": diagnostic.rule_id,
+                "level": sarif_level(diagnostic.severity),
+                "message": {
+                    "text": diagnostic.message
+                },
+                "locations": [{
+                    "physicalLocation": {
+                        "artifactLocation": {
+                            "uri": diagnostic.path.to_string_lossy().replace('\\', "/")
+                        },
+                        "region": {
+                            "startLine": diagnostic.line,
+                            "startColumn": diagnostic.column
+                        }
+                    }
+                }]
+            })
+        })
+        .collect()
+}
+
+fn sarif_rule_definitions(rules: &[costguard_core::RuleMetadata]) -> Vec<serde_json::Value> {
+    rules
+        .iter()
+        .map(|rule| {
+            serde_json::json!({
+                "id": rule.id,
+                "name": rule.name,
+                "shortDescription": {
+                    "text": rule.description
+                },
+                "defaultConfiguration": {
+                    "level": sarif_level(rule.severity)
+                }
+            })
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -317,6 +409,8 @@ mod tests {
                 metadata_only_scan: false,
                 diagnostics_by_rule: BTreeMap::new(),
                 diagnostics_by_severity: BTreeMap::new(),
+                baselined_findings: 0,
+                new_findings: 0,
             },
             file_parse_status: Vec::new(),
             pr_summary: Some(PrSummary {
@@ -418,5 +512,14 @@ mod tests {
         result.diagnostics[0].compiled_column = Some(4);
         let rendered = render_github(&result);
         assert!(rendered.contains("compiled SQL location: line 12"));
+    }
+
+    #[test]
+    fn sarif_output_has_required_fields() {
+        let rendered = render(&sample_result(true), OutputFormat::Sarif).expect("sarif render");
+        let value: serde_json::Value = serde_json::from_str(&rendered).expect("parse sarif");
+        assert_eq!(value["version"], "2.1.0");
+        assert_eq!(value["runs"][0]["tool"]["driver"]["name"], "costguard");
+        assert_eq!(value["runs"][0]["results"][0]["ruleId"], "SQLCOST005");
     }
 }

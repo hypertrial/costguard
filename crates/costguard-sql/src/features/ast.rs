@@ -2,9 +2,9 @@ use crate::strip::JinjaStripMap;
 use crate::{CteFeature, ExpressionFeature, JoinFeature, JoinKind, SqlFeatures, WindowFeature};
 use costguard_diagnostics::{LineIndex, Span};
 use sqlparser::ast::{
-    BinaryOperator, DataType, DuplicateTreatment, Expr, Function, FunctionArguments, Join,
-    JoinConstraint, JoinOperator, ObjectName, Query, Select, SelectItem, SetExpr, SetOperator,
-    SetQuantifier, Statement, TableFactor, TableWithJoins, WindowSpec, WindowType, With,
+    BinaryOperator, DuplicateTreatment, Expr, Function, FunctionArguments, Join, JoinConstraint,
+    JoinOperator, ObjectName, Query, Select, SelectItem, SetExpr, SetOperator, SetQuantifier,
+    Statement, TableFactor, TableWithJoins, WindowSpec, WindowType, With,
 };
 use std::collections::HashMap;
 
@@ -523,6 +523,9 @@ fn join_predicate_has_function_on_key(expr: &Expr) -> bool {
             if is_symmetric_normalization_eq(left, right)
                 || is_time_bucket_join_eq(left, right)
                 || is_coalesce_null_safe_join_eq(left, right)
+                || is_normalization_of_same_column(left, right)
+                || is_normalization_of_same_column(right, left)
+                || is_symmetric_hash_eq(left, right)
             {
                 return false;
             }
@@ -558,6 +561,53 @@ fn is_symmetric_normalization_eq(left: &Expr, right: &Expr) -> bool {
 
 fn is_coalesce_null_safe_join_eq(left: &Expr, right: &Expr) -> bool {
     coalesce_null_safe_side(left, right) || coalesce_null_safe_side(right, left)
+}
+
+fn is_normalization_of_same_column(normalized: &Expr, bare: &Expr) -> bool {
+    let Expr::Function(function) = normalized else {
+        return false;
+    };
+    if !is_join_key_normalization_function(function) {
+        return false;
+    }
+    let Some(inner) = function_first_arg_expr(function) else {
+        return false;
+    };
+    column_names_equivalent(inner, bare)
+}
+
+fn function_first_arg_expr(function: &Function) -> Option<&Expr> {
+    use sqlparser::ast::{FunctionArg, FunctionArgExpr};
+    function.args.args().iter().find_map(|arg| match arg {
+        FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => Some(expr),
+        FunctionArg::Named {
+            arg: FunctionArgExpr::Expr(expr),
+            ..
+        } => Some(expr),
+        _ => None,
+    })
+}
+
+fn is_symmetric_hash_eq(left: &Expr, right: &Expr) -> bool {
+    match (left, right) {
+        (Expr::Function(left_fn), Expr::Function(right_fn)) => {
+            let left_name = function_name(left_fn);
+            let right_name = function_name(right_fn);
+            left_name == right_name
+                && matches!(
+                    left_name.as_str(),
+                    "keccak256" | "keccak" | "sha256" | "sha2" | "md5" | "hash"
+                )
+        }
+        _ => false,
+    }
+}
+
+fn column_names_equivalent(left: &Expr, right: &Expr) -> bool {
+    match (expr_column_name(left), expr_column_name(right)) {
+        (Some(left_name), Some(right_name)) => left_name == right_name,
+        _ => false,
+    }
 }
 
 fn coalesce_null_safe_side(coalesce_side: &Expr, other: &Expr) -> bool {
@@ -689,6 +739,16 @@ fn is_join_key_normalization_function(function: &Function) -> bool {
 fn is_non_sargable_filter(expr: &Expr) -> bool {
     match expr {
         Expr::Function(function) => {
+            let name = function_name(function);
+            if matches!(name.as_str(), "date_trunc" | "timestamp_trunc")
+                && function
+                    .args
+                    .args()
+                    .iter()
+                    .any(expr_contains_partition_column_in_arg)
+            {
+                return false;
+            }
             is_sargability_breaking_function(function)
                 && function
                     .args
@@ -696,15 +756,7 @@ fn is_non_sargable_filter(expr: &Expr) -> bool {
                     .iter()
                     .any(expr_contains_partition_column_in_arg)
         }
-        Expr::Cast {
-            expr: inner,
-            data_type,
-            ..
-        } => {
-            is_date_like_type(data_type)
-                && expr_contains_partition_column(inner)
-                && !matches!(inner.as_ref(), Expr::Value(_))
-        }
+        Expr::Cast { .. } => false,
         Expr::Nested(inner) => is_non_sargable_filter(inner),
         _ => false,
     }
@@ -784,13 +836,6 @@ fn is_partition_column_name(name: &str) -> bool {
     ]
     .iter()
     .any(|needle| lower == *needle || lower.ends_with(&format!("_{needle}")))
-}
-
-fn is_date_like_type(data_type: &DataType) -> bool {
-    matches!(
-        data_type,
-        DataType::Date | DataType::Datetime(_) | DataType::Timestamp(_, _) | DataType::Time(_, _)
-    )
 }
 
 fn table_name_has_wildcard(name: &ObjectName) -> bool {

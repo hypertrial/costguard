@@ -3,38 +3,41 @@
   "kind": "external",
   "metrics": {
     "counts": {
-      "manifest": 3,
+      "manifest": 0,
       "other": 0,
-      "python": 4,
-      "sql": 33,
-      "yaml": 35
+      "python": 1,
+      "sql": 15,
+      "yaml": 14
     },
+    "dbt_project_parse_failures": 0,
     "diagnostics_by_rule": {
-      "SQLCOST001": 24,
-      "SQLCOST002": 3,
-      "SQLCOST003": 1,
-      "SQLCOST005": 2,
-      "SQLCOST007": 2,
-      "SQLCOST008": 1,
-      "SQLCOST009": 1,
-      "SQLCOST010": 1,
-      "SQLCOST011": 7,
-      "SQLCOST012": 1,
-      "SQLCOST013": 1,
-      "SQLCOST014": 11,
-      "SQLCOST015": 2
+      "SQLCOST001": 7,
+      "SQLCOST007": 1,
+      "SQLCOST014": 3,
+      "SQLCOST020": 2
     },
     "diagnostics_by_severity": {
-      "high": 6,
-      "low": 14,
-      "med": 37
+      "high": 2,
+      "low": 4,
+      "med": 7
     },
-    "sql_parse_failures": 10,
-    "sql_parse_total": 33
+    "metadata_only_scan": false,
+    "metadata_warnings": 0,
+    "new_findings": 13,
+    "sql_parse_compiled_failures": 0,
+    "sql_parse_compiled_total": 13,
+    "sql_parse_failures": 0,
+    "sql_parse_other_failures": 2,
+    "sql_parse_other_total": 2,
+    "sql_parse_total": 13,
+    "yaml_parse_failures": 0
   },
+  "runtime_ms": 26,
   "target": "external/jaffle-shop",
   "thresholds": {
-    "max_parse_failure_delta": 50,
+    "max_diagnostics_by_rule": {},
+    "max_parse_failure_delta": 5,
+    "max_runtime_ms": 1026,
     "max_sql_parse_compiled_failures": 0
   },
   "version": 1,

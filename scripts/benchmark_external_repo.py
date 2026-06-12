@@ -253,6 +253,14 @@ def compare_report(report: dict[str, Any], baseline: dict[str, Any]) -> list[str
                 f"rule {rule} count {actual_count} > max {ceiling}"
             )
 
+    max_runtime_ms = thresholds.get("max_runtime_ms")
+    if max_runtime_ms is not None:
+        actual_runtime = report.get("runtime_ms", 0)
+        if actual_runtime > max_runtime_ms:
+            errors.append(
+                f"runtime_ms {actual_runtime} > allowed {max_runtime_ms}"
+            )
+
     return errors
 
 
@@ -364,6 +372,7 @@ def run_external(
             "warehouse": repo.get("warehouse", "generic"),
             "commit": repo["commit"],
             "metrics": report["metrics"],
+            "runtime_ms": report["runtime_ms"],
             "thresholds": {
                 "max_parse_failure_delta": existing_thresholds.get("max_parse_failure_delta", 50),
                 "max_sql_parse_compiled_failures": existing_thresholds.get(
@@ -371,6 +380,10 @@ def run_external(
                 ),
                 "max_diagnostics_by_rule": existing_thresholds.get(
                     "max_diagnostics_by_rule", {}
+                ),
+                "max_runtime_ms": existing_thresholds.get(
+                    "max_runtime_ms",
+                    max(int(report["runtime_ms"] * 1.25), report["runtime_ms"] + 1000),
                 ),
             },
         }
@@ -449,6 +462,7 @@ def main() -> int:
         fixtures = [
             "real_world/jaffle_snippets",
             "real_world/spellbook_snippets",
+            "real_world/snowflake_snippets",
             "real_world/manifest_graph",
             "real_world/multi_dbt",
         ]

@@ -40,6 +40,23 @@ Compiled-only unmapped diagnostics annotate the raw model path at line 1 and inc
 
 PR-summary-oriented report with grouped findings and suppression guidance footer.
 
+## SARIF (`sarif`)
+
+[SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html) for GitHub Code Scanning, GitLab SAST (`reports: sast`), and Jenkins SARIF plugins.
+
+Includes `tool.driver.rules` metadata and `results` with physical locations. Severity maps to SARIF levels: `error` (High/Critical), `warning` (Medium), `note` (Low/Info).
+
+## Finding baselines
+
+Use `--write-baseline` / `--baseline` (or `[output].baseline` in config) to grandfather known findings in legacy repos. Metrics include:
+
+| Field | Description |
+| --- | --- |
+| `baselined_findings` | Findings suppressed by the baseline file |
+| `new_findings` | Findings reported after baseline filtering |
+
+Exit code `1` applies only to **new** findings at or above `--fail-on`.
+
 PR markdown output includes a reminder:
 
 ```text

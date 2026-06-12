@@ -12,7 +12,7 @@ fail_on = "critical"
 [[repo]]
 name = "spellbook"
 url = "https://github.com/duneanalytics/spellbook.git"
-commit = "60f3b3fded8bae7d55780e7f8e6b15b1249d16a6"
+commit = "031a5053dd9608ce7e6b9f2d9b16dd9a2fbeba10"
 warehouse = "trino"
 compile_dbt = true
 dbt_adapter = "dbt-trino"
@@ -36,3 +36,17 @@ scan_paths = [
 ]
 fail_on = "critical"
 max_parse_failure_rate = 0.35
+
+[[repo]]
+name = "mattermost-warehouse"
+url = "https://github.com/mattermost/mattermost-data-warehouse.git"
+commit = "61af2424d790a8f83267f2b9ee12589fd32bcfa9"
+warehouse = "snowflake"
+compile_dbt = false
+dbt_adapter = "dbt-snowflake"
+dbt_profile_type = "snowflake"
+dbt_project_dir = "transform/snowflake-dbt"
+scan_paths = ["transform/snowflake-dbt"]
+smoke_scan_paths = ["transform/snowflake-dbt/models/staging"]
+fail_on = "critical"
+max_parse_failure_rate = 0.5

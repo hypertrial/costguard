@@ -1,3 +1,6 @@
+use crate::baseline::{
+    apply_finding_baseline, load_finding_baseline, write_finding_baseline, FindingBaseline,
+};
 use crate::config::ScanConfig;
 use crate::dbt_graph::enrich_pr_summary;
 use crate::{FileParseStatus, PrSummary, Project, ScanMetrics, ScanResult};
@@ -105,7 +108,11 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
     let scan_sql_documents = if config.changed_only {
         analyze_sql_documents(&project.files, config.platform, &compiled_by_path)
     } else {
-        context_sql_documents.clone()
+        context_sql_documents
+            .iter()
+            .filter(|doc| project.files.iter().any(|file| file.path == doc.path))
+            .cloned()
+            .collect()
     };
     let sql_by_path = scan_sql_documents
         .iter()
@@ -131,6 +138,69 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
         diagnostics.extend(file_diagnostics);
     }
 
+    diagnostics.extend(parse_failure_diagnostics(&context_sql_documents, &root));
+
+    if let Some(path) = &config.write_baseline_path {
+        let output = if path.is_absolute() {
+            path.clone()
+        } else {
+            root.join(path)
+        };
+        let baseline_to_write = if let Some(existing_path) = &config.baseline_path {
+            let existing = load_finding_baseline(
+                if existing_path.is_absolute() {
+                    existing_path.clone()
+                } else {
+                    root.join(existing_path)
+                }
+                .as_path(),
+            )?;
+            let mut combined = existing.findings;
+            for diagnostic in &diagnostics {
+                combined.push(crate::baseline::BaselinedFinding {
+                    fingerprint: crate::baseline::diagnostic_fingerprint(diagnostic),
+                    rule_id: diagnostic.rule_id.clone(),
+                    path: diagnostic.path.to_string_lossy().replace('\\', "/"),
+                    message: Some(diagnostic.message.clone()),
+                });
+            }
+            combined.sort_by(|left, right| {
+                left.path
+                    .cmp(&right.path)
+                    .then(left.rule_id.cmp(&right.rule_id))
+                    .then(left.fingerprint.cmp(&right.fingerprint))
+            });
+            combined.dedup_by(|left, right| left.fingerprint == right.fingerprint);
+            FindingBaseline {
+                version: 1,
+                warehouse: Some(config.platform.to_string()),
+                findings: combined,
+            }
+        } else {
+            FindingBaseline::from_diagnostics(&diagnostics, Some(&config.platform.to_string()))
+        };
+        write_finding_baseline(&output, &baseline_to_write)?;
+    }
+
+    let baseline = if let Some(path) = &config.baseline_path {
+        Some(load_finding_baseline(
+            if path.is_absolute() {
+                path.clone()
+            } else {
+                root.join(path)
+            }
+            .as_path(),
+        )?)
+    } else {
+        None
+    };
+
+    let (mut diagnostics, baselined_findings) = if let Some(baseline) = &baseline {
+        apply_finding_baseline(diagnostics, baseline)
+    } else {
+        (diagnostics, 0)
+    };
+
     diagnostics.sort_by(|left, right| {
         left.path
             .cmp(&right.path)
@@ -140,7 +210,7 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
 
     let pr_summary = pr_summary.map(|summary| enrich_pr_summary(summary, &project));
     let file_parse_status = build_file_parse_status(&context_sql_documents);
-    let metrics = build_scan_metrics(
+    let mut metrics = build_scan_metrics(
         &context_sql_documents,
         &diagnostics,
         counts,
@@ -149,6 +219,8 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
         yaml_parse_failures,
         dbt_project_parse_failures,
     );
+    metrics.baselined_findings = baselined_findings;
+    metrics.new_findings = diagnostics.len();
     Ok(ScanResult {
         diagnostics,
         counts: metrics.counts.clone(),
@@ -458,6 +530,34 @@ fn build_file_parse_status(sql_documents: &[SqlDocument]) -> Vec<FileParseStatus
         .collect()
 }
 
+fn parse_failure_diagnostics(sql_documents: &[SqlDocument], root: &Path) -> Vec<Diagnostic> {
+    sql_documents
+        .iter()
+        .filter(|doc| doc.is_dbt_sql_model && !doc.parsed)
+        .map(|doc| {
+            let path = doc
+                .path
+                .strip_prefix(root)
+                .map(Path::to_path_buf)
+                .unwrap_or_else(|_| doc.path.clone());
+            Diagnostic::new(
+                "SQLCOST027",
+                Severity::Info,
+                path,
+                None,
+                format!(
+                    "SQL parse failed for {}; rules may use regex fallback with lower confidence",
+                    doc.path.file_name().and_then(|name| name.to_str()).unwrap_or("model")
+                ),
+            )
+            .with_suggestion(
+                "run dbt compile and pass --manifest target/manifest.json for compiled SQL fallback",
+            )
+            .with_confidence(costguard_diagnostics::Confidence::High)
+        })
+        .collect()
+}
+
 fn build_scan_metrics(
     sql_documents: &[SqlDocument],
     diagnostics: &[costguard_diagnostics::Diagnostic],
@@ -514,6 +614,8 @@ fn build_scan_metrics(
         metadata_only_scan: metadata_only,
         diagnostics_by_rule,
         diagnostics_by_severity,
+        baselined_findings: 0,
+        new_findings: diagnostics.len(),
     }
 }
 

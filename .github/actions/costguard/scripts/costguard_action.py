@@ -118,7 +118,7 @@ def install_release(version: str) -> None:
             names = archive.getnames()
             if names != [bin_name]:
                 raise SystemExit(f"unexpected archive layout: {names}")
-            archive.extractall(install_dir)
+            archive.extractall(install_dir, filter="data")
     if bin_name != "costguard.exe":
         (install_dir / bin_name).chmod(0o755)
     append_file(Path(env("GITHUB_PATH")), str(install_dir))
@@ -260,6 +260,9 @@ def command_run() -> int:
     min_confidence = env("MIN_CONFIDENCE_INPUT")
     if min_confidence:
         command.extend(["--min-confidence", min_confidence])
+    baseline = env("BASELINE_INPUT")
+    if baseline:
+        command.extend(["--baseline", baseline])
     manifest = env("MANIFEST_INPUT")
     manifest_output = env("MANIFEST_OUTPUT_INPUT", "target/manifest.json")
     if not manifest and (root / manifest_output).is_file():

@@ -1,0 +1,45 @@
+{
+  "expect_rules": [],
+  "forbid_rules": [
+    "SQLCOST005"
+  ],
+  "kind": "vendored",
+  "metrics": {
+    "counts": {
+      "manifest": 0,
+      "other": 0,
+      "python": 0,
+      "sql": 2,
+      "yaml": 1
+    },
+    "dbt_project_parse_failures": 0,
+    "diagnostics_by_rule": {
+      "SQLCOST020": 1,
+      "SQLCOST023": 1
+    },
+    "diagnostics_by_severity": {
+      "info": 1,
+      "med": 1
+    },
+    "metadata_only_scan": true,
+    "metadata_warnings": 1,
+    "new_findings": 2,
+    "sql_parse_compiled_failures": 0,
+    "sql_parse_compiled_total": 0,
+    "sql_parse_failures": 0,
+    "sql_parse_other_failures": 0,
+    "sql_parse_other_total": 0,
+    "sql_parse_total": 2,
+    "yaml_parse_failures": 0
+  },
+  "target": "real_world/snowflake_snippets",
+  "thresholds": {
+    "exact_diagnostics_by_rule": {
+      "SQLCOST020": 1,
+      "SQLCOST023": 1
+    },
+    "max_sql_parse_failures": 0
+  },
+  "version": 1,
+  "warehouse": "snowflake"
+}

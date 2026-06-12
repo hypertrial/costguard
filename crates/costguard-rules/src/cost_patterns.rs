@@ -68,7 +68,7 @@ impl Rule for FunctionWrappedJoinKeyRule {
         "Detects joins where a join key is transformed inline."
     }
     fn default_severity(&self) -> Severity {
-        Severity::High
+        Severity::Medium
     }
     fn check(&self, ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
         let Some(sql) = ctx.sql else {

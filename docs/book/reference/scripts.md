@@ -244,6 +244,26 @@ python3 scripts/bucket_rule_diagnostics.py --repo spellbook --rule SQLCOST017 \
 
 Requires a cached checkout with `target/manifest.json` from `benchmark_external_repo.py --repo spellbook`.
 
+## `precision_triage.py`
+
+Sample external-repo findings and compute precision against [`fp_registry.toml`](../../../tests/benchmarks/fp_registry.toml) bucket verdicts. Used for Spellbook enterprise readiness gates (≥90% high, ≥80% overall).
+
+```bash
+python3 scripts/precision_triage.py --repo spellbook --sample-size 200
+python3 scripts/precision_triage.py --scan-json report.json --json-out triage/precision.json
+```
+
+| Flag | Description |
+| --- | --- |
+| `--repo` | External repo key (default `spellbook`) |
+| `--scan-json` | Optional precomputed Costguard JSON (otherwise runs scan) |
+| `--checkout` | Repo checkout path (default benchmark cache) |
+| `--sample-size` | Stratified sample size (default `200`) |
+| `--seed` | RNG seed for reproducible sampling |
+| `--json-out` | Write precision report JSON |
+
+Exit code `1` when precision gates fail.
+
 ## `validate_fp_registry.py`
 
 Validate [`tests/benchmarks/fp_registry.toml`](../../../tests/benchmarks/fp_registry.toml) against corpus `forbid_rules` contracts:

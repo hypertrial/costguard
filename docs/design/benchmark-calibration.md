@@ -33,6 +33,9 @@ python3 scripts/bucket_rule_diagnostics.py --repo spellbook --rule SQLCOST017 --
 # Validate false-positive registry against corpus forbid_rules contracts
 python3 scripts/validate_fp_registry.py
 
+# Sampled precision report (requires cached Spellbook checkout + manifest)
+python3 scripts/precision_triage.py --repo spellbook --sample-size 200
+
 # Refresh baselines after intentional rule tuning
 python3 scripts/benchmark_external_repo.py --fixture real_world/jaffle_snippets --update-baseline
 python3 scripts/benchmark_external_repo.py --repo spellbook --update-baseline
@@ -52,7 +55,18 @@ Baselines live in [`tests/benchmarks/baselines/`](../../tests/benchmarks/baselin
 | Target kind | Pass criteria |
 | --- | --- |
 | Vendored | Exact rule counts, parse failure ceiling, forbidden rules |
-| External | Crash-free, model parse failures ≤ baseline + delta, optional parse failure rate cap, `max_diagnostics_by_rule` ceilings on triaged rules |
+| External | Crash-free, model parse failures ≤ baseline + delta, optional parse failure rate cap, `max_diagnostics_by_rule` ceilings on triaged rules, optional `max_runtime_ms` |
+
+### Enterprise readiness gates (Spellbook)
+
+| Gate | Threshold |
+| --- | --- |
+| Model parse failures | 0% headline rate; `sql_parse_compiled_failures = 0` |
+| High-severity sampled precision | ≥ 90% (`scripts/precision_triage.py`) |
+| Overall sampled precision | ≥ 80% |
+| Per-rule sampled precision | ≥ 70% for each classified rule |
+| Full scan runtime | ≤ 15 s and ≤ 1 GiB RSS (recorded in baseline `max_runtime_ms`) |
+| Baseline workflow | Rescan with `--baseline` reports 0 new findings on unchanged tree |
 
 ### False-positive registry
 

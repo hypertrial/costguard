@@ -448,3 +448,58 @@ fn scan_min_confidence_suppresses_low_confidence_high_severity() {
         String::from_utf8_lossy(&with_floor.stdout)
     );
 }
+
+#[test]
+fn scan_sarif_outputs_valid_schema_fields() {
+    let output = Command::new(bin())
+        .arg("scan")
+        .arg(fixture("dbt_incremental"))
+        .arg("--format")
+        .arg("sarif")
+        .output()
+        .expect("run costguard");
+    assert_eq!(output.status.code(), Some(1));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("\"version\": \"2.1.0\""));
+    assert!(stdout.contains("\"name\": \"costguard\""));
+    assert!(stdout.contains("\"ruleId\""));
+}
+
+#[test]
+fn baseline_grandfathers_known_findings() {
+    let tempdir = tempfile::tempdir().expect("tempdir");
+    let baseline_path = tempdir.path().join("baseline.json");
+    let fixture = fixture("dbt_incremental");
+
+    let write = Command::new(bin())
+        .arg("scan")
+        .arg(&fixture)
+        .arg("--warehouse")
+        .arg("snowflake")
+        .arg("--write-baseline")
+        .arg(&baseline_path)
+        .output()
+        .expect("write baseline");
+    assert_eq!(write.status.code(), Some(1));
+    assert!(baseline_path.exists());
+
+    let with_baseline = Command::new(bin())
+        .arg("scan")
+        .arg(&fixture)
+        .arg("--warehouse")
+        .arg("snowflake")
+        .arg("--baseline")
+        .arg(&baseline_path)
+        .arg("--fail-on")
+        .arg("high")
+        .output()
+        .expect("scan with baseline");
+    assert_eq!(
+        with_baseline.status.code(),
+        Some(0),
+        "expected pass when all findings are baselined:\n{}",
+        String::from_utf8_lossy(&with_baseline.stdout)
+    );
+    let stdout = String::from_utf8_lossy(&with_baseline.stdout);
+    assert!(stdout.contains("No diagnostics"), "{stdout}");
+}

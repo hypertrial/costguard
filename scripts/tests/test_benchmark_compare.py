@@ -53,6 +53,15 @@ class CompareReportTests(unittest.TestCase):
         baseline = {"metrics": {"sql_parse_failures": 0}, "thresholds": {"max_diagnostics_by_rule": {"SQLCOST012": 815}}}
         self.assertEqual(compare_report(report, baseline), [])
 
+    def test_max_runtime_ms_gate(self) -> None:
+        report = {"runtime_ms": 2000, "metrics": {"sql_parse_failures": 0, "sql_parse_total": 1, "diagnostics_by_rule": {}}}
+        baseline = {"metrics": {"sql_parse_failures": 0}, "thresholds": {"max_runtime_ms": 15000}}
+        self.assertEqual(compare_report(report, baseline), [])
+        report["runtime_ms"] = 20000
+        errors = compare_report(report, baseline)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("runtime_ms", errors[0])
+
 
 if __name__ == "__main__":
     unittest.main()

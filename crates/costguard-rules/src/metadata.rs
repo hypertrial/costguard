@@ -5,6 +5,7 @@ pub(crate) struct MetadataOnlyScanRule;
 pub(crate) struct YamlParseFailedRule;
 pub(crate) struct DbtProjectMetadataRule;
 pub(crate) struct FileSkippedRule;
+pub(crate) struct SqlParseFailedRule;
 
 impl Rule for MetadataOnlyScanRule {
     fn id(&self) -> &'static str {
@@ -72,6 +73,24 @@ impl Rule for FileSkippedRule {
     }
     fn default_severity(&self) -> Severity {
         Severity::Low
+    }
+    fn check(&self, _ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
+        Vec::new()
+    }
+}
+
+impl Rule for SqlParseFailedRule {
+    fn id(&self) -> &'static str {
+        "SQLCOST027"
+    }
+    fn name(&self) -> &'static str {
+        "SQL parse failure"
+    }
+    fn description(&self) -> &'static str {
+        "Reports when a dbt model SQL file could not be parsed and rules may fall back to regex heuristics."
+    }
+    fn default_severity(&self) -> Severity {
+        Severity::Info
     }
     fn check(&self, _ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
         Vec::new()

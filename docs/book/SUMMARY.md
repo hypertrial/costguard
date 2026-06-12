@@ -7,6 +7,10 @@
 - [Quick start (PR check)](getting-started/quick-start.md)
 - [Local scan and explain](getting-started/local-scan.md)
 - [Pre-commit hook](getting-started/pre-commit.md)
+- [Enterprise adoption](getting-started/enterprise-adoption.md)
+- [GitLab CI](getting-started/gitlab-ci.md)
+- [Jenkins](getting-started/jenkins.md)
+- [Privacy and local-only guarantees](getting-started/privacy.md)
 
 # Reference
 
@@ -48,6 +52,7 @@
 - [SQLCOST024](../rules/SQLCOST024.md)
 - [SQLCOST025](../rules/SQLCOST025.md)
 - [SQLCOST026](../rules/SQLCOST026.md)
+- [SQLCOST027](../rules/SQLCOST027.md)
 
 # Design
 

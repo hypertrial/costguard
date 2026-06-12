@@ -25,7 +25,7 @@ python3 scripts/generate_rule_docs.py
 | low | `SQLCOST014` | Repeated CTE reference | [SQLCOST014](../../rules/SQLCOST014.md) |
 | medium | `SQLCOST015` | Expensive expression repeated across downstream models | [SQLCOST015](../../rules/SQLCOST015.md) |
 | high | `SQLCOST016` | Non-sargable partition or date predicate | [SQLCOST016](../../rules/SQLCOST016.md) |
-| high | `SQLCOST017` | Function-wrapped join key | [SQLCOST017](../../rules/SQLCOST017.md) |
+| medium | `SQLCOST017` | Function-wrapped join key | [SQLCOST017](../../rules/SQLCOST017.md) |
 | medium | `SQLCOST018` | UNION instead of UNION ALL | [SQLCOST018](../../rules/SQLCOST018.md) |
 | high | `SQLCOST019` | Incremental model reads source without source-side bound | [SQLCOST019](../../rules/SQLCOST019.md) |
 | medium | `SQLCOST020` | Exact distinct aggregation on large model | [SQLCOST020](../../rules/SQLCOST020.md) |
@@ -35,6 +35,7 @@ python3 scripts/generate_rule_docs.py
 | low | `SQLCOST024` | Schema YAML parse failure | [SQLCOST024](../../rules/SQLCOST024.md) |
 | low | `SQLCOST025` | dbt_project.yml metadata issue | [SQLCOST025](../../rules/SQLCOST025.md) |
 | low | `SQLCOST026` | File skipped during scan | [SQLCOST026](../../rules/SQLCOST026.md) |
+| info | `SQLCOST027` | SQL parse failure | [SQLCOST027](../../rules/SQLCOST027.md) |
 
 ## Descriptions
 
@@ -168,7 +169,7 @@ Fix guidance: [SQLCOST016.md](../../rules/SQLCOST016.md)
 
 ### `SQLCOST017` — Function-wrapped join key
 
-**Severity:** high
+**Severity:** medium
 
 Detects joins where a join key is transformed inline.
 
@@ -245,4 +246,12 @@ Fix guidance: [SQLCOST025.md](../../rules/SQLCOST025.md)
 Reports when a SQL or dbt file exceeds the configured scan size limit and was not loaded.
 
 Fix guidance: [SQLCOST026.md](../../rules/SQLCOST026.md)
+
+### `SQLCOST027` — SQL parse failure
+
+**Severity:** info
+
+Reports when a dbt model SQL file could not be parsed and rules may fall back to regex heuristics.
+
+Fix guidance: [SQLCOST027.md](../../rules/SQLCOST027.md)
 <!-- generated:rules:end -->

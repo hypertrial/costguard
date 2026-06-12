@@ -18,8 +18,12 @@ inputs:
     description: Minimum diagnostic confidence required to fail (low, medium/med, high). Empty omits the flag.
     required: false
     default: ""
+  baseline:
+    description: Finding baseline JSON path for grandfathering known findings
+    required: false
+    default: ""
   format:
-    description: Output format (github, markdown, json, text)
+    description: Output format (github, markdown, json, text, sarif)
     required: false
     default: github
   install-mode:
@@ -159,6 +163,7 @@ runs:
         FAIL_ON_INPUT: ${{ inputs.fail-on }}
         FORMAT_INPUT: ${{ inputs.format }}
         MIN_CONFIDENCE_INPUT: ${{ inputs.min-confidence }}
+        BASELINE_INPUT: ${{ inputs.baseline }}
         MANIFEST_INPUT: ${{ inputs.manifest }}
         MANIFEST_OUTPUT_INPUT: ${{ inputs.manifest-output }}
         USE_EXISTING_MANIFEST_INPUT: ${{ inputs.use-existing-manifest }}

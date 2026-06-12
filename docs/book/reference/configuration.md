@@ -49,9 +49,10 @@ severity = "high"
 
 | Key | Type | Description |
 | --- | --- | --- |
-| `format` | string | `text`, `json`, `github`, `markdown`, `md` |
+| `format` | string | `text`, `json`, `github`, `markdown`, `md`, `sarif` |
 | `fail_on` | string | Minimum failing severity |
 | `min_confidence` | string | Optional confidence floor for fail logic: `low`, `medium`/`med`, `high` |
+| `baseline` | string | Finding baseline JSON path for grandfathering |
 
 ## `[dbt]`
 

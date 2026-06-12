@@ -29,15 +29,19 @@ pub(crate) fn threshold(ctx: &RuleContext<'_>, rule_id: &str, default: usize) ->
 pub(crate) fn is_downstream_model(path: &Path) -> bool {
     let path = normalized_path(path);
     path.contains("marts/")
+        || path.contains("mart/")
         || path.contains("intermediate/")
         || path.contains("/int_")
         || path.contains("/fct_")
         || path.contains("/dim_")
+        || path.contains("/core/")
+        || path.contains("/analytics/")
+        || path.contains("/reporting/")
 }
 
 pub(crate) fn is_staging_model(path: &Path) -> bool {
     let path = normalized_path(path);
-    path.contains("staging/") || path.contains("/stg_")
+    path.contains("staging/") || path.contains("/stg_") || path.contains("/stage/")
 }
 
 pub(crate) fn normalized_path(path: &Path) -> String {

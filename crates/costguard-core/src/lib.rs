@@ -1,7 +1,12 @@
+mod baseline;
 mod config;
 mod dbt_graph;
 mod scan;
 
+pub use baseline::{
+    apply_finding_baseline, diagnostic_fingerprint, load_finding_baseline, write_finding_baseline,
+    BaselinedFinding, FindingBaseline,
+};
 pub use config::{
     apply_file_config, load_config, DbtSection, FileConfig, OutputFormat, OutputSection,
     ScanConfig, ScanSection,
@@ -48,6 +53,14 @@ pub struct ScanMetrics {
     pub metadata_only_scan: bool,
     pub diagnostics_by_rule: BTreeMap<String, usize>,
     pub diagnostics_by_severity: BTreeMap<String, usize>,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub baselined_findings: usize,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub new_findings: usize,
+}
+
+fn is_zero(value: &usize) -> bool {
+    *value == 0
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -137,6 +150,8 @@ mod tests {
                 metadata_only_scan: false,
                 diagnostics_by_rule: BTreeMap::new(),
                 diagnostics_by_severity: BTreeMap::new(),
+                baselined_findings: 0,
+                new_findings: 0,
             },
             file_parse_status: Vec::new(),
             pr_summary: None,

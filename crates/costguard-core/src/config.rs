@@ -14,6 +14,7 @@ pub enum OutputFormat {
     Json,
     Github,
     Markdown,
+    Sarif,
 }
 
 impl FromStr for OutputFormat {
@@ -25,6 +26,7 @@ impl FromStr for OutputFormat {
             "json" => Ok(Self::Json),
             "github" => Ok(Self::Github),
             "markdown" | "md" => Ok(Self::Markdown),
+            "sarif" => Ok(Self::Sarif),
             other => Err(format!("unknown output format '{other}'")),
         }
     }
@@ -44,6 +46,8 @@ pub struct ScanConfig {
     pub fail_on: Option<Severity>,
     pub min_confidence: Option<Confidence>,
     pub rule_overrides: RuleOverrides,
+    pub baseline_path: Option<PathBuf>,
+    pub write_baseline_path: Option<PathBuf>,
 }
 
 impl Default for ScanConfig {
@@ -61,6 +65,8 @@ impl Default for ScanConfig {
             fail_on: Some(Severity::High),
             min_confidence: None,
             rule_overrides: RuleOverrides::default(),
+            baseline_path: None,
+            write_baseline_path: None,
         }
     }
 }
@@ -90,6 +96,7 @@ pub struct OutputSection {
     pub format: Option<String>,
     pub fail_on: Option<String>,
     pub min_confidence: Option<String>,
+    pub baseline: Option<PathBuf>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -135,6 +142,9 @@ pub fn apply_file_config(mut config: ScanConfig, file_config: FileConfig) -> Res
         if let Some(min_confidence) = output.min_confidence {
             config.min_confidence = Some(min_confidence.parse().map_err(anyhow::Error::msg)?);
         }
+        if let Some(baseline) = output.baseline {
+            config.baseline_path = Some(baseline);
+        }
     }
     if let Some(dbt) = file_config.dbt {
         config.manifest_path = dbt.manifest_path;
@@ -172,6 +182,10 @@ mod tests {
         assert_eq!(
             "markdown".parse::<OutputFormat>().unwrap(),
             OutputFormat::Markdown
+        );
+        assert_eq!(
+            "sarif".parse::<OutputFormat>().unwrap(),
+            OutputFormat::Sarif
         );
     }
 

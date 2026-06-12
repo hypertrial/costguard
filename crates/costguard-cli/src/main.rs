@@ -40,6 +40,10 @@ struct ScanArgs {
     fail_on: Option<String>,
     #[arg(long)]
     min_confidence: Option<String>,
+    #[arg(long)]
+    baseline: Option<PathBuf>,
+    #[arg(long)]
+    write_baseline: Option<PathBuf>,
 }
 
 #[derive(Debug, Parser)]
@@ -71,6 +75,8 @@ struct PrArgs {
     fail_on: Option<String>,
     #[arg(long)]
     min_confidence: Option<String>,
+    #[arg(long)]
+    baseline: Option<PathBuf>,
 }
 
 #[derive(Debug, Parser)]
@@ -85,6 +91,7 @@ enum FormatArg {
     Json,
     Github,
     Markdown,
+    Sarif,
 }
 
 impl From<FormatArg> for OutputFormat {
@@ -94,6 +101,7 @@ impl From<FormatArg> for OutputFormat {
             FormatArg::Json => OutputFormat::Json,
             FormatArg::Github => OutputFormat::Github,
             FormatArg::Markdown => OutputFormat::Markdown,
+            FormatArg::Sarif => OutputFormat::Sarif,
         }
     }
 }
@@ -195,6 +203,8 @@ fn config_from_scan_args(args: ScanArgs) -> Result<ScanConfig> {
         args.manifest,
         args.fail_on,
         args.min_confidence,
+        args.baseline,
+        args.write_baseline,
     )?;
     validate_config(&config)?;
     Ok(config)
@@ -208,6 +218,8 @@ fn config_from_explain_args(args: &ExplainArgs) -> Result<ScanConfig> {
         args.dialect.clone(),
         args.format,
         args.manifest.clone(),
+        None,
+        None,
         None,
         None,
     )?;
@@ -227,11 +239,14 @@ fn config_from_pr_args(args: PrArgs) -> Result<ScanConfig> {
         args.manifest,
         args.fail_on,
         args.min_confidence,
+        args.baseline,
+        None,
     )?;
     validate_config(&config)?;
     Ok(config)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn apply_common_flags(
     config: &mut ScanConfig,
     warehouse: Option<String>,
@@ -240,6 +255,8 @@ fn apply_common_flags(
     manifest: Option<PathBuf>,
     fail_on: Option<String>,
     min_confidence: Option<String>,
+    baseline: Option<PathBuf>,
+    write_baseline: Option<PathBuf>,
 ) -> Result<()> {
     if let Some(warehouse) = warehouse {
         config.platform = warehouse.parse::<Platform>().map_err(anyhow::Error::msg)?;
@@ -258,6 +275,12 @@ fn apply_common_flags(
     if let Some(min_confidence) = min_confidence {
         config.min_confidence = Some(min_confidence.parse().map_err(anyhow::Error::msg)?);
     }
+    if let Some(baseline) = baseline {
+        config.baseline_path = Some(baseline);
+    }
+    if let Some(write_baseline) = write_baseline {
+        config.write_baseline_path = Some(write_baseline);
+    }
     Ok(())
 }
 
@@ -270,6 +293,16 @@ fn validate_config(config: &ScanConfig) -> Result<()> {
         };
         if !resolved.exists() {
             anyhow::bail!("manifest path does not exist: {}", resolved.display());
+        }
+    }
+    if let Some(path) = &config.baseline_path {
+        let resolved = if path.is_absolute() {
+            path.clone()
+        } else {
+            config.root.join(path)
+        };
+        if !resolved.exists() {
+            anyhow::bail!("baseline path does not exist: {}", resolved.display());
         }
     }
     Ok(())
