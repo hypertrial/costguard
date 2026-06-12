@@ -1,23 +1,38 @@
 # Cost estimates
 
-Costguard can attach **estimated monthly cost intervals** to each behavioral finding. Estimates are computed entirely from local files—no warehouse connections or credentials.
+Costguard attaches **estimated monthly savings** to each behavioral finding and **deduplicated project totals** to every cost-enabled scan. Estimates are computed entirely from local files—no warehouse connections or credentials.
 
 ## Concepts
 
-Each finding with a cost estimate includes:
+### Per-finding fields
 
 | Field | Description |
 | --- | --- |
-| `relative_index` | Dimensionless impact score (GB-equivalent × rule multiplier × runs) |
-| `p10_usd_per_month` / `p50_usd_per_month` / `p90_usd_per_month` | Dollar interval when pricing is configured |
+| `relative_index` | Estimated savings in **GB-months** (ranking without pricing) |
+| `p10_usd_per_month` / `p50_usd_per_month` / `p90_usd_per_month` | **Savings** dollar interval when pricing is configured |
+| `savings_p10_usd_per_month` / `savings_p50_usd_per_month` / `savings_p90_usd_per_month` | Explicit savings fields (same values as `p*` when priced) |
+| `model_id` | dbt model identifier for the finding |
+| `model_monthly_p50_usd` | Resolved monthly cost of the underlying model (p50) |
 | `grade` | Input provenance: **A** (query history), **B** (catalog/config), **C** (size priors) |
 | `basis` | Human-readable derivation string |
 
-Intervals default to an **80% band** (`p10`–`p90`). Values are rounded to two significant figures in text output.
+> **v2 semantics:** `p50_usd_per_month` on findings now means **estimated savings**, not total model cost. Use `model_monthly_p50_usd` for the model baseline.
+
+### Project cost summary
+
+When `[cost]` is enabled, scan output includes a `cost` block (JSON) or **Cost summary** section (text/markdown):
+
+| Field | Description |
+| --- | --- |
+| `project_p50_usd` | Deduplicated sum of per-model monthly costs (priced mode) |
+| `project_gb_months` | Sum of model scan volumes in GB-months |
+| `savings_p50_usd` | Deduplicated sum of new finding savings |
+| `top_models` | Top 5 models by monthly cost |
+| `grade_a` / `grade_b` / `grade_c` | Count of models by input grade |
 
 ## Modes
 
-1. **Relative index only** — enable `[cost]` without `[cost.pricing]`. Findings are ranked by `relative_index`.
+1. **Relative index only** — enable `[cost]` without `[cost.pricing]`. Findings ranked by GB-month savings; gate with `fail_on_monthly_delta_gb`.
 2. **Scan-priced dollars** — BigQuery on-demand, Athena, Trino-on-S3: set `[cost.pricing] model = "scan"` and `usd_per_tb`.
 3. **Compute-priced dollars** — Snowflake credits, Databricks DBUs: set `model = "compute"`, `usd_per_credit`, and `tb_per_credit_hour` range.
 
@@ -30,6 +45,7 @@ interval = 0.80
 default_runs_per_month = 30
 default_table_size = "medium"
 fail_on_monthly_delta = 500
+fail_on_monthly_delta_gb = 1000
 
 [cost.pricing]
 model = "scan"
@@ -49,21 +65,29 @@ runs_per_month = 720
 multiplier = { p10 = 2, p90 = 6 }
 ```
 
-## Input sources (priority order)
-
-1. **Query-history export (grade A)** — CSV with columns `model_or_table`, `bytes_per_run`, optional `runs_per_month`.
-2. **`target/catalog.json` (grade B)** — from `dbt docs generate` on BigQuery/Snowflake adapters (`stats.num_bytes`).
-3. **`[cost.sources]` overrides (grade B)** — explicit bytes or row counts in `costguard.toml`.
-4. **Size-class priors (grade C)** — `default_table_size` (`small`, `medium`, `large`, `xlarge`).
-
-## CLI flags
+## CLI
 
 ```bash
 costguard scan --cost
+costguard scan --cost --fail-on-cost-delta 500
 costguard pr --cost --fail-on-cost-delta 500
+costguard explain models/marts/fct.sql --cost
+costguard cost . --manifest target/manifest.json
 ```
 
-When `--cost` is passed without a `[cost]` section, Costguard uses default priors.
+- `--cost` on `scan`, `pr`, and `explain` enables cost annotation
+- `--fail-on-cost-delta` gates on deduplicated **savings p50** (also enables cost)
+- `costguard cost` renders the project cost report without requiring findings
+
+## Output
+
+Text and markdown scans append:
+
+- Per-finding savings line (`Est. savings: …`)
+- Top findings by estimated monthly savings
+- Cost summary with project total, grade mix, and top models
+
+JSON schema version is **2** with optional top-level `cost` object.
 
 ## GitHub Action
 
@@ -74,49 +98,17 @@ When `--cost` is passed without a `[cost]` section, Costguard uses default prior
     fail-on-cost-delta: "500"
 ```
 
-Cost delta gating sums **p50** across post-baseline (new) findings only.
-
-## Exporting query history
-
-### BigQuery
-
-```sql
-SELECT
-  REGEXP_EXTRACT(query, r'\\`([^.]+\\.[^.]+\\.[^`]+)\\`') AS model_or_table,
-  AVG(total_bytes_billed) AS bytes_per_run,
-  COUNT(*) * 30.0 / DATE_DIFF(MAX(DATE(creation_time)), MIN(DATE(creation_time)), DAY) AS runs_per_month
-FROM `region-us`.INFORMATION_SCHEMA.JOBS
-WHERE creation_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY)
-  AND statement_type = 'SELECT'
-GROUP BY 1;
-```
-
-Export the result to CSV and point `[cost.inputs].query_history` at the file.
-
-### Snowflake
-
-```sql
-SELECT
-  REGEXP_SUBSTR(query_text, '([A-Z0-9_]+\\.[A-Z0-9_]+\\.[A-Z0-9_]+)', 1, 1, 'e', 1) AS model_or_table,
-  AVG(bytes_scanned) AS bytes_per_run,
-  COUNT(*) * 30.0 / NULLIF(DATEDIFF('day', MIN(start_time), MAX(start_time)), 0) AS runs_per_month
-FROM snowflake.account_usage.query_history
-WHERE start_time >= DATEADD('day', -30, CURRENT_TIMESTAMP())
-GROUP BY 1;
-```
-
 ## Calibration
-
-Fit compute conversion factors and validate interval coverage with:
 
 ```bash
 python3 scripts/calibrate_cost_model.py exports/jobs_30d.csv
+python3 scripts/calibrate_cost_model.py exports/jobs_30d.csv --json
 ```
 
-The script reports what fraction of 80% intervals contain actual bytes-billed values (target band 60–95%) and suggests `tb_per_credit_hour` bounds.
+Reports bytes-per-run interval coverage, model monthly scan volume, and suggested compute conversion bounds.
 
 ## Related
 
 - [Configuration](configuration.md) — full `[cost]` schema
-- [Cost model design](../../design/cost-model.md) — lognormal math
+- [Cost model design](../../design/cost-model.md) — two-stage math
 - [Privacy](../getting-started/privacy.md) — local-only inputs

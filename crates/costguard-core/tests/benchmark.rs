@@ -197,14 +197,17 @@ fn cost_estimate_fixture_includes_cost_fields() {
         "expected at least one diagnostic with cost_estimate"
     );
     assert!(
-        result.diagnostics.iter().any(|diagnostic| {
-            diagnostic
-                .cost_estimate
-                .as_ref()
-                .and_then(|cost| cost.p50_usd_per_month)
-                .is_some()
-        }),
-        "expected dollar cost estimates when scan pricing is configured"
+        result.cost_summary.is_some(),
+        "expected project cost summary when cost is enabled"
+    );
+    assert!(
+        result
+            .cost_summary
+            .as_ref()
+            .unwrap()
+            .project_p50_usd
+            .is_some(),
+        "expected priced project total"
     );
 }
 

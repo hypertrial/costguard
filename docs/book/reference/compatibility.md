@@ -5,7 +5,8 @@ Costguard follows semantic versioning from `1.0.0` onward.
 ## Stable contracts
 
 - CLI exit codes and existing command/flag meanings
-- JSON `schema_version: 1` fields and meanings
+- JSON `schema_version: 1` fields and meanings (version `2` adds optional `cost`; consumers must ignore unknown fields)
+- `cost_estimate.p50_usd_per_month` on findings represents **estimated savings** (v2); use `model_monthly_p50_usd` for model baseline when present
 - `SQLCOST###` identifiers; an identifier is never reused for another rule
 - suppression syntax and matching behavior
 - accepted configuration keys and precedence

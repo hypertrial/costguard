@@ -79,11 +79,13 @@ def load_history(path: Path) -> list[dict[str, float | str]]:
                 continue
             bytes_per_run = float(row.get("bytes_per_run") or row.get("bytes_billed") or 0)
             actual = float(row.get("actual_bytes_per_run") or bytes_per_run)
+            runs = float(row.get("runs_per_month") or row.get("run_count") or 30.0)
             rows.append(
                 {
                     "model_or_table": key.strip(),
                     "bytes_per_run": bytes_per_run,
                     "actual_bytes_per_run": actual,
+                    "runs_per_month": runs,
                 }
             )
     return rows
@@ -129,6 +131,12 @@ def build_report(rows: list[dict[str, float | str]]) -> dict[str, Any]:
         "p10": round(math.exp(mu_a - mu_e - sigma_e) / 1e12, 3),
         "p90": round(math.exp(mu_a - mu_e + sigma_e) / 1e12, 3),
     }
+    model_monthly_tb = sum(
+        float(row["bytes_per_run"])
+        * float(row.get("runs_per_month") or 30.0)
+        / 1e12
+        for row in rows
+    )
     passes = coverage >= COVERAGE_MIN
     too_wide = coverage > COVERAGE_MAX
     return {
@@ -138,6 +146,11 @@ def build_report(rows: list[dict[str, float | str]]) -> dict[str, Any]:
         "passes": passes,
         "too_wide": too_wide,
         "tb_per_credit_hour_suggestion": tb_per_credit_hour,
+        "model_monthly_scan_tb": round(model_monthly_tb, 3),
+        "attribution_note": (
+            "Per-model monthly scan volume is summed once; finding savings should not exceed "
+            "project totals when Costguard applies per-model attribution caps."
+        ),
     }
 
 
@@ -154,6 +167,8 @@ def main() -> int:
         print(f"Rows: {report['rows']}")
         print(f"80% interval coverage: {report['coverage']}")
         print(f"Suggested tb_per_credit_hour: {report['tb_per_credit_hour_suggestion']}")
+        print(f"Model monthly scan (TB): {report.get('model_monthly_scan_tb')}")
+        print(report.get("attribution_note", ""))
         if report.get("too_wide"):
             print("WARN: intervals may be too wide (>95% coverage)")
         print("PASS" if report["passes"] else "FAIL")

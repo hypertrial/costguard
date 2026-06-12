@@ -39,6 +39,52 @@ impl Estimate {
         let tail = (1.0 - coverage) / 2.0;
         (self.quantile(tail), self.quantile(1.0 - tail))
     }
+
+    pub fn variance(&self) -> f64 {
+        let sigma2 = self.sigma * self.sigma;
+        ((2.0 * self.mu + sigma2).exp()) * (sigma2.exp() - 1.0)
+    }
+
+    pub fn mean(&self) -> f64 {
+        (self.mu + 0.5 * self.sigma * self.sigma).exp()
+    }
+}
+
+/// Sum independent lognormals via moment matching (Fenton–Wilkinson).
+pub fn sum_lognormals(estimates: &[Estimate]) -> Estimate {
+    if estimates.is_empty() {
+        return Estimate::from_point(1.0, Some(0.5));
+    }
+    let mut sum_mean = 0.0;
+    let mut sum_var = 0.0;
+    for estimate in estimates {
+        sum_mean += estimate.mean();
+        sum_var += estimate.variance();
+    }
+    if sum_mean <= 0.0 {
+        return Estimate::from_point(0.001, Some(0.5));
+    }
+    let cv = (sum_var.sqrt() / sum_mean).clamp(0.01, 2.0);
+    Estimate::from_point(sum_mean, Some(cv))
+}
+
+pub fn excess_multiplier(multiplier: Estimate) -> Estimate {
+    let p10 = (multiplier.quantile(0.1) - 1.0).max(0.0);
+    let p50 = (multiplier.median() - 1.0).max(0.0);
+    let p90 = (multiplier.quantile(0.9) - 1.0).max(0.0);
+    if p50 <= 0.0 {
+        return Estimate::from_point(0.001, Some(0.5));
+    }
+    if p90 > p10 && p10 > 0.0 {
+        Estimate::from_range(p10.max(0.001), p90)
+    } else {
+        Estimate::from_point(p50, Some(0.3))
+    }
+}
+
+pub fn gb_months_from_bytes_runs(bytes: Estimate, runs: Estimate) -> f64 {
+    let bytes_per_month = bytes * runs;
+    bytes_per_month.median() / 1_000_000_000.0
 }
 
 impl std::ops::Mul for Estimate {
@@ -180,6 +226,16 @@ mod tests {
         let (lo, hi) = est.interval(0.8);
         assert!(lo < est.median());
         assert!(hi > est.median());
+    }
+
+    #[test]
+    fn sum_lognormals_moment_matches() {
+        let estimates = vec![
+            Estimate::from_point(100.0, Some(0.2)),
+            Estimate::from_point(200.0, Some(0.2)),
+        ];
+        let total = super::sum_lognormals(&estimates);
+        assert!((total.mean() - 300.0).abs() < 30.0);
     }
 
     #[test]

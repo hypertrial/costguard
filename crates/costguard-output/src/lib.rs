@@ -1,6 +1,6 @@
 use anyhow::Result;
 use costguard_core::{OutputFormat, PrSummary, ScanResult};
-use costguard_cost::format_cost_line;
+use costguard_cost::{format_cost_line, format_usd_interval, ProjectCostSummary};
 use costguard_diagnostics::{Diagnostic, Severity};
 use serde::Serialize;
 
@@ -8,6 +8,8 @@ use serde::Serialize;
 struct JsonOutput<'a> {
     schema_version: u8,
     metrics: &'a costguard_core::ScanMetrics,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cost: Option<&'a ProjectCostSummary>,
     diagnostics: &'a [Diagnostic],
     files: &'a [costguard_core::FileParseStatus],
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -18,8 +20,9 @@ pub fn render(result: &ScanResult, format: OutputFormat) -> Result<String> {
     match format {
         OutputFormat::Text => Ok(render_text(result)),
         OutputFormat::Json => Ok(serde_json::to_string_pretty(&JsonOutput {
-            schema_version: 1,
+            schema_version: 2,
             metrics: &result.metrics,
+            cost: result.cost_summary.as_ref(),
             diagnostics: &result.diagnostics,
             files: &result.file_parse_status,
             pr_summary: result.pr_summary.as_ref(),
@@ -27,6 +30,14 @@ pub fn render(result: &ScanResult, format: OutputFormat) -> Result<String> {
         OutputFormat::Github => Ok(render_github(result)),
         OutputFormat::Markdown => Ok(render_markdown(result)),
         OutputFormat::Sarif => Ok(render_sarif(result)?),
+    }
+}
+
+pub fn render_cost_report(result: &ScanResult, format: OutputFormat) -> Result<String> {
+    match format {
+        OutputFormat::Json => Ok(serde_json::to_string_pretty(&result.cost_summary)?),
+        OutputFormat::Markdown => Ok(render_cost_markdown(result)),
+        _ => Ok(render_cost_text(result)),
     }
 }
 
@@ -147,6 +158,7 @@ fn render_text(result: &ScanResult) -> String {
         output.push('\n');
     }
     append_top_cost_findings(&mut output, &result.diagnostics);
+    append_cost_summary(&mut output, result.cost_summary.as_ref());
     output
 }
 
@@ -169,7 +181,7 @@ fn append_top_cost_findings(output: &mut String, diagnostics: &[Diagnostic]) {
             )
             .unwrap_or(std::cmp::Ordering::Equal)
     });
-    output.push_str("\nTop findings by estimated monthly cost:\n");
+    output.push_str("\nTop findings by estimated monthly savings:\n");
     for (diagnostic, cost) in ranked.into_iter().take(10) {
         output.push_str(&format!(
             "  - {} {}:{} — {}\n",
@@ -290,6 +302,7 @@ fn render_markdown(result: &ScanResult) -> String {
             output.push('\n');
         }
         append_top_cost_findings_markdown(&mut output, &result.diagnostics);
+        append_cost_summary_markdown(&mut output, result.cost_summary.as_ref());
         output.push_str(
             "Suppress only intentional exceptions with `-- costguard: disable-next-line=RULE`.\n",
         );
@@ -317,7 +330,7 @@ fn append_top_cost_findings_markdown(output: &mut String, diagnostics: &[Diagnos
             )
             .unwrap_or(std::cmp::Ordering::Equal)
     });
-    output.push_str("\n## Top findings by estimated monthly cost\n\n");
+    output.push_str("\n## Top findings by estimated monthly savings\n\n");
     for (diagnostic, cost) in ranked.into_iter().take(10) {
         output.push_str(&format!(
             "- `{}` {}:{} — {}\n",
@@ -328,6 +341,133 @@ fn append_top_cost_findings_markdown(output: &mut String, diagnostics: &[Diagnos
         ));
     }
     output.push('\n');
+}
+
+fn append_cost_summary(output: &mut String, summary: Option<&ProjectCostSummary>) {
+    let Some(summary) = summary else {
+        return;
+    };
+    output.push_str("\nCost summary:\n");
+    if let (Some(p10), Some(p50), Some(p90)) = (
+        summary.project_p10_usd,
+        summary.project_p50_usd,
+        summary.project_p90_usd,
+    ) {
+        output.push_str(&format!(
+            "  Project total: {} across {} models\n",
+            format_usd_interval(p10, p50, p90),
+            summary.model_count
+        ));
+    } else {
+        output.push_str(&format!(
+            "  Project scan volume: {:.0} GB-mo across {} models\n",
+            summary.project_gb_months, summary.model_count
+        ));
+    }
+    if summary.savings_p50_usd > 0.0 {
+        output.push_str(&format!(
+            "  New finding savings (deduplicated): ~${:.0}/mo (${:.0}–${:.0})\n",
+            summary.savings_p50_usd, summary.savings_p10_usd, summary.savings_p90_usd
+        ));
+    } else if summary.savings_gb_months > 0.0 {
+        output.push_str(&format!(
+            "  New finding savings (deduplicated): ~{:.0} GB-mo\n",
+            summary.savings_gb_months
+        ));
+    }
+    output.push_str(&format!(
+        "  Grade mix: A={}, B={}, C={}\n",
+        summary.grade_a, summary.grade_b, summary.grade_c
+    ));
+    if !summary.top_models.is_empty() {
+        output.push_str("  Top models by cost:\n");
+        for model in &summary.top_models {
+            if let Some(p50) = model.p50_usd_per_month {
+                output.push_str(&format!(
+                    "    - {} — ~${p50:.0}/mo (grade {})\n",
+                    model.model_id, model.grade
+                ));
+            } else {
+                output.push_str(&format!(
+                    "    - {} — {:.0} GB-mo (grade {})\n",
+                    model.model_id, model.gb_months, model.grade
+                ));
+            }
+        }
+    }
+}
+
+fn append_cost_summary_markdown(output: &mut String, summary: Option<&ProjectCostSummary>) {
+    let Some(summary) = summary else {
+        return;
+    };
+    output.push_str("\n## Cost summary\n\n");
+    if let (Some(p10), Some(p50), Some(p90)) = (
+        summary.project_p10_usd,
+        summary.project_p50_usd,
+        summary.project_p90_usd,
+    ) {
+        output.push_str(&format!(
+            "Project total: {} across {} models.\n\n",
+            format_usd_interval(p10, p50, p90),
+            summary.model_count
+        ));
+    } else {
+        output.push_str(&format!(
+            "Project scan volume: {:.0} GB-mo across {} models.\n\n",
+            summary.project_gb_months, summary.model_count
+        ));
+    }
+    if summary.savings_p50_usd > 0.0 {
+        output.push_str(&format!(
+            "New finding savings (deduplicated): ~${:.0}/mo.\n\n",
+            summary.savings_p50_usd
+        ));
+    } else if summary.savings_gb_months > 0.0 {
+        output.push_str(&format!(
+            "New finding savings (deduplicated): ~{:.0} GB-mo.\n\n",
+            summary.savings_gb_months
+        ));
+    }
+    output.push_str(&format!(
+        "Input grades: A={}, B={}, C={}.\n\n",
+        summary.grade_a, summary.grade_b, summary.grade_c
+    ));
+    if !summary.top_models.is_empty() {
+        output.push_str("### Top models by cost\n\n");
+        for model in &summary.top_models {
+            if let Some(p50) = model.p50_usd_per_month {
+                output.push_str(&format!(
+                    "- `{}` — ~${p50:.0}/mo (grade {})\n",
+                    model.model_id, model.grade
+                ));
+            } else {
+                output.push_str(&format!(
+                    "- `{}` — {:.0} GB-mo (grade {})\n",
+                    model.model_id, model.gb_months, model.grade
+                ));
+            }
+        }
+        output.push('\n');
+    }
+}
+
+fn render_cost_text(result: &ScanResult) -> String {
+    let mut output = String::from("Costguard project cost report\n\n");
+    append_cost_summary(&mut output, result.cost_summary.as_ref());
+    if !result.diagnostics.is_empty() {
+        append_top_cost_findings(&mut output, &result.diagnostics);
+    }
+    output
+}
+
+fn render_cost_markdown(result: &ScanResult) -> String {
+    let mut output = String::from("# Costguard project cost report\n\n");
+    append_cost_summary_markdown(&mut output, result.cost_summary.as_ref());
+    if !result.diagnostics.is_empty() {
+        append_top_cost_findings_markdown(&mut output, &result.diagnostics);
+    }
+    output
 }
 
 fn markdown_list(output: &mut String, title: &str, items: &[String]) {
@@ -508,6 +648,7 @@ mod tests {
                 affected_exposures: vec!["dashboard".into()],
                 ..PrSummary::default()
             }),
+            cost_summary: None,
         }
     }
 
@@ -569,7 +710,8 @@ mod tests {
 
         let rendered = render(&result, OutputFormat::Json).expect("json render");
         let value: serde_json::Value = serde_json::from_str(&rendered).expect("parse json");
-        assert_eq!(value["schema_version"], 1);
+        assert_eq!(value["schema_version"], 2);
+        assert!(value["cost"].is_null());
         assert_eq!(value["metrics"]["sql_parse_total"], 3);
         assert_eq!(value["metrics"]["sql_parse_failures"], 1);
         assert_eq!(value["metrics"]["diagnostics_by_rule"]["SQLCOST005"], 1);

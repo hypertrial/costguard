@@ -22,6 +22,7 @@ enum Command {
     Scan(ScanArgs),
     Explain(ExplainArgs),
     Pr(PrArgs),
+    Cost(CostArgs),
     Rules(RulesArgs),
 }
 
@@ -51,6 +52,19 @@ struct ScanArgs {
 }
 
 #[derive(Debug, Parser)]
+struct CostArgs {
+    paths: Vec<PathBuf>,
+    #[arg(long)]
+    warehouse: Option<String>,
+    #[arg(long)]
+    dialect: Option<String>,
+    #[arg(long, value_enum)]
+    format: Option<FormatArg>,
+    #[arg(long)]
+    manifest: Option<PathBuf>,
+}
+
+#[derive(Debug, Parser)]
 struct ExplainArgs {
     path: PathBuf,
     #[arg(long)]
@@ -61,6 +75,8 @@ struct ExplainArgs {
     format: Option<FormatArg>,
     #[arg(long)]
     manifest: Option<PathBuf>,
+    #[arg(long)]
+    cost: bool,
 }
 
 #[derive(Debug, Parser)]
@@ -139,6 +155,7 @@ fn run() -> Result<u8> {
                     config.fail_on,
                     config.min_confidence,
                     fail_on_monthly_delta(&config),
+                    fail_on_monthly_delta_gb(&config),
                 ) {
                     1
                 } else {
@@ -158,6 +175,7 @@ fn run() -> Result<u8> {
                     config.fail_on,
                     config.min_confidence,
                     fail_on_monthly_delta(&config),
+                    fail_on_monthly_delta_gb(&config),
                 ) {
                     1
                 } else {
@@ -177,12 +195,25 @@ fn run() -> Result<u8> {
                     config.fail_on,
                     config.min_confidence,
                     fail_on_monthly_delta(&config),
+                    fail_on_monthly_delta_gb(&config),
                 ) {
                     1
                 } else {
                     0
                 },
             )
+        }
+        Command::Cost(args) => {
+            let config = match config_from_cost_args(args).context("configuration error") {
+                Ok(config) => config,
+                Err(err) => return configuration_error(err),
+            };
+            let result = scan(&config)?;
+            print!(
+                "{}",
+                costguard_output::render_cost_report(&result, config.format)?
+            );
+            Ok(0)
         }
         Command::Rules(args) => {
             let format = args
@@ -239,6 +270,25 @@ fn config_from_explain_args(args: &ExplainArgs) -> Result<ScanConfig> {
         dialect: args.dialect.clone(),
         format: args.format.map(Into::into),
         manifest_path: args.manifest.clone(),
+        cost: args.cost,
+        ..ScanRuntimeOverrides::default()
+    }
+    .apply_to(&mut config)?;
+    validate_scan_config(&config)?;
+    Ok(config)
+}
+
+fn config_from_cost_args(args: CostArgs) -> Result<ScanConfig> {
+    let mut config = base_config()?;
+    if !args.paths.is_empty() {
+        config.paths = args.paths;
+    }
+    ScanRuntimeOverrides {
+        warehouse: args.warehouse,
+        dialect: args.dialect,
+        format: args.format.map(Into::into),
+        manifest_path: args.manifest,
+        cost: true,
         ..ScanRuntimeOverrides::default()
     }
     .apply_to(&mut config)?;
@@ -272,4 +322,11 @@ fn fail_on_monthly_delta(config: &ScanConfig) -> Option<f64> {
         .cost
         .as_ref()
         .and_then(|cost| cost.fail_on_monthly_delta)
+}
+
+fn fail_on_monthly_delta_gb(config: &ScanConfig) -> Option<f64> {
+    config
+        .cost
+        .as_ref()
+        .and_then(|cost| cost.fail_on_monthly_delta_gb)
 }

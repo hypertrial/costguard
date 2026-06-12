@@ -10,7 +10,7 @@ use crate::sql_analysis::{
 };
 use crate::{PrSummary, Project, ScanResult};
 use anyhow::{Context, Result};
-use costguard_cost::{annotate_diagnostics, CostInputs};
+use costguard_cost::{annotate_diagnostics, summarize_features, CostInputs, ModelFeatureSummary};
 use costguard_dbt::{compiled_code_by_model_path, MetadataWarning, MetadataWarningKind};
 use costguard_diagnostics::{apply_suppressions, Diagnostic, Severity};
 use costguard_rules::{ProjectIndexes, RuleMetadata, RuleRegistry};
@@ -18,6 +18,7 @@ use costguard_scanner::{
     discover_with_options, read_existing_paths_with_options, DiscoveryOptions, FileKind,
     ProjectFile, ScanCounts, SkippedFile,
 };
+use costguard_sql::{JoinKind, SqlDocument};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -194,18 +195,24 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
         (diagnostics, 0)
     };
 
-    if let Some(cost_config) = &config.cost {
+    let features_by_path = feature_summaries_by_path(&context_sql_documents);
+    let cost_summary = if let Some(cost_config) = &config.cost {
         if cost_config.enabled {
             let inputs = CostInputs::load(&root, cost_config)?;
-            annotate_diagnostics(
+            Some(annotate_diagnostics(
                 &mut diagnostics,
                 cost_config,
                 project.dbt.as_ref(),
                 &inputs,
                 &root,
-            );
+                &features_by_path,
+            ))
+        } else {
+            None
         }
-    }
+    } else {
+        None
+    };
 
     diagnostics.sort_by(|left, right| {
         left.path
@@ -233,7 +240,37 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
         metrics,
         file_parse_status,
         pr_summary,
+        cost_summary,
     })
+}
+
+fn feature_summaries_by_path(documents: &[SqlDocument]) -> HashMap<PathBuf, ModelFeatureSummary> {
+    documents
+        .iter()
+        .map(|doc| {
+            let cte_reuse_max = doc
+                .features
+                .cte_references
+                .iter()
+                .map(|cte| cte.key.parse::<usize>().unwrap_or(1))
+                .max()
+                .unwrap_or(0);
+            (
+                doc.path.clone(),
+                summarize_features(
+                    doc.features.joins.len(),
+                    doc.features
+                        .joins
+                        .iter()
+                        .filter(|join| matches!(join.kind, JoinKind::Cross | JoinKind::Comma))
+                        .count(),
+                    doc.features.select_stars.len(),
+                    doc.features.window_functions.len(),
+                    cte_reuse_max,
+                ),
+            )
+        })
+        .collect()
 }
 
 pub fn explain(config: &ScanConfig, path: &Path) -> Result<ScanResult> {

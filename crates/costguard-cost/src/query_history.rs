@@ -28,34 +28,40 @@ pub fn parse_query_history_text(text: &str) -> Result<QueryHistoryStats> {
         .context("query history CSV is empty")?
         .trim()
         .to_ascii_lowercase();
-    let columns: Vec<&str> = header.split(',').map(str::trim).collect();
+    let columns: Vec<String> = parse_csv_line(&header)
+        .into_iter()
+        .map(|field| field.trim().to_ascii_lowercase())
+        .collect();
     let model_idx = columns
         .iter()
-        .position(|c| *c == "model_or_table" || *c == "model" || *c == "table")
+        .position(|c| c == "model_or_table" || c == "model" || c == "table")
         .context("query history CSV missing model_or_table column")?;
     let bytes_idx = columns
         .iter()
-        .position(|c| *c == "bytes_per_run" || *c == "bytes_billed")
+        .position(|c| c == "bytes_per_run" || c == "bytes_billed")
         .context("query history CSV missing bytes_per_run column")?;
     let runs_idx = columns
         .iter()
-        .position(|c| *c == "runs_per_month" || *c == "run_count")
-        .unwrap_or(usize::MAX);
+        .position(|c| c == "runs_per_month" || c == "run_count");
 
     for line in lines {
         if line.trim().is_empty() {
             continue;
         }
-        let fields: Vec<&str> = line.split(',').map(str::trim).collect();
+        let fields = parse_csv_line(line);
         if fields.len() <= model_idx.max(bytes_idx) {
             continue;
         }
-        let key = fields[model_idx].to_string();
+        let key = fields[model_idx].trim().to_string();
         let bytes: f64 = fields[bytes_idx]
+            .trim()
             .parse()
             .with_context(|| format!("invalid bytes in line: {line}"))?;
-        let runs = if runs_idx != usize::MAX && fields.len() > runs_idx {
-            fields[runs_idx].parse().unwrap_or(30.0)
+        let runs = if let Some(idx) = runs_idx {
+            fields
+                .get(idx)
+                .and_then(|value| value.trim().parse().ok())
+                .unwrap_or(30.0)
         } else {
             30.0
         };
@@ -70,6 +76,33 @@ pub fn parse_query_history_text(text: &str) -> Result<QueryHistoryStats> {
     Ok(stats)
 }
 
+/// Minimal RFC4180-style CSV line parser (handles quoted fields with commas).
+pub fn parse_csv_line(line: &str) -> Vec<String> {
+    let mut fields = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+    let mut chars = line.chars().peekable();
+    while let Some(ch) = chars.next() {
+        match ch {
+            '"' if in_quotes => {
+                if chars.peek() == Some(&'"') {
+                    chars.next();
+                    current.push('"');
+                } else {
+                    in_quotes = false;
+                }
+            }
+            '"' => in_quotes = true,
+            ',' if !in_quotes => {
+                fields.push(std::mem::take(&mut current));
+            }
+            _ => current.push(ch),
+        }
+    }
+    fields.push(current);
+    fields
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -80,5 +113,20 @@ mod tests {
         let stats = parse_query_history_text(text).unwrap();
         assert_eq!(stats.by_key["fct_orders"].bytes_per_run, 1e12);
         assert_eq!(stats.by_key["fct_orders"].runs_per_month, 720.0);
+    }
+
+    #[test]
+    fn parses_quoted_csv_fields() {
+        let line = r#""model,with,comma",1000,30"#;
+        let fields = parse_csv_line(line);
+        assert_eq!(fields[0], "model,with,comma");
+        assert_eq!(fields[1], "1000");
+    }
+
+    #[test]
+    fn parses_quoted_history_row() {
+        let text = "model_or_table,bytes_per_run,runs_per_month\n\"fct,orders\",500,60\n";
+        let stats = parse_query_history_text(text).unwrap();
+        assert_eq!(stats.by_key["fct,orders"].bytes_per_run, 500.0);
     }
 }

@@ -10,6 +10,7 @@ pub struct CostSection {
     pub default_runs_per_month: Option<f64>,
     pub default_table_size: Option<String>,
     pub fail_on_monthly_delta: Option<f64>,
+    pub fail_on_monthly_delta_gb: Option<f64>,
     pub incremental_fraction: Option<f64>,
     pub pricing: Option<CostPricingSection>,
     pub inputs: Option<CostInputsSection>,
@@ -106,6 +107,7 @@ pub struct CostConfig {
     pub default_runs_per_month: f64,
     pub default_table_size: TableSizeClass,
     pub fail_on_monthly_delta: Option<f64>,
+    pub fail_on_monthly_delta_gb: Option<f64>,
     pub incremental_fraction: f64,
     pub pricing: CostPricingSection,
     pub inputs: CostInputsSection,
@@ -122,6 +124,7 @@ impl Default for CostConfig {
             default_runs_per_month: 30.0,
             default_table_size: TableSizeClass::Medium,
             fail_on_monthly_delta: None,
+            fail_on_monthly_delta_gb: None,
             incremental_fraction: 0.05,
             pricing: CostPricingSection {
                 model: None,
@@ -153,6 +156,7 @@ impl CostConfig {
             default_runs_per_month: section.default_runs_per_month.unwrap_or(30.0).max(0.0),
             default_table_size,
             fail_on_monthly_delta: section.fail_on_monthly_delta,
+            fail_on_monthly_delta_gb: section.fail_on_monthly_delta_gb,
             incremental_fraction: section
                 .incremental_fraction
                 .unwrap_or(0.05)

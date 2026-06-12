@@ -1,49 +1,54 @@
-# Cost model design
+# Cost model design (v2)
 
-Costguard estimates monthly spend per finding using a **lognormal product model**. All inputs are local files; the scanner never connects to a warehouse.
+Costguard estimates monthly spend using a **two-stage, model-centric** lognormal product model. All inputs are local files; the scanner never connects to a warehouse.
 
-## Formula
+## Stage 1 — Per-model monthly cost
+
+For every dbt model in the project (not only models with findings):
 
 ```
-monthly_cost ≈ base_bytes × rule_multiplier × runs_per_month × price_per_byte
+model_monthly_scan = base_bytes × runs_per_month
+model_monthly_cost = model_monthly_scan × price_per_byte   (when pricing configured)
 ```
 
-Each factor is modeled as a lognormal distribution in log-space. The product of independent lognormals is lognormal with:
-
-- `μ_product = Σ μ_i`
-- `σ²_product = Σ σ²_i`
-
-This yields closed-form p10/p50/p90 quantiles without Monte Carlo simulation.
-
-## Factor definitions
-
-### Base bytes
-
-Resolved per dbt model in priority order:
+Base bytes resolve in priority order:
 
 1. Query-history CSV (`bytes_per_run`) — grade **A**
 2. `catalog.json` `stats.num_bytes` — grade **B**
-3. `[cost.sources]` bytes/rows — grade **B**
-4. `default_table_size` prior — grade **C**
+3. `catalog.json` `stats.row_count × avg_row_bytes` (default 200) — grade **B**
+4. `[cost.sources]` bytes/rows — grade **B**
+5. `default_table_size` prior — grade **C**
 
-Incremental models with a valid `unique_key` scale base bytes by `incremental_fraction` (default 5%).
+Adjustments before pricing:
 
-### Rule multiplier
+- **Partition/cluster priors**: models with `partition_by` or `cluster_by` scale effective scan by 0.7×
+- **Views**: materialized `view` models scale by 0.5×
+- **Incrementals**: models with `materialized=incremental` and a `unique_key` scale by `incremental_fraction` (default 5%), preserving lognormal σ
+- **Full refresh**: incrementals with `full_refresh=true` skip the incremental discount
+- **Unbounded incremental findings** (SQLCOST004/005/019/029): attribution uses full bytes (no incremental discount)
 
-Default lognormal priors per `SQLCOST*` rule (e.g. missing partition 5–100×, cross join 5–50×, repeated CTE 2–6×). Overridable via `[cost.rules.RULE_ID].multiplier`.
+Runs per month resolve from `[cost.models]`, query history, sibling-folder inference, or `default_runs_per_month`.
 
-Infrastructure rules `SQLCOST023`–`SQLCOST027` receive no cost estimate.
+Project totals sum each model **once** using moment-matched lognormal aggregation (Fenton–Wilkinson).
 
-### Runs per month
+## Stage 2 — Finding savings attribution
 
-`[cost.models]` override, else `[cost].default_runs_per_month` (default 30).
+Finding estimates represent **addressable excess cost** (potential monthly savings), not total model spend:
 
-### Pricing
+```
+savings ≈ model_monthly_cost × (rule_multiplier − 1) × structure_factor × fan_out_factor
+```
 
-| Regime | Config | Uncertainty |
-| --- | --- | --- |
-| Scan | `model = "scan"`, `usd_per_tb` | Low (CV ~5%) |
-| Compute | `model = "compute"`, `usd_per_credit`, `tb_per_credit_hour` | High unless calibrated |
+- **Rule multiplier**: lognormal prior per `SQLCOST*` rule (unchanged ranges)
+- **Structure factor**: positions within the multiplier range using local SQL features (join count, cross joins, CTE reuse, etc.)
+- **Fan-out factor**: bounded boost from downstream model count and exposure dependencies (`1 + log2(1+N) × 0.25`, capped)
+- **Per-model cap**: when multiple findings hit one model, savings are scaled so their sum does not exceed ~95% of model monthly cost
+
+Backward-compatible JSON fields:
+
+- `p10_usd_per_month` / `p50_usd_per_month` / `p90_usd_per_month` — **savings** intervals (not total model cost)
+- `relative_index` — savings in **GB-months** (dimensionless ranking without pricing)
+- New fields: `model_id`, `model_monthly_p50_usd`, `savings_p*_usd_per_month`
 
 ## Confidence grades
 
@@ -53,30 +58,29 @@ Infrastructure rules `SQLCOST023`–`SQLCOST027` receive no cost estimate.
 | B | Catalog stats or explicit `[cost.sources]` config |
 | C | Default size-class prior only |
 
-Text output always shows the grade so readers know how much to trust the interval width.
-
 ## Gating
 
-`fail_on_monthly_delta` fails the check when the sum of **p50** across post-baseline findings exceeds the threshold. This composes with severity-based `--fail-on` (either condition fails).
+- `fail_on_monthly_delta` — sum of **savings p50** across new (post-baseline) findings
+- `fail_on_monthly_delta_gb` — sum of savings `relative_index` (GB-months) when pricing is disabled
 
-Cost gating is **optional enrichment**, not a replacement for severity gates. See [PR check workflow](pr-check-primary-workflow.md).
+Either condition fails the check (OR with severity gate). Failure messages print the computed total and threshold.
 
 ## Calibration
 
-`scripts/calibrate_cost_model.py` reads a query-history CSV and:
+`scripts/calibrate_cost_model.py` reads query-history CSV and:
 
-1. Computes 80% interval coverage (actual vs estimated bytes per run).
-2. Suggests `tb_per_credit_hour` bounds for compute-priced repos.
-3. Fails when coverage is outside 60–95% (intervals too wide or overconfident).
+1. Computes 80% interval coverage for bytes-per-run estimates
+2. Reports deduplicated model monthly scan volume (TB)
+3. Suggests `tb_per_credit_hour` bounds for compute-priced repos
 
 ## Implementation
 
-- Rust crate: `costguard-cost` (lognormal math, volume resolver, annotation pass)
-- Annotation runs after baseline filtering in `costguard-core/src/scan.rs`
+- Rust crate: `costguard-cost` (`model_cost.rs`, `attribution.rs`, `volume.rs`)
+- Pipeline: build `ModelCostIndex` → baseline filter → attribute findings → `ProjectCostSummary` on `ScanResult`
 - Baseline fingerprints ignore cost fields (`rule_id|path|message`)
 
 ## Limitations
 
-- Estimates rank findings and gate PR cost deltas at order-of-magnitude fidelity; they are not a query optimizer or billing system of record.
-- Cross-file rules use the diagnosed model's volume, not full-project aggregation.
-- Compute-priced intervals remain wide until query-history calibration narrows `tb_per_credit_hour`.
+- Estimates rank findings and gate PR cost deltas at order-of-magnitude fidelity; not a billing system of record
+- Per-model caps prevent double counting but do not model fix interaction effects
+- Compute-priced intervals remain wide until query-history calibration narrows `tb_per_credit_hour`

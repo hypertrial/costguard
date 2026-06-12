@@ -9,6 +9,7 @@ Source: `crates/costguard-cli/src/main.rs`
 | `scan` | Scan one or more paths (default: entire cwd) |
 | `explain` | Analyze a single SQL/dbt file |
 | `pr` | Scan git-changed files against a base ref |
+| `cost` | Project cost report (model-centric totals) |
 | `rules` | List registered rules |
 
 ## Shared flags
@@ -21,8 +22,8 @@ Source: `crates/costguard-cli/src/main.rs`
 | `--manifest` | scan, explain, pr | Path to dbt `manifest.json` with `compiled_code` |
 | `--baseline` | scan, pr | Finding baseline JSON (grandfather known findings) |
 | `--write-baseline` | scan | Write current findings to a baseline JSON file |
-| `--cost` | scan, pr | Enable cost estimates (uses `[cost]` in `costguard.toml` when present) |
-| `--fail-on-cost-delta` | scan, pr | Fail when sum of p50 USD/month on new findings exceeds threshold |
+| `--cost` | scan, explain, pr | Enable cost estimates (uses `[cost]` in `costguard.toml` when present) |
+| `--fail-on-cost-delta` | scan, pr | Fail when deduplicated savings p50 on new findings exceeds threshold (USD) |
 
 ## `scan`
 
@@ -36,8 +37,8 @@ costguard scan [PATHS...] [OPTIONS]
 | `--min-confidence` | unset | Optional floor: `low`, `medium`/`med`, `high`. Recommended for noisy repos: `--fail-on high --min-confidence high` |
 | `--baseline` | unset | Suppress findings matching baseline fingerprints |
 | `--write-baseline` | unset | Snapshot findings to a baseline JSON file |
-| `--cost` | unset | Enable per-finding cost estimates |
-| `--fail-on-cost-delta` | unset | Optional USD/month p50 gate on new findings |
+| `--cost` | unset | Enable per-finding savings estimates and project cost summary |
+| `--fail-on-cost-delta` | unset | Optional deduplicated savings p50 gate (USD) on new findings |
 
 ## `explain`
 
@@ -45,7 +46,15 @@ costguard scan [PATHS...] [OPTIONS]
 costguard explain PATH [OPTIONS]
 ```
 
-Requires exactly one file path. Does not support `--fail-on`.
+Requires exactly one file path. Supports `--cost`. Does not support `--fail-on`.
+
+## `cost`
+
+```bash
+costguard cost [PATHS...] [OPTIONS]
+```
+
+Renders a project cost report (model totals, top models, optional finding savings). Cost is always enabled; uses `[cost]` from `costguard.toml` when present.
 
 ## `pr`
 
@@ -59,8 +68,8 @@ costguard pr [OPTIONS]
 | `--fail-on` | `high` | Same severity values as `scan` |
 | `--min-confidence` | unset | Same confidence values as `scan` |
 | `--baseline` | unset | Suppress findings matching baseline fingerprints |
-| `--cost` | unset | Enable per-finding cost estimates |
-| `--fail-on-cost-delta` | unset | Optional USD/month p50 gate on new findings |
+| `--cost` | unset | Enable per-finding savings estimates and project cost summary |
+| `--fail-on-cost-delta` | unset | Optional deduplicated savings p50 gate (USD) on new findings |
 
 Invalid git bases and non-git directories fail the check instead of silently scanning zero files.
 

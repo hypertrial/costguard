@@ -527,6 +527,46 @@ fn scan_cost_estimate_json_includes_cost_fields() {
 }
 
 #[test]
+fn scan_cost_summary_json_includes_cost_block() {
+    let fixture = fixture("cost_estimate");
+    let output = Command::new(bin())
+        .current_dir(&fixture)
+        .arg("scan")
+        .arg(".")
+        .arg("--manifest")
+        .arg("target/manifest.json")
+        .arg("--format")
+        .arg("json")
+        .output()
+        .expect("run costguard");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("\"cost\""),
+        "expected cost block:\n{stdout}"
+    );
+    assert!(stdout.contains("\"project_p50_usd\""), "{stdout}");
+    assert!(stdout.contains("\"model_id\""), "{stdout}");
+}
+
+#[test]
+fn cost_command_renders_project_report() {
+    let fixture = fixture("cost_estimate");
+    let output = Command::new(bin())
+        .current_dir(&fixture)
+        .arg("cost")
+        .arg(".")
+        .arg("--manifest")
+        .arg("target/manifest.json")
+        .output()
+        .expect("run costguard cost");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Cost summary") || stdout.contains("project cost report"),
+        "expected cost report output:\n{stdout}"
+    );
+}
+
+#[test]
 fn scan_cost_delta_gate_fails_when_threshold_exceeded() {
     let fixture = fixture("cost_estimate");
     let output = Command::new(bin())

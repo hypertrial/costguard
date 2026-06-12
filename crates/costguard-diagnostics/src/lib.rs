@@ -141,6 +141,7 @@ impl fmt::Display for CostGrade {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CostEstimate {
+    /// Estimated monthly savings (GB-months when pricing is disabled).
     pub relative_index: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub p10_usd_per_month: Option<f64>,
@@ -151,6 +152,16 @@ pub struct CostEstimate {
     pub grade: CostGrade,
     pub basis: String,
     pub currency: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_monthly_p50_usd: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub savings_p10_usd_per_month: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub savings_p50_usd_per_month: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub savings_p90_usd_per_month: Option<f64>,
 }
 
 impl Diagnostic {

@@ -14,6 +14,7 @@ pub use config::{
     OutputSection, ScanConfig, ScanRuntimeOverrides, ScanSection,
 };
 pub use costguard_cost::CostConfig;
+pub use costguard_cost::ProjectCostSummary;
 pub use costguard_dbt::{
     DbtColumn, DbtConfig, DbtExposure, DbtGraph, DbtProject as DbtProjectModel, DbtRef, DbtSource,
     DbtSourceRef, DbtSqlFeatures, DbtTest,
@@ -83,6 +84,7 @@ pub struct ScanResult {
     pub metrics: ScanMetrics,
     pub file_parse_status: Vec<FileParseStatus>,
     pub pr_summary: Option<PrSummary>,
+    pub cost_summary: Option<ProjectCostSummary>,
 }
 
 impl ScanResult {
@@ -91,6 +93,7 @@ impl ScanResult {
         fail_on: Option<costguard_diagnostics::Severity>,
         min_confidence: Option<costguard_diagnostics::Confidence>,
         fail_on_monthly_delta: Option<f64>,
+        fail_on_monthly_delta_gb: Option<f64>,
     ) -> bool {
         if let Some(threshold) = fail_on {
             if self.diagnostics.iter().any(|diagnostic| {
@@ -101,7 +104,20 @@ impl ScanResult {
             }
         }
         if let Some(delta) = fail_on_monthly_delta {
-            if costguard_cost::total_p50_usd_per_month(&self.diagnostics) >= delta {
+            let savings = costguard_cost::total_p50_usd_per_month(&self.diagnostics);
+            if savings >= delta {
+                eprintln!(
+                    "cost gate failed: estimated new savings ${savings:.0}/mo >= threshold ${delta:.0}/mo"
+                );
+                return true;
+            }
+        }
+        if let Some(delta_gb) = fail_on_monthly_delta_gb {
+            let savings_gb = costguard_cost::total_savings_gb_months(&self.diagnostics);
+            if savings_gb >= delta_gb {
+                eprintln!(
+                    "cost gate failed: estimated new savings {savings_gb:.0} GB-mo >= threshold {delta_gb:.0} GB-mo"
+                );
                 return true;
             }
         }
@@ -167,14 +183,15 @@ mod tests {
             },
             file_parse_status: Vec::new(),
             pr_summary: None,
+            cost_summary: None,
         }
     }
 
     #[test]
     fn should_fail_respects_min_confidence() {
         let result = result_with(vec![diagnostic(Severity::High, Confidence::Low)]);
-        assert!(result.should_fail(Some(Severity::High), None, None));
-        assert!(!result.should_fail(Some(Severity::High), Some(Confidence::High), None));
+        assert!(result.should_fail(Some(Severity::High), None, None, None));
+        assert!(!result.should_fail(Some(Severity::High), Some(Confidence::High), None, None));
     }
 
     #[test]
@@ -188,9 +205,14 @@ mod tests {
             grade: costguard_diagnostics::CostGrade::C,
             basis: "test".into(),
             currency: "USD".into(),
+            model_id: None,
+            model_monthly_p50_usd: None,
+            savings_p10_usd_per_month: Some(400.0),
+            savings_p50_usd_per_month: Some(500.0),
+            savings_p90_usd_per_month: Some(900.0),
         });
         let result = result_with(vec![diag]);
-        assert!(!result.should_fail(None, None, Some(600.0)));
-        assert!(result.should_fail(None, None, Some(500.0)));
+        assert!(!result.should_fail(None, None, Some(600.0), None));
+        assert!(result.should_fail(None, None, Some(500.0), None));
     }
 }

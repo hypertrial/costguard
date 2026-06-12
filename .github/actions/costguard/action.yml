@@ -99,7 +99,7 @@ inputs:
     required: false
     default: "false"
   fail-on-cost-delta:
-    description: Fail when estimated monthly p50 cost of new findings exceeds this USD threshold
+    description: Fail when deduplicated savings p50 on new findings exceeds this USD threshold
     required: false
     default: ""
 

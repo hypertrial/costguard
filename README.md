@@ -81,7 +81,7 @@ See [Quick start (PR check)](docs/book/getting-started/quick-start.md) for input
 
 ## What it detects
 
-Costguard ships **35 SQLCOST rules** for incremental safety, join risk, warehouse cost patterns, and dbt anti-patterns. Optional **[cost estimates](docs/book/reference/cost-estimates.md)** rank findings by estimated monthly spend using local catalog stats, query-history exports, or configurable priors—with p10/p50/p90 intervals and provenance grades. See the [rule catalog](docs/book/rules/index.md) for severity and fix guidance.
+Costguard ships **35 SQLCOST rules** for incremental safety, join risk, warehouse cost patterns, and dbt anti-patterns. Optional **[cost estimates](docs/book/reference/cost-estimates.md)** resolve per-model monthly spend once, attribute deduplicated savings to findings, and rank by p10/p50/p90 intervals with provenance grades. Use `costguard cost` for a project cost report. See the [rule catalog](docs/book/rules/index.md) for severity and fix guidance.
 
 ## Benchmark smoke tests
 

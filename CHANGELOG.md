@@ -2,6 +2,23 @@
 
 All notable changes to Costguard are documented here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Model-centric cost engine (v2):** per-model monthly cost index, deduplicated project totals, savings attribution with per-model caps, structure factors from SQL features, and lineage fan-out weighting.
+- `ProjectCostSummary` on scan results; JSON schema version 2 with top-level `cost` block.
+- `costguard cost` subcommand for project cost reports without requiring findings.
+- `--cost` on `explain`; `fail_on_monthly_delta_gb` for GB-month savings gating without pricing.
+- New `CostEstimate` fields: `model_id`, `model_monthly_p50_usd`, `savings_p*_usd_per_month`.
+
+### Changed
+
+- **Breaking (cost semantics):** finding `p50_usd_per_month` now represents estimated **savings**, not total inflated model×rule cost. Use `model_monthly_p50_usd` for model baseline spend.
+- `--fail-on-cost-delta` gates on deduplicated savings sum; failure messages print computed total vs threshold.
+- Catalog row counts used as grade-B volume fallback; symmetric catalog key matching; quoted-field CSV parsing for query history.
+- Incremental byte discount preserves lognormal σ; skipped for unbounded-incremental rules (SQLCOST004/005/019/029).
+
 ## [1.1.0] - 2026-06-12
 
 ### Added
