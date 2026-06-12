@@ -171,7 +171,12 @@ fn extract_join(join: &Join, finder: &mut SpanFinder<'_>, features: &mut SqlFeat
         extract_table_factor(&join.relation, finder, features);
         return;
     }
-    if let Some(span) = finder.find_next(needle) {
+    let span = if kind == JoinKind::Inner {
+        finder.find_word_next("join")
+    } else {
+        finder.find_next(needle)
+    };
+    if let Some(span) = span {
         features.joins.push(JoinFeature {
             span,
             kind,
@@ -369,7 +374,7 @@ fn object_name_last(name: &ObjectName) -> String {
 fn merge_join_features(base: &[JoinFeature], ast: &[JoinFeature]) -> Vec<JoinFeature> {
     let mut merged: Vec<JoinFeature> = base
         .iter()
-        .filter(|join| join.kind != JoinKind::Cross)
+        .filter(|join| join.kind == JoinKind::Comma)
         .cloned()
         .collect();
     merged.extend(ast.iter().cloned());
@@ -411,7 +416,7 @@ impl<'a> SpanFinder<'a> {
     fn find_next(&mut self, needle: &str) -> Option<Span> {
         let lower_needle = needle.to_ascii_lowercase();
         let start_from = self.cursors.get(&lower_needle).copied().unwrap_or(0);
-        let (start, span) = self.find_sanitized_from(&lower_needle, start_from, |_| true)?;
+        let (start, span) = self.find_sanitized_from(&lower_needle, start_from, |_, _| true)?;
         self.cursors
             .insert(lower_needle.clone(), start + lower_needle.len());
         Some(span)
@@ -419,7 +424,7 @@ impl<'a> SpanFinder<'a> {
 
     fn find_after(&self, raw_after: usize, needle: &str) -> Option<Span> {
         let lower_needle = needle.to_ascii_lowercase();
-        self.find_sanitized_from(&lower_needle, 0, |raw_start| raw_start >= raw_after)
+        self.find_sanitized_from(&lower_needle, 0, |raw_start, _| raw_start >= raw_after)
             .map(|(_, span)| span)
     }
 
@@ -427,9 +432,10 @@ impl<'a> SpanFinder<'a> {
         let lower_word = word.to_ascii_lowercase();
         let cursor_key = format!("word:{lower_word}");
         let start_from = self.cursors.get(&cursor_key).copied().unwrap_or(0);
-        let (start, span) = self.find_sanitized_from(&lower_word, start_from, |raw_start| {
-            self.word_boundaries(raw_start, &lower_word)
-        })?;
+        let (start, span) =
+            self.find_sanitized_from(&lower_word, start_from, |raw_start, raw_end| {
+                self.word_boundaries(raw_start, raw_end)
+            })?;
         self.cursors.insert(cursor_key, start + lower_word.len());
         Some(span)
     }
@@ -439,8 +445,8 @@ impl<'a> SpanFinder<'a> {
         let mut spans = Vec::new();
         let mut start_from = 0usize;
         while let Some((start, span)) =
-            self.find_sanitized_from(&lower_word, start_from, |raw_start| {
-                raw_start >= raw_after && self.word_boundaries(raw_start, &lower_word)
+            self.find_sanitized_from(&lower_word, start_from, |raw_start, raw_end| {
+                raw_start >= raw_after && self.word_boundaries(raw_start, raw_end)
             })
         {
             start_from = start + lower_word.len();
@@ -460,14 +466,14 @@ impl<'a> SpanFinder<'a> {
         raw_filter: F,
     ) -> Option<(usize, Span)>
     where
-        F: Fn(usize) -> bool,
+        F: Fn(usize, usize) -> bool,
     {
         while start_from < self.lower_sanitized.len() {
             let relative = self.lower_sanitized[start_from..].find(lower_needle)?;
             let start = start_from + relative;
             let end = start + lower_needle.len();
             if let Some((raw_start, raw_end)) = self.strip_map.map_sanitized_range(start, end) {
-                if raw_filter(raw_start) {
+                if raw_filter(raw_start, raw_end) {
                     return Some((
                         start,
                         self.line_index.span(raw_start, raw_end.min(self.raw.len())),
@@ -479,8 +485,14 @@ impl<'a> SpanFinder<'a> {
         None
     }
 
-    fn word_boundaries(&self, raw_start: usize, word: &str) -> bool {
-        let raw_end = raw_start + word.len();
+    fn word_boundaries(&self, raw_start: usize, raw_end: usize) -> bool {
+        if raw_start > raw_end
+            || raw_end > self.raw.len()
+            || !self.raw.is_char_boundary(raw_start)
+            || !self.raw.is_char_boundary(raw_end)
+        {
+            return false;
+        }
         let before = self.raw[..raw_start]
             .chars()
             .next_back()

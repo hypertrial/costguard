@@ -87,6 +87,6 @@ For Dune Spellbook and other Trino dbt projects:
 
 ## Related
 
-- [Benchmark calibration](../design/benchmark-calibration.md)
-- [Spellbook stress test](../design/spellbook-stress-test.md)
+- [Benchmark calibration](../../design/benchmark-calibration.md)
+- [Spellbook stress test](../../design/spellbook-stress-test.md)
 - [Platforms](platforms.md)

@@ -9,7 +9,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/hypertrial/costguard
-    rev: v0.1.0
+    rev: v1
     hooks:
       - id: costguard-pr
 ```
@@ -22,7 +22,7 @@ pre-commit install
 pre-commit install --hook-type pre-push
 ```
 
-Install `costguard` on your PATH (for example `cargo install --path crates/costguard-cli`) or build the release binary locally.
+Install a checksum-verified release binary on your `PATH` as shown in the [quick start](quick-start.md).
 
 ## Environment overrides
 
@@ -35,7 +35,7 @@ Install `costguard` on your PATH (for example `cargo install --path crates/costg
 
 ## Dogfooding in this repo
 
-This repository includes [`.pre-commit-config.yaml`](../../.pre-commit-config.yaml) pointing at the local hook script for development.
+This repository includes [`.pre-commit-config.yaml`](../../../.pre-commit-config.yaml) pointing at the local hook script for development.
 
 While GitHub Actions CI is unavailable, run the full local gate with:
 
@@ -43,4 +43,4 @@ While GitHub Actions CI is unavailable, run the full local gate with:
 ./scripts/ci_local.sh
 ```
 
-Track workflow priority in the [PR check workflow design doc](../design/pr-check-primary-workflow.md) (pre-commit is priority 3).
+Track workflow priority in the [PR check workflow design doc](../../design/pr-check-primary-workflow.md) (pre-commit is priority 3).

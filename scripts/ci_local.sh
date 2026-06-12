@@ -19,14 +19,15 @@ run() {
 
 run python3 scripts/validate_workspace_deps.py
 run cargo fmt --check
-run cargo clippy --all-targets --all-features -- -D warnings
-run cargo build -p costguard-cli
-run cargo build --release -p costguard-cli
+run cargo clippy --locked --all-targets --all-features -- -D warnings
+run cargo build --locked -p costguard-cli
+run cargo build --release --locked -p costguard-cli
 run python3 scripts/verify_release_assets.py
 run python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 run python3 scripts/validate_fp_registry.py
 COSTGUARD_BUILD_PROFILE=release run python3 scripts/benchmark_external_repo.py --all-vendored
 run python3 scripts/generate_rule_docs.py --check
+run python3 scripts/check_docs.py
 if command -v mdbook >/dev/null 2>&1; then
   run mdbook build
 else
@@ -37,7 +38,7 @@ if command -v cargo-deny >/dev/null 2>&1; then
 else
   echo "WARN: cargo-deny not installed; skipping cargo deny check"
 fi
-run cargo test
+run cargo test --workspace --all-targets --locked
 if [ "$SPELLBOOK_SMOKE" -eq 1 ]; then
   COSTGUARD_BUILD_PROFILE=release run python3 scripts/benchmark_external_repo.py --repo spellbook --smoke
 fi

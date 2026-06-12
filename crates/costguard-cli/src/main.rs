@@ -11,6 +11,7 @@ use std::process::ExitCode;
 #[derive(Debug, Parser)]
 #[command(name = "costguard")]
 #[command(about = "Static cost and performance guardrails for dbt and warehouse SQL")]
+#[command(version, propagate_version = true)]
 struct Cli {
     #[command(subcommand)]
     command: Command,

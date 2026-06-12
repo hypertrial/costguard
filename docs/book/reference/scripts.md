@@ -1,8 +1,8 @@
 # Scripts
 
-Helper scripts live under [`scripts/`](../../scripts/) at the repository root. Prefer `python3` when invoking them.
+Helper scripts live under [`scripts/`](../../../scripts/) at the repository root. Prefer `python3` when invoking them.
 
-For Spellbook, the script compiles five subprojects and **merges** their manifests into `target/manifest.json` at the repo root before scanning. The GitHub Action uses the same merge logic via [`dbt_compile_for_costguard.py`](../../scripts/dbt_compile_for_costguard.py).
+For Spellbook, the script compiles five subprojects and **merges** their manifests into `target/manifest.json` at the repo root before scanning. The GitHub Action uses the same merge logic via [`dbt_compile_for_costguard.py`](../../../scripts/dbt_compile_for_costguard.py).
 
 ## `dbt_compile_for_costguard.py`
 
@@ -46,9 +46,19 @@ python3 scripts/dbt_compile_for_costguard.py \
 
 Shared helper for locating/building the CLI. Benchmark and doc scripts default to **release** builds (`COSTGUARD_BUILD_PROFILE=release`; set `debug` for local debugging). Skips rebuild when the binary is newer than Rust sources under `crates/`.
 
+## `release_check.py`
+
+Authoritative pre-release qualification gate. It requires the verified signed version tag at `HEAD`, validates the requested workspace version, runs local CI and consumer Action tests, executes pinned external benchmarks, enforces the 10,000-model performance budget, checks external documentation links, and writes `dist/release/release-check.json` bound to the commit.
+
+```bash
+python3 scripts/release_check.py --version 1.0.0
+```
+
+`--development`, `--skip-external`, and `--skip-external-links` are development aids. Development mode does not write a release qualification receipt. Strict qualification also requires `mdbook` and `cargo-deny` so documentation and dependency policy checks cannot be silently skipped.
+
 ## `verify_release_assets.py`
 
-Builds a host-platform release tarball using the same layout as [`.github/workflows/release.yml`](../../.github/workflows/release.yml), verifies the `.sha256` checksum, and smoke-tests the extracted `costguard rules --format json` binary. CI runs this after every release build so packaging stays aligned with the GitHub Action `install-mode: release` downloader.
+Builds a host-platform release tarball using the same layout as [`.github/workflows/release.yml`](../../../.github/workflows/release.yml), verifies its checksum, and smoke-tests the extracted binary. The local release gate runs this before publication.
 
 ```bash
 python3 scripts/verify_release_assets.py
@@ -56,20 +66,23 @@ python3 scripts/verify_release_assets.py
 
 ## `publish_release_local.py`
 
-Strict local release publisher for when GitHub Actions credits are unavailable. Builds **all four** release targets, packages tarballs + `.sha256` sidecars, smoke-tests assets runnable on the build host (other targets verify archive layout only), and optionally uploads with `gh release upload`.
+Strict local release publisher for when GitHub Actions credits are unavailable. It requires a clean checkout at a verified signed annotated tag, builds all four release targets, creates deterministic archives, validates native smoke receipts, signs provenance, and creates a new immutable GitHub release.
 
 ```bash
-./scripts/publish_release_local.sh --package-only --workdir dist/release
-./scripts/publish_release_local.sh --publish --version v0.1.0 --workdir dist/release
+./scripts/publish_release_local.sh --package-only --version 1.0.0
+./scripts/publish_release_local.sh --publish --version 1.0.0 \
+  --receipt /path/to/smoke-x86_64-pc-windows-msvc.json
 ```
 
 | Flag | Description |
 | --- | --- |
-| `--package-only` | Build and verify assets only |
+| `--package-only` | Build deterministic assets and available local smoke receipts for inspection and Windows transfer |
 | `--publish` | Upload assets with `gh` after all four targets pass |
-| `--version` | Release tag (default `v0.1.0`) |
+| `--version` | Required version; must equal the workspace version and signed tag |
 | `--workdir` | Output directory (default `dist/release`) |
 | `--notes-file` | Optional release notes for `gh release create` |
+| `--receipt` | Native smoke receipt; supply the Windows receipt when publishing elsewhere |
+| `--qualification-receipt` | Qualification evidence (default `WORKDIR/release-check.json`) |
 
 ### Cross-compile toolchain matrix (strict all-target builds)
 
@@ -80,20 +93,32 @@ Strict local release publisher for when GitHub Actions credits are unavailable. 
 | `x86_64-unknown-linux-gnu` | macOS/Linux | `rustup target add x86_64-unknown-linux-gnu`, install [Zig](https://ziglang.org/download/), and `cargo install cargo-zigbuild` |
 | `x86_64-pc-windows-msvc` | macOS/Linux | `rustup target add x86_64-pc-windows-msvc`, `cargo install cargo-xwin`, and `cargo xwin cache xwin` |
 
+## `smoke_release_asset.py`
+
+Runs `--version` and `rules --format json` from an extracted native release binary and writes a receipt bound to the archive SHA-256. Windows publication requires a receipt produced on Windows.
+
+```bash
+python3 scripts/smoke_release_asset.py \
+  --asset costguard-x86_64-pc-windows-msvc.tar.gz \
+  --target x86_64-pc-windows-msvc \
+  --version 1.0.0 \
+  --receipt smoke-x86_64-pc-windows-msvc.json
+```
+
 ### No Actions credits (operator checklist)
 
 1. Install the cross toolchains from the matrix above.
-2. Package locally: `./scripts/publish_release_local.sh --package-only --workdir dist/release`
-3. Spot-check host packaging: `python3 scripts/verify_release_assets.py`
-4. Publish: `./scripts/publish_release_local.sh --publish --version v0.1.0 --workdir dist/release`
-5. Verify: `gh release view v0.1.0`
-6. Smoke-test consumer install with `uses: hypertrial/costguard/.github/actions/costguard@v0.1.0` and default `install-mode: release`.
+2. Create the signed exact tag and qualify locally: `python3 scripts/release_check.py --version 1.0.0`.
+3. Package with `--package-only`, inspect `SHA256SUMS`, and send the Windows archive for native smoke testing.
+4. Follow the [release checklist](../contributing/releasing.md), including the returned Windows receipt.
+5. Publish with `--publish`; it validates qualification, creates signed provenance, and rejects existing releases.
+6. Smoke-test `uses: hypertrial/costguard/.github/actions/costguard@v1.0.0`, then move `v1`.
 
-When Actions billing is restored, tag pushes can still use [`.github/workflows/release.yml`](../../.github/workflows/release.yml).
+Hosted workflows are manual mirrors only and never publish a release.
 
 ## `ci_local.sh`
 
-Local mirror of [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) for development when GitHub Actions is unavailable:
+Authoritative local gate mirrored by [`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml):
 
 ```bash
 ./scripts/ci_local.sh
@@ -105,6 +130,14 @@ Unit tests:
 ```bash
 python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 ```
+
+## `check_docs.py`
+
+Validates repository-local Markdown links during every local CI run. Release qualification adds retrying external URL checks with `--external`.
+
+## `scale_check.py`
+
+Generates and scans 10,000 clean models in release mode. The default budget is 10 seconds and 1 GiB maximum RSS with zero parse failures and zero diagnostics.
 
 ## `benchmark_external_repo.py`
 
@@ -213,7 +246,7 @@ Requires a cached checkout with `target/manifest.json` from `benchmark_external_
 
 ## `validate_fp_registry.py`
 
-Validate [`tests/benchmarks/fp_registry.toml`](../../tests/benchmarks/fp_registry.toml) against corpus `forbid_rules` contracts:
+Validate [`tests/benchmarks/fp_registry.toml`](../../../tests/benchmarks/fp_registry.toml) against corpus `forbid_rules` contracts:
 
 ```bash
 python3 scripts/validate_fp_registry.py
@@ -231,4 +264,4 @@ python3 scripts/generate_rule_docs.py --check
 ## Related
 
 - [Benchmark tiers](../contributing/benchmark-tiers.md)
-- [Benchmark calibration](../design/benchmark-calibration.md)
+- [Benchmark calibration](../../design/benchmark-calibration.md)

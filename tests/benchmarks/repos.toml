@@ -3,6 +3,9 @@ name = "jaffle-shop"
 url = "https://github.com/dbt-labs/jaffle-shop.git"
 commit = "7be2c5838dbdeca8e915d4e46db70e910753d7f6"
 warehouse = "generic"
+compile_dbt = true
+dbt_adapter = "dbt-duckdb"
+dbt_profile_type = "duckdb"
 scan_paths = ["."]
 fail_on = "critical"
 

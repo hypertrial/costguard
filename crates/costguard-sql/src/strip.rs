@@ -8,6 +8,7 @@ struct StripSegment {
     sanitized_start: usize,
     sanitized_end: usize,
     raw_start: usize,
+    raw_end: usize,
 }
 
 impl JinjaStripMap {
@@ -25,7 +26,7 @@ impl JinjaStripMap {
             if sanitized_index >= segment.sanitized_start && sanitized_index < segment.sanitized_end
             {
                 let delta = sanitized_index - segment.sanitized_start;
-                return Some(segment.raw_start + delta);
+                return Some((segment.raw_start + delta).min(segment.raw_end.saturating_sub(1)));
             }
         }
         None
@@ -37,6 +38,7 @@ impl JinjaStripMap {
                 sanitized_start: 0,
                 sanitized_end: text_len,
                 raw_start: 0,
+                raw_end: text_len,
             }],
         }
     }
@@ -69,6 +71,7 @@ pub fn strip_jinja_with_map(text: &str) -> (String, JinjaStripMap) {
                     sanitized_start,
                     sanitized_end: sanitized.len(),
                     raw_start: abs_start,
+                    raw_end: abs_end,
                 });
                 index = abs_end;
                 continue;
@@ -97,6 +100,7 @@ fn push_literal_segment(
         sanitized_start,
         sanitized_end: sanitized.len(),
         raw_start,
+        raw_end,
     });
 }
 
@@ -133,5 +137,16 @@ mod tests {
         let line_index = LineIndex::new(text);
         let span = line_index.span(raw_start, raw_end);
         assert!(span.line >= 1);
+    }
+
+    #[test]
+    fn short_jinja_expression_never_maps_past_raw_text() {
+        let text = "select {{x}}";
+        let (sanitized, map) = strip_jinja_with_map(text);
+        let start = sanitized.find("__jinja__").expect("placeholder");
+        let (_, raw_end) = map
+            .map_sanitized_range(start, start + "__jinja__".len())
+            .expect("mapped placeholder");
+        assert!(raw_end <= text.len());
     }
 }

@@ -85,7 +85,7 @@ checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
 name = "costguard-cli"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -99,7 +99,7 @@ dependencies = [
 
 [[package]]
 name = "costguard-core"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "costguard-dbt",
@@ -118,7 +118,7 @@ dependencies = [
 
 [[package]]
 name = "costguard-dbt"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "regex",
@@ -129,14 +129,14 @@ dependencies = [
 
 [[package]]
 name = "costguard-diagnostics"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "costguard-git"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "tempfile",
@@ -144,7 +144,7 @@ dependencies = [
 
 [[package]]
 name = "costguard-output"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "costguard-core",
@@ -156,7 +156,7 @@ dependencies = [
 
 [[package]]
 name = "costguard-platform"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "serde",
  "sqlparser",
@@ -164,7 +164,7 @@ dependencies = [
 
 [[package]]
 name = "costguard-rules"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "costguard-dbt",
  "costguard-diagnostics",
@@ -177,7 +177,7 @@ dependencies = [
 
 [[package]]
 name = "costguard-scanner"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "costguard-diagnostics",
@@ -190,7 +190,7 @@ dependencies = [
 
 [[package]]
 name = "costguard-sql"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "costguard-dbt",
  "costguard-diagnostics",

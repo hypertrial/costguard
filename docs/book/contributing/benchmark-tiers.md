@@ -13,17 +13,17 @@ Costguard validates changes through four benchmark **layers**. See the [Glossary
 
 ## Layer 1 — Corpus
 
-Deterministic mini dbt projects under [`tests/fixtures/corpus/`](../../tests/fixtures/corpus/).
+Deterministic mini dbt projects under [`tests/fixtures/corpus/`](../../../tests/fixtures/corpus/).
 
 ```bash
 cargo test -p costguard-core --test corpus
 ```
 
-Register cases in [`tests/fixtures/corpus/manifest.toml`](../../tests/fixtures/corpus/manifest.toml).
+Register cases in [`tests/fixtures/corpus/manifest.toml`](../../../tests/fixtures/corpus/manifest.toml).
 
 ## Layer 2 — Vendored
 
-Offline snippets in [`tests/fixtures/real_world/`](../../tests/fixtures/real_world/).
+Offline snippets in [`tests/fixtures/real_world/`](../../../tests/fixtures/real_world/).
 
 ```bash
 python3 scripts/benchmark_external_repo.py --all-vendored
@@ -32,7 +32,7 @@ cargo test -p costguard-core --test benchmark vendored_baselines_match
 
 ## Layer 3 — External
 
-Pinned clones defined in [`tests/benchmarks/repos.toml`](../../tests/benchmarks/repos.toml).
+Pinned clones defined in [`tests/benchmarks/repos.toml`](../../../tests/benchmarks/repos.toml).
 
 ```bash
 python3 scripts/benchmark_external_repo.py --repo jaffle-shop
@@ -40,7 +40,7 @@ python3 scripts/benchmark_external_repo.py --repo spellbook
 python3 scripts/benchmark_external_repo.py --repo spellbook --smoke
 ```
 
-GitHub Actions: **Spellbook smoke** runs on push to `main`; full external benchmarks use **benchmark** workflow (`workflow_dispatch`).
+GitHub Actions workflows are optional `workflow_dispatch` mirrors. The local release gate is authoritative and runs the full pinned repositories.
 
 ### Defaults by context
 
@@ -72,9 +72,9 @@ costguard scan /tmp/costguard-synthetic-10k --warehouse generic --fail-on critic
 | Vendored | Exact rule counts, parse failure ceiling, forbidden rules |
 | External | Crash-free, parse failures ≤ baseline + delta, optional rate cap, `sql_parse_compiled_failures` gate for Spellbook |
 
-Details: [Benchmark calibration](../design/benchmark-calibration.md).
+Details: [Benchmark calibration](../../design/benchmark-calibration.md).
 
 ## Related
 
 - [Scripts](../reference/scripts.md)
-- [Spellbook stress test](../design/spellbook-stress-test.md)
+- [Spellbook stress test](../../design/spellbook-stress-test.md)

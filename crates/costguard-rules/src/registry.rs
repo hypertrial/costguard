@@ -8,6 +8,7 @@ use std::collections::HashMap;
 pub use costguard_platform::Platform as Warehouse;
 
 #[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RuleOverride {
     pub enabled: Option<bool>,
     pub severity: Option<Severity>,

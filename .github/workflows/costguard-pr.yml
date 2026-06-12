@@ -1,7 +1,13 @@
-name: costguard-pr
+name: costguard-pr-manual-mirror
 
 on:
-  pull_request:
+  workflow_dispatch:
+    inputs:
+      base:
+        description: Base ref for the manual PR-style scan
+        required: false
+        default: origin/main
+        type: string
 
 permissions:
   contents: read
@@ -15,8 +21,9 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/costguard
         with:
-          base: origin/${{ github.base_ref }}
+          base: ${{ inputs.base }}
           warehouse: generic
+          dbt-adapter-package: dbt-trino
           fail-on: high
           min-confidence: high
           format: github

@@ -159,6 +159,35 @@ fn rules_command_lists_rules() {
 }
 
 #[test]
+fn version_reports_workspace_version() {
+    let output = Command::new(bin())
+        .arg("--version")
+        .output()
+        .expect("run costguard");
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "costguard 1.0.0"
+    );
+}
+
+#[test]
+fn version_propagates_to_every_subcommand() {
+    for subcommand in ["scan", "pr", "explain", "rules"] {
+        let output = Command::new(bin())
+            .args([subcommand, "--version"])
+            .output()
+            .expect("run costguard subcommand version");
+        assert!(output.status.success(), "{subcommand}");
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout).trim(),
+            format!("costguard-{subcommand} 1.0.0"),
+            "{subcommand}"
+        );
+    }
+}
+
+#[test]
 fn invalid_config_flag_exits_with_configuration_code() {
     let output = Command::new(bin())
         .arg("scan")
@@ -169,6 +198,74 @@ fn invalid_config_flag_exits_with_configuration_code() {
     assert_eq!(output.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("configuration error"));
+}
+
+#[test]
+fn unknown_config_field_exits_with_configuration_code() {
+    let tempdir = tempfile::tempdir().expect("tempdir");
+    fs::write(
+        tempdir.path().join("costguard.toml"),
+        "[scan]\nunknown = true\n",
+    )
+    .expect("write config");
+    let output = Command::new(bin())
+        .arg("scan")
+        .current_dir(tempdir.path())
+        .output()
+        .expect("run costguard");
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("unknown field"));
+}
+
+#[test]
+fn unknown_config_section_exits_with_configuration_code() {
+    let tempdir = tempfile::tempdir().expect("tempdir");
+    fs::write(
+        tempdir.path().join("costguard.toml"),
+        "[unknown]\nvalue = true\n",
+    )
+    .expect("write config");
+    let output = Command::new(bin())
+        .arg("scan")
+        .current_dir(tempdir.path())
+        .output()
+        .expect("run costguard");
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("unknown field"));
+}
+
+#[test]
+fn unknown_rule_id_exits_with_configuration_code() {
+    let tempdir = tempfile::tempdir().expect("tempdir");
+    fs::write(
+        tempdir.path().join("costguard.toml"),
+        "[rules.SQLCOST999]\nenabled = false\n",
+    )
+    .expect("write config");
+    let output = Command::new(bin())
+        .arg("scan")
+        .current_dir(tempdir.path())
+        .output()
+        .expect("run costguard");
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("unknown rule id"));
+}
+
+#[test]
+fn unknown_rule_setting_exits_with_configuration_code() {
+    let tempdir = tempfile::tempdir().expect("tempdir");
+    fs::write(
+        tempdir.path().join("costguard.toml"),
+        "[rules.SQLCOST001]\nunknown = true\n",
+    )
+    .expect("write config");
+    let output = Command::new(bin())
+        .arg("scan")
+        .current_dir(tempdir.path())
+        .output()
+        .expect("run costguard");
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("unknown field"));
 }
 
 #[test]

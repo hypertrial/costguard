@@ -47,17 +47,59 @@ def write_dummy_profiles(
     profiles_file = profiles_dir / "profiles.yml"
     if profiles_file.exists():
         return
+    credentials = {
+        "bigquery": """      method: oauth
+      project: costguard
+      dataset: costguard
+      threads: 1""",
+        "databricks": """      host: localhost
+      http_path: /sql/1.0/warehouses/costguard
+      token: costguard
+      schema: costguard
+      threads: 1""",
+        "duckdb": """      path: ':memory:'
+      schema: costguard
+      threads: 1""",
+        "postgres": """      host: localhost
+      port: 5432
+      user: costguard
+      password: costguard
+      dbname: costguard
+      schema: costguard
+      threads: 1""",
+        "redshift": """      host: localhost
+      port: 5439
+      user: costguard
+      password: costguard
+      dbname: costguard
+      schema: costguard
+      threads: 1""",
+        "snowflake": """      account: costguard
+      user: costguard
+      password: costguard
+      role: costguard
+      database: costguard
+      warehouse: costguard
+      schema: costguard
+      threads: 1""",
+        "trino": """      host: localhost
+      port: 8080
+      user: costguard
+      database: costguard
+      schema: costguard
+      threads: 1""",
+    }
+    try:
+        profile_credentials = credentials[profile_type]
+    except KeyError as exc:
+        raise SystemExit(f"unsupported dummy dbt profile type: {profile_type}") from exc
     profiles_file.write_text(
         f"""{profile_name}:
   target: {target}
   outputs:
     {target}:
       type: {profile_type}
-      host: localhost
-      port: 8080
-      user: costguard
-      database: costguard
-      schema: costguard
+{profile_credentials}
 """,
         encoding="utf-8",
     )

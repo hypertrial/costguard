@@ -43,15 +43,24 @@ class DbtCompileHelpersTest(unittest.TestCase):
         self.assertEqual(read_dbt_profile_name(project), "my_profile")
 
     def test_write_dummy_profiles(self) -> None:
-        profiles_dir = self._temp_dir() / "profiles"
-        write_dummy_profiles(
-            profiles_dir,
-            profile_name="demo",
-            target="dev",
-            profile_type="postgres",
-        )
-        text = (profiles_dir / "profiles.yml").read_text(encoding="utf-8")
-        self.assertIn("type: postgres", text)
+        for profile_type in [
+            "bigquery",
+            "databricks",
+            "duckdb",
+            "postgres",
+            "redshift",
+            "snowflake",
+            "trino",
+        ]:
+            profiles_dir = self._temp_dir() / profile_type
+            write_dummy_profiles(
+                profiles_dir,
+                profile_name="demo",
+                target="dev",
+                profile_type=profile_type,
+            )
+            text = (profiles_dir / "profiles.yml").read_text(encoding="utf-8")
+            self.assertIn(f"type: {profile_type}", text)
 
     def test_merge_manifests_prefixes_model_paths(self) -> None:
         tmp = self._temp_dir()

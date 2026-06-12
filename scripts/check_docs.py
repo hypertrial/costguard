@@ -1,0 +1,98 @@
+#!/usr/bin/env python3
+"""Validate Markdown links using only the Python standard library."""
+
+from __future__ import annotations
+
+import argparse
+import re
+import time
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+LINK_RE = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
+HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*$", re.MULTILINE)
+
+
+def slug(value: str) -> str:
+    value = re.sub(r"[`*_]", "", value.strip().lower())
+    value = re.sub(r"[^a-z0-9 _-]", "", value)
+    return re.sub(r"[ _]+", "-", value)
+
+
+def markdown_files() -> list[Path]:
+    paths = [ROOT / "README.md"]
+    paths.extend(sorted((ROOT / "docs").rglob("*.md")))
+    for name in ["CHANGELOG.md", "SECURITY.md", "SUPPORT.md", "CONTRIBUTING.md"]:
+        path = ROOT / name
+        if path.exists():
+            paths.append(path)
+    return paths
+
+
+def check_internal(source: Path, target: str) -> str | None:
+    clean = target.split(maxsplit=1)[0].strip("<>")
+    if not clean or clean.startswith(("http://", "https://", "mailto:")):
+        return None
+    path_part, _, anchor = clean.partition("#")
+    destination = source if not path_part else (source.parent / path_part).resolve()
+    if not destination.exists():
+        return f"{source.relative_to(ROOT)}: missing link target {target}"
+    if anchor and destination.suffix.lower() == ".md":
+        headings = {
+            slug(match.group(1))
+            for match in HEADING_RE.finditer(destination.read_text(encoding="utf-8"))
+        }
+        if anchor.lower() not in headings:
+            return f"{source.relative_to(ROOT)}: missing anchor #{anchor} in {destination.relative_to(ROOT)}"
+    return None
+
+
+def check_external(url: str, retries: int) -> str | None:
+    request = urllib.request.Request(url, headers={"User-Agent": "costguard-doc-check/1.0"})
+    for attempt in range(retries):
+        try:
+            with urllib.request.urlopen(request, timeout=15) as response:
+                if response.status < 400:
+                    return None
+        except (urllib.error.URLError, TimeoutError) as exc:
+            if attempt == retries - 1:
+                return f"external link failed: {url}: {exc}"
+            time.sleep(2**attempt)
+    return f"external link failed: {url}"
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--external", action="store_true")
+    parser.add_argument("--retries", type=int, default=3)
+    args = parser.parse_args()
+    errors: list[str] = []
+    external_urls: set[str] = set()
+    for source in markdown_files():
+        text = source.read_text(encoding="utf-8")
+        for match in LINK_RE.finditer(text):
+            target = match.group(1).strip()
+            if target.startswith(("http://", "https://")):
+                external_urls.add(target)
+                continue
+            error = check_internal(source, target)
+            if error:
+                errors.append(error)
+    if args.external:
+        for url in sorted(external_urls):
+            error = check_external(url, args.retries)
+            if error:
+                errors.append(error)
+    if errors:
+        raise SystemExit("documentation link errors:\n" + "\n".join(errors))
+    print(
+        f"documentation links valid ({len(markdown_files())} files"
+        f"{f', {len(external_urls)} external URLs' if args.external else ''})"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -37,9 +37,9 @@ Bare `costguard: allow cross-join` (without `--`) also works.
 
 - Suppress only intentional exceptions with documented rationale.
 - Prefer fixing the underlying cost/perf issue when possible.
-- See [PR check workflow](../design/pr-check-primary-workflow.md) for product-level suppression guidance.
+- See [PR check workflow](../../design/pr-check-primary-workflow.md) for product-level suppression guidance.
 
 ## Related
 
-- [SQLCOST012](../rules/SQLCOST012.md)
+- [SQLCOST012](../../rules/SQLCOST012.md)
 - [Rule catalog](../rules/index.md)

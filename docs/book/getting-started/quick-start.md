@@ -11,7 +11,7 @@ costguard pr --base origin/main --warehouse snowflake --fail-on high --min-confi
 | Flag | Notes |
 | --- | --- |
 | `--base` | Git ref to diff against. CLI default is `main`; use `origin/main` in CI after checkout with history. |
-| `--warehouse` | SQL dialect for parsing heuristics. See [Platforms](reference/platforms.md). |
+| `--warehouse` | SQL dialect for parsing heuristics. See [Platforms](../reference/platforms.md). |
 | `--fail-on` | Minimum severity that fails the run. Default when unset in config: `high`. |
 | `--min-confidence` | Optional confidence floor for fail logic. Recommended for PR gates: `high` (suppresses regex-only shape hits on Jinja-heavy models). |
 
@@ -23,7 +23,7 @@ Use the published composite action:
 - uses: actions/checkout@v4
   with:
     fetch-depth: 0
-- uses: hypertrial/costguard/.github/actions/costguard@v0.1.0
+- uses: hypertrial/costguard/.github/actions/costguard@v1
   with:
     base: origin/main
     warehouse: snowflake
@@ -38,11 +38,11 @@ For Costguard contributor workflows that need to run the checked-out source inst
     install-mode: source
 ```
 
-Inputs: `base`, `warehouse`, `fail-on`, `min-confidence`, `format` (`github` \| `markdown` \| `json` \| `text`), optional `manifest`, `working-directory`, release install settings (`install-mode`, `version`), and dbt compile settings (`compile-dbt`, `dbt-target`, `dbt-project-dir`, `dbt-profiles-dir`, `dbt-adapter-package`, `dbt-profile-type`, `dbt-compile-dirs`, `manifest-output`, `dbt-requirements-file`, `dbt-constraints-file`, `dbt-vars`, `fail-on-deps-failure`, `use-existing-manifest`).
+Inputs: `base`, `warehouse`, `fail-on`, `min-confidence`, `format` (`github` \| `markdown` \| `json` \| `text`), optional `manifest`, `working-directory`, release install settings (`install-mode`, `version`), and dbt compile settings (`compile-dbt`, `dbt-target`, `dbt-project-dir`, `dbt-profiles-dir`, `dbt-adapter-package`, `dbt-profile-type`, `dbt-compile-dirs`, `manifest-output`, `dbt-requirements-file`, `dbt-constraints-file`, `dbt-vars`, `fail-on-deps-failure`, `use-existing-manifest`). Use `@v1` for compatible updates or `@v1.0.0` for an immutable pin.
 
 Pair `fail-on: high` with `min-confidence: high` on macro-heavy dbt projects so PR gates keep AST-confirmed findings and ignore regex-only noise (for example SQLCOST012 comma joins detected without a successful parse).
 
-When `compile-dbt` is enabled (default), the action runs the shared [`dbt_compile_for_costguard.py`](../../scripts/dbt_compile_for_costguard.py) helper (same logic as the Spellbook benchmark harness): `dbt deps`, `dbt compile`, optional multi-subproject manifest merge, then passes `--manifest` when present. Compile uses a dummy local profile (no warehouse connection). Set `dbt-profile-type` or derive it from `dbt-adapter-package` (for example `dbt-postgres` → `postgres`).
+When `compile-dbt` is enabled (default), the action runs the shared [`dbt_compile_for_costguard.py`](../../../scripts/dbt_compile_for_costguard.py) helper (same logic as the Spellbook benchmark harness): `dbt deps`, `dbt compile`, optional multi-subproject manifest merge, then passes `--manifest` when present. Compile uses a dummy local profile (no warehouse connection). The adapter package is derived from `warehouse`; `generic` requires an explicit `dbt-adapter-package`. Set `dbt-profile-type` only when the package name does not identify the profile type.
 
 Enterprise dbt repos should pin dbt dependencies with `dbt-requirements-file` or `dbt-constraints-file`, pass required compile variables through `dbt-vars`, and set `fail-on-deps-failure: true` when package resolution must be enforced. If another workflow already uploads `target/manifest.json`, set `use-existing-manifest: true` and provide `manifest` or `manifest-output` to run Costguard in artifact-only mode.
 
@@ -62,7 +62,7 @@ costguard pr --base origin/main --warehouse snowflake --fail-on high --min-confi
 - `markdown` — PR-summary-oriented report
 - `json` — structured `diagnostics` and optional `pr_summary`
 
-See [Output formats](reference/output.md) for the JSON schema.
+See [Output formats](../reference/output.md) for the JSON schema.
 
 ## Manifest and compiled SQL
 
@@ -72,5 +72,5 @@ If `--manifest` is omitted, Costguard auto-loads `target/manifest.json` when tha
 
 ## Related
 
-- [PR check primary workflow](../design/pr-check-primary-workflow.md)
-- [Suppressions](reference/suppressions.md)
+- [PR check primary workflow](../../design/pr-check-primary-workflow.md)
+- [Suppressions](../reference/suppressions.md)

@@ -1879,6 +1879,62 @@ select * from unit_test where diff_count > 0
     }
 
     #[test]
+    fn compiled_time_bucket_join_is_not_function_wrapped_key() {
+        let raw = "select * from {{ ref('events') }}";
+        let compiled = "select * from dexs left join prices p on p.minute = date_trunc('minute', dexs.block_time) and p.contract_address = dexs.token_address";
+        let index = LineIndex::new(raw);
+        let doc = analyze_sql(
+            PathBuf::from("models/marts/fct.sql"),
+            raw,
+            Platform::Trino,
+            &index,
+            Some(compiled),
+            true,
+        );
+        assert!(!doc
+            .features
+            .joins
+            .iter()
+            .any(|join| join.function_on_join_key));
+    }
+
+    #[test]
+    fn compiled_range_function_is_not_treated_as_join_key() {
+        let raw = "select * from {{ ref('events') }}";
+        let compiled = "select * from markets m join existing e on m.token_id = e.token_id and e.day >= cast(try_cast(m.start_time as timestamp) as date)";
+        let index = LineIndex::new(raw);
+        let doc = analyze_sql(
+            PathBuf::from("models/marts/fct.sql"),
+            raw,
+            Platform::Trino,
+            &index,
+            Some(compiled),
+            true,
+        );
+        assert!(!doc
+            .features
+            .joins
+            .iter()
+            .any(|join| join.function_on_join_key));
+    }
+
+    #[test]
+    fn parsed_range_function_is_not_treated_as_join_key() {
+        let text = "select * from markets m join existing e on m.token_id = e.token_id and e.day >= cast(try_cast(m.start_time as timestamp) as date)";
+        let index = LineIndex::new(text);
+        let doc = analyze_sql(
+            PathBuf::from("models/marts/fct.sql"),
+            text,
+            Platform::Trino,
+            &index,
+            None,
+            true,
+        );
+        assert_eq!(doc.features.joins.len(), 1);
+        assert!(!doc.features.joins[0].function_on_join_key);
+    }
+
+    #[test]
     fn explicit_join_with_group_by_commas_are_not_comma_joins() {
         let text = "select s.id from basic_yak_swaps s inner join logs l on l.tx_hash = s.tx_hash group by s.id, s.block_number";
         let index = LineIndex::new(text);

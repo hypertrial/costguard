@@ -5,6 +5,7 @@ from __future__ import annotations
 import shutil
 import tempfile
 import unittest
+import json
 from pathlib import Path
 from unittest import mock
 
@@ -18,6 +19,7 @@ import publish_release_local  # noqa: E402
 from release_packaging import (  # noqa: E402
     RELEASE_TARGETS,
     asset_name,
+    file_sha256,
     package_built_binary,
     target_bin_name,
     verify_checksum,
@@ -66,7 +68,7 @@ class PublishReleaseLocalTest(unittest.TestCase):
                 "publish_release_local.ensure_targets_installed"
             ), mock.patch(
                 "publish_release_local.package_and_verify_target",
-                side_effect=lambda root_path, out, target: (
+                side_effect=lambda root_path, out, target, **_kwargs: (
                     package_built_binary(
                         out,
                         target=target,
@@ -90,11 +92,98 @@ class PublishReleaseLocalTest(unittest.TestCase):
 
                 ensure_targets_installed(RELEASE_TARGETS)
 
-    def test_publish_requires_all_assets(self) -> None:
+    def test_deterministic_package_bytes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workdir = Path(tmp)
+            binary = workdir / "costguard"
+            binary.write_bytes(b"binary")
+            first, _ = package_built_binary(
+                workdir / "one",
+                target="aarch64-apple-darwin",
+                binary_path=binary,
+                epoch=1234,
+            )
+            second, _ = package_built_binary(
+                workdir / "two",
+                target="aarch64-apple-darwin",
+                binary_path=binary,
+                epoch=1234,
+            )
+            self.assertEqual(first.read_bytes(), second.read_bytes())
+
+    def test_receipt_must_match_asset_checksum(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            binary = workdir / "costguard"
+            binary.write_bytes(b"binary")
+            asset, _ = package_built_binary(
+                workdir,
+                target="aarch64-apple-darwin",
+                binary_path=binary,
+                epoch=1234,
+            )
+            receipt = workdir / "receipt.json"
+            receipt.write_text(
+                json.dumps(
+                    {
+                        "target": "aarch64-apple-darwin",
+                        "version": "1.0.0",
+                        "asset": asset.name,
+                        "sha256": file_sha256(asset),
+                        "schema_version": 1,
+                        "verified_on": "Darwin-arm64",
+                        "verification_method": "native",
+                        "checks": ["version", "rules-json"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            verified = publish_release_local.verify_receipt(
+                receipt, workdir, "aarch64-apple-darwin", "1.0.0"
+            )
+            self.assertTrue(verified.exists())
+
+    def test_qualification_receipt_must_match_commit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            receipt = workdir / "qualification.json"
+            receipt.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "status": "passed",
+                        "version": "1.0.0",
+                        "tag": "v1.0.0",
+                        "commit": "abc123",
+                        "commands": [["cargo", "test"]],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            verified = publish_release_local.verify_qualification_receipt(
+                receipt,
+                workdir,
+                version="1.0.0",
+                tag="v1.0.0",
+                commit="abc123",
+            )
+            self.assertEqual(verified.name, "release-check.json")
+
             with self.assertRaises(SystemExit):
-                publish_release_local.publish_release("v0.1.0", workdir, notes_file=None)
+                publish_release_local.verify_qualification_receipt(
+                    receipt,
+                    workdir,
+                    version="1.0.0",
+                    tag="v1.0.0",
+                    commit="different",
+                )
+
+    def test_existing_release_is_rejected(self) -> None:
+        with mock.patch("publish_release_local.require_public_repository"), mock.patch(
+            "publish_release_local.release_exists", return_value=True
+        ):
+            with self.assertRaises(SystemExit):
+                publish_release_local.publish_release("v1.0.0", [], notes_file=None)
 
 
 if __name__ == "__main__":

@@ -23,6 +23,13 @@ pub enum Platform {
     Trino,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SupportTier {
+    Production,
+    Preview,
+}
+
 impl FromStr for Platform {
     type Err = String;
 
@@ -73,6 +80,17 @@ impl Platform {
             Self::Trino => Box::new(TrinoDialect::default()),
         }
     }
+
+    pub fn support_tier(self) -> SupportTier {
+        match self {
+            Self::Generic | Self::Snowflake | Self::BigQuery | Self::Trino => {
+                SupportTier::Production
+            }
+            Self::Databricks | Self::Redshift | Self::Postgres | Self::DuckDB => {
+                SupportTier::Preview
+            }
+        }
+    }
 }
 
 pub type Warehouse = Platform;
@@ -92,5 +110,25 @@ mod tests {
         "#;
         let dialect = Platform::Trino.sqlparser_dialect();
         assert!(Parser::parse_sql(dialect.as_ref(), sql).is_ok());
+    }
+
+    #[test]
+    fn v1_support_tiers_are_explicit() {
+        for platform in [
+            Platform::Generic,
+            Platform::Snowflake,
+            Platform::BigQuery,
+            Platform::Trino,
+        ] {
+            assert_eq!(platform.support_tier(), SupportTier::Production);
+        }
+        for platform in [
+            Platform::Databricks,
+            Platform::Redshift,
+            Platform::Postgres,
+            Platform::DuckDB,
+        ] {
+            assert_eq!(platform.support_tier(), SupportTier::Preview);
+        }
     }
 }

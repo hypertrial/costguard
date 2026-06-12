@@ -16,6 +16,7 @@
 - [Suppressions](reference/suppressions.md)
 - [Parse metrics](reference/parse-metrics.md)
 - [Platforms and warehouses](reference/platforms.md)
+- [Compatibility policy](reference/compatibility.md)
 - [Scripts](reference/scripts.md)
 
 # Rules
@@ -59,6 +60,7 @@
 - [Benchmark tiers](contributing/benchmark-tiers.md)
 - [Corpus and vendored fixtures](contributing/corpus-fixtures.md)
 - [Dependencies](contributing/dependencies.md)
+- [Release checklist](contributing/releasing.md)
 
 # Glossary
 

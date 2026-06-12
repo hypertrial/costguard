@@ -12,6 +12,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output", type=Path)
     parser.add_argument("--models", type=int, default=1000)
+    parser.add_argument(
+        "--clean",
+        action="store_true",
+        help="generate parseable models without intentional Costguard findings",
+    )
     args = parser.parse_args()
 
     root = args.output
@@ -25,7 +30,11 @@ def main() -> None:
         name = f"model_{idx:04d}"
         path = Path("models") / "generated" / f"{name}.sql"
         previous = f"model_{idx - 1:04d}" if idx else None
-        if previous:
+        if args.clean:
+            sql = f"select {idx} as id\n"
+            refs = []
+            depends_on = []
+        elif previous:
             sql = (
                 "{{ config(materialized='incremental') }}\n\n"
                 "select\n"
@@ -50,12 +59,15 @@ def main() -> None:
             "resource_type": "model",
             "name": name,
             "original_file_path": path.as_posix(),
-            "config": {"materialized": "incremental" if previous else "view"},
+            "config": {
+                "materialized": "view" if args.clean else ("incremental" if previous else "view")
+            },
             "refs": refs,
             "sources": [["raw", "events"]] if not previous else [],
             "depends_on": {"nodes": depends_on},
             "columns": {"id": {}},
             "tags": ["synthetic"],
+            "compiled_code": sql,
         }
 
     manifest = {

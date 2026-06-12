@@ -1,43 +1,31 @@
-name: ci
+name: ci-manual-mirror
 
 on:
-  pull_request:
-  push:
-    branches: [main]
+  workflow_dispatch:
+    inputs:
+      spellbook-smoke:
+        description: Include the pinned Spellbook smoke benchmark
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: read
 
 jobs:
-  rust:
+  local-gate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
-      - uses: EmbarkStudios/cargo-deny-action@091bd13faf7e96935df105635d17ce9a607bc99d
-      - run: python3 scripts/validate_workspace_deps.py
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-      - run: cargo fmt --check
-      - run: cargo clippy --all-targets --all-features -- -D warnings
-      - run: cargo build -p costguard-cli
-      - run: cargo build --release -p costguard-cli
-      - run: python3 scripts/verify_release_assets.py
-      - run: python3 -m unittest discover -s scripts/tests -p 'test_*.py'
-      - run: python3 scripts/validate_fp_registry.py
-      - run: python3 scripts/benchmark_external_repo.py --all-vendored
-        env:
-          COSTGUARD_BUILD_PROFILE: release
-      - run: python3 scripts/generate_rule_docs.py --check
-      - uses: peaceiris/actions-mdbook@062dc9e3eab0bad35531417c6bb6c6a7a184764f
-        with:
-          mdbook-version: "0.4.40"
-      - run: mdbook build
-      - run: cargo test
+          python-version: "3.11"
+      - run: cargo install mdbook --version 0.4.40 --locked
+      - run: cargo install cargo-deny --version 0.19.7 --locked
+      - if: inputs.spellbook-smoke
+        run: ./scripts/ci_local.sh --spellbook-smoke
+      - if: ${{ !inputs.spellbook-smoke }}
+        run: ./scripts/ci_local.sh

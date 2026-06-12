@@ -4,16 +4,18 @@ Costguard uses a single `Platform` enum for warehouse SQL dialect selection. CLI
 
 ## Supported values
 
-| CLI / config value | Aliases | Notes |
-| --- | --- | --- |
-| `generic` | — | Default; dialect-agnostic heuristics |
-| `snowflake` | — | Snowflake SQL |
-| `bigquery` | — | BigQuery SQL |
-| `databricks` | — | Databricks SQL |
-| `redshift` | — | Redshift SQL |
-| `postgres` | `postgresql` | PostgreSQL SQL |
-| `duckdb` | — | DuckDB SQL |
-| `trino` | `presto` | Presto/Trino SQL (Hive-family parsing + Trino normalization for compiled SQL) |
+| CLI / config value | Aliases | Support | Notes |
+| --- | --- | --- | --- |
+| `generic` | - | Production | Default; dialect-agnostic heuristics |
+| `snowflake` | - | Production | Snowflake SQL |
+| `bigquery` | - | Production | BigQuery SQL |
+| `trino` | `presto` | Production | Presto/Trino SQL with compiled SQL normalization |
+| `databricks` | - | Preview | Databricks SQL |
+| `redshift` | - | Preview | Redshift SQL |
+| `postgres` | `postgresql` | Preview | PostgreSQL SQL |
+| `duckdb` | - | Preview | DuckDB SQL |
+
+Production platforms have zero-parse-failure release fixtures and are covered by the v1 compatibility policy. Preview platforms have deterministic smoke coverage but may receive parser and rule behavior changes in minor releases.
 
 ## Choosing a platform
 
@@ -34,7 +36,7 @@ Costguard uses a single `Platform` enum for warehouse SQL dialect selection. CLI
 | Vendored harness | `generic` | `critical` |
 | This repo's PR workflow | `generic` | `high` |
 
-Benchmark pins live in [`tests/benchmarks/repos.toml`](../../tests/benchmarks/repos.toml).
+Benchmark pins live in [`tests/benchmarks/repos.toml`](../../../tests/benchmarks/repos.toml).
 
 ## Related
 

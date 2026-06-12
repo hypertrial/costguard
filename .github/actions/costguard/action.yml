@@ -27,7 +27,7 @@ inputs:
     required: false
     default: release
   version:
-    description: Costguard release version to install when install-mode=release (defaults to action ref when available)
+    description: Exact Costguard release version override (defaults to the Action checkout workspace version)
     required: false
     default: ""
   manifest:
@@ -55,9 +55,9 @@ inputs:
     required: false
     default: ""
   dbt-adapter-package:
-    description: pip package for dbt compile (for example dbt-trino or dbt-postgres)
+    description: Optional dbt adapter package; derived from warehouse when empty
     required: false
-    default: dbt-trino
+    default: ""
   dbt-profile-type:
     description: Dummy profiles.yml adapter type (defaults from dbt-adapter-package when empty)
     required: false
@@ -98,134 +98,61 @@ runs:
       if: inputs.install-mode == 'source'
       uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
 
-    - name: Cache cargo build
-      if: inputs.install-mode == 'source'
-      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-costguard-action-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-costguard-action-
-
-    - name: Build costguard CLI
-      if: inputs.install-mode == 'source'
-      shell: bash
-      run: |
-        cargo build --release -p costguard-cli --locked
-        echo "${GITHUB_WORKSPACE}/target/release" >> "$GITHUB_PATH"
-
-    - name: Install costguard release
-      if: inputs.install-mode == 'release'
+    - name: Install costguard
       shell: bash
       env:
+        INSTALL_MODE_INPUT: ${{ inputs.install-mode }}
         VERSION_INPUT: ${{ inputs.version }}
-        ACTION_REF: ${{ github.action_ref }}
       run: |
-        set -eo pipefail
-        version="${VERSION_INPUT:-${ACTION_REF:-}}"
-        if [ -z "$version" ] || [ "$version" = "__run" ]; then
-          echo "A release version is required when install-mode=release." >&2
-          exit 2
-        fi
-        os="$(uname -s)"
-        arch="$(uname -m)"
-        case "${os}-${arch}" in
-          Linux-x86_64) target="x86_64-unknown-linux-gnu" ;;
-          Darwin-arm64) target="aarch64-apple-darwin" ;;
-          Darwin-x86_64) target="x86_64-apple-darwin" ;;
-          MINGW*-x86_64|MSYS*-x86_64) target="x86_64-pc-windows-msvc" ;;
-          *) echo "Unsupported runner platform: ${os}-${arch}" >&2; exit 2 ;;
-        esac
-        asset="costguard-${target}.tar.gz"
-        base_url="https://github.com/hypertrial/costguard/releases/download/${version}"
-        tmp="$(mktemp -d)"
-        curl -fsSL "${base_url}/${asset}" -o "${tmp}/${asset}"
-        curl -fsSL "${base_url}/${asset}.sha256" -o "${tmp}/${asset}.sha256"
-        (cd "$tmp" && shasum -a 256 -c "${asset}.sha256")
-        mkdir -p "${RUNNER_TEMP}/costguard-bin"
-        tar -xzf "${tmp}/${asset}" -C "${RUNNER_TEMP}/costguard-bin"
-        echo "${RUNNER_TEMP}/costguard-bin" >> "$GITHUB_PATH"
+        PYTHON="$(command -v python3 || command -v python)"
+        "${PYTHON}" "${GITHUB_ACTION_PATH}/scripts/costguard_action.py" install \
+          --mode "${INSTALL_MODE_INPUT}" \
+          --version "${VERSION_INPUT}"
+
+    - name: Plan dbt compile
+      id: dbt-plan
+      shell: bash
+      env:
+        COMPILE_DBT_INPUT: ${{ inputs.compile-dbt }}
+        USE_EXISTING_MANIFEST_INPUT: ${{ inputs.use-existing-manifest }}
+        WORKING_DIRECTORY_INPUT: ${{ inputs.working-directory }}
+        DBT_PROJECT_DIR_INPUT: ${{ inputs.dbt-project-dir }}
+        DBT_COMPILE_DIRS_INPUT: ${{ inputs.dbt-compile-dirs }}
+        DBT_ADAPTER_PACKAGE_INPUT: ${{ inputs.dbt-adapter-package }}
+        MANIFEST_INPUT: ${{ inputs.manifest }}
+        WAREHOUSE_INPUT: ${{ inputs.warehouse }}
+      run: |
+        PYTHON="$(command -v python3 || command -v python)"
+        "${PYTHON}" "${GITHUB_ACTION_PATH}/scripts/costguard_action.py" plan-compile
 
     - name: Set up Python
-      if: inputs.compile-dbt == 'true' && inputs.use-existing-manifest != 'true'
+      if: steps.dbt-plan.outputs.compile-required == 'true'
       uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
       with:
         python-version: "3.11"
 
     - name: Compile dbt project
-      if: inputs.compile-dbt == 'true' && inputs.use-existing-manifest != 'true'
+      if: steps.dbt-plan.outputs.compile-required == 'true'
       shell: bash
       env:
-        DBT_ADAPTER_PACKAGE: ${{ inputs.dbt-adapter-package }}
-        DBT_TARGET: ${{ inputs.dbt-target }}
+        WORKING_DIRECTORY_INPUT: ${{ inputs.working-directory }}
         DBT_PROJECT_DIR_INPUT: ${{ inputs.dbt-project-dir }}
         DBT_PROFILES_DIR_INPUT: ${{ inputs.dbt-profiles-dir }}
         DBT_PROFILE_TYPE_INPUT: ${{ inputs.dbt-profile-type }}
         DBT_COMPILE_DIRS_INPUT: ${{ inputs.dbt-compile-dirs }}
+        DBT_ADAPTER_PACKAGE_INPUT: ${{ steps.dbt-plan.outputs.adapter-package }}
+        DBT_TARGET_INPUT: ${{ inputs.dbt-target }}
         DBT_REQUIREMENTS_FILE_INPUT: ${{ inputs.dbt-requirements-file }}
         DBT_CONSTRAINTS_FILE_INPUT: ${{ inputs.dbt-constraints-file }}
         DBT_VARS_INPUT: ${{ inputs.dbt-vars }}
         FAIL_ON_DEPS_FAILURE_INPUT: ${{ inputs.fail-on-deps-failure }}
         MANIFEST_OUTPUT_INPUT: ${{ inputs.manifest-output }}
-        WORKING_DIRECTORY_INPUT: ${{ inputs.working-directory }}
       run: |
-        set -eo pipefail
-        repo_root="${GITHUB_WORKSPACE}"
-        workdir="${WORKING_DIRECTORY_INPUT:-.}"
-        if [ "${workdir}" != "." ]; then
-          repo_root="${GITHUB_WORKSPACE}/${workdir}"
-        fi
-        project_dir="${DBT_PROJECT_DIR_INPUT:-.}"
-        compile_dirs="${DBT_COMPILE_DIRS_INPUT}"
-        if [ -z "${compile_dirs}" ] && [ ! -f "${repo_root}/${project_dir}/dbt_project.yml" ]; then
-          echo "No dbt_project.yml in ${repo_root}/${project_dir}; skipping dbt compile."
-          exit 0
-        fi
-
-        python -m pip install --upgrade pip
-        install_args=()
-        if [ -n "${DBT_CONSTRAINTS_FILE_INPUT}" ]; then
-          install_args+=(-c "${repo_root}/${DBT_CONSTRAINTS_FILE_INPUT}")
-        fi
-        if [ -n "${DBT_REQUIREMENTS_FILE_INPUT}" ]; then
-          install_args+=(-r "${repo_root}/${DBT_REQUIREMENTS_FILE_INPUT}")
-        fi
-        install_args+=("${DBT_ADAPTER_PACKAGE}")
-        python -m pip install "${install_args[@]}"
-
-        args=(
-          python3 "${GITHUB_WORKSPACE}/scripts/dbt_compile_for_costguard.py"
-          --checkout "${repo_root}"
-          --adapter-package "${DBT_ADAPTER_PACKAGE}"
-          --target "${DBT_TARGET}"
-          --manifest-out "${MANIFEST_OUTPUT_INPUT}"
-          --use-system-dbt
-        )
-        if [ -n "${DBT_PROFILE_TYPE_INPUT}" ]; then
-          args+=(--profile-type "${DBT_PROFILE_TYPE_INPUT}")
-        fi
-        if [ -n "${DBT_PROFILES_DIR_INPUT}" ]; then
-          args+=(--profiles-dir "${DBT_PROFILES_DIR_INPUT}")
-        fi
-        if [ -n "${compile_dirs}" ]; then
-          args+=(--compile-dirs "${compile_dirs}")
-        else
-          args+=(--project-dir "${project_dir}")
-        fi
-        if [ -n "${DBT_VARS_INPUT}" ]; then
-          args+=(--vars "${DBT_VARS_INPUT}")
-        fi
-        if [ "${FAIL_ON_DEPS_FAILURE_INPUT}" = "true" ]; then
-          args+=(--fail-on-deps-failure)
-        fi
-        "${args[@]}"
+        PYTHON="$(command -v python3 || command -v python)"
+        "${PYTHON}" "${GITHUB_ACTION_PATH}/scripts/costguard_action.py" compile
 
     - name: Run costguard pr
       shell: bash
-      working-directory: ${{ inputs.working-directory }}
       env:
         BASE_INPUT: ${{ inputs.base }}
         WAREHOUSE_INPUT: ${{ inputs.warehouse }}
@@ -234,30 +161,8 @@ runs:
         MIN_CONFIDENCE_INPUT: ${{ inputs.min-confidence }}
         MANIFEST_INPUT: ${{ inputs.manifest }}
         MANIFEST_OUTPUT_INPUT: ${{ inputs.manifest-output }}
+        USE_EXISTING_MANIFEST_INPUT: ${{ inputs.use-existing-manifest }}
+        WORKING_DIRECTORY_INPUT: ${{ inputs.working-directory }}
       run: |
-        set -eo pipefail
-        args=(
-          pr
-          --base "${BASE_INPUT}"
-          --warehouse "${WAREHOUSE_INPUT}"
-          --fail-on "${FAIL_ON_INPUT}"
-          --format "${FORMAT_INPUT}"
-        )
-        if [ -n "${MIN_CONFIDENCE_INPUT}" ]; then
-          args+=(--min-confidence "${MIN_CONFIDENCE_INPUT}")
-        fi
-        manifest="${MANIFEST_INPUT}"
-        if [ -z "${manifest}" ] && [ -f "${MANIFEST_OUTPUT_INPUT}" ]; then
-          manifest="${MANIFEST_OUTPUT_INPUT}"
-        fi
-        if [ -n "${manifest}" ]; then
-          args+=(--manifest "${manifest}")
-        fi
-        set +e
-        output="$(costguard "${args[@]}")"
-        status=$?
-        printf '%s\n' "$output"
-        if [ "${FORMAT_INPUT}" = "markdown" ] && [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
-          printf '%s\n' "$output" >> "$GITHUB_STEP_SUMMARY"
-        fi
-        exit "$status"
+        PYTHON="$(command -v python3 || command -v python)"
+        "${PYTHON}" "${GITHUB_ACTION_PATH}/scripts/costguard_action.py" run

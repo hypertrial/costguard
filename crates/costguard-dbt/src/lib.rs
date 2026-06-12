@@ -298,9 +298,11 @@ fn split_top_level_commas(text: &str) -> Vec<&str> {
 }
 
 fn split_top_level_assignment(text: &str) -> Option<(&str, &str)> {
-    split_top_level(text, '=')
-        .split_first()
-        .and_then(|(key, rest)| (rest.len() == 1).then_some((*key, rest[0])))
+    let parts = split_top_level(text, '=');
+    match parts.as_slice() {
+        [key, value] => Some((*key, *value)),
+        _ => None,
+    }
 }
 
 fn split_top_level(text: &str, delimiter: char) -> Vec<&str> {
@@ -1168,6 +1170,16 @@ models:
                 .get(&PathBuf::from("models/marts/fct_block_time.sql"))
                 .map(String::as_str),
             Some("select tx_hash, block_time from dex.trades")
+        );
+    }
+
+    #[test]
+    fn top_level_assignment_requires_exactly_one_delimiter() {
+        assert_eq!(split_top_level_assignment("materialized"), None);
+        assert_eq!(split_top_level_assignment("a=b=c"), None);
+        assert_eq!(
+            split_top_level_assignment("materialized='incremental'"),
+            Some(("materialized", "'incremental'"))
         );
     }
 }

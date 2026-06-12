@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use costguard_diagnostics::{Confidence, Severity};
 use costguard_platform::Platform;
-use costguard_rules::RuleOverrides;
+use costguard_rules::{RuleOverrides, RuleRegistry};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -66,6 +66,7 @@ impl Default for ScanConfig {
 }
 
 #[derive(Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct FileConfig {
     pub warehouse: Option<String>,
     pub dialect: Option<String>,
@@ -76,6 +77,7 @@ pub struct FileConfig {
 }
 
 #[derive(Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct ScanSection {
     pub paths: Option<Vec<PathBuf>>,
     pub ignore: Option<Vec<PathBuf>>,
@@ -83,6 +85,7 @@ pub struct ScanSection {
 }
 
 #[derive(Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct OutputSection {
     pub format: Option<String>,
     pub fail_on: Option<String>,
@@ -90,6 +93,7 @@ pub struct OutputSection {
 }
 
 #[derive(Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct DbtSection {
     pub manifest_path: Option<PathBuf>,
 }
@@ -136,10 +140,20 @@ pub fn apply_file_config(mut config: ScanConfig, file_config: FileConfig) -> Res
         config.manifest_path = dbt.manifest_path;
     }
     if let Some(rules) = file_config.rules {
-        config.rule_overrides = rules
+        let known = RuleRegistry::default_rules()
+            .metadata()
             .into_iter()
-            .map(|(key, value)| (key.to_ascii_uppercase(), value))
-            .collect();
+            .map(|rule| rule.id)
+            .collect::<std::collections::HashSet<_>>();
+        let mut overrides = RuleOverrides::default();
+        for (key, value) in rules {
+            let normalized = key.to_ascii_uppercase();
+            if !known.contains(normalized.as_str()) {
+                anyhow::bail!("unknown rule id '{key}'");
+            }
+            overrides.insert(normalized, value);
+        }
+        config.rule_overrides = overrides;
     }
     Ok(config)
 }

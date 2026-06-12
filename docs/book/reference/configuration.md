@@ -2,6 +2,8 @@
 
 Costguard reads optional `costguard.toml` from the project root. CLI flags override file settings.
 
+Configuration is strict in 1.0. Unknown sections, fields, rule settings, and rule IDs are configuration errors and exit with code `2`.
+
 ## Example
 
 ```toml
@@ -71,3 +73,4 @@ Rule IDs are normalized to uppercase (for example `SQLCOST002`).
 
 - [CLI reference](cli.md)
 - [Rule catalog](../rules/index.md)
+- [Compatibility](compatibility.md)

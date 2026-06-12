@@ -31,7 +31,7 @@ cargo deny check
 python3 scripts/validate_workspace_deps.py
 ```
 
-CI runs both on every pull request.
+The authoritative local CI gate runs both. Hosted workflows are manual mirrors only while GitHub Actions credits are unavailable.
 
 ## Audit binary feature
 

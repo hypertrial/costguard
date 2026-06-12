@@ -34,7 +34,8 @@
   },
   "target": "external/jaffle-shop",
   "thresholds": {
-    "max_parse_failure_delta": 50
+    "max_parse_failure_delta": 50,
+    "max_sql_parse_compiled_failures": 0
   },
   "version": 1,
   "warehouse": "generic"

@@ -50,5 +50,5 @@ See the [Rule catalog](../rules/index.md) for prose fix guidance per rule.
 
 ## Related
 
-- [CLI reference](reference/cli.md)
-- [Configuration](reference/configuration.md)
+- [CLI reference](../reference/cli.md)
+- [Configuration](../reference/configuration.md)

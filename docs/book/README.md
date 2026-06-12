@@ -4,6 +4,8 @@ Costguard is a PR-first check for catching expensive dbt and warehouse SQL befor
 
 Runs locally as a fast Rust CLI. No warehouse credentials required.
 
+Version 1.0 is production-ready for Generic SQL, Snowflake, BigQuery, and Trino. See [Platforms and warehouses](reference/platforms.md) for preview dialects and the [compatibility policy](reference/compatibility.md) for stable interfaces.
+
 ## Why
 
 Analytics teams introduce warehouse cost and performance risks through normal PRs: unsafe incremental models,
@@ -43,4 +45,4 @@ See [Quick start (PR check)](getting-started/quick-start.md) for GitHub Action s
 
 ## Status
 
-Experimental.
+Production-ready.
