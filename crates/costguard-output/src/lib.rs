@@ -1,5 +1,6 @@
 use anyhow::Result;
 use costguard_core::{OutputFormat, PrSummary, ScanResult};
+use costguard_cost::format_cost_line;
 use costguard_diagnostics::{Diagnostic, Severity};
 use serde::Serialize;
 
@@ -140,9 +141,44 @@ fn render_text(result: &ScanResult) -> String {
         if let Some(suggestion) = &diagnostic.suggestion {
             output.push_str(&format!("      Suggestion: {suggestion}\n"));
         }
+        if let Some(cost) = &diagnostic.cost_estimate {
+            output.push_str(&format!("      {}\n", format_cost_line(cost)));
+        }
         output.push('\n');
     }
+    append_top_cost_findings(&mut output, &result.diagnostics);
     output
+}
+
+fn append_top_cost_findings(output: &mut String, diagnostics: &[Diagnostic]) {
+    let mut ranked: Vec<_> = diagnostics
+        .iter()
+        .filter_map(|d| d.cost_estimate.as_ref().map(|c| (d, c)))
+        .collect();
+    if ranked.is_empty() {
+        return;
+    }
+    ranked.sort_by(|(_left, left_cost), (_right, right_cost)| {
+        right_cost
+            .p50_usd_per_month
+            .unwrap_or(right_cost.relative_index)
+            .partial_cmp(
+                &left_cost
+                    .p50_usd_per_month
+                    .unwrap_or(left_cost.relative_index),
+            )
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    output.push_str("\nTop findings by estimated monthly cost:\n");
+    for (diagnostic, cost) in ranked.into_iter().take(10) {
+        output.push_str(&format!(
+            "  - {} {}:{} — {}\n",
+            diagnostic.rule_id,
+            diagnostic.path.display(),
+            diagnostic.line,
+            format_cost_line(cost)
+        ));
+    }
 }
 
 fn render_github(result: &ScanResult) -> String {
@@ -173,13 +209,20 @@ fn render_github(result: &ScanResult) -> String {
 }
 
 fn github_message(diagnostic: &Diagnostic) -> String {
-    if let (Some(line), Some(column)) = (diagnostic.compiled_line, diagnostic.compiled_column) {
-        return format!(
+    let mut message = if let (Some(line), Some(column)) =
+        (diagnostic.compiled_line, diagnostic.compiled_column)
+    {
+        format!(
             "{} (compiled SQL location: line {line}, column {column})",
             diagnostic.message
-        );
+        )
+    } else {
+        diagnostic.message.clone()
+    };
+    if let Some(cost) = &diagnostic.cost_estimate {
+        message.push_str(&format!(" | {}", format_cost_line(cost)));
     }
-    diagnostic.message.clone()
+    message
 }
 
 fn render_markdown(result: &ScanResult) -> String {
@@ -238,14 +281,53 @@ fn render_markdown(result: &ScanResult) -> String {
             if let Some(suggestion) = &diagnostic.suggestion {
                 output.push_str(&format!("   Suggestion: {}\n", escape_markdown(suggestion)));
             }
+            if let Some(cost) = &diagnostic.cost_estimate {
+                output.push_str(&format!(
+                    "   {}\n",
+                    escape_markdown(&format_cost_line(cost))
+                ));
+            }
             output.push('\n');
         }
+        append_top_cost_findings_markdown(&mut output, &result.diagnostics);
         output.push_str(
             "Suppress only intentional exceptions with `-- costguard: disable-next-line=RULE`.\n",
         );
     }
 
     output
+}
+
+fn append_top_cost_findings_markdown(output: &mut String, diagnostics: &[Diagnostic]) {
+    let mut ranked: Vec<_> = diagnostics
+        .iter()
+        .filter_map(|d| d.cost_estimate.as_ref().map(|c| (d, c)))
+        .collect();
+    if ranked.is_empty() {
+        return;
+    }
+    ranked.sort_by(|(_left, left_cost), (_right, right_cost)| {
+        right_cost
+            .p50_usd_per_month
+            .unwrap_or(right_cost.relative_index)
+            .partial_cmp(
+                &left_cost
+                    .p50_usd_per_month
+                    .unwrap_or(left_cost.relative_index),
+            )
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    output.push_str("\n## Top findings by estimated monthly cost\n\n");
+    for (diagnostic, cost) in ranked.into_iter().take(10) {
+        output.push_str(&format!(
+            "- `{}` {}:{} — {}\n",
+            diagnostic.rule_id,
+            diagnostic.path.display(),
+            diagnostic.line,
+            escape_markdown(&format_cost_line(cost))
+        ));
+    }
+    output.push('\n');
 }
 
 fn markdown_list(output: &mut String, title: &str, items: &[String]) {
@@ -322,7 +404,7 @@ fn sarif_results(result: &ScanResult) -> Vec<serde_json::Value> {
         .diagnostics
         .iter()
         .map(|diagnostic| {
-            serde_json::json!({
+            let mut result = serde_json::json!({
                 "ruleId": diagnostic.rule_id,
                 "level": sarif_level(diagnostic.severity),
                 "message": {
@@ -339,7 +421,13 @@ fn sarif_results(result: &ScanResult) -> Vec<serde_json::Value> {
                         }
                     }
                 }]
-            })
+            });
+            if let Some(cost) = &diagnostic.cost_estimate {
+                result["properties"] = serde_json::json!({
+                    "costEstimate": cost
+                });
+            }
+            result
         })
         .collect()
 }
@@ -388,6 +476,7 @@ mod tests {
                 source_provenance: None,
                 compiled_line: None,
                 compiled_column: None,
+                cost_estimate: None,
             }]
         } else {
             Vec::new()

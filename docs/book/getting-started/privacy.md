@@ -15,6 +15,7 @@ Costguard is a **local static analyzer**. It is suitable for enterprise security
 - SQL, YAML, Python, and manifest files under configured scan paths.
 - Optional git metadata for `costguard pr` changed-file detection.
 - User-supplied `costguard.toml`, finding baselines, and suppressions in source files.
+- Optional local cost inputs: dbt `catalog.json`, offline query-history CSV exports, and `[cost]` overrides in `costguard.toml`. Costguard reads these files only; it does not fetch them from a warehouse.
 
 ## What leaves the runner
 

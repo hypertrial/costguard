@@ -1,7 +1,8 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use costguard_core::{
-    apply_file_config, explain, load_config, rules, scan, OutputFormat, Platform, ScanConfig,
+    apply_file_config, explain, load_config, rules, scan, CostConfig, OutputFormat, Platform,
+    ScanConfig,
 };
 use costguard_diagnostics::Severity;
 use costguard_output::{render, render_rules};
@@ -44,6 +45,10 @@ struct ScanArgs {
     baseline: Option<PathBuf>,
     #[arg(long)]
     write_baseline: Option<PathBuf>,
+    #[arg(long)]
+    cost: bool,
+    #[arg(long)]
+    fail_on_cost_delta: Option<f64>,
 }
 
 #[derive(Debug, Parser)]
@@ -77,6 +82,10 @@ struct PrArgs {
     min_confidence: Option<String>,
     #[arg(long)]
     baseline: Option<PathBuf>,
+    #[arg(long)]
+    cost: bool,
+    #[arg(long)]
+    fail_on_cost_delta: Option<f64>,
 }
 
 #[derive(Debug, Parser)]
@@ -127,7 +136,11 @@ fn run() -> Result<u8> {
             let result = scan(&config)?;
             print!("{}", render(&result, config.format)?);
             Ok(
-                if result.should_fail(config.fail_on, config.min_confidence) {
+                if result.should_fail(
+                    config.fail_on,
+                    config.min_confidence,
+                    fail_on_monthly_delta(&config),
+                ) {
                     1
                 } else {
                     0
@@ -142,7 +155,11 @@ fn run() -> Result<u8> {
             let result = explain(&config, &args.path)?;
             print!("{}", render(&result, config.format)?);
             Ok(
-                if result.should_fail(config.fail_on, config.min_confidence) {
+                if result.should_fail(
+                    config.fail_on,
+                    config.min_confidence,
+                    fail_on_monthly_delta(&config),
+                ) {
                     1
                 } else {
                     0
@@ -157,7 +174,11 @@ fn run() -> Result<u8> {
             let result = scan(&config)?;
             print!("{}", render(&result, config.format)?);
             Ok(
-                if result.should_fail(config.fail_on, config.min_confidence) {
+                if result.should_fail(
+                    config.fail_on,
+                    config.min_confidence,
+                    fail_on_monthly_delta(&config),
+                ) {
                     1
                 } else {
                     0
@@ -205,6 +226,8 @@ fn config_from_scan_args(args: ScanArgs) -> Result<ScanConfig> {
         args.min_confidence,
         args.baseline,
         args.write_baseline,
+        args.cost,
+        args.fail_on_cost_delta,
     )?;
     validate_config(&config)?;
     Ok(config)
@@ -221,6 +244,8 @@ fn config_from_explain_args(args: &ExplainArgs) -> Result<ScanConfig> {
         None,
         None,
         None,
+        None,
+        false,
         None,
     )?;
     validate_config(&config)?;
@@ -241,6 +266,8 @@ fn config_from_pr_args(args: PrArgs) -> Result<ScanConfig> {
         args.min_confidence,
         args.baseline,
         None,
+        args.cost,
+        args.fail_on_cost_delta,
     )?;
     validate_config(&config)?;
     Ok(config)
@@ -257,6 +284,8 @@ fn apply_common_flags(
     min_confidence: Option<String>,
     baseline: Option<PathBuf>,
     write_baseline: Option<PathBuf>,
+    cost: bool,
+    fail_on_cost_delta: Option<f64>,
 ) -> Result<()> {
     if let Some(warehouse) = warehouse {
         config.platform = warehouse.parse::<Platform>().map_err(anyhow::Error::msg)?;
@@ -281,7 +310,28 @@ fn apply_common_flags(
     if let Some(write_baseline) = write_baseline {
         config.write_baseline_path = Some(write_baseline);
     }
+    if cost {
+        let mut cost_config = config.cost.take().unwrap_or_default();
+        cost_config.enabled = true;
+        config.cost = Some(cost_config);
+    }
+    if let Some(delta) = fail_on_cost_delta {
+        let mut cost_config = config.cost.take().unwrap_or_else(|| CostConfig {
+            enabled: true,
+            ..CostConfig::default()
+        });
+        cost_config.enabled = true;
+        cost_config.fail_on_monthly_delta = Some(delta);
+        config.cost = Some(cost_config);
+    }
     Ok(())
+}
+
+fn fail_on_monthly_delta(config: &ScanConfig) -> Option<f64> {
+    config
+        .cost
+        .as_ref()
+        .and_then(|cost| cost.fail_on_monthly_delta)
 }
 
 fn validate_config(config: &ScanConfig) -> Result<()> {

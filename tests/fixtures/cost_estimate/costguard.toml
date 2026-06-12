@@ -1,0 +1,19 @@
+warehouse = "bigquery"
+
+[cost]
+enabled = true
+default_runs_per_month = 30
+fail_on_monthly_delta = 10000
+
+[cost.pricing]
+model = "scan"
+usd_per_tb = 6.25
+
+[cost.inputs]
+catalog = "target/catalog.json"
+
+[cost.sources."raw.events"]
+bytes = "100GB"
+
+[cost.models."fct_orders"]
+runs_per_month = 720

@@ -180,6 +180,7 @@ mod tests {
             source_provenance: None,
             compiled_line: None,
             compiled_column: None,
+            cost_estimate: None,
         }
     }
 

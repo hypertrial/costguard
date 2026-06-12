@@ -275,6 +275,17 @@ python3 scripts/recall_report.py --rules SQLCOST030 SQLCOST031
 
 Exit code `1` when any checked rule falls below the minimum case counts.
 
+## `calibrate_cost_model.py`
+
+Calibrate compute conversion factors and validate 80% interval coverage from an offline query-history CSV export:
+
+```bash
+python3 scripts/calibrate_cost_model.py exports/jobs_30d.csv
+python3 scripts/calibrate_cost_model.py exports/jobs_30d.csv --json
+```
+
+Exit code `1` when coverage falls outside the 60–95% target band.
+
 ## `validate_fp_registry.py`
 
 Validate [`tests/benchmarks/fp_registry.toml`](../../../tests/benchmarks/fp_registry.toml) against corpus contracts (`forbid_rules` for `fp` verdicts, `expect_rules` for `tp` verdicts):

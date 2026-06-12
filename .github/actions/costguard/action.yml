@@ -94,6 +94,14 @@ inputs:
     description: Skip dbt compile and use manifest-output or manifest input as an existing artifact
     required: false
     default: "false"
+  cost:
+    description: Enable cost estimates (uses [cost] in costguard.toml when present)
+    required: false
+    default: "false"
+  fail-on-cost-delta:
+    description: Fail when estimated monthly p50 cost of new findings exceeds this USD threshold
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -164,6 +172,8 @@ runs:
         FORMAT_INPUT: ${{ inputs.format }}
         MIN_CONFIDENCE_INPUT: ${{ inputs.min-confidence }}
         BASELINE_INPUT: ${{ inputs.baseline }}
+        COST_INPUT: ${{ inputs.cost }}
+        FAIL_ON_COST_DELTA_INPUT: ${{ inputs.fail-on-cost-delta }}
         MANIFEST_INPUT: ${{ inputs.manifest }}
         MANIFEST_OUTPUT_INPUT: ${{ inputs.manifest-output }}
         USE_EXISTING_MANIFEST_INPUT: ${{ inputs.use-existing-manifest }}

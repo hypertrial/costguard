@@ -21,6 +21,8 @@ Source: `crates/costguard-cli/src/main.rs`
 | `--manifest` | scan, explain, pr | Path to dbt `manifest.json` with `compiled_code` |
 | `--baseline` | scan, pr | Finding baseline JSON (grandfather known findings) |
 | `--write-baseline` | scan | Write current findings to a baseline JSON file |
+| `--cost` | scan, pr | Enable cost estimates (uses `[cost]` in `costguard.toml` when present) |
+| `--fail-on-cost-delta` | scan, pr | Fail when sum of p50 USD/month on new findings exceeds threshold |
 
 ## `scan`
 
@@ -34,6 +36,8 @@ costguard scan [PATHS...] [OPTIONS]
 | `--min-confidence` | unset | Optional floor: `low`, `medium`/`med`, `high`. Recommended for noisy repos: `--fail-on high --min-confidence high` |
 | `--baseline` | unset | Suppress findings matching baseline fingerprints |
 | `--write-baseline` | unset | Snapshot findings to a baseline JSON file |
+| `--cost` | unset | Enable per-finding cost estimates |
+| `--fail-on-cost-delta` | unset | Optional USD/month p50 gate on new findings |
 
 ## `explain`
 
@@ -55,6 +59,8 @@ costguard pr [OPTIONS]
 | `--fail-on` | `high` | Same severity values as `scan` |
 | `--min-confidence` | unset | Same confidence values as `scan` |
 | `--baseline` | unset | Suppress findings matching baseline fingerprints |
+| `--cost` | unset | Enable per-finding cost estimates |
+| `--fail-on-cost-delta` | unset | Optional USD/month p50 gate on new findings |
 
 Invalid git bases and non-git directories fail the check instead of silently scanning zero files.
 

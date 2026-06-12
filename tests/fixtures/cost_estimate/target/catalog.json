@@ -1,0 +1,26 @@
+{
+  "metadata": {
+    "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v12.json"
+  },
+  "nodes": {
+    "model.cost_estimate.fct_orders": {
+      "resource_type": "model",
+      "name": "fct_orders",
+      "original_file_path": "models/marts/fct_orders.sql",
+      "stats": {
+        "num_bytes": 50000000000,
+        "row_count": 1000000
+      }
+    }
+  },
+  "sources": {
+    "source.cost_estimate.raw.events": {
+      "resource_type": "source",
+      "name": "events",
+      "stats": {
+        "num_bytes": 100000000000,
+        "row_count": 5000000
+      }
+    }
+  }
+}

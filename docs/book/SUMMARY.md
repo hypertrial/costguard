@@ -22,6 +22,7 @@
 - [Platforms and warehouses](reference/platforms.md)
 - [Compatibility policy](reference/compatibility.md)
 - [Scripts](reference/scripts.md)
+- [Cost estimates](reference/cost-estimates.md)
 
 # Rules
 
@@ -65,6 +66,7 @@
 # Design
 
 - [PR check primary workflow](../design/pr-check-primary-workflow.md)
+- [Cost model](../design/cost-model.md)
 - [Benchmark calibration](../design/benchmark-calibration.md)
 - [Spellbook stress test](../design/spellbook-stress-test.md)
 

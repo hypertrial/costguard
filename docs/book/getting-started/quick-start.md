@@ -38,7 +38,7 @@ For Costguard contributor workflows that need to run the checked-out source inst
     install-mode: source
 ```
 
-Inputs: `base`, `warehouse`, `fail-on`, `min-confidence`, `format` (`github` \| `markdown` \| `json` \| `text`), optional `manifest`, `working-directory`, release install settings (`install-mode`, `version`), and dbt compile settings (`compile-dbt`, `dbt-target`, `dbt-project-dir`, `dbt-profiles-dir`, `dbt-adapter-package`, `dbt-profile-type`, `dbt-compile-dirs`, `manifest-output`, `dbt-requirements-file`, `dbt-constraints-file`, `dbt-vars`, `fail-on-deps-failure`, `use-existing-manifest`). Use `@v1` for compatible updates or `@v1.0.0` for an immutable pin.
+Inputs: `base`, `warehouse`, `fail-on`, `min-confidence`, `format` (`github` \| `markdown` \| `json` \| `text`), optional `manifest`, `working-directory`, optional `cost` and `fail-on-cost-delta`, release install settings (`install-mode`, `version`), and dbt compile settings (`compile-dbt`, `dbt-target`, `dbt-project-dir`, `dbt-profiles-dir`, `dbt-adapter-package`, `dbt-profile-type`, `dbt-compile-dirs`, `manifest-output`, `dbt-requirements-file`, `dbt-constraints-file`, `dbt-vars`, `fail-on-deps-failure`, `use-existing-manifest`). Use `@v1` for compatible updates or `@v1.1.0` for an immutable pin.
 
 Pair `fail-on: high` with `min-confidence: high` on macro-heavy dbt projects so PR gates keep AST-confirmed findings and ignore regex-only noise (for example SQLCOST012 comma joins detected without a successful parse).
 

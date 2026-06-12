@@ -22,7 +22,7 @@ Structured scan result:
 | --- | --- | --- |
 | `schema_version` | Always | Stable JSON schema version for downstream consumers |
 | `metrics` | Always | Scan counters including parse metrics (see [Parse metrics](parse-metrics.md)) |
-| `diagnostics` | Always | Array of findings with `rule_id`, `severity`, `message`, `path`, `line`, `confidence`; compiled-only unmapped findings include `source_provenance`, `compiled_line`, and `compiled_column` |
+| `diagnostics` | Always | Array of findings with `rule_id`, `severity`, `message`, `path`, `line`, `confidence`; optional `cost_estimate` when `[cost]` is enabled; compiled-only unmapped findings include `source_provenance`, `compiled_line`, and `compiled_column` |
 | `files` | Always | Per-model parse metadata (`parse_input`, `parsed_raw`, `parsed_compiled`, `feature_extraction_used_ast`) |
 | `pr_summary` | PR mode | Changed files, optional downstream blast radius |
 
@@ -55,7 +55,7 @@ Use `--write-baseline` / `--baseline` (or `[output].baseline` in config) to gran
 | `baselined_findings` | Findings suppressed by the baseline file |
 | `new_findings` | Findings reported after baseline filtering |
 
-Exit code `1` applies only to **new** findings at or above `--fail-on`.
+Exit code `1` applies to **new** findings at or above `--fail-on`, or when estimated monthly p50 cost on new findings exceeds `--fail-on-cost-delta` when set.
 
 PR markdown output includes a reminder:
 
@@ -67,8 +67,8 @@ Suppress only intentional exceptions with `-- costguard: disable-next-line=RULE`
 
 | Code | Meaning |
 | --- | --- |
-| `0` | No diagnostics at or above `--fail-on` / `fail_on` (and `--min-confidence` / `min_confidence` when set) |
-| `1` | One or more diagnostics at or above severity threshold with confidence at or above the optional floor |
+| `0` | No diagnostics at or above `--fail-on` / `fail_on` (and `--min-confidence` / `min_confidence` when set); cost delta gate not exceeded |
+| `1` | One or more diagnostics at or above severity threshold with confidence at or above the optional floor, or p50 cost delta gate exceeded |
 | `2` | Configuration error (invalid config, missing manifest path) |
 | `3` | Runtime error |
 

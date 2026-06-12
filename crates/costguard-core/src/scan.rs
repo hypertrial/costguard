@@ -5,6 +5,7 @@ use crate::config::ScanConfig;
 use crate::dbt_graph::enrich_pr_summary;
 use crate::{FileParseStatus, PrSummary, Project, ScanMetrics, ScanResult};
 use anyhow::{Context, Result};
+use costguard_cost::{annotate_diagnostics, CostInputs};
 use costguard_dbt::{
     apply_dbt_project_configs_in_roots, compiled_code_by_model_path, extract_sql_features,
     merge_yaml_project, parse_manifest, parse_yaml_project_with_warnings, synthesized_model_id,
@@ -200,6 +201,19 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
     } else {
         (diagnostics, 0)
     };
+
+    if let Some(cost_config) = &config.cost {
+        if cost_config.enabled {
+            let inputs = CostInputs::load(&root, cost_config)?;
+            annotate_diagnostics(
+                &mut diagnostics,
+                cost_config,
+                project.dbt.as_ref(),
+                &inputs,
+                &root,
+            );
+        }
+    }
 
     diagnostics.sort_by(|left, right| {
         left.path

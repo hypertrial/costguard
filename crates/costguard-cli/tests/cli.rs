@@ -167,7 +167,7 @@ fn version_reports_workspace_version() {
     assert!(output.status.success());
     assert_eq!(
         String::from_utf8_lossy(&output.stdout).trim(),
-        "costguard 1.0.0"
+        "costguard 1.1.0"
     );
 }
 
@@ -181,7 +181,7 @@ fn version_propagates_to_every_subcommand() {
         assert!(output.status.success(), "{subcommand}");
         assert_eq!(
             String::from_utf8_lossy(&output.stdout).trim(),
-            format!("costguard-{subcommand} 1.0.0"),
+            format!("costguard-{subcommand} 1.1.0"),
             "{subcommand}"
         );
     }
@@ -502,4 +502,49 @@ fn baseline_grandfathers_known_findings() {
     );
     let stdout = String::from_utf8_lossy(&with_baseline.stdout);
     assert!(stdout.contains("No diagnostics"), "{stdout}");
+}
+
+#[test]
+fn scan_cost_estimate_json_includes_cost_fields() {
+    let fixture = fixture("cost_estimate");
+    let output = Command::new(bin())
+        .current_dir(&fixture)
+        .arg("scan")
+        .arg(".")
+        .arg("--manifest")
+        .arg("target/manifest.json")
+        .arg("--format")
+        .arg("json")
+        .output()
+        .expect("run costguard");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("\"cost_estimate\""),
+        "expected cost_estimate in output:\n{stdout}"
+    );
+    assert!(stdout.contains("\"relative_index\""), "{stdout}");
+    assert!(stdout.contains("\"p50_usd_per_month\""), "{stdout}");
+}
+
+#[test]
+fn scan_cost_delta_gate_fails_when_threshold_exceeded() {
+    let fixture = fixture("cost_estimate");
+    let output = Command::new(bin())
+        .current_dir(&fixture)
+        .arg("scan")
+        .arg(".")
+        .arg("--manifest")
+        .arg("target/manifest.json")
+        .arg("--fail-on")
+        .arg("critical")
+        .arg("--fail-on-cost-delta")
+        .arg("1")
+        .output()
+        .expect("run costguard");
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "expected cost delta gate failure:\n{}",
+        String::from_utf8_lossy(&output.stdout)
+    );
 }

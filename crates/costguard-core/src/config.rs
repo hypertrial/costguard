@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use costguard_cost::{CostConfig, CostSection};
 use costguard_diagnostics::{Confidence, Severity};
 use costguard_platform::Platform;
 use costguard_rules::{RuleOverrides, RuleRegistry};
@@ -48,6 +49,7 @@ pub struct ScanConfig {
     pub rule_overrides: RuleOverrides,
     pub baseline_path: Option<PathBuf>,
     pub write_baseline_path: Option<PathBuf>,
+    pub cost: Option<CostConfig>,
 }
 
 impl Default for ScanConfig {
@@ -67,6 +69,7 @@ impl Default for ScanConfig {
             rule_overrides: RuleOverrides::default(),
             baseline_path: None,
             write_baseline_path: None,
+            cost: None,
         }
     }
 }
@@ -80,6 +83,7 @@ pub struct FileConfig {
     pub output: Option<OutputSection>,
     pub dbt: Option<DbtSection>,
     pub rules: Option<RuleOverrides>,
+    pub cost: Option<CostSection>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -164,6 +168,9 @@ pub fn apply_file_config(mut config: ScanConfig, file_config: FileConfig) -> Res
             overrides.insert(normalized, value);
         }
         config.rule_overrides = overrides;
+    }
+    if let Some(cost) = file_config.cost {
+        config.cost = Some(CostConfig::from_section(cost));
     }
     Ok(config)
 }

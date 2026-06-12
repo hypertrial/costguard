@@ -1,5 +1,5 @@
 [package]
-name = "costguard-output"
+name = "costguard-cost"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,11 +7,7 @@ repository.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-costguard-cost = { path = "../costguard-cost" }
-costguard-core = { path = "../costguard-core" }
+costguard-dbt = { path = "../costguard-dbt" }
 costguard-diagnostics = { path = "../costguard-diagnostics" }
-serde.workspace = true
+serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
-
-[dev-dependencies]
-costguard-scanner = { path = "../costguard-scanner" }

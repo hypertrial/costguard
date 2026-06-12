@@ -70,7 +70,42 @@ Rule IDs are normalized to uppercase (for example `SQLCOST002`).
 | `severity` | string | Override default severity for the rule |
 | `threshold` | integer | Minimum count before some repetition rules fire (default varies by rule; often `2`) |
 
+## `[cost]`
+
+Optional cost-estimation settings. See [Cost estimates](cost-estimates.md) for the full guide.
+
+| Key | Type | Description |
+| --- | --- | --- |
+| `enabled` | bool | Enable cost annotations (default `true` when section present) |
+| `interval` | float | Interval coverage for p10/p90 (default `0.80`) |
+| `default_runs_per_month` | float | Default model run frequency (default `30`) |
+| `default_table_size` | string | Size prior when bytes unknown: `small`, `medium`, `large`, `xlarge` |
+| `fail_on_monthly_delta` | float | Fail when sum of p50 USD/month on new findings exceeds threshold |
+| `incremental_fraction` | float | Fraction of table bytes for incremental models (default `0.05`) |
+
+### `[cost.pricing]`
+
+| Key | Type | Description |
+| --- | --- | --- |
+| `model` | string | `scan` or `compute`; omit for relative index only |
+| `usd_per_tb` | float | Scan-priced warehouses (BigQuery on-demand, etc.) |
+| `usd_per_credit` | float | Compute-priced warehouses |
+| `tb_per_credit_hour` | float or `{ p10, p90 }` | Bytes-to-credit conversion (compute regime) |
+
+### `[cost.inputs]`
+
+| Key | Type | Description |
+| --- | --- | --- |
+| `catalog` | string | Path to dbt `catalog.json` (`stats.num_bytes`) |
+| `query_history` | string | Offline CSV export (`model_or_table`, `bytes_per_run`) |
+
+### `[cost.sources."name"]` / `[cost.models."name"]` / `[cost.rules.RULE_ID]`
+
+Override bytes, runs per month, or rule multiplier priors. Source keys match dbt source or ref names.
+
 ## Related
+
+- [Cost estimates](cost-estimates.md)
 
 - [CLI reference](cli.md)
 - [Rule catalog](../rules/index.md)

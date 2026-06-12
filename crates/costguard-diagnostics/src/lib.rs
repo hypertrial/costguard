@@ -94,7 +94,7 @@ impl Span {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Diagnostic {
     pub rule_id: String,
     pub severity: Severity,
@@ -117,6 +117,40 @@ pub struct Diagnostic {
     pub compiled_line: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub compiled_column: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cost_estimate: Option<CostEstimate>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CostGrade {
+    A,
+    B,
+    C,
+}
+
+impl fmt::Display for CostGrade {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::A => f.write_str("A"),
+            Self::B => f.write_str("B"),
+            Self::C => f.write_str("C"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CostEstimate {
+    pub relative_index: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub p10_usd_per_month: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub p50_usd_per_month: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub p90_usd_per_month: Option<f64>,
+    pub grade: CostGrade,
+    pub basis: String,
+    pub currency: String,
 }
 
 impl Diagnostic {
@@ -159,7 +193,13 @@ impl Diagnostic {
             source_provenance,
             compiled_line,
             compiled_column,
+            cost_estimate: None,
         }
+    }
+
+    pub fn with_cost_estimate(mut self, cost_estimate: CostEstimate) -> Self {
+        self.cost_estimate = Some(cost_estimate);
+        self
     }
 
     pub fn with_risk(mut self, risk: impl Into<String>) -> Self {

@@ -9,7 +9,7 @@ costguard:
   stage: test
   image: ubuntu:24.04
   variables:
-    COSTGUARD_VERSION: "v1.0.0"
+    COSTGUARD_VERSION: "v1.1.0"
   before_script:
     - apt-get update && apt-get install -y curl ca-certificates
     - curl -fsSL "https://github.com/hypertrial/costguard/releases/download/${COSTGUARD_VERSION}/costguard-x86_64-unknown-linux-gnu.tar.gz" -o /tmp/costguard.tgz
@@ -35,4 +35,4 @@ costguard:
 - Use `--format sarif` for GitLab SAST report ingestion (`reports: sast`).
 - Use `--format json` for custom gates or merge-request comments via a small script.
 - Pin the release version and verify SHA-256 checksums before extracting the binary.
-- For monorepos, compile each dbt subproject and merge manifests before scan (see `scripts/dbt_compile_for_costguard.py`).
+- Optional: enable `[cost]` in `costguard.toml` or pass `--cost` and `--fail-on-cost-delta` for spend-aware gating. See [Cost estimates](../reference/cost-estimates.md).

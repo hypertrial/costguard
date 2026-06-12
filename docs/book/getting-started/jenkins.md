@@ -8,7 +8,7 @@ Run Costguard from a Jenkins pipeline using a pinned release binary.
 pipeline {
   agent any
   environment {
-    COSTGUARD_VERSION = 'v1.0.0'
+    COSTGUARD_VERSION = 'v1.1.0'
   }
   stages {
     stage('Install Costguard') {
@@ -35,6 +35,7 @@ pipeline {
             --baseline costguard-baseline.json \
             --fail-on high \
             --format sarif > costguard.sarif
+          # Optional: add --cost --fail-on-cost-delta 500 when costguard.toml [cost] is configured
         '''
       }
     }
@@ -52,6 +53,7 @@ pipeline {
 - Archive `costguard.sarif` as a build artifact.
 - Optionally publish with a SARIF plugin if your controller supports it.
 - Use `--format json` and parse `metrics.new_findings` for simple pass/fail gates.
+- Optional cost estimates: configure `[cost]` in `costguard.toml` or pass `--cost`; gate on new spend with `--fail-on-cost-delta`. See [Cost estimates](../reference/cost-estimates.md).
 
 ## Baseline workflow
 

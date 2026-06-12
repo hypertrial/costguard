@@ -1,0 +1,2 @@
+model_or_table,bytes_per_run,runs_per_month
+fct_orders,50000000000,720

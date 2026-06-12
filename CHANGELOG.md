@@ -2,6 +2,22 @@
 
 All notable changes to Costguard are documented here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-06-12
+
+### Added
+
+- Per-finding cost estimates with lognormal p10/p50/p90 intervals and provenance grades (A/B/C).
+- `[cost]` section in `costguard.toml` for pricing, catalog/query-history inputs, and multiplier overrides.
+- `costguard-cost` crate: volume resolver, rule multiplier priors, scan/compute pricing regimes.
+- CLI flags `--cost` and `--fail-on-cost-delta`; GitHub Action inputs `cost` and `fail-on-cost-delta`.
+- `scripts/calibrate_cost_model.py` for offline query-history calibration and coverage reporting.
+- Cost estimate fixture and integration tests; documentation at `docs/book/reference/cost-estimates.md`.
+
+### Changed
+
+- README rule count updated to 35; diagnostics include optional `cost_estimate` in JSON/SARIF output.
+- Text/markdown output ranks top findings by estimated monthly cost when cost is enabled.
+
 ## [1.0.0] - 2026-06-12
 
 ### Added

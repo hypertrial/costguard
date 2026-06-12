@@ -15,7 +15,7 @@ class ReleaseCheckTest(unittest.TestCase):
                 sys.executable,
                 str(ROOT / "scripts/release_check.py"),
                 "--version",
-                "1.0.0",
+                "1.1.0",
                 "--skip-external",
             ],
             cwd=ROOT,

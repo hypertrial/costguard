@@ -11,6 +11,7 @@ pub use config::{
     apply_file_config, load_config, DbtSection, FileConfig, OutputFormat, OutputSection,
     ScanConfig, ScanSection,
 };
+pub use costguard_cost::CostConfig;
 pub use costguard_dbt::{
     DbtColumn, DbtConfig, DbtExposure, DbtGraph, DbtProject as DbtProjectModel, DbtRef, DbtSource,
     DbtSourceRef, DbtSqlFeatures, DbtTest,
@@ -87,14 +88,22 @@ impl ScanResult {
         &self,
         fail_on: Option<costguard_diagnostics::Severity>,
         min_confidence: Option<costguard_diagnostics::Confidence>,
+        fail_on_monthly_delta: Option<f64>,
     ) -> bool {
-        let Some(threshold) = fail_on else {
-            return false;
-        };
-        self.diagnostics.iter().any(|diagnostic| {
-            diagnostic.severity >= threshold
-                && min_confidence.is_none_or(|mc| diagnostic.confidence >= mc)
-        })
+        if let Some(threshold) = fail_on {
+            if self.diagnostics.iter().any(|diagnostic| {
+                diagnostic.severity >= threshold
+                    && min_confidence.is_none_or(|mc| diagnostic.confidence >= mc)
+            }) {
+                return true;
+            }
+        }
+        if let Some(delta) = fail_on_monthly_delta {
+            if costguard_cost::total_p50_usd_per_month(&self.diagnostics) >= delta {
+                return true;
+            }
+        }
+        false
     }
 }
 
@@ -129,6 +138,7 @@ mod tests {
             source_provenance: None,
             compiled_line: None,
             compiled_column: None,
+            cost_estimate: None,
         }
     }
 
@@ -161,7 +171,24 @@ mod tests {
     #[test]
     fn should_fail_respects_min_confidence() {
         let result = result_with(vec![diagnostic(Severity::High, Confidence::Low)]);
-        assert!(result.should_fail(Some(Severity::High), None));
-        assert!(!result.should_fail(Some(Severity::High), Some(Confidence::High)));
+        assert!(result.should_fail(Some(Severity::High), None, None));
+        assert!(!result.should_fail(Some(Severity::High), Some(Confidence::High), None));
+    }
+
+    #[test]
+    fn should_fail_on_cost_delta() {
+        let mut diag = diagnostic(Severity::Low, Confidence::High);
+        diag.cost_estimate = Some(costguard_diagnostics::CostEstimate {
+            relative_index: 100.0,
+            p10_usd_per_month: Some(400.0),
+            p50_usd_per_month: Some(500.0),
+            p90_usd_per_month: Some(900.0),
+            grade: costguard_diagnostics::CostGrade::C,
+            basis: "test".into(),
+            currency: "USD".into(),
+        });
+        let result = result_with(vec![diag]);
+        assert!(!result.should_fail(None, None, Some(600.0)));
+        assert!(result.should_fail(None, None, Some(500.0)));
     }
 }

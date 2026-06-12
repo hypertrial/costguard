@@ -69,7 +69,7 @@ def git(root: Path, *args: str) -> None:
 
 class ActionConsumerTest(unittest.TestCase):
     def test_floating_major_action_uses_exact_workspace_release(self) -> None:
-        self.assertEqual(load_driver_module().action_release_version(), "v1.0.0")
+        self.assertEqual(load_driver_module().action_release_version(), "v1.1.0")
 
     def test_release_install_from_local_server(self) -> None:
         binary = ROOT / "target" / "release" / "costguard"

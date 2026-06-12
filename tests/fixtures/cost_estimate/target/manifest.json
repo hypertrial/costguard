@@ -1,0 +1,29 @@
+{
+  "metadata": {
+    "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v12.json",
+    "project_name": "cost_estimate"
+  },
+  "nodes": {
+    "model.cost_estimate.fct_orders": {
+      "resource_type": "model",
+      "name": "fct_orders",
+      "package_name": "cost_estimate",
+      "original_file_path": "models/marts/fct_orders.sql",
+      "path": "marts/fct_orders.sql",
+      "config": {
+        "materialized": "table"
+      },
+      "depends_on": {
+        "nodes": ["source.cost_estimate.raw.events"]
+      }
+    }
+  },
+  "sources": {
+    "source.cost_estimate.raw.events": {
+      "resource_type": "source",
+      "source_name": "raw",
+      "name": "events",
+      "identifier": "events"
+    }
+  }
+}

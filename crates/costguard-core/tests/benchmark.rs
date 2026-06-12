@@ -1,4 +1,4 @@
-use costguard_core::{scan, ScanConfig};
+use costguard_core::{apply_file_config, load_config, scan, ScanConfig};
 use costguard_diagnostics::Severity;
 use costguard_platform::Platform;
 use serde::Deserialize;
@@ -172,6 +172,40 @@ fn vendored_baselines_match() {
         let result = scan_fixture(&fixture, warehouse);
         compare_baseline(&baseline, &result);
     }
+}
+
+#[test]
+fn cost_estimate_fixture_includes_cost_fields() {
+    let fixture = repo_root().join("tests/fixtures/cost_estimate");
+    let file_config = load_config(&fixture).expect("load cost config");
+    let base = ScanConfig {
+        root: fixture.clone(),
+        paths: vec![fixture.clone()],
+        platform: Platform::BigQuery,
+        manifest_path: Some(fixture.join("target/manifest.json")),
+        fail_on: None,
+        ..ScanConfig::default()
+    };
+    let config = apply_file_config(base, file_config).expect("apply cost config");
+    assert!(config.cost.as_ref().is_some_and(|cost| cost.enabled));
+    let result = scan(&config).expect("scan cost fixture");
+    assert!(
+        result
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.cost_estimate.is_some()),
+        "expected at least one diagnostic with cost_estimate"
+    );
+    assert!(
+        result.diagnostics.iter().any(|diagnostic| {
+            diagnostic
+                .cost_estimate
+                .as_ref()
+                .and_then(|cost| cost.p50_usd_per_month)
+                .is_some()
+        }),
+        "expected dollar cost estimates when scan pricing is configured"
+    );
 }
 
 #[test]

@@ -95,8 +95,6 @@ MVP pass/fail should be based on risk severity **and** diagnostic confidence on 
 
 Use both flags together in PR checks. `--fail-on high` alone still fails on regex-only shape findings (low confidence) when raw SQL does not parse; `--min-confidence high` keeps AST-confirmed high-risk hits and suppresses that noise.
 
-Do not make dollar thresholds the MVP. True cost estimation needs warehouse metadata,
-table sizes, query history, pricing models, partitioning/clustering stats, cache behavior,
-and execution plans. Add dollar estimates later as enrichment, not as the first gating model.
+Do not make dollar thresholds the **primary** MVP gate. Severity and confidence remain the default PR failure model. Optional cost estimates (see [Cost estimates](../book/reference/cost-estimates.md)) use local catalog stats, offline query-history exports, and configurable priors—never live warehouse connections. Use `--fail-on-cost-delta` only when you have calibrated inputs; otherwise rely on `--fail-on high --min-confidence high`.
 
 Suppression directives: prefer SQL comment prefix `-- costguard: ...` (bare `costguard:` also works). See [Suppressions](../book/reference/suppressions.md).

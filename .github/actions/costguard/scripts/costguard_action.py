@@ -263,6 +263,11 @@ def command_run() -> int:
     baseline = env("BASELINE_INPUT")
     if baseline:
         command.extend(["--baseline", baseline])
+    if env("COST_INPUT").lower() == "true":
+        command.append("--cost")
+    fail_on_cost_delta = env("FAIL_ON_COST_DELTA_INPUT")
+    if fail_on_cost_delta:
+        command.extend(["--fail-on-cost-delta", fail_on_cost_delta])
     manifest = env("MANIFEST_INPUT")
     manifest_output = env("MANIFEST_OUTPUT_INPUT", "target/manifest.json")
     if not manifest and (root / manifest_output).is_file():
