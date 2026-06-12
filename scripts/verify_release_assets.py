@@ -14,10 +14,10 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from costguard_tooling import costguard_binary  # noqa: E402
 from release_packaging import (  # noqa: E402
+    extract_and_smoke_test,
     host_target,
     package_built_binary,
     verify_checksum,
-    extract_and_smoke_test,
 )
 
 

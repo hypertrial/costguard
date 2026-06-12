@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
-"""Generate recall corpus fixtures for behavioral rules SQLCOST001-022."""
+"""Generate recall corpus fixtures for behavioral rules SQLCOST001-022 and SQLCOST028-035."""
 
 from __future__ import annotations
 
+import argparse
+import filecmp
+import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -381,17 +385,65 @@ FIXTURES: dict[str, dict[str, str]] = {
 }
 
 
-def main() -> None:
+def normalized_content(content: str | tuple[str, ...]) -> str:
+    if isinstance(content, tuple):
+        return "".join(content)
+    return content
+
+
+def write_fixtures(corpus_dir: Path) -> None:
     for name, files in FIXTURES.items():
-        case_dir = CORPUS / name
+        case_dir = corpus_dir / name
         case_dir.mkdir(parents=True, exist_ok=True)
         for relative, content in files.items():
             path = case_dir / relative
             path.parent.mkdir(parents=True, exist_ok=True)
-            if isinstance(content, tuple):
-                content = "".join(content)
-            path.write_text(content, encoding="utf-8")
+            path.write_text(normalized_content(content), encoding="utf-8")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Exit 1 when committed recall fixtures differ from generator output",
+    )
+    args = parser.parse_args()
+
+    if args.check:
+        with tempfile.TemporaryDirectory(prefix="costguard-recall-check-") as tmp:
+            generated = Path(tmp)
+            write_fixtures(generated)
+            errors: list[str] = []
+            for name in FIXTURES:
+                expected_dir = generated / name
+                actual_dir = CORPUS / name
+                if not actual_dir.is_dir():
+                    errors.append(f"missing fixture directory: {name}")
+                    continue
+                comparison = filecmp.dircmp(expected_dir, actual_dir)
+                errors.extend(
+                    f"missing fixture file: {name}/{path}"
+                    for path in comparison.left_only
+                )
+                errors.extend(
+                    f"extra fixture file: {name}/{path}"
+                    for path in comparison.right_only
+                )
+                for path in comparison.common_files:
+                    if not filecmp.cmp(expected_dir / path, actual_dir / path, shallow=False):
+                        errors.append(f"stale fixture file: {name}/{path}")
+            if errors:
+                for error in errors:
+                    print(error, file=sys.stderr)
+                raise SystemExit(1)
+        print(f"recall corpus fixtures up to date ({len(FIXTURES)} cases)")
+        return 0
+
+    write_fixtures(CORPUS)
+    print(f"wrote {len(FIXTURES)} recall corpus fixtures under {CORPUS}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

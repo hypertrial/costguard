@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import csv
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,7 +9,11 @@ import sys
 
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from calibrate_cost_model import build_report, interval_contains, load_history  # noqa: E402
+from calibrate_cost_model import (  # noqa: E402
+    build_report,
+    interval_contains,
+    load_history,
+)
 
 
 class CalibrateCostModelTests(unittest.TestCase):

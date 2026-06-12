@@ -175,6 +175,87 @@ pub fn apply_file_config(mut config: ScanConfig, file_config: FileConfig) -> Res
     Ok(config)
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct ScanRuntimeOverrides {
+    pub warehouse: Option<String>,
+    pub dialect: Option<String>,
+    pub format: Option<OutputFormat>,
+    pub manifest_path: Option<PathBuf>,
+    pub fail_on: Option<String>,
+    pub min_confidence: Option<String>,
+    pub baseline_path: Option<PathBuf>,
+    pub write_baseline_path: Option<PathBuf>,
+    pub cost: bool,
+    pub fail_on_cost_delta: Option<f64>,
+}
+
+impl ScanRuntimeOverrides {
+    pub fn apply_to(&self, config: &mut ScanConfig) -> Result<()> {
+        if let Some(warehouse) = &self.warehouse {
+            config.platform = warehouse.parse::<Platform>().map_err(anyhow::Error::msg)?;
+        } else if let Some(dialect) = &self.dialect {
+            config.platform = dialect.parse::<Platform>().map_err(anyhow::Error::msg)?;
+        }
+        if let Some(format) = &self.format {
+            config.format = *format;
+        }
+        if let Some(manifest) = &self.manifest_path {
+            config.manifest_path = Some(manifest.clone());
+        }
+        if let Some(fail_on) = &self.fail_on {
+            config.fail_on = Some(fail_on.parse::<Severity>().map_err(anyhow::Error::msg)?);
+        }
+        if let Some(min_confidence) = &self.min_confidence {
+            config.min_confidence = Some(min_confidence.parse().map_err(anyhow::Error::msg)?);
+        }
+        if let Some(baseline) = &self.baseline_path {
+            config.baseline_path = Some(baseline.clone());
+        }
+        if let Some(write_baseline) = &self.write_baseline_path {
+            config.write_baseline_path = Some(write_baseline.clone());
+        }
+        if self.cost {
+            let mut cost_config = config.cost.take().unwrap_or_default();
+            cost_config.enabled = true;
+            config.cost = Some(cost_config);
+        }
+        if let Some(delta) = self.fail_on_cost_delta {
+            let mut cost_config = config.cost.take().unwrap_or_else(|| CostConfig {
+                enabled: true,
+                ..CostConfig::default()
+            });
+            cost_config.enabled = true;
+            cost_config.fail_on_monthly_delta = Some(delta);
+            config.cost = Some(cost_config);
+        }
+        Ok(())
+    }
+}
+
+pub fn validate_scan_config(config: &ScanConfig) -> Result<()> {
+    if let Some(path) = &config.manifest_path {
+        let resolved = if path.is_absolute() {
+            path.clone()
+        } else {
+            config.root.join(path)
+        };
+        if !resolved.exists() {
+            anyhow::bail!("manifest path does not exist: {}", resolved.display());
+        }
+    }
+    if let Some(path) = &config.baseline_path {
+        let resolved = if path.is_absolute() {
+            path.clone()
+        } else {
+            config.root.join(path)
+        };
+        if !resolved.exists() {
+            anyhow::bail!("baseline path does not exist: {}", resolved.display());
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

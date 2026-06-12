@@ -44,10 +44,6 @@ impl JinjaStripMap {
     }
 }
 
-pub fn strip_jinja(text: &str) -> String {
-    strip_jinja_with_map(text).0
-}
-
 pub fn strip_jinja_with_map(text: &str) -> (String, JinjaStripMap) {
     let mut sanitized = String::with_capacity(text.len());
     let mut segments = Vec::new();

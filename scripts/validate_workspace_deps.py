@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import sys
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,12 +25,6 @@ ALLOWED = frozenset(
         "toml",
     }
 )
-
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib  # type: ignore[no-redef]
-
 
 def workspace_dependency_keys() -> set[str]:
     data = tomllib.loads(CARGO_TOML.read_text(encoding="utf-8"))

@@ -93,7 +93,6 @@ dependencies = [
  "costguard-diagnostics",
  "costguard-output",
  "costguard-rules",
- "costguard-sql",
  "tempfile",
 ]
 

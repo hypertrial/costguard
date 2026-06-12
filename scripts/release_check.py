@@ -10,12 +10,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib  # type: ignore[no-redef]
-
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
+
+from costguard_tooling import git_output, workspace_version  # noqa: E402
+
 COMMANDS: list[list[str]] = []
 
 
@@ -23,17 +22,6 @@ def run(command: list[str], *, env: dict[str, str] | None = None) -> None:
     print("+", " ".join(command), flush=True)
     COMMANDS.append(command)
     subprocess.run(command, cwd=ROOT, env=env, check=True)
-
-
-def package_version() -> str:
-    data = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))
-    return data["workspace"]["package"]["version"]
-
-
-def git_output(*args: str) -> str:
-    return subprocess.run(
-        ["git", *args], cwd=ROOT, capture_output=True, text=True, check=True
-    ).stdout.strip()
 
 
 def require_release_tag(version: str) -> tuple[str, str]:
@@ -89,8 +77,8 @@ def main() -> int:
     parser.add_argument("--receipt", type=Path, default=Path("dist/release/release-check.json"))
     args = parser.parse_args()
     version = args.version.removeprefix("v")
-    if version != package_version():
-        raise SystemExit(f"requested version {version} != workspace version {package_version()}")
+    if version != workspace_version():
+        raise SystemExit(f"requested version {version} != workspace version {workspace_version()}")
     tag = f"v{version}"
     commit = git_output("rev-parse", "HEAD")
     if args.development:

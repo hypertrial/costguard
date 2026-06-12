@@ -1,26 +1,14 @@
 use crate::catalog::CatalogStats;
-use crate::config::{parse_bytes_spec, CostConfig, CostSourceOverride, TableSizeClass};
+use crate::config::{parse_bytes_spec, CostConfig, CostSourceOverride};
 use crate::query_history::QueryHistoryStats;
 use crate::Estimate;
 use costguard_dbt::{DbtModel, DbtProject};
 use costguard_diagnostics::CostGrade;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VolumeProvenance {
-    QueryHistory,
-    Catalog,
-    ConfigSource,
-    SizePrior,
-}
-
 pub struct ResolvedVolume {
     pub bytes: Estimate,
     pub runs_per_month: Estimate,
     pub grade: CostGrade,
-    #[allow(dead_code)]
-    pub provenance: VolumeProvenance,
-    #[allow(dead_code)]
-    pub label: String,
 }
 
 pub struct VolumeContext<'a> {
@@ -40,8 +28,6 @@ impl VolumeContext<'_> {
                         bytes: Estimate::from_point(entry.bytes_per_run, Some(0.2)),
                         runs_per_month: Estimate::from_point(entry.runs_per_month, Some(0.1)),
                         grade: CostGrade::A,
-                        provenance: VolumeProvenance::QueryHistory,
-                        label: key,
                     };
                 }
             }
@@ -56,8 +42,6 @@ impl VolumeContext<'_> {
                         bytes: est,
                         runs_per_month: runs,
                         grade: CostGrade::B,
-                        provenance: VolumeProvenance::Catalog,
-                        label: unique_id.clone(),
                     };
                 }
             }
@@ -74,8 +58,6 @@ impl VolumeContext<'_> {
             bytes: est,
             runs_per_month: runs,
             grade: CostGrade::C,
-            provenance: VolumeProvenance::SizePrior,
-            label: format!("{} prior", size_label(self.config.default_table_size)),
         }
     }
 
@@ -111,8 +93,6 @@ impl VolumeContext<'_> {
                         bytes: est,
                         runs_per_month: runs,
                         grade: CostGrade::B,
-                        provenance: VolumeProvenance::ConfigSource,
-                        label: key,
                     });
                 }
             }
@@ -171,15 +151,6 @@ fn upstream_keys(model: &DbtModel, dbt: Option<&DbtProject>) -> Vec<String> {
     keys.sort();
     keys.dedup();
     keys
-}
-
-fn size_label(size: TableSizeClass) -> &'static str {
-    match size {
-        TableSizeClass::Small => "small",
-        TableSizeClass::Medium => "medium",
-        TableSizeClass::Large => "large",
-        TableSizeClass::Xlarge => "xlarge",
-    }
 }
 
 pub fn model_for_path<'a>(dbt: &'a DbtProject, path: &std::path::Path) -> Option<&'a DbtModel> {

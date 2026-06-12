@@ -1,10 +1,9 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use costguard_core::{
-    apply_file_config, explain, load_config, rules, scan, CostConfig, OutputFormat, Platform,
-    ScanConfig,
+    apply_file_config, explain, load_config, rules, scan, validate_scan_config, OutputFormat,
+    ScanConfig, ScanRuntimeOverrides,
 };
-use costguard_diagnostics::Severity;
 use costguard_output::{render, render_rules};
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -216,39 +215,34 @@ fn config_from_scan_args(args: ScanArgs) -> Result<ScanConfig> {
     if !args.paths.is_empty() {
         config.paths = args.paths;
     }
-    apply_common_flags(
-        &mut config,
-        args.warehouse,
-        args.dialect,
-        args.format,
-        args.manifest,
-        args.fail_on,
-        args.min_confidence,
-        args.baseline,
-        args.write_baseline,
-        args.cost,
-        args.fail_on_cost_delta,
-    )?;
-    validate_config(&config)?;
+    ScanRuntimeOverrides {
+        warehouse: args.warehouse,
+        dialect: args.dialect,
+        format: args.format.map(Into::into),
+        manifest_path: args.manifest,
+        fail_on: args.fail_on,
+        min_confidence: args.min_confidence,
+        baseline_path: args.baseline,
+        write_baseline_path: args.write_baseline,
+        cost: args.cost,
+        fail_on_cost_delta: args.fail_on_cost_delta,
+    }
+    .apply_to(&mut config)?;
+    validate_scan_config(&config)?;
     Ok(config)
 }
 
 fn config_from_explain_args(args: &ExplainArgs) -> Result<ScanConfig> {
     let mut config = base_config()?;
-    apply_common_flags(
-        &mut config,
-        args.warehouse.clone(),
-        args.dialect.clone(),
-        args.format,
-        args.manifest.clone(),
-        None,
-        None,
-        None,
-        None,
-        false,
-        None,
-    )?;
-    validate_config(&config)?;
+    ScanRuntimeOverrides {
+        warehouse: args.warehouse.clone(),
+        dialect: args.dialect.clone(),
+        format: args.format.map(Into::into),
+        manifest_path: args.manifest.clone(),
+        ..ScanRuntimeOverrides::default()
+    }
+    .apply_to(&mut config)?;
+    validate_scan_config(&config)?;
     Ok(config)
 }
 
@@ -256,75 +250,21 @@ fn config_from_pr_args(args: PrArgs) -> Result<ScanConfig> {
     let mut config = base_config()?;
     config.changed_only = true;
     config.base_branch = Some(args.base);
-    apply_common_flags(
-        &mut config,
-        args.warehouse,
-        args.dialect,
-        args.format,
-        args.manifest,
-        args.fail_on,
-        args.min_confidence,
-        args.baseline,
-        None,
-        args.cost,
-        args.fail_on_cost_delta,
-    )?;
-    validate_config(&config)?;
+    ScanRuntimeOverrides {
+        warehouse: args.warehouse,
+        dialect: args.dialect,
+        format: args.format.map(Into::into),
+        manifest_path: args.manifest,
+        fail_on: args.fail_on,
+        min_confidence: args.min_confidence,
+        baseline_path: args.baseline,
+        cost: args.cost,
+        fail_on_cost_delta: args.fail_on_cost_delta,
+        ..ScanRuntimeOverrides::default()
+    }
+    .apply_to(&mut config)?;
+    validate_scan_config(&config)?;
     Ok(config)
-}
-
-#[allow(clippy::too_many_arguments)]
-fn apply_common_flags(
-    config: &mut ScanConfig,
-    warehouse: Option<String>,
-    dialect: Option<String>,
-    format: Option<FormatArg>,
-    manifest: Option<PathBuf>,
-    fail_on: Option<String>,
-    min_confidence: Option<String>,
-    baseline: Option<PathBuf>,
-    write_baseline: Option<PathBuf>,
-    cost: bool,
-    fail_on_cost_delta: Option<f64>,
-) -> Result<()> {
-    if let Some(warehouse) = warehouse {
-        config.platform = warehouse.parse::<Platform>().map_err(anyhow::Error::msg)?;
-    } else if let Some(dialect) = dialect {
-        config.platform = dialect.parse::<Platform>().map_err(anyhow::Error::msg)?;
-    }
-    if let Some(format) = format {
-        config.format = format.into();
-    }
-    if let Some(manifest) = manifest {
-        config.manifest_path = Some(manifest);
-    }
-    if let Some(fail_on) = fail_on {
-        config.fail_on = Some(fail_on.parse::<Severity>().map_err(anyhow::Error::msg)?);
-    }
-    if let Some(min_confidence) = min_confidence {
-        config.min_confidence = Some(min_confidence.parse().map_err(anyhow::Error::msg)?);
-    }
-    if let Some(baseline) = baseline {
-        config.baseline_path = Some(baseline);
-    }
-    if let Some(write_baseline) = write_baseline {
-        config.write_baseline_path = Some(write_baseline);
-    }
-    if cost {
-        let mut cost_config = config.cost.take().unwrap_or_default();
-        cost_config.enabled = true;
-        config.cost = Some(cost_config);
-    }
-    if let Some(delta) = fail_on_cost_delta {
-        let mut cost_config = config.cost.take().unwrap_or_else(|| CostConfig {
-            enabled: true,
-            ..CostConfig::default()
-        });
-        cost_config.enabled = true;
-        cost_config.fail_on_monthly_delta = Some(delta);
-        config.cost = Some(cost_config);
-    }
-    Ok(())
 }
 
 fn fail_on_monthly_delta(config: &ScanConfig) -> Option<f64> {
@@ -332,28 +272,4 @@ fn fail_on_monthly_delta(config: &ScanConfig) -> Option<f64> {
         .cost
         .as_ref()
         .and_then(|cost| cost.fail_on_monthly_delta)
-}
-
-fn validate_config(config: &ScanConfig) -> Result<()> {
-    if let Some(path) = &config.manifest_path {
-        let resolved = if path.is_absolute() {
-            path.clone()
-        } else {
-            config.root.join(path)
-        };
-        if !resolved.exists() {
-            anyhow::bail!("manifest path does not exist: {}", resolved.display());
-        }
-    }
-    if let Some(path) = &config.baseline_path {
-        let resolved = if path.is_absolute() {
-            path.clone()
-        } else {
-            config.root.join(path)
-        };
-        if !resolved.exists() {
-            anyhow::bail!("baseline path does not exist: {}", resolved.display());
-        }
-    }
-    Ok(())
 }

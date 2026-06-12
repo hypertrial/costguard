@@ -1,15 +1,17 @@
 mod baseline;
 mod config;
 mod dbt_graph;
+mod dbt_load;
 mod scan;
+mod sql_analysis;
 
 pub use baseline::{
     apply_finding_baseline, diagnostic_fingerprint, load_finding_baseline, write_finding_baseline,
     BaselinedFinding, FindingBaseline,
 };
 pub use config::{
-    apply_file_config, load_config, DbtSection, FileConfig, OutputFormat, OutputSection,
-    ScanConfig, ScanSection,
+    apply_file_config, load_config, validate_scan_config, DbtSection, FileConfig, OutputFormat,
+    OutputSection, ScanConfig, ScanRuntimeOverrides, ScanSection,
 };
 pub use costguard_cost::CostConfig;
 pub use costguard_dbt::{

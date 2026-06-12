@@ -1,4 +1,5 @@
 use crate::{ProjectIndexes, RuleContext, RuleOverrides, RuleRegistry};
+use costguard_dbt::extract_sql_features;
 use costguard_diagnostics::{apply_suppressions, LineIndex};
 use costguard_platform::Platform;
 use costguard_scanner::{FileKind, ProjectFile};
@@ -45,6 +46,7 @@ fn run_for_file(file: &ProjectFile, docs: &[SqlDocument]) -> Vec<String> {
 }
 
 fn analyze(file: &ProjectFile) -> SqlDocument {
+    let dbt = extract_sql_features(&file.text);
     analyze_sql(
         file.path.clone(),
         &file.text,
@@ -52,6 +54,7 @@ fn analyze(file: &ProjectFile) -> SqlDocument {
         &file.line_index,
         None,
         true,
+        dbt,
     )
 }
 
@@ -203,6 +206,7 @@ fn analyze_for_rule(rule_id: &str, file: &ProjectFile) -> SqlDocument {
         "SQLCOST035" => Platform::Trino,
         _ => Platform::Generic,
     };
+    let dbt = extract_sql_features(&file.text);
     analyze_sql(
         file.path.clone(),
         &file.text,
@@ -210,6 +214,7 @@ fn analyze_for_rule(rule_id: &str, file: &ProjectFile) -> SqlDocument {
         &file.line_index,
         None,
         true,
+        dbt,
     )
 }
 
@@ -259,6 +264,7 @@ fn bigquery_wildcard_rule_has_positive_coverage() {
 }
 
 fn analyze_bigquery(file: &ProjectFile) -> SqlDocument {
+    let dbt = extract_sql_features(&file.text);
     analyze_sql(
         file.path.clone(),
         &file.text,
@@ -266,6 +272,7 @@ fn analyze_bigquery(file: &ProjectFile) -> SqlDocument {
         &file.line_index,
         None,
         true,
+        dbt,
     )
 }
 

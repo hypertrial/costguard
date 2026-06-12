@@ -14,13 +14,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
+from costguard_tooling import file_sha256, git_output, workspace_version  # noqa: E402
 from release_packaging import (  # noqa: E402
     RELEASE_TARGETS,
     asset_name,
     ensure_targets_installed,
-    file_sha256,
     package_and_verify_target,
-    workspace_version,
     write_consolidated_checksums,
     write_provenance,
 )
@@ -29,12 +28,6 @@ from release_packaging import (  # noqa: E402
 def require_command(name: str) -> None:
     if shutil.which(name) is None:
         raise SystemExit(f"required command not found: {name}")
-
-
-def git_output(*args: str) -> str:
-    return subprocess.run(
-        ["git", *args], cwd=ROOT, capture_output=True, text=True, check=True
-    ).stdout.strip()
 
 
 def git_config(name: str) -> str:

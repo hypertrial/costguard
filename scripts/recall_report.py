@@ -6,17 +6,13 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import tomllib
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 CORPUS_MANIFEST = ROOT / "tests" / "fixtures" / "corpus" / "manifest.toml"
-
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib  # type: ignore[no-redef]
 
 BEHAVIORAL_RULES = [f"SQLCOST{idx:03d}" for idx in range(1, 23)] + [
     f"SQLCOST{idx:03d}" for idx in range(28, 36)

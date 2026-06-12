@@ -5,25 +5,17 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
-import subprocess
 import sys
 from collections import Counter, defaultdict
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from costguard_tooling import costguard_binary  # noqa: E402
-
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib  # type: ignore[no-redef]
-
-REPOS_TOML = ROOT / "tests" / "benchmarks" / "repos.toml"
+from costguard_tooling import repo_by_name, run_costguard_scan  # noqa: E402
 
 CROSS_JOIN_RE = re.compile(r"(?i)\bcross\s+join\b")
 CROSS_JOIN_UNNEST_RE = re.compile(r"(?i)\bcross\s+join\s+(?:unnest|table)\s*\(")
@@ -354,11 +346,7 @@ CLASSIFIERS: dict[str, Callable[[str], str]] = {
 
 
 def load_repo(name: str) -> dict[str, Any]:
-    data = tomllib.loads(REPOS_TOML.read_text(encoding="utf-8"))
-    for repo in data.get("repo", []):
-        if repo["name"] == name:
-            return repo
-    raise SystemExit(f"unknown repo '{name}' in {REPOS_TOML}")
+    return repo_by_name(name)
 
 
 def run_scan(
@@ -368,31 +356,14 @@ def run_scan(
     scan_paths: list[str],
     manifest: Path,
 ) -> dict[str, Any]:
-    cmd = [
-        str(costguard_binary()),
-        "scan",
-        "--warehouse",
-        warehouse,
-        "--fail-on",
-        "critical",
-        "--format",
-        "json",
-        "--manifest",
-        str(manifest.relative_to(checkout)),
-        *scan_paths,
-    ]
-    completed = subprocess.run(
-        cmd,
-        cwd=checkout,
-        capture_output=True,
-        text=True,
-        check=False,
+    payload, _exit_code = run_costguard_scan(
+        checkout,
+        warehouse=warehouse,
+        scan_paths=scan_paths,
+        fail_on="critical",
+        manifest=manifest,
     )
-    if completed.returncode not in (0, 1):
-        raise SystemExit(
-            f"costguard scan failed (exit {completed.returncode}):\n{completed.stderr}"
-        )
-    return json.loads(completed.stdout)
+    return payload
 
 
 def load_manifest_sql(manifest_path: Path) -> dict[str, str]:

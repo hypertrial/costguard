@@ -16,7 +16,6 @@ costguard-core = { path = "../costguard-core" }
 costguard-diagnostics = { path = "../costguard-diagnostics" }
 costguard-output = { path = "../costguard-output" }
 costguard-rules = { path = "../costguard-rules" }
-costguard-sql = { path = "../costguard-sql" }
 
 [dev-dependencies]
 tempfile.workspace = true

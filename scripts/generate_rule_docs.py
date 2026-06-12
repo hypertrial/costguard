@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -13,6 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 OUTPUT = ROOT / "docs" / "book" / "rules" / "index.md"
+RULE_GUIDES = ROOT / "docs" / "rules"
 GENERATED_START = "<!-- generated:rules:start -->"
 GENERATED_END = "<!-- generated:rules:end -->"
 
@@ -101,6 +101,22 @@ def read_existing_generated(path: Path) -> str | None:
     return text[start : end + len(GENERATED_END)]
 
 
+def validate_rule_guides(rules: list[dict[str, str]]) -> list[str]:
+    errors: list[str] = []
+    for rule in rules:
+        rule_id = rule["id"]
+        guide = RULE_GUIDES / f"{rule_id}.md"
+        if not guide.exists():
+            errors.append(f"missing per-rule guide: docs/rules/{rule_id}.md")
+    extra = sorted(
+        path.stem
+        for path in RULE_GUIDES.glob("SQLCOST*.md")
+        if path.stem not in {rule["id"] for rule in rules}
+    )
+    errors.extend(f"orphan per-rule guide: docs/rules/{rule_id}.md" for rule_id in extra)
+    return errors
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -115,6 +131,11 @@ def main() -> None:
     generated = document[document.find(GENERATED_START) : document.find(GENERATED_END) + len(GENERATED_END)]
 
     if args.check:
+        guide_errors = validate_rule_guides(rules)
+        if guide_errors:
+            for error in guide_errors:
+                print(error, file=sys.stderr)
+            raise SystemExit(1)
         existing = read_existing_generated(OUTPUT)
         if existing != generated:
             print(f"stale rule catalog: {OUTPUT}", file=sys.stderr)

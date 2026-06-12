@@ -12,33 +12,18 @@ import time
 from pathlib import Path
 from typing import Any
 
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib  # type: ignore[no-redef]
-
-
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from costguard_tooling import costguard_binary  # noqa: E402
+from costguard_tooling import (  # noqa: E402
+    repo_by_name,
+    run_costguard_scan,
+)
 from dbt_compile_for_costguard import compile_dbt_repo, write_json  # noqa: E402
+
 FIXTURES = ROOT / "tests" / "fixtures"
 BASELINES = ROOT / "tests" / "benchmarks" / "baselines"
 REPORTS = ROOT / "tests" / "benchmarks" / "reports"
-REPOS_TOML = ROOT / "tests" / "benchmarks" / "repos.toml"
-
-
-def load_repos() -> list[dict[str, Any]]:
-    data = tomllib.loads(REPOS_TOML.read_text(encoding="utf-8"))
-    return data.get("repo", [])
-
-
-def repo_by_name(name: str) -> dict[str, Any]:
-    for repo in load_repos():
-        if repo["name"] == name:
-            return repo
-    raise SystemExit(f"unknown repo '{name}' in {REPOS_TOML}")
 
 
 def baseline_path(target: str) -> Path:
@@ -54,53 +39,20 @@ def run_costguard(
     fail_on: str,
     manifest: Path | None = None,
 ) -> dict[str, Any]:
-    cmd = [
-        str(costguard_binary()),
-        "scan",
-        "--warehouse",
-        warehouse,
-        "--fail-on",
-        fail_on,
-        "--format",
-        "json",
-    ]
-    if manifest is not None:
-        if manifest.is_absolute():
-            manifest_arg = manifest.relative_to(workdir) if manifest.is_relative_to(workdir) else manifest
-        else:
-            manifest_arg = manifest
-        cmd.extend(["--manifest", str(manifest_arg)])
-    cmd.extend(scan_paths)
-
     started = time.monotonic()
-    completed = subprocess.run(
-        cmd,
-        cwd=workdir,
-        capture_output=True,
-        text=True,
-        check=False,
+    payload, exit_code = run_costguard_scan(
+        workdir,
+        warehouse=warehouse,
+        scan_paths=scan_paths,
+        fail_on=fail_on,
+        manifest=manifest,
     )
     elapsed_ms = int((time.monotonic() - started) * 1000)
 
-    if completed.returncode not in (0, 1):
-        raise SystemExit(
-            f"costguard scan failed (exit {completed.returncode}):\n"
-            f"{completed.stderr.strip()}"
-        )
-
-    try:
-        payload = json.loads(completed.stdout)
-    except json.JSONDecodeError as exc:
-        raise SystemExit(
-            f"failed to parse costguard JSON output: {exc}\nstdout:\n{completed.stdout}"
-        ) from exc
-
-    metrics = payload.get("metrics")
-    if metrics is None:
-        raise SystemExit("costguard JSON output missing 'metrics'")
+    metrics = payload["metrics"]
 
     return {
-        "exit_code": completed.returncode,
+        "exit_code": exit_code,
         "runtime_ms": elapsed_ms,
         "metrics": metrics,
         "diagnostics_count": len(payload.get("diagnostics", [])),

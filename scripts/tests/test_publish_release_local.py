@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 import tempfile
 import unittest
-import json
 from pathlib import Path
 from unittest import mock
 
@@ -22,7 +22,6 @@ from release_packaging import (  # noqa: E402
     file_sha256,
     package_built_binary,
     target_bin_name,
-    verify_checksum,
 )
 
 

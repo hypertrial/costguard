@@ -4,10 +4,7 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import os
-import platform
-import re
 import shutil
 import subprocess
 import sys
@@ -15,7 +12,6 @@ import tarfile
 import tempfile
 import urllib.request
 from pathlib import Path
-
 
 ADAPTERS = {
     "snowflake": "dbt-snowflake",
@@ -45,15 +41,17 @@ def action_repo_root() -> Path:
     return action_path().parents[2]
 
 
+def ensure_scripts_path() -> None:
+    scripts = action_repo_root() / "scripts"
+    if str(scripts) not in sys.path:
+        sys.path.insert(0, str(scripts))
+
+
 def action_release_version() -> str:
-    cargo_toml = (action_repo_root() / "Cargo.toml").read_text(encoding="utf-8")
-    workspace_package = cargo_toml.split("[workspace.package]", maxsplit=1)
-    if len(workspace_package) != 2:
-        raise SystemExit("workspace package version is missing from Cargo.toml")
-    match = re.search(r'^version\s*=\s*"([^"]+)"', workspace_package[1], re.MULTILINE)
-    if not match:
-        raise SystemExit("workspace package version is missing from Cargo.toml")
-    return f"v{match.group(1)}"
+    ensure_scripts_path()
+    from costguard_tooling import release_tag_version  # noqa: E402
+
+    return release_tag_version(action_repo_root())
 
 
 def append_file(path: Path, value: str) -> None:
@@ -63,20 +61,10 @@ def append_file(path: Path, value: str) -> None:
 
 
 def runner_target() -> tuple[str, str]:
-    system = platform.system()
-    machine = platform.machine().lower()
-    if system == "Linux" and machine in {"x86_64", "amd64"}:
-        return "x86_64-unknown-linux-gnu", "costguard"
-    if system == "Darwin" and machine == "arm64":
-        return "aarch64-apple-darwin", "costguard"
-    if system == "Darwin" and machine == "x86_64":
-        return "x86_64-apple-darwin", "costguard"
-    if system in {"Windows", "MINGW", "MSYS", "CYGWIN"} and machine in {
-        "x86_64",
-        "amd64",
-    }:
-        return "x86_64-pc-windows-msvc", "costguard.exe"
-    raise SystemExit(f"unsupported runner platform: {system}-{machine}")
+    ensure_scripts_path()
+    from costguard_tooling import host_target  # noqa: E402
+
+    return host_target()
 
 
 def download(url: str, destination: Path) -> None:
@@ -85,11 +73,10 @@ def download(url: str, destination: Path) -> None:
 
 
 def sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+    ensure_scripts_path()
+    from costguard_tooling import file_sha256  # noqa: E402
+
+    return file_sha256(path)
 
 
 def install_release(version: str) -> None:

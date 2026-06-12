@@ -3,20 +3,20 @@
 from __future__ import annotations
 
 import gzip
-import hashlib
 import json
 import os
-import platform
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 from pathlib import Path
 
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib  # type: ignore[no-redef]
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+
+from costguard_tooling import file_sha256, host_target
 
 RELEASE_BIN_NAME = "costguard"
 WINDOWS_BIN_NAME = "costguard.exe"
@@ -35,28 +35,6 @@ def target_bin_name(target: str) -> str:
 
 def asset_name(target: str) -> str:
     return f"costguard-{target}.tar.gz"
-
-
-def file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def host_target() -> tuple[str, str]:
-    system = platform.system()
-    machine = platform.machine().lower()
-    if system == "Linux" and machine in {"x86_64", "amd64"}:
-        return "x86_64-unknown-linux-gnu", RELEASE_BIN_NAME
-    if system == "Darwin" and machine == "arm64":
-        return "aarch64-apple-darwin", RELEASE_BIN_NAME
-    if system == "Darwin" and machine == "x86_64":
-        return "x86_64-apple-darwin", RELEASE_BIN_NAME
-    if system in {"Windows", "MINGW", "MSYS", "CYGWIN"} and machine in {"x86_64", "amd64"}:
-        return "x86_64-pc-windows-msvc", WINDOWS_BIN_NAME
-    raise SystemExit(f"unsupported host platform for release verification: {system}-{machine}")
 
 
 def installed_rust_targets() -> set[str]:
@@ -172,6 +150,8 @@ def verify_archive_layout(asset: Path, *, bin_name: str) -> None:
 
 
 def can_smoke_test_target(target: str) -> bool:
+    import platform
+
     system = platform.system()
     if target == "x86_64-pc-windows-msvc":
         return system == "Windows"
@@ -181,6 +161,8 @@ def can_smoke_test_target(target: str) -> bool:
 
 
 def extract_and_smoke_test(asset: Path, *, bin_name: str, target: str) -> None:
+    import platform
+
     verify_archive_layout(asset, bin_name=bin_name)
     if not can_smoke_test_target(target):
         return
@@ -231,11 +213,6 @@ def write_consolidated_checksums(workdir: Path, assets: list[Path]) -> Path:
     return output
 
 
-def workspace_version(root: Path) -> str:
-    data = tomllib.loads((root / "Cargo.toml").read_text(encoding="utf-8"))
-    return data["workspace"]["package"]["version"]
-
-
 def command_output(command: list[str], *, cwd: Path) -> str:
     return subprocess.run(
         command, cwd=cwd, capture_output=True, text=True, check=True
@@ -259,6 +236,8 @@ def write_provenance(
     assets: list[Path],
     receipts: list[Path],
 ) -> Path:
+    import platform
+
     payload = {
         "schema_version": 1,
         "version": version,

@@ -1,3 +1,4 @@
+use super::join_heuristics::{has_equality_predicate, is_date_spine_table};
 use crate::strip::JinjaStripMap;
 use crate::{CteFeature, ExpressionFeature, JoinFeature, JoinKind, SqlFeatures, WindowFeature};
 use costguard_diagnostics::{LineIndex, Span};
@@ -380,19 +381,6 @@ fn is_exempt_cross_join_target(factor: &TableFactor) -> bool {
     }
 }
 
-fn is_date_spine_table(name: &str) -> bool {
-    matches!(
-        name,
-        "check_date"
-            | "date_spine"
-            | "time_seq"
-            | "calendar"
-            | "dates"
-            | "time_dimension"
-            | "date_ranges"
-    )
-}
-
 fn object_name_last(name: &ObjectName) -> String {
     name.0
         .last()
@@ -536,10 +524,6 @@ impl<'a> SpanFinder<'a> {
 
 fn is_word_char(ch: char) -> bool {
     ch.is_ascii_alphanumeric() || ch == '_'
-}
-
-fn has_equality_predicate(predicate: &str) -> bool {
-    predicate.contains('=') && !predicate.contains(">=") && !predicate.contains("<=")
 }
 
 fn join_predicate_has_function_on_key(expr: &Expr) -> bool {

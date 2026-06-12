@@ -7,11 +7,11 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from bucket_rule_diagnostics import (  # noqa: E402
     CLASSIFIERS,
+    classify_sqlcost005,
     classify_sqlcost012,
     classify_sqlcost016,
     classify_sqlcost017,
     classify_sqlcost019,
-    classify_sqlcost005,
 )
 
 

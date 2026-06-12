@@ -198,11 +198,6 @@ fn is_config_or_meta_key(key: &str) -> bool {
         || key == "data_tests"
 }
 
-#[allow(dead_code)]
-pub fn parse_dbt_project_text(text: &str) -> DbtProjectFile {
-    parse_dbt_project_with_warnings(text, Path::new("<dbt_project.yml>")).0
-}
-
 pub fn parse_dbt_project_with_warnings(
     text: &str,
     path: &Path,
@@ -305,17 +300,6 @@ fn walk_folder_tree(
         };
         walk_folder_tree(value, &child_prefix, current.clone(), map);
     }
-}
-
-#[allow(dead_code)]
-pub fn discover_dbt_project_files(root: &Path) -> Vec<DbtProjectFile> {
-    discover_dbt_project_files_with_warnings(root).0
-}
-
-pub fn discover_dbt_project_files_with_warnings(
-    root: &Path,
-) -> (Vec<DbtProjectFile>, Vec<MetadataWarning>) {
-    discover_dbt_project_files_in_roots_with_warnings(root, &[root.to_path_buf()])
 }
 
 pub fn discover_dbt_project_files_in_roots_with_warnings(
@@ -498,7 +482,9 @@ models:
       +materialized: incremental
       +unique_key: tx_hash
 "#;
-        let project = parse_dbt_project_text(yaml);
+        let (project, warnings) =
+            parse_dbt_project_with_warnings(yaml, Path::new("<dbt_project.yml>"));
+        assert!(warnings.is_empty());
         let marts = resolve_folder_config(&project.folder_configs, "marts");
         assert_eq!(marts.materialized.as_deref(), Some("incremental"));
         assert_eq!(marts.unique_key.as_deref(), Some("tx_hash"));
@@ -515,7 +501,9 @@ models:
         materialized: incremental
         unique_key: id
 "#;
-        let project = parse_dbt_project_text(yaml);
+        let (project, warnings) =
+            parse_dbt_project_with_warnings(yaml, Path::new("<dbt_project.yml>"));
+        assert!(warnings.is_empty());
         let marts = resolve_folder_config(&project.folder_configs, "marts");
         assert_eq!(marts.materialized.as_deref(), Some("incremental"));
         assert_eq!(marts.unique_key.as_deref(), Some("id"));
@@ -541,7 +529,9 @@ models:
       finance:
         +unique_key: id
 "#;
-        let project = parse_dbt_project_text(yaml);
+        let (project, warnings) =
+            parse_dbt_project_with_warnings(yaml, Path::new("<dbt_project.yml>"));
+        assert!(warnings.is_empty());
         let finance = resolve_folder_config(&project.folder_configs, "marts/finance");
         assert_eq!(finance.materialized.as_deref(), Some("incremental"));
         assert_eq!(finance.unique_key.as_deref(), Some("id"));

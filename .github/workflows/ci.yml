@@ -8,6 +8,11 @@ on:
         required: false
         default: true
         type: boolean
+      precision:
+        description: Include the Spellbook precision gate when cache is available
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -25,7 +30,12 @@ jobs:
           python-version: "3.11"
       - run: cargo install mdbook --version 0.4.40 --locked
       - run: cargo install cargo-deny --version 0.19.7 --locked
-      - if: inputs.spellbook-smoke
+      - run: pip install ruff
+      - if: ${{ inputs.spellbook-smoke && inputs.precision }}
+        run: ./scripts/ci_local.sh --spellbook-smoke --precision
+      - if: ${{ inputs.spellbook-smoke && !inputs.precision }}
         run: ./scripts/ci_local.sh --spellbook-smoke
-      - if: ${{ !inputs.spellbook-smoke }}
+      - if: ${{ !inputs.spellbook-smoke && inputs.precision }}
+        run: ./scripts/ci_local.sh --precision
+      - if: ${{ !inputs.spellbook-smoke && !inputs.precision }}
         run: ./scripts/ci_local.sh

@@ -4,11 +4,11 @@ Costguard is a PR-first check for catching expensive dbt and warehouse SQL befor
 
 Runs locally as a fast Rust CLI. No warehouse credentials required.
 
-Costguard 1.0 is production-ready for Generic SQL, Snowflake, BigQuery, and Trino. Databricks, Redshift, Postgres, and DuckDB support is preview.
+Costguard 1.1 is production-ready for Generic SQL, Snowflake, BigQuery, and Trino. Databricks, Redshift, Postgres, and DuckDB support is preview.
 
 ## Quick start
 
-Use the GitHub Action at the moving compatible major tag `@v1`, pin exact behavior with `@v1.0.0`, or download a checksum-protected binary from GitHub Releases.
+Use the GitHub Action at the moving compatible major tag `@v1`, pin exact behavior with `@v1.1.0`, or download a checksum-protected binary from GitHub Releases.
 
 ```yaml
 - uses: actions/checkout@v4
@@ -25,7 +25,7 @@ Use the GitHub Action at the moving compatible major tag `@v1`, pin exact behavi
 Install an exact release binary by selecting one of `aarch64-apple-darwin`, `x86_64-apple-darwin`, or `x86_64-unknown-linux-gnu`:
 
 ```bash
-VERSION=v1.0.0
+VERSION=v1.1.0
 TARGET=aarch64-apple-darwin
 curl -LO "https://github.com/hypertrial/costguard/releases/download/${VERSION}/costguard-${TARGET}.tar.gz"
 curl -LO "https://github.com/hypertrial/costguard/releases/download/${VERSION}/costguard-${TARGET}.tar.gz.sha256"

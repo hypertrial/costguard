@@ -20,6 +20,11 @@ run() {
 }
 
 run python3 scripts/validate_workspace_deps.py
+if command -v ruff >/dev/null 2>&1; then
+  run ruff check scripts .github/actions/costguard/scripts
+else
+  echo "WARN: ruff not installed; skipping ruff check"
+fi
 run cargo fmt --check
 run cargo clippy --locked --all-targets --all-features -- -D warnings
 run cargo build --locked -p costguard-cli
@@ -28,6 +33,7 @@ run python3 scripts/verify_release_assets.py
 run python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 run python3 scripts/validate_fp_registry.py
 run python3 scripts/recall_report.py
+run python3 scripts/generate_recall_corpus.py --check
 COSTGUARD_BUILD_PROFILE=release run python3 scripts/benchmark_external_repo.py --all-vendored
 run python3 scripts/generate_rule_docs.py --check
 run python3 scripts/check_docs.py

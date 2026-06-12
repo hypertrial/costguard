@@ -7,17 +7,13 @@ import argparse
 import json
 import random
 import sys
+import tomllib
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
-
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib  # type: ignore[no-redef]
 
 from bucket_rule_diagnostics import (  # noqa: E402
     CLASSIFIERS,

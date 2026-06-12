@@ -1,0 +1,25 @@
+[project]
+name = "costguard-scripts"
+version = "0.0.0"
+requires-python = ">=3.11"
+description = "Development scripts for the Costguard repository"
+
+[tool.ruff]
+target-version = "py311"
+src = ["scripts", ".github/actions/costguard/scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/tests/*" = ["E402"]
+"scripts/benchmark_external_repo.py" = ["E402"]
+"scripts/bucket_rule_diagnostics.py" = ["E402"]
+"scripts/precision_triage.py" = ["E402"]
+"scripts/publish_release_local.py" = ["E402"]
+"scripts/release_check.py" = ["E402"]
+"scripts/verify_release_assets.py" = ["E402"]
+"scripts/release_packaging.py" = ["E402"]
+"scripts/generate_rule_docs.py" = ["E402"]
+".github/actions/costguard/scripts/costguard_action.py" = ["E402"]

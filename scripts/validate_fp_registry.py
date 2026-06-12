@@ -4,17 +4,13 @@
 from __future__ import annotations
 
 import sys
+import tomllib
 from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = ROOT / "tests" / "benchmarks" / "fp_registry.toml"
 CORPUS_MANIFEST = ROOT / "tests" / "fixtures" / "corpus" / "manifest.toml"
-
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib  # type: ignore[no-redef]
 
 
 def load_corpus_rules() -> dict[str, dict[str, set[str]]]:
