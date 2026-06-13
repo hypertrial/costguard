@@ -3,7 +3,7 @@ use costguard_diagnostics::{Diagnostic, Severity};
 use costguard_scanner::ProjectFile;
 use costguard_sql::SqlDocument;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 pub use costguard_platform::Platform;
 
@@ -159,4 +159,194 @@ impl RuleRegistry {
             })
             .collect()
     }
+
+    pub fn run_declarative(
+        &self,
+        ctx: &RuleContext<'_>,
+        rules: &[costguard_policy::DeclarativeRule],
+    ) -> anyhow::Result<Vec<Diagnostic>> {
+        let facts = rule_facts(ctx);
+        let mut diagnostics = Vec::new();
+        for rule in rules {
+            if costguard_policy::evaluate_custom_rule(rule, &facts)? {
+                let mut diagnostic = Diagnostic::new(
+                    rule.id.clone(),
+                    rule.severity,
+                    ctx.file.root_relative_path.clone(),
+                    None,
+                    rule.message.clone(),
+                )
+                .with_confidence(rule.confidence)
+                .with_warehouse(ctx.warehouse.to_string());
+                if let Some(risk) = &rule.risk {
+                    diagnostic = diagnostic.with_risk(risk.clone());
+                }
+                if let Some(suggestion) = &rule.suggestion {
+                    diagnostic = diagnostic.with_suggestion(suggestion.clone());
+                }
+                diagnostic.governance.evidence_key = "declarative:primary".into();
+                diagnostics.push(diagnostic);
+            }
+        }
+        Ok(diagnostics)
+    }
+}
+
+fn rule_facts(ctx: &RuleContext<'_>) -> costguard_policy::RuleFactsV1 {
+    let mut facts = costguard_policy::RuleFactsV1::default();
+    facts
+        .strings
+        .insert("platform".into(), ctx.warehouse.to_string());
+    facts.strings.insert(
+        "path".into(),
+        ctx.file
+            .root_relative_path
+            .to_string_lossy()
+            .replace('\\', "/"),
+    );
+    facts.strings.insert(
+        "file.kind".into(),
+        format!("{:?}", ctx.file.kind).to_ascii_lowercase(),
+    );
+    facts.strings.insert(
+        "metadata.state".into(),
+        if ctx.dbt_model.is_some() {
+            "dbt_model"
+        } else {
+            "source_only"
+        }
+        .into(),
+    );
+    if let Some(model) = ctx.dbt_model {
+        if let Some(materialized) = &model.materialized {
+            facts
+                .strings
+                .insert("dbt.materialized".into(), materialized.clone());
+        }
+        facts.strings.insert("dbt.model".into(), model.name.clone());
+        for (field, value) in [
+            ("dbt.unique_key", model.unique_key.as_ref()),
+            (
+                "dbt.incremental_strategy",
+                model.incremental_strategy.as_ref(),
+            ),
+            ("dbt.partition_by", model.partition_by.as_ref()),
+            ("dbt.cluster_by", model.cluster_by.as_ref()),
+            ("dbt.on_schema_change", model.on_schema_change.as_ref()),
+        ] {
+            if let Some(value) = value {
+                facts.strings.insert(field.into(), value.clone());
+            }
+        }
+        facts.sets.insert(
+            "dbt.tags".into(),
+            model.tags.iter().cloned().collect::<BTreeSet<_>>(),
+        );
+        facts.sets.insert(
+            "lineage.refs".into(),
+            model.refs.iter().cloned().collect::<BTreeSet<_>>(),
+        );
+        facts.sets.insert(
+            "lineage.sources".into(),
+            model
+                .sources
+                .iter()
+                .map(|source| format!("{}.{}", source.source_name, source.table_name))
+                .collect::<BTreeSet<_>>(),
+        );
+        facts
+            .numbers
+            .insert("dbt.ref_count".into(), model.refs.len() as f64);
+        facts
+            .numbers
+            .insert("dbt.source_count".into(), model.sources.len() as f64);
+    }
+    if let Some(sql) = ctx.sql {
+        let features = &sql.features;
+        for (name, value) in [
+            ("sql.join_count", features.joins.len()),
+            ("sql.window_count", features.window_functions.len()),
+            ("sql.cte_count", features.ctes.len()),
+            ("sql.select_star_count", features.select_stars.len()),
+            ("sql.json_extraction_count", features.json_extractions.len()),
+            ("sql.regex_count", features.regex_calls.len()),
+            (
+                "sql.normalization_count",
+                features.normalization_calls.len(),
+            ),
+            (
+                "sql.non_sargable_count",
+                features.non_sargable_predicates.len(),
+            ),
+            (
+                "sql.correlated_subquery_count",
+                features.correlated_subqueries.len(),
+            ),
+        ] {
+            facts.numbers.insert(name.into(), value as f64);
+        }
+        facts.numbers.insert(
+            "sql.cross_join_count".into(),
+            features
+                .joins
+                .iter()
+                .filter(|join| {
+                    matches!(
+                        join.kind,
+                        costguard_sql::JoinKind::Cross | costguard_sql::JoinKind::Comma
+                    )
+                })
+                .count() as f64,
+        );
+        facts.numbers.insert(
+            "sql.equality_join_count".into(),
+            features
+                .joins
+                .iter()
+                .filter(|join| join.has_equality)
+                .count() as f64,
+        );
+        facts.numbers.insert(
+            "sql.unbounded_join_count".into(),
+            features
+                .joins
+                .iter()
+                .filter(|join| !join.has_equality && join.predicate.is_none())
+                .count() as f64,
+        );
+        facts.numbers.insert(
+            "sql.unpartitioned_window_count".into(),
+            features
+                .window_functions
+                .iter()
+                .filter(|window| !window.has_partition_by)
+                .count() as f64,
+        );
+        facts.sets.insert(
+            "sql.join_kinds".into(),
+            features
+                .joins
+                .iter()
+                .map(|join| format!("{:?}", join.kind).to_ascii_lowercase())
+                .collect(),
+        );
+        let mut function_classes = BTreeSet::new();
+        for (class, present) in [
+            ("json", !features.json_extractions.is_empty()),
+            ("regex", !features.regex_calls.is_empty()),
+            ("normalization", !features.normalization_calls.is_empty()),
+            ("window", !features.window_functions.is_empty()),
+        ] {
+            if present {
+                function_classes.insert(class.into());
+            }
+        }
+        facts
+            .sets
+            .insert("sql.function_classes".into(), function_classes);
+        facts
+            .strings
+            .insert("sql.parsed".into(), sql.parsed.to_string());
+    }
+    facts
 }

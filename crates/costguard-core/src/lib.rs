@@ -12,8 +12,8 @@ pub use baseline::{
 };
 pub use config::{
     apply_file_config, load_config, validate_scan_config, AnalysisConfig, AnalysisPolicy,
-    AnalysisSection, DbtSection, FileConfig, OutputFormat, OutputSection, ScanConfig,
-    ScanRuntimeOverrides, ScanSection,
+    AnalysisSection, DbtSection, EnterprisePolicyConfig, EnterprisePolicySection, FileConfig,
+    OutputFormat, OutputSection, ScanConfig, ScanRuntimeOverrides, ScanSection,
 };
 pub use costguard_cost::CostConfig;
 pub use costguard_cost::ProjectCostSummary;
@@ -25,11 +25,14 @@ pub use costguard_diagnostics::{Confidence, LineIndex, Span};
 pub use costguard_platform::Platform;
 pub use costguard_rules::{Rule, RuleContext, RuleMetadata, RuleOverrides};
 pub use costguard_scanner::{FileKind as ProjectFileKind, ProjectFile as ScannedProjectFile};
-pub use costguard_sql::{CteFeature, ExpressionFeature, JoinFeature, ParseInput, SqlFeatures, WindowFeature};
+pub use costguard_sql::{
+    CteFeature, ExpressionFeature, JoinFeature, ParseInput, SqlFeatures, WindowFeature,
+};
 pub use scan::{explain, rules, scan};
 
 use costguard_dbt::DbtProject;
 use costguard_diagnostics::Diagnostic;
+use costguard_protocol::EnforcementOutcome;
 use costguard_scanner::{ProjectFile, ScanCounts};
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -118,9 +121,12 @@ impl ScanResult {
             return true;
         }
         if let Some(threshold) = fail_on {
+            let managed = self.policy.digest != "local-unmanaged";
             if self.diagnostics.iter().any(|diagnostic| {
                 diagnostic.severity >= threshold
                     && min_confidence.is_none_or(|mc| diagnostic.confidence >= mc)
+                    && (!managed
+                        || diagnostic.governance.enforcement == EnforcementOutcome::Blocked)
             }) {
                 return true;
             }

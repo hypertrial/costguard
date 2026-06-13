@@ -9,12 +9,18 @@ use crate::sql_analysis::{
     analyze_sql_documents, build_file_parse_status, build_scan_metrics, dbt_models_by_path,
     parse_failure_diagnostics,
 };
-use crate::{AnalysisReport, AnalysisViolation, PolicyMetadata, PrSummary, Project, RunMetadata, ScanResult};
+use crate::{
+    AnalysisReport, AnalysisViolation, PolicyMetadata, PrSummary, Project, RunMetadata, ScanResult,
+};
 use anyhow::{Context, Result};
 use costguard_cost::{annotate_diagnostics, summarize_features, CostInputs, ModelFeatureSummary};
 use costguard_dbt::{compiled_code_by_model_path, MetadataWarning, MetadataWarningKind};
 use costguard_diagnostics::{apply_suppressions, Diagnostic, Severity};
-use costguard_rules::{ProjectIndexes, RuleMetadata, RuleRegistry};
+use costguard_policy::{
+    apply_governance, read_signed_policy, read_trust_store, resolve_policy, verify_policy,
+    PolicyDocumentV1, ResolutionContext, ResolvedPolicy,
+};
+use costguard_rules::{ProjectIndexes, RuleMetadata, RuleOverride, RuleOverrides, RuleRegistry};
 use costguard_scanner::{
     discover_with_options, read_existing_paths_with_options, DiscoveryOptions, FileKind,
     ProjectFile, ScanCounts, SkippedFile,
@@ -30,6 +36,8 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
         .root
         .canonicalize()
         .with_context(|| format!("failed to resolve root {}", config.root.display()))?;
+    let managed_policy = load_managed_policy(config, &root, started_at)?;
+    validate_local_policy_controls(config, managed_policy.as_ref())?;
     let discovery_options =
         DiscoveryOptions::from_scan(config.ignore.clone(), config.max_file_bytes);
     let (files, context_files, pr_summary, skipped_files) = if config.changed_only {
@@ -122,6 +130,12 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
     for file in &project.files {
         let sql = sql_by_path.get(&file.path).copied();
         let dbt_model = dbt_by_path.get(&file.root_relative_path).copied();
+        let policy_path = normalized_path(&file.root_relative_path);
+        let resolved = managed_policy
+            .as_ref()
+            .map(|policy| policy.resolve(Some(&policy_path)))
+            .transpose()?;
+        let overrides = effective_rule_overrides(config, resolved.as_ref());
         let ctx = costguard_rules::RuleContext {
             warehouse: config.platform,
             file,
@@ -129,14 +143,29 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
             dbt_model,
             all_sql: &context_sql_documents,
             project_indexes: &project_indexes,
-            overrides: &config.rule_overrides,
+            overrides: &overrides,
         };
-        let file_diagnostics = apply_suppressions(&file.text, registry.run(&ctx));
+        let mut file_diagnostics = registry.run(&ctx);
+        if let Some(policy) = &resolved {
+            file_diagnostics.extend(registry.run_declarative(&ctx, &policy.custom_rules)?);
+        }
+        if managed_policy
+            .as_ref()
+            .is_none_or(|policy| policy.document.permissions.allow_inline_suppressions)
+        {
+            file_diagnostics = apply_suppressions(&file.text, file_diagnostics);
+        }
         diagnostics.extend(file_diagnostics);
     }
 
     diagnostics.extend(parse_failure_diagnostics(&context_sql_documents, &root));
     assign_finding_identities(&mut diagnostics);
+    let policy_violations =
+        apply_managed_governance(&mut diagnostics, managed_policy.as_ref(), started_at)?;
+    let policy_digest = managed_policy
+        .as_ref()
+        .map(|policy| policy.digest.clone())
+        .unwrap_or_else(|| "local-unmanaged".into());
 
     if let Some(path) = &config.write_baseline_path {
         let output = if path.is_absolute() {
@@ -154,9 +183,19 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
                 .as_path(),
             )?;
             validate_finding_baseline(&existing, config.platform)?;
-            crate::baseline::merge_baseline_findings(&existing, &diagnostics, config.platform, None)
+            validate_baseline_policy(&existing, &policy_digest)?;
+            crate::baseline::merge_baseline_findings(
+                &existing,
+                &diagnostics,
+                config.platform,
+                Some(policy_digest.clone()),
+            )
         } else {
-            crate::FindingBaseline::from_diagnostics(&diagnostics, config.platform, None)
+            crate::FindingBaseline::from_diagnostics(
+                &diagnostics,
+                config.platform,
+                Some(policy_digest.clone()),
+            )
         };
         write_finding_baseline(&output, &baseline_to_write)?;
     }
@@ -171,6 +210,7 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
             .as_path(),
         )?;
         validate_finding_baseline(&baseline, config.platform)?;
+        validate_baseline_policy(&baseline, &policy_digest)?;
         Some(baseline)
     } else {
         None
@@ -221,21 +261,37 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
     );
     metrics.baselined_findings = baselined_findings;
     metrics.new_findings = diagnostics.len();
-    let analysis = evaluate_analysis(config, &metrics, skipped_files.len(), metadata_only);
+    let mut analysis = evaluate_analysis(config, &metrics, skipped_files.len(), metadata_only);
+    for violation in policy_violations {
+        analysis.violations.push(AnalysisViolation {
+            code: violation.code,
+            message: violation.message,
+            observed: 1.0,
+            allowed: 0.0,
+        });
+    }
+    analysis.passed = analysis.violations.is_empty();
     let completed_at = chrono::Utc::now();
     Ok(ScanResult {
         run: RunMetadata {
-            id: format!("scan-{}-{}", started_at.timestamp_millis(), std::process::id()),
+            id: format!(
+                "scan-{}-{}",
+                started_at.timestamp_millis(),
+                std::process::id()
+            ),
             started_at: started_at.to_rfc3339(),
             completed_at: completed_at.to_rfc3339(),
             duration_ms: started.elapsed().as_millis().try_into().unwrap_or(u64::MAX),
             tool_version: env!("CARGO_PKG_VERSION").to_string(),
         },
-        policy: PolicyMetadata {
-            digest: "local-unmanaged".into(),
-            version: env!("CARGO_PKG_VERSION").into(),
-            scope: "local".into(),
-        },
+        policy: managed_policy
+            .as_ref()
+            .map(ManagedPolicy::metadata)
+            .unwrap_or_else(|| PolicyMetadata {
+                digest: "local-unmanaged".into(),
+                version: env!("CARGO_PKG_VERSION").into(),
+                scope: "local".into(),
+            }),
         diagnostics,
         counts: metrics.counts.clone(),
         metrics,
@@ -244,6 +300,188 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
         cost_summary,
         analysis,
     })
+}
+
+struct ManagedPolicy {
+    document: PolicyDocumentV1,
+    digest: String,
+    organization: String,
+    team: Option<String>,
+    repository: String,
+}
+
+impl ManagedPolicy {
+    fn resolve(&self, path: Option<&str>) -> Result<ResolvedPolicy> {
+        resolve_policy(
+            &self.document,
+            &ResolutionContext {
+                organization: &self.organization,
+                team: self.team.as_deref(),
+                repository: &self.repository,
+                path,
+            },
+        )
+    }
+
+    fn metadata(&self) -> PolicyMetadata {
+        PolicyMetadata {
+            digest: self.digest.clone(),
+            version: self.document.version.clone(),
+            scope: "resolved-per-path".into(),
+        }
+    }
+}
+
+fn load_managed_policy(
+    config: &ScanConfig,
+    root: &Path,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<Option<ManagedPolicy>> {
+    let Some(bundle_path) = &config.enterprise_policy.bundle_path else {
+        return Ok(None);
+    };
+    let trust_path = config
+        .enterprise_policy
+        .trust_store_path
+        .as_ref()
+        .context("policy trust store is required")?;
+    let resolve_path = |path: &Path| {
+        if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            root.join(path)
+        }
+    };
+    let signed = read_signed_policy(&resolve_path(bundle_path))?;
+    let trust = read_trust_store(&resolve_path(trust_path))?;
+    let document = verify_policy(&signed, &trust, now)?;
+    let organization = config
+        .enterprise_policy
+        .organization
+        .clone()
+        .unwrap_or_else(|| document.organization.clone());
+    let repository = config
+        .enterprise_policy
+        .repository
+        .clone()
+        .or_else(|| std::env::var("GITHUB_REPOSITORY").ok())
+        .or_else(|| {
+            root.file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+        })
+        .context("unable to determine policy repository")?;
+    let resolved = resolve_policy(
+        &document,
+        &ResolutionContext {
+            organization: &organization,
+            team: config.enterprise_policy.team.as_deref(),
+            repository: &repository,
+            path: None,
+        },
+    )?;
+    Ok(Some(ManagedPolicy {
+        document,
+        digest: resolved.digest,
+        organization,
+        team: config.enterprise_policy.team.clone(),
+        repository,
+    }))
+}
+
+fn validate_local_policy_controls(
+    config: &ScanConfig,
+    policy: Option<&ManagedPolicy>,
+) -> Result<()> {
+    let Some(policy) = policy else {
+        return Ok(());
+    };
+    let permissions = &policy.document.permissions;
+    if (config.baseline_path.is_some() || config.write_baseline_path.is_some())
+        && !permissions.allow_repository_baselines
+    {
+        anyhow::bail!("organization policy forbids repository baselines");
+    }
+    if !config.rule_overrides.is_empty()
+        && !permissions.allow_local_severity_overrides
+        && !permissions.allow_cli_overrides
+    {
+        anyhow::bail!("organization policy forbids local rule overrides");
+    }
+    Ok(())
+}
+
+fn effective_rule_overrides(config: &ScanConfig, policy: Option<&ResolvedPolicy>) -> RuleOverrides {
+    let mut overrides = if policy.is_none()
+        || policy.is_some_and(|policy| {
+            policy.document.permissions.allow_local_severity_overrides
+                || policy.document.permissions.allow_cli_overrides
+        }) {
+        config.rule_overrides.clone()
+    } else {
+        RuleOverrides::default()
+    };
+    if let Some(policy) = policy {
+        for (rule_id, settings) in &policy.rules {
+            let entry = overrides
+                .entry(rule_id.clone())
+                .or_insert_with(RuleOverride::default);
+            if let Some(enabled) = settings.enabled {
+                entry.enabled = Some(enabled);
+            }
+            if let Some(severity) = settings.severity {
+                entry.severity = Some(severity);
+            }
+            if let Some(threshold) = settings.threshold {
+                entry.threshold = Some(threshold);
+            }
+        }
+    }
+    overrides
+}
+
+fn apply_managed_governance(
+    diagnostics: &mut [Diagnostic],
+    managed: Option<&ManagedPolicy>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<Vec<costguard_policy::PolicyViolation>> {
+    let Some(managed) = managed else {
+        return Ok(Vec::new());
+    };
+    let mut violations = Vec::new();
+    for diagnostic in diagnostics {
+        let path = normalized_path(&diagnostic.path);
+        let resolved = managed.resolve(Some(&path))?;
+        violations.extend(apply_governance(
+            std::slice::from_mut(diagnostic),
+            &resolved,
+            &managed.repository,
+            now,
+        )?);
+    }
+    violations.sort_by(|left, right| {
+        left.code
+            .cmp(&right.code)
+            .then(left.message.cmp(&right.message))
+    });
+    violations.dedup_by(|left, right| left.code == right.code && left.message == right.message);
+    Ok(violations)
+}
+
+fn normalized_path(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
+fn validate_baseline_policy(baseline: &crate::FindingBaseline, digest: &str) -> Result<()> {
+    if let Some(expected) = &baseline.policy_digest {
+        if expected != digest {
+            anyhow::bail!(
+                "baseline policy digest '{}' does not match active policy '{}'",
+                expected,
+                digest
+            );
+        }
+    }
+    Ok(())
 }
 
 fn assign_finding_identities(diagnostics: &mut [Diagnostic]) {
@@ -256,7 +494,10 @@ fn assign_finding_identities(diagnostics: &mut [Diagnostic]) {
     });
     let mut occurrences = std::collections::HashMap::<(PathBuf, String), usize>::new();
     for diagnostic in diagnostics {
-        let key = (diagnostic.path.clone(), diagnostic.rule_id.to_ascii_uppercase());
+        let key = (
+            diagnostic.path.clone(),
+            diagnostic.rule_id.to_ascii_uppercase(),
+        );
         let ordinal = occurrences.entry(key).or_default();
         let evidence_key = if diagnostic.governance.evidence_key.is_empty() {
             format!("occurrence:{ordinal}")

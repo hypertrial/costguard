@@ -6,9 +6,11 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+anyhow.workspace = true
 costguard-dbt = { path = "../costguard-dbt" }
 costguard-diagnostics = { path = "../costguard-diagnostics" }
 costguard-platform = { path = "../costguard-platform" }
+costguard-policy = { path = "../costguard-policy" }
 costguard-scanner = { path = "../costguard-scanner" }
 costguard-sql = { path = "../costguard-sql" }
 regex.workspace = true

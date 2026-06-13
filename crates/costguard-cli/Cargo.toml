@@ -15,8 +15,13 @@ clap.workspace = true
 costguard-core = { path = "../costguard-core" }
 costguard-diagnostics = { path = "../costguard-diagnostics" }
 costguard-output = { path = "../costguard-output" }
+costguard-policy = { path = "../costguard-policy" }
 costguard-rules = { path = "../costguard-rules" }
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
+chrono.workspace = true
 tempfile.workspace = true
 serde_json.workspace = true

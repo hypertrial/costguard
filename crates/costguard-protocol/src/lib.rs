@@ -165,7 +165,14 @@ mod tests {
     #[test]
     fn scan_schema_rejects_source_content_fields() {
         let schema = serde_json::to_string(&schema_for::<ScanEnvelopeV1>()).unwrap();
-        for forbidden in ["sql", "yaml", "python", "manifest", "snippet", "source_text"] {
+        for forbidden in [
+            "sql",
+            "yaml",
+            "python",
+            "manifest",
+            "snippet",
+            "source_text",
+        ] {
             assert!(!schema.contains(&format!("\"{forbidden}\"")));
         }
     }

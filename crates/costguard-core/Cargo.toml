@@ -13,6 +13,7 @@ costguard-dbt = { path = "../costguard-dbt" }
 costguard-diagnostics = { path = "../costguard-diagnostics" }
 costguard-git = { path = "../costguard-git" }
 costguard-platform = { path = "../costguard-platform" }
+costguard-policy = { path = "../costguard-policy" }
 costguard-protocol = { path = "../costguard-protocol" }
 costguard-rules = { path = "../costguard-rules" }
 costguard-scanner = { path = "../costguard-scanner" }

@@ -19,6 +19,71 @@ fn fixture(name: &str) -> PathBuf {
 }
 
 #[test]
+fn policy_cli_compiles_signs_and_verifies() {
+    let temp = tempfile::tempdir().unwrap();
+    let source = temp.path().join("policy.toml");
+    let compiled = temp.path().join("policy.json");
+    let private_key = temp.path().join("private.json");
+    let trust = temp.path().join("trust.json");
+    let bundle = temp.path().join("bundle.json");
+    let now = chrono::Utc::now();
+    fs::write(
+        &source,
+        format!(
+            r#"schema_version = 1
+id = "enterprise-default"
+version = "2026.06"
+organization = "acme"
+issued_at = "{}"
+expires_at = "{}"
+
+[[scopes]]
+id = "org"
+kind = "organization"
+selector = "acme"
+priority = 0
+enforcement = "block"
+"#,
+            (now - chrono::Duration::minutes(1)).to_rfc3339(),
+            (now + chrono::Duration::days(30)).to_rfc3339()
+        ),
+    )
+    .unwrap();
+
+    let keygen = costguard_command()
+        .args(["policy", "keygen", "root-2026", "--private-key"])
+        .arg(&private_key)
+        .arg("--trust-store")
+        .arg(&trust)
+        .output()
+        .unwrap();
+    assert!(
+        keygen.status.success(),
+        "{}",
+        String::from_utf8_lossy(&keygen.stderr)
+    );
+
+    let commands = [
+        vec![source.clone(), compiled.clone()],
+        vec![compiled.clone(), private_key.clone(), bundle.clone()],
+        vec![bundle.clone(), trust.clone()],
+    ];
+    for (subcommand, paths) in ["compile", "sign", "verify"].into_iter().zip(commands) {
+        let output = costguard_command()
+            .args(["policy", subcommand])
+            .args(paths)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "stdout={} stderr={}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+#[test]
 fn scan_text_reports_mvp_diagnostics() {
     let output = costguard_command()
         .arg("scan")

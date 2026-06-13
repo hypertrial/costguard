@@ -120,6 +120,7 @@ pub struct ScanConfig {
     pub write_baseline_path: Option<PathBuf>,
     pub cost: Option<CostConfig>,
     pub analysis: AnalysisConfig,
+    pub enterprise_policy: EnterprisePolicyConfig,
 }
 
 impl Default for ScanConfig {
@@ -141,6 +142,7 @@ impl Default for ScanConfig {
             write_baseline_path: None,
             cost: None,
             analysis: AnalysisConfig::default(),
+            enterprise_policy: EnterprisePolicyConfig::default(),
         }
     }
 }
@@ -156,6 +158,7 @@ pub struct FileConfig {
     pub rules: Option<RuleOverrides>,
     pub cost: Option<CostSection>,
     pub analysis: Option<AnalysisSection>,
+    pub policy: Option<EnterprisePolicySection>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -190,6 +193,27 @@ pub struct AnalysisSection {
     pub max_compiled_parse_failures: Option<usize>,
     pub max_skipped_files: Option<usize>,
     pub fail_on_metadata_errors: Option<bool>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct EnterprisePolicyConfig {
+    pub bundle_path: Option<PathBuf>,
+    pub trust_store_path: Option<PathBuf>,
+    pub organization: Option<String>,
+    pub team: Option<String>,
+    pub repository: Option<String>,
+    pub required: bool,
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+pub struct EnterprisePolicySection {
+    pub bundle: Option<PathBuf>,
+    pub trust_store: Option<PathBuf>,
+    pub organization: Option<String>,
+    pub team: Option<String>,
+    pub repository: Option<String>,
+    pub required: Option<bool>,
 }
 
 pub fn load_config(root: &Path) -> Result<FileConfig> {
@@ -275,6 +299,14 @@ pub fn apply_file_config(mut config: ScanConfig, file_config: FileConfig) -> Res
             config.analysis.fail_on_metadata_errors = value;
         }
     }
+    if let Some(policy) = file_config.policy {
+        config.enterprise_policy.bundle_path = policy.bundle;
+        config.enterprise_policy.trust_store_path = policy.trust_store;
+        config.enterprise_policy.organization = policy.organization;
+        config.enterprise_policy.team = policy.team;
+        config.enterprise_policy.repository = policy.repository;
+        config.enterprise_policy.required = policy.required.unwrap_or(false);
+    }
     Ok(config)
 }
 
@@ -291,6 +323,11 @@ pub struct ScanRuntimeOverrides {
     pub cost: bool,
     pub fail_on_cost_delta: Option<f64>,
     pub analysis_policy: Option<String>,
+    pub policy_bundle_path: Option<PathBuf>,
+    pub trust_store_path: Option<PathBuf>,
+    pub policy_organization: Option<String>,
+    pub policy_team: Option<String>,
+    pub policy_repository: Option<String>,
 }
 
 impl ScanRuntimeOverrides {
@@ -335,6 +372,21 @@ impl ScanRuntimeOverrides {
         if let Some(policy) = &self.analysis_policy {
             config.analysis.policy = policy.parse().map_err(anyhow::Error::msg)?;
         }
+        if let Some(path) = &self.policy_bundle_path {
+            config.enterprise_policy.bundle_path = Some(path.clone());
+        }
+        if let Some(path) = &self.trust_store_path {
+            config.enterprise_policy.trust_store_path = Some(path.clone());
+        }
+        if let Some(value) = &self.policy_organization {
+            config.enterprise_policy.organization = Some(value.clone());
+        }
+        if let Some(value) = &self.policy_team {
+            config.enterprise_policy.team = Some(value.clone());
+        }
+        if let Some(value) = &self.policy_repository {
+            config.enterprise_policy.repository = Some(value.clone());
+        }
         Ok(())
     }
 }
@@ -365,6 +417,35 @@ pub fn validate_scan_config(config: &ScanConfig) -> Result<()> {
     }
     if let Some(cost) = &config.cost {
         cost.validate()?;
+    }
+    if config.enterprise_policy.required && config.enterprise_policy.bundle_path.is_none() {
+        anyhow::bail!("enterprise policy is required but no bundle is configured");
+    }
+    if config.enterprise_policy.bundle_path.is_some()
+        && config.enterprise_policy.trust_store_path.is_none()
+    {
+        anyhow::bail!("policy.trust_store is required when policy.bundle is configured");
+    }
+    for (label, path) in [
+        (
+            "policy bundle",
+            config.enterprise_policy.bundle_path.as_ref(),
+        ),
+        (
+            "policy trust store",
+            config.enterprise_policy.trust_store_path.as_ref(),
+        ),
+    ] {
+        if let Some(path) = path {
+            let resolved = if path.is_absolute() {
+                path.clone()
+            } else {
+                config.root.join(path)
+            };
+            if !resolved.is_file() {
+                anyhow::bail!("{label} does not exist: {}", resolved.display());
+            }
+        }
     }
     Ok(())
 }

@@ -118,7 +118,9 @@ pub fn migrate_legacy_baseline_v1(
             .and_then(|message| {
                 candidates
                     .iter()
-                    .find(|diagnostic| normalize_message(&diagnostic.message) == normalize_message(message))
+                    .find(|diagnostic| {
+                        normalize_message(&diagnostic.message) == normalize_message(message)
+                    })
                     .copied()
             })
             .or_else(|| (candidates.len() == 1).then(|| candidates[0]));
@@ -149,7 +151,11 @@ pub fn validate_finding_baseline(baseline: &FindingBaseline, platform: Platform)
     if expected != platform {
         anyhow::bail!("baseline platform '{expected}' does not match scan platform '{platform}'");
     }
-    if baseline.findings.iter().any(|finding| finding.finding_id.is_empty()) {
+    if baseline
+        .findings
+        .iter()
+        .any(|finding| finding.finding_id.is_empty())
+    {
         anyhow::bail!("baseline contains an empty finding_id");
     }
     Ok(())
@@ -216,7 +222,11 @@ fn normalize_string_path(path: &str) -> String {
 }
 
 fn normalize_message(message: &str) -> String {
-    message.split_whitespace().collect::<Vec<_>>().join(" ").to_ascii_lowercase()
+    message
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_ascii_lowercase()
 }
 
 #[cfg(test)]
@@ -261,11 +271,8 @@ mod tests {
     #[test]
     fn baseline_filters_known_findings() {
         let diagnostics = vec![sample_diagnostic("known"), sample_diagnostic("new finding")];
-        let baseline = FindingBaseline::from_diagnostics(
-            &[diagnostics[0].clone()],
-            Platform::Generic,
-            None,
-        );
+        let baseline =
+            FindingBaseline::from_diagnostics(&[diagnostics[0].clone()], Platform::Generic, None);
         let (filtered, baselined) = apply_finding_baseline(diagnostics, &baseline);
         assert_eq!(baselined, 2);
         assert!(filtered.is_empty());
