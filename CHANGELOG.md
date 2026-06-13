@@ -2,6 +2,17 @@
 
 All notable changes to Costguard are documented here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [2.0.0-rc.2] - 2026-06-13
+
+### Changed
+
+- Replaced quadratic manifest model lookup and full-scan document filtering with indexed, linear-time paths.
+- Strengthened the 10,000-model release gate with a 2,000-model scaling baseline, nonlinear-growth detection, and version 3 evidence reports that are written on failure.
+
+### Fixed
+
+- Restored the 10,000-model scan to the release performance budget on macOS development hardware.
+
 ## [2.0.0-rc.1] - 2026-06-13
 
 ### Added

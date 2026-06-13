@@ -51,7 +51,7 @@ Shared helper for locating/building the CLI. Benchmark and doc scripts default t
 Authoritative pre-release qualification gate. It requires the verified signed version tag at `HEAD`, validates the requested workspace version, runs local CI and consumer Action tests, executes pinned external benchmarks, enforces the 10,000-model performance budget, checks external documentation links, and writes `dist/release/release-check.json` bound to the commit.
 
 ```bash
-python3 scripts/release_check.py --version 2.0.0-rc.1
+python3 scripts/release_check.py --version 2.0.0-rc.2
 ```
 
 `--development`, `--skip-external`, and `--skip-external-links` are development aids. Development mode does not write a release qualification receipt. Strict qualification also requires `mdbook` and `cargo-deny` so documentation and dependency policy checks cannot be silently skipped.
@@ -69,7 +69,7 @@ python3 scripts/verify_release_assets.py
 Local package-recovery tool. It requires a clean checkout at a verified signed annotated tag, builds all four release targets, creates deterministic archives, and validates available native smoke receipts. It cannot publish; GitHub Actions is the sole publication authority.
 
 ```bash
-./scripts/publish_release_local.sh --package-only --version 2.0.0-rc.1
+./scripts/publish_release_local.sh --package-only --version 2.0.0-rc.2
 ```
 
 | Flag | Description |
@@ -97,20 +97,20 @@ Runs `--version` and `rules --format json` from an extracted native release bina
 python3 scripts/smoke_release_asset.py \
   --asset costguard-x86_64-pc-windows-msvc.tar.gz \
   --target x86_64-pc-windows-msvc \
-  --version 2.0.0-rc.1 \
+  --version 2.0.0-rc.2 \
   --receipt smoke-x86_64-pc-windows-msvc.json
 ```
 
 ### Packaging recovery checklist
 
 1. Install the cross toolchains from the matrix above.
-2. Qualify the exact signed tag locally with `python3 scripts/release_check.py --version 2.0.0-rc.1`.
+2. Qualify the exact signed tag locally with `python3 scripts/release_check.py --version 2.0.0-rc.2`.
 3. Package with `--package-only`, inspect `SHA256SUMS`, and run native smoke tests as needed.
 4. Restore GitHub Actions publication and rerun the immutable tag workflow. Do not upload recovery artifacts manually or replace an exact release.
 
 ## `ci_local.sh`
 
-Authoritative local gate mirrored by [`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml):
+PR-equivalent local gate mirrored by the required `pr-gate` job in [`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml). It does not create release evidence; use `release_check.py` for authoritative release qualification.
 
 ```bash
 ./scripts/ci_local.sh
@@ -132,7 +132,7 @@ Validates repository-local Markdown links during every local CI run. Release qua
 
 ## `scale_check.py`
 
-Generates and scans 10,000 clean models in release mode. It runs one warmup plus three measured scans and requires median ≤10 seconds, maximum ≤15 seconds, peak RSS ≤1 GiB, zero parse failures, and zero diagnostics. The benchmark report uses internal schema version 2 and records all runtime samples.
+Generates independent 2,000-model and 10,000-model clean projects in release mode. Each target runs one warmup plus three measured scans. The gate requires the 10,000-model median ≤10 seconds, maximum ≤15 seconds, peak RSS ≤1 GiB, per-model runtime growth ≤1.5×, zero parse failures, and zero diagnostics. The version 3 report records environment metadata, both sample sets, growth, thresholds, status, and violations, and is written even when the gate fails.
 
 ## `benchmark_external_repo.py`
 

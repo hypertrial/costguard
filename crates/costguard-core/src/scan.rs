@@ -110,15 +110,18 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
     let context_sql_documents =
         analyze_sql_documents(context_files_ref, config.platform, &compiled_by_path);
     let project_indexes = ProjectIndexes::from_sql_documents(&context_sql_documents);
-    let scan_sql_documents = if config.changed_only {
-        analyze_sql_documents(&project.files, config.platform, &compiled_by_path)
+    let changed_sql_documents = if config.changed_only {
+        Some(analyze_sql_documents(
+            &project.files,
+            config.platform,
+            &compiled_by_path,
+        ))
     } else {
-        context_sql_documents
-            .iter()
-            .filter(|doc| project.files.iter().any(|file| file.path == doc.path))
-            .cloned()
-            .collect()
+        None
     };
+    let scan_sql_documents = changed_sql_documents
+        .as_deref()
+        .unwrap_or(&context_sql_documents);
     let sql_by_path = scan_sql_documents
         .iter()
         .map(|doc| (doc.path.clone(), doc))
