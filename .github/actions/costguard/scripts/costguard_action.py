@@ -11,6 +11,7 @@ import sys
 import tarfile
 import tempfile
 import urllib.request
+import venv
 from pathlib import Path
 
 ADAPTERS = {
@@ -95,6 +96,8 @@ def install_release(version: str) -> None:
         checksum = temp_dir / f"{asset_name}.sha256"
         download(f"{base_url}/{asset_name}", asset)
         download(f"{base_url}/{asset_name}.sha256", checksum)
+        if env("VERIFY_ATTESTATION_INPUT", "true").lower() == "true":
+            verify_attestation(asset)
         expected = checksum.read_text(encoding="utf-8").split()[0]
         actual = sha256(asset)
         if actual != expected:
@@ -109,6 +112,22 @@ def install_release(version: str) -> None:
     if bin_name != "costguard.exe":
         (install_dir / bin_name).chmod(0o755)
     append_file(Path(env("GITHUB_PATH")), str(install_dir))
+
+
+def verify_attestation(asset: Path) -> None:
+    gh = shutil.which("gh")
+    if gh is None:
+        raise SystemExit("gh is required to verify release artifact attestations")
+    repository = env("GITHUB_REPOSITORY", "hypertrial/costguard")
+    completed = subprocess.run(
+        [gh, "attestation", "verify", str(asset), "--repo", repository],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip()
+        raise SystemExit(f"artifact attestation verification failed: {detail}")
 
 
 def install_source() -> None:
@@ -149,11 +168,14 @@ def resolve_adapter(warehouse: str, requested: str) -> str:
 def consumer_root() -> Path:
     workspace = Path(env("GITHUB_WORKSPACE", str(Path.cwd()))).resolve()
     working_directory = env("WORKING_DIRECTORY_INPUT", ".") or "."
-    return (workspace / working_directory).resolve()
+    root = (workspace / working_directory).resolve()
+    if root != workspace and workspace not in root.parents:
+        raise SystemExit(f"working-directory resolves outside GITHUB_WORKSPACE: {root}")
+    return root
 
 
 def compile_required() -> bool:
-    if env("COMPILE_DBT_INPUT", "true").lower() != "true":
+    if env("COMPILE_DBT_INPUT", "false").lower() != "true":
         return False
     if env("USE_EXISTING_MANIFEST_INPUT").lower() == "true":
         return False
@@ -183,51 +205,120 @@ def command_compile() -> int:
     if not adapter:
         raise SystemExit("resolved dbt adapter package is missing")
 
-    install_args = [sys.executable, "-m", "pip", "install"]
-    constraints = env("DBT_CONSTRAINTS_FILE_INPUT")
-    requirements = env("DBT_REQUIREMENTS_FILE_INPUT")
-    if constraints:
-        install_args.extend(["-c", str(root / constraints)])
-    if requirements:
-        install_args.extend(["-r", str(root / requirements)])
-    install_args.append(adapter)
-    if env("COSTGUARD_ACTION_SKIP_DBT_INSTALL") != "1":
-        subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "pip"], check=True)
-        subprocess.run(install_args, check=True)
-
     helper = action_repo_root() / "scripts" / "dbt_compile_for_costguard.py"
-    command = [
-        sys.executable,
-        str(helper),
-        "--checkout",
-        str(root),
-        "--adapter-package",
-        adapter,
-        "--target",
-        env("DBT_TARGET_INPUT", "dev"),
-        "--manifest-out",
-        env("MANIFEST_OUTPUT_INPUT", "target/manifest.json"),
-        "--use-system-dbt",
-    ]
-    profile_type = env("DBT_PROFILE_TYPE_INPUT")
-    profiles_dir = env("DBT_PROFILES_DIR_INPUT")
-    compile_dirs = env("DBT_COMPILE_DIRS_INPUT")
-    project_dir = env("DBT_PROJECT_DIR_INPUT", ".") or "."
-    dbt_vars = env("DBT_VARS_INPUT")
-    if profile_type:
-        command.extend(["--profile-type", profile_type])
-    if profiles_dir:
-        command.extend(["--profiles-dir", profiles_dir])
-    if compile_dirs:
-        command.extend(["--compile-dirs", compile_dirs])
-    else:
-        command.extend(["--project-dir", project_dir])
-    if dbt_vars:
-        command.extend(["--vars", dbt_vars])
-    if env("FAIL_ON_DEPS_FAILURE_INPUT").lower() == "true":
-        command.append("--fail-on-deps-failure")
-    subprocess.run(command, check=True)
+    installation = env("DBT_INSTALLATION_INPUT", "system").lower()
+    requirements = env("DBT_REQUIREMENTS_FILE_INPUT")
+    constraints = env("DBT_CONSTRAINTS_FILE_INPUT")
+    with tempfile.TemporaryDirectory(prefix="costguard-dbt-") as temp:
+        temp_dir = Path(temp)
+        command_python = sys.executable
+        command_env = os.environ.copy()
+        if env("COSTGUARD_ACTION_SKIP_DBT_INSTALL") == "1":
+            installation = "system"
+        if installation == "system":
+            if shutil.which("dbt") is None:
+                raise SystemExit(
+                    "dbt-installation=system requires a preinstalled dbt executable"
+                )
+        elif installation == "locked":
+            if not requirements:
+                raise SystemExit(
+                    "dbt-installation=locked requires dbt-requirements-file"
+                )
+            requirements_path = contained_file(root, requirements, "dbt requirements")
+            validate_locked_requirements(requirements_path, adapter)
+            venv_dir = temp_dir / "venv"
+            venv.EnvBuilder(with_pip=True, clear=True).create(venv_dir)
+            bin_dir = venv_dir / ("Scripts" if os.name == "nt" else "bin")
+            command_python = str(bin_dir / ("python.exe" if os.name == "nt" else "python"))
+            pip = bin_dir / ("pip.exe" if os.name == "nt" else "pip")
+            install_args = [
+                str(pip),
+                "install",
+                "--require-hashes",
+                "--no-deps",
+                "-r",
+                str(requirements_path),
+            ]
+            if constraints:
+                install_args.extend(
+                    ["-c", str(contained_file(root, constraints, "dbt constraints"))]
+                )
+            subprocess.run(install_args, check=True)
+            command_env["PATH"] = f"{bin_dir}{os.pathsep}{command_env.get('PATH', '')}"
+        else:
+            raise SystemExit(
+                f"unknown dbt-installation '{installation}'; expected system or locked"
+            )
+
+        command = [
+            command_python,
+            str(helper),
+            "--checkout",
+            str(root),
+            "--adapter-package",
+            adapter,
+            "--target",
+            env("DBT_TARGET_INPUT", "dev"),
+            "--manifest-out",
+            env("MANIFEST_OUTPUT_INPUT", "target/manifest.json"),
+            "--use-system-dbt",
+        ]
+        profile_type = env("DBT_PROFILE_TYPE_INPUT")
+        requested_profiles_dir = env("DBT_PROFILES_DIR_INPUT")
+        compile_dirs = env("DBT_COMPILE_DIRS_INPUT")
+        project_dir = env("DBT_PROJECT_DIR_INPUT", ".") or "."
+        dbt_vars = env("DBT_VARS_INPUT")
+        if profile_type:
+            command.extend(["--profile-type", profile_type])
+        if requested_profiles_dir:
+            if env("ALLOW_CREDENTIALED_COMPILE_INPUT").lower() != "true":
+                raise SystemExit(
+                    "dbt-profiles-dir requires allow-credentialed-compile=true"
+                )
+            profiles_dir = Path(requested_profiles_dir).expanduser().resolve()
+            if not (profiles_dir / "profiles.yml").is_file():
+                raise SystemExit(f"profiles.yml does not exist in {profiles_dir}")
+        else:
+            profiles_dir = temp_dir / "profiles"
+        command.extend(["--profiles-dir", str(profiles_dir)])
+        if compile_dirs:
+            command.extend(["--compile-dirs", compile_dirs])
+        else:
+            command.extend(["--project-dir", project_dir])
+        if dbt_vars:
+            command.extend(["--vars", dbt_vars])
+        if (
+            env("ANALYSIS_POLICY_INPUT", "strict").lower() == "strict"
+            or env("FAIL_ON_DEPS_FAILURE_INPUT").lower() == "true"
+        ):
+            command.append("--fail-on-deps-failure")
+        subprocess.run(command, check=True, env=command_env)
     return 0
+
+
+def contained_file(root: Path, requested: str, label: str) -> Path:
+    path = (root / requested).resolve()
+    if path != root and root not in path.parents:
+        raise SystemExit(f"{label} file resolves outside working directory: {path}")
+    if not path.is_file():
+        raise SystemExit(f"{label} file does not exist: {path}")
+    return path
+
+
+def validate_locked_requirements(path: Path, adapter: str) -> None:
+    text = path.read_text(encoding="utf-8")
+    active = [line.strip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    if not active or "--hash=sha256:" not in text:
+        raise SystemExit("dbt requirements must be hash-locked with sha256 hashes")
+    normalized_adapter = adapter.lower().replace("_", "-")
+    if not any(
+        line.lower().replace("_", "-").startswith(f"{normalized_adapter}==")
+        for line in active
+    ):
+        raise SystemExit(
+            f"dbt requirements must pin {adapter} with an exact == version"
+        )
 
 
 def command_run() -> int:
@@ -243,6 +334,8 @@ def command_run() -> int:
         env("FAIL_ON_INPUT", "high"),
         "--format",
         env("FORMAT_INPUT", "github"),
+        "--analysis-policy",
+        env("ANALYSIS_POLICY_INPUT", "strict"),
     ]
     min_confidence = env("MIN_CONFIDENCE_INPUT")
     if min_confidence:

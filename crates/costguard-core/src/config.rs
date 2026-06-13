@@ -9,6 +9,75 @@ use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+pub enum AnalysisPolicy {
+    #[default]
+    Standard,
+    Strict,
+}
+
+impl FromStr for AnalysisPolicy {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "standard" => Ok(Self::Standard),
+            "strict" => Ok(Self::Strict),
+            other => Err(format!("unknown analysis policy '{other}'")),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AnalysisConfig {
+    pub policy: AnalysisPolicy,
+    pub require_manifest: bool,
+    pub max_parse_failure_rate: f64,
+    pub max_compiled_parse_failures: usize,
+    pub max_skipped_files: usize,
+    pub fail_on_metadata_errors: bool,
+}
+
+impl Default for AnalysisConfig {
+    fn default() -> Self {
+        Self {
+            policy: AnalysisPolicy::Standard,
+            require_manifest: false,
+            max_parse_failure_rate: 1.0,
+            max_compiled_parse_failures: usize::MAX,
+            max_skipped_files: usize::MAX,
+            fail_on_metadata_errors: false,
+        }
+    }
+}
+
+impl AnalysisConfig {
+    pub fn effective(&self) -> Self {
+        if self.policy == AnalysisPolicy::Strict {
+            Self {
+                policy: AnalysisPolicy::Strict,
+                require_manifest: true,
+                max_parse_failure_rate: 0.0,
+                max_compiled_parse_failures: 0,
+                max_skipped_files: 0,
+                fail_on_metadata_errors: true,
+            }
+        } else {
+            self.clone()
+        }
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        if !self.max_parse_failure_rate.is_finite()
+            || !(0.0..=1.0).contains(&self.max_parse_failure_rate)
+        {
+            anyhow::bail!("analysis.max_parse_failure_rate must be finite and between 0 and 1");
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum OutputFormat {
     #[default]
     Text,
@@ -50,6 +119,7 @@ pub struct ScanConfig {
     pub baseline_path: Option<PathBuf>,
     pub write_baseline_path: Option<PathBuf>,
     pub cost: Option<CostConfig>,
+    pub analysis: AnalysisConfig,
 }
 
 impl Default for ScanConfig {
@@ -70,6 +140,7 @@ impl Default for ScanConfig {
             baseline_path: None,
             write_baseline_path: None,
             cost: None,
+            analysis: AnalysisConfig::default(),
         }
     }
 }
@@ -84,6 +155,7 @@ pub struct FileConfig {
     pub dbt: Option<DbtSection>,
     pub rules: Option<RuleOverrides>,
     pub cost: Option<CostSection>,
+    pub analysis: Option<AnalysisSection>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -107,6 +179,17 @@ pub struct OutputSection {
 #[serde(deny_unknown_fields)]
 pub struct DbtSection {
     pub manifest_path: Option<PathBuf>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+pub struct AnalysisSection {
+    pub policy: Option<String>,
+    pub require_manifest: Option<bool>,
+    pub max_parse_failure_rate: Option<f64>,
+    pub max_compiled_parse_failures: Option<usize>,
+    pub max_skipped_files: Option<usize>,
+    pub fail_on_metadata_errors: Option<bool>,
 }
 
 pub fn load_config(root: &Path) -> Result<FileConfig> {
@@ -170,7 +253,27 @@ pub fn apply_file_config(mut config: ScanConfig, file_config: FileConfig) -> Res
         config.rule_overrides = overrides;
     }
     if let Some(cost) = file_config.cost {
-        config.cost = Some(CostConfig::from_section(cost));
+        config.cost = Some(CostConfig::from_section(cost)?);
+    }
+    if let Some(analysis) = file_config.analysis {
+        if let Some(policy) = analysis.policy {
+            config.analysis.policy = policy.parse().map_err(anyhow::Error::msg)?;
+        }
+        if let Some(value) = analysis.require_manifest {
+            config.analysis.require_manifest = value;
+        }
+        if let Some(value) = analysis.max_parse_failure_rate {
+            config.analysis.max_parse_failure_rate = value;
+        }
+        if let Some(value) = analysis.max_compiled_parse_failures {
+            config.analysis.max_compiled_parse_failures = value;
+        }
+        if let Some(value) = analysis.max_skipped_files {
+            config.analysis.max_skipped_files = value;
+        }
+        if let Some(value) = analysis.fail_on_metadata_errors {
+            config.analysis.fail_on_metadata_errors = value;
+        }
     }
     Ok(config)
 }
@@ -187,6 +290,7 @@ pub struct ScanRuntimeOverrides {
     pub write_baseline_path: Option<PathBuf>,
     pub cost: bool,
     pub fail_on_cost_delta: Option<f64>,
+    pub analysis_policy: Option<String>,
 }
 
 impl ScanRuntimeOverrides {
@@ -228,11 +332,15 @@ impl ScanRuntimeOverrides {
             cost_config.fail_on_monthly_delta = Some(delta);
             config.cost = Some(cost_config);
         }
+        if let Some(policy) = &self.analysis_policy {
+            config.analysis.policy = policy.parse().map_err(anyhow::Error::msg)?;
+        }
         Ok(())
     }
 }
 
 pub fn validate_scan_config(config: &ScanConfig) -> Result<()> {
+    config.analysis.validate()?;
     if let Some(path) = &config.manifest_path {
         let resolved = if path.is_absolute() {
             path.clone()
@@ -252,6 +360,11 @@ pub fn validate_scan_config(config: &ScanConfig) -> Result<()> {
         if !resolved.exists() {
             anyhow::bail!("baseline path does not exist: {}", resolved.display());
         }
+        let baseline = crate::baseline::load_finding_baseline(&resolved)?;
+        crate::baseline::validate_finding_baseline(&baseline, config.platform)?;
+    }
+    if let Some(cost) = &config.cost {
+        cost.validate()?;
     }
     Ok(())
 }
@@ -291,5 +404,27 @@ max_file_bytes = 1024
         )
         .expect("apply config");
         assert_eq!(config.max_file_bytes, Some(1024));
+    }
+
+    #[test]
+    fn strict_analysis_policy_is_fail_closed() {
+        let config = apply_file_config(
+            ScanConfig::default(),
+            toml::from_str(
+                r#"
+[analysis]
+policy = "strict"
+max_parse_failure_rate = 0.5
+max_skipped_files = 10
+"#,
+            )
+            .expect("parse config"),
+        )
+        .expect("apply config");
+        let effective = config.analysis.effective();
+        assert!(effective.require_manifest);
+        assert_eq!(effective.max_parse_failure_rate, 0.0);
+        assert_eq!(effective.max_skipped_files, 0);
+        assert!(effective.fail_on_metadata_errors);
     }
 }

@@ -6,12 +6,13 @@ mod scan;
 mod sql_analysis;
 
 pub use baseline::{
-    apply_finding_baseline, diagnostic_fingerprint, load_finding_baseline, write_finding_baseline,
-    BaselinedFinding, FindingBaseline,
+    apply_finding_baseline, diagnostic_fingerprint, load_finding_baseline,
+    validate_finding_baseline, write_finding_baseline, BaselinedFinding, FindingBaseline,
 };
 pub use config::{
-    apply_file_config, load_config, validate_scan_config, DbtSection, FileConfig, OutputFormat,
-    OutputSection, ScanConfig, ScanRuntimeOverrides, ScanSection,
+    apply_file_config, load_config, validate_scan_config, AnalysisConfig, AnalysisPolicy,
+    AnalysisSection, DbtSection, FileConfig, OutputFormat, OutputSection, ScanConfig,
+    ScanRuntimeOverrides, ScanSection,
 };
 pub use costguard_cost::CostConfig;
 pub use costguard_cost::ProjectCostSummary;
@@ -85,6 +86,7 @@ pub struct ScanResult {
     pub file_parse_status: Vec<FileParseStatus>,
     pub pr_summary: Option<PrSummary>,
     pub cost_summary: Option<ProjectCostSummary>,
+    pub analysis: AnalysisReport,
 }
 
 impl ScanResult {
@@ -95,6 +97,9 @@ impl ScanResult {
         fail_on_monthly_delta: Option<f64>,
         fail_on_monthly_delta_gb: Option<f64>,
     ) -> bool {
+        if !self.analysis.passed {
+            return true;
+        }
         if let Some(threshold) = fail_on {
             if self.diagnostics.iter().any(|diagnostic| {
                 diagnostic.severity >= threshold
@@ -123,6 +128,31 @@ impl ScanResult {
         }
         false
     }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AnalysisReport {
+    pub policy: AnalysisPolicy,
+    pub passed: bool,
+    pub violations: Vec<AnalysisViolation>,
+}
+
+impl Default for AnalysisReport {
+    fn default() -> Self {
+        Self {
+            policy: AnalysisPolicy::Standard,
+            passed: true,
+            violations: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AnalysisViolation {
+    pub code: String,
+    pub message: String,
+    pub observed: f64,
+    pub allowed: f64,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -184,6 +214,7 @@ mod tests {
             file_parse_status: Vec::new(),
             pr_summary: None,
             cost_summary: None,
+            analysis: AnalysisReport::default(),
         }
     }
 

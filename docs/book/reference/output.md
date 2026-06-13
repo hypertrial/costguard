@@ -11,6 +11,7 @@ Structured scan result:
 ```json
 {
   "schema_version": 2,
+  "analysis": { "...": "..." },
   "metrics": { "...": "..." },
   "cost": { "...": "..." },
   "diagnostics": [ "..." ],
@@ -22,6 +23,7 @@ Structured scan result:
 | Field | Present when | Description |
 | --- | --- | --- |
 | `schema_version` | Always | JSON schema version (`2` adds optional `cost` block) |
+| `analysis` | Always | Completeness report: `policy`, `passed`, and optional `violations` with `code`, `message`, `observed`, and `allowed` |
 | `metrics` | Always | Scan counters including parse metrics (see [Parse metrics](parse-metrics.md)) |
 | `cost` | `[cost]` enabled | Project cost summary: deduplicated model totals, savings sum, top models, grade mix (see [Cost estimates](cost-estimates.md)) |
 | `diagnostics` | Always | Array of findings with `rule_id`, `severity`, `message`, `path`, `line`, `confidence`; optional `cost_estimate` when `[cost]` is enabled (`p50_usd_per_month` is **savings**, not model total); compiled-only unmapped findings include `source_provenance`, `compiled_line`, and `compiled_column` |
@@ -57,7 +59,7 @@ Use `--write-baseline` / `--baseline` (or `[output].baseline` in config) to gran
 | `baselined_findings` | Findings suppressed by the baseline file |
 | `new_findings` | Findings reported after baseline filtering |
 
-Exit code `1` applies to **new** findings at or above `--fail-on`, or when deduplicated **savings** p50 on new findings exceeds `--fail-on-cost-delta` (USD) or `fail_on_monthly_delta_gb` (GB-months) when set.
+Exit code `1` applies when analysis completeness checks fail (`analysis.passed = false`), to **new** findings at or above `--fail-on`, or when deduplicated **savings** p50 on new findings exceeds `--fail-on-cost-delta` (USD) or `fail_on_monthly_delta_gb` (GB-months) when set.
 
 PR markdown output includes a reminder:
 
@@ -69,8 +71,8 @@ Suppress only intentional exceptions with `-- costguard: disable-next-line=RULE`
 
 | Code | Meaning |
 | --- | --- |
-| `0` | No diagnostics at or above `--fail-on` / `fail_on` (and `--min-confidence` / `min_confidence` when set); cost delta gate not exceeded |
-| `1` | One or more diagnostics at or above severity threshold with confidence at or above the optional floor, or deduplicated savings cost gate exceeded |
+| `0` | Analysis completeness checks passed; no diagnostics at or above `--fail-on` / `fail_on` (and `--min-confidence` / `min_confidence` when set); cost delta gate not exceeded |
+| `1` | Analysis completeness checks failed, one or more diagnostics at or above severity threshold with confidence at or above the optional floor, or deduplicated savings cost gate exceeded |
 | `2` | Configuration error (invalid config, missing manifest path) |
 | `3` | Runtime error |
 

@@ -43,9 +43,25 @@ inputs:
     required: false
     default: .
   compile-dbt:
-    description: Run dbt compile before scan when dbt_project.yml is present
+    description: Run dbt compile before scan when dbt_project.yml is present (network and credential access may occur)
+    required: false
+    default: "false"
+  analysis-policy:
+    description: Analysis completeness policy (standard or strict)
+    required: false
+    default: strict
+  verify-attestation:
+    description: Verify the GitHub artifact attestation before extracting a release archive
     required: false
     default: "true"
+  allow-credentialed-compile:
+    description: Permit dbt compile to read the explicitly configured real profiles directory
+    required: false
+    default: "false"
+  dbt-installation:
+    description: dbt dependency source for compilation (system or locked)
+    required: false
+    default: system
   dbt-target:
     description: dbt --target value for compile
     required: false
@@ -59,7 +75,7 @@ inputs:
     required: false
     default: ""
   dbt-adapter-package:
-    description: Optional dbt adapter package; derived from warehouse when empty
+    description: dbt adapter package used for profile selection; derived from warehouse when empty
     required: false
     default: ""
   dbt-profile-type:
@@ -75,7 +91,7 @@ inputs:
     required: false
     default: target/manifest.json
   dbt-requirements-file:
-    description: Optional pip requirements file for dbt dependencies
+    description: Hash-locked pip requirements file required by dbt-installation=locked
     required: false
     default: ""
   dbt-constraints-file:
@@ -115,6 +131,7 @@ runs:
       env:
         INSTALL_MODE_INPUT: ${{ inputs.install-mode }}
         VERSION_INPUT: ${{ inputs.version }}
+        VERIFY_ATTESTATION_INPUT: ${{ inputs.verify-attestation }}
       run: |
         PYTHON="$(command -v python3 || command -v python)"
         "${PYTHON}" "${GITHUB_ACTION_PATH}/scripts/costguard_action.py" install \
@@ -153,11 +170,14 @@ runs:
         DBT_PROFILE_TYPE_INPUT: ${{ inputs.dbt-profile-type }}
         DBT_COMPILE_DIRS_INPUT: ${{ inputs.dbt-compile-dirs }}
         DBT_ADAPTER_PACKAGE_INPUT: ${{ steps.dbt-plan.outputs.adapter-package }}
+        DBT_INSTALLATION_INPUT: ${{ inputs.dbt-installation }}
         DBT_TARGET_INPUT: ${{ inputs.dbt-target }}
         DBT_REQUIREMENTS_FILE_INPUT: ${{ inputs.dbt-requirements-file }}
         DBT_CONSTRAINTS_FILE_INPUT: ${{ inputs.dbt-constraints-file }}
         DBT_VARS_INPUT: ${{ inputs.dbt-vars }}
         FAIL_ON_DEPS_FAILURE_INPUT: ${{ inputs.fail-on-deps-failure }}
+        ANALYSIS_POLICY_INPUT: ${{ inputs.analysis-policy }}
+        ALLOW_CREDENTIALED_COMPILE_INPUT: ${{ inputs.allow-credentialed-compile }}
         MANIFEST_OUTPUT_INPUT: ${{ inputs.manifest-output }}
       run: |
         PYTHON="$(command -v python3 || command -v python)"
@@ -178,6 +198,7 @@ runs:
         MANIFEST_OUTPUT_INPUT: ${{ inputs.manifest-output }}
         USE_EXISTING_MANIFEST_INPUT: ${{ inputs.use-existing-manifest }}
         WORKING_DIRECTORY_INPUT: ${{ inputs.working-directory }}
+        ANALYSIS_POLICY_INPUT: ${{ inputs.analysis-policy }}
       run: |
         PYTHON="$(command -v python3 || command -v python)"
         "${PYTHON}" "${GITHUB_ACTION_PATH}/scripts/costguard_action.py" run

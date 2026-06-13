@@ -57,11 +57,17 @@ pub fn parse_query_history_text(text: &str) -> Result<QueryHistoryStats> {
             .trim()
             .parse()
             .with_context(|| format!("invalid bytes in line: {line}"))?;
+        validate_positive("bytes_per_run", bytes, line)?;
         let runs = if let Some(idx) = runs_idx {
-            fields
+            let value = fields
                 .get(idx)
-                .and_then(|value| value.trim().parse().ok())
-                .unwrap_or(30.0)
+                .context("query history row is missing runs_per_month")?;
+            let parsed = value
+                .trim()
+                .parse::<f64>()
+                .with_context(|| format!("invalid runs_per_month in line: {line}"))?;
+            validate_positive("runs_per_month", parsed, line)?;
+            parsed
         } else {
             30.0
         };
@@ -74,6 +80,13 @@ pub fn parse_query_history_text(text: &str) -> Result<QueryHistoryStats> {
         );
     }
     Ok(stats)
+}
+
+fn validate_positive(name: &str, value: f64, line: &str) -> Result<()> {
+    if !value.is_finite() || value <= 0.0 {
+        anyhow::bail!("{name} must be finite and greater than zero in line: {line}");
+    }
+    Ok(())
 }
 
 /// Minimal RFC4180-style CSV line parser (handles quoted fields with commas).
@@ -128,5 +141,11 @@ mod tests {
         let text = "model_or_table,bytes_per_run,runs_per_month\n\"fct,orders\",500,60\n";
         let stats = parse_query_history_text(text).unwrap();
         assert_eq!(stats.by_key["fct,orders"].bytes_per_run, 500.0);
+    }
+
+    #[test]
+    fn rejects_non_positive_history_values() {
+        let text = "model_or_table,bytes_per_run,runs_per_month\nfct_orders,1000,0\n";
+        assert!(parse_query_history_text(text).is_err());
     }
 }

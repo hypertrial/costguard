@@ -104,7 +104,10 @@ pub fn discover_with_options(
     requested_paths: &[PathBuf],
     options: &DiscoveryOptions,
 ) -> Result<DiscoveryResult> {
-    let scan_roots = if requested_paths.is_empty() {
+    let root = root
+        .canonicalize()
+        .with_context(|| format!("failed to resolve project root {}", root.display()))?;
+    let requested_scan_roots = if requested_paths.is_empty() {
         vec![root.to_path_buf()]
     } else {
         requested_paths
@@ -121,13 +124,15 @@ pub fn discover_with_options(
 
     let mut paths = Vec::new();
     let mut skipped_files = Vec::new();
-    let ignored = normalize_ignored(root, &options.ignore);
+    let ignored = normalize_ignored(&root, &options.ignore);
     let max_file_bytes = if options.max_file_bytes == 0 {
         DEFAULT_MAX_FILE_BYTES
     } else {
         options.max_file_bytes
     };
-    for scan_root in scan_roots {
+    for requested_scan_root in requested_scan_roots {
+        let scan_root = canonical_within_root(&root, &requested_scan_root)
+            .with_context(|| format!("invalid scan path {}", requested_scan_root.display()))?;
         let mut builder = WalkBuilder::new(&scan_root);
         builder.standard_filters(true).hidden(false);
         let ignored_for_filter = ignored.clone();
@@ -139,14 +144,28 @@ pub fn discover_with_options(
             if !entry.file_type().is_some_and(|kind| kind.is_file()) {
                 continue;
             }
-            let path = entry.into_path();
+            let requested_path = entry.into_path();
+            let path = match canonical_within_root(&root, &requested_path) {
+                Ok(path) => path,
+                Err(err) => {
+                    skipped_files.push(SkippedFile {
+                        root_relative_path: requested_path
+                            .strip_prefix(&root)
+                            .unwrap_or(&requested_path)
+                            .to_path_buf(),
+                        path: requested_path,
+                        reason: err.to_string(),
+                    });
+                    continue;
+                }
+            };
             if is_ignored_path(&path, &ignored) {
                 continue;
             }
-            let kind = classify(&path, root);
+            let kind = classify(&path, &root);
             if kind != FileKind::Other {
                 if file_too_large(&path, max_file_bytes) {
-                    skipped_files.push(skipped_file(root, path, max_file_bytes));
+                    skipped_files.push(skipped_file(&root, path, max_file_bytes));
                     continue;
                 }
                 paths.push((path, kind));
@@ -155,8 +174,10 @@ pub fn discover_with_options(
     }
     paths.sort_by(|left, right| left.0.cmp(&right.0));
     paths.dedup_by(|left, right| left.0 == right.0);
+    let loaded = load_project_files(&root, paths);
+    skipped_files.extend(loaded.skipped_files);
     Ok(DiscoveryResult {
-        files: load_project_files(root, paths)?,
+        files: loaded.files,
         skipped_files,
     })
 }
@@ -173,46 +194,74 @@ pub fn read_existing_paths_with_options(
     requested_paths: &[PathBuf],
     options: &DiscoveryOptions,
 ) -> Result<DiscoveryResult> {
-    let ignored = normalize_ignored(root, &options.ignore);
+    let root = root
+        .canonicalize()
+        .with_context(|| format!("failed to resolve project root {}", root.display()))?;
+    let ignored = normalize_ignored(&root, &options.ignore);
     let max_file_bytes = if options.max_file_bytes == 0 {
         DEFAULT_MAX_FILE_BYTES
     } else {
         options.max_file_bytes
     };
     let mut skipped_files = Vec::new();
-    let mut paths = requested_paths
-        .iter()
-        .map(|path| {
-            if path.is_absolute() {
-                path.clone()
-            } else {
-                root.join(path)
+    let mut paths = Vec::new();
+    for requested in requested_paths {
+        let requested_path = if requested.is_absolute() {
+            requested.clone()
+        } else {
+            root.join(requested)
+        };
+        if !requested_path.exists() {
+            continue;
+        }
+        let path = match canonical_within_root(&root, &requested_path) {
+            Ok(path) => path,
+            Err(err) => {
+                skipped_files.push(SkippedFile {
+                    root_relative_path: requested.clone(),
+                    path: requested_path,
+                    reason: err.to_string(),
+                });
+                continue;
             }
-        })
-        .filter(|path| path.is_file() && !is_ignored_path(path, &ignored))
-        .filter_map(|path| {
-            let kind = classify(&path, root);
-            if kind != FileKind::Other && file_too_large(&path, max_file_bytes) {
-                skipped_files.push(skipped_file(root, path, max_file_bytes));
-                return None;
-            }
-            (kind != FileKind::Other).then_some((path, kind))
-        })
-        .collect::<Vec<_>>();
+        };
+        if !path.is_file() || is_ignored_path(&path, &ignored) {
+            continue;
+        }
+        let kind = classify(&path, &root);
+        if kind == FileKind::Other {
+            continue;
+        }
+        if file_too_large(&path, max_file_bytes) {
+            skipped_files.push(skipped_file(&root, path, max_file_bytes));
+            continue;
+        }
+        paths.push((path, kind));
+    }
     paths.sort_by(|left, right| left.0.cmp(&right.0));
     paths.dedup_by(|left, right| left.0 == right.0);
+    let loaded = load_project_files(&root, paths);
+    skipped_files.extend(loaded.skipped_files);
     Ok(DiscoveryResult {
-        files: load_project_files(root, paths)?,
+        files: loaded.files,
         skipped_files,
     })
 }
 
-fn load_project_files(root: &Path, paths: Vec<(PathBuf, FileKind)>) -> Result<Vec<ProjectFile>> {
-    paths
+fn load_project_files(root: &Path, paths: Vec<(PathBuf, FileKind)>) -> DiscoveryResult {
+    let loaded = paths
         .into_par_iter()
         .map(|(path, kind)| {
-            let text = std::fs::read_to_string(&path)
-                .with_context(|| format!("failed to read {}", path.display()))?;
+            let text = match std::fs::read_to_string(&path) {
+                Ok(text) => text,
+                Err(err) => {
+                    return Err(SkippedFile {
+                        root_relative_path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
+                        path: path.clone(),
+                        reason: format!("failed to read {}: {err}", path.display()),
+                    });
+                }
+            };
             let kind = if kind == FileKind::DbtYaml && !is_dbt_yaml(&path, root, &text) {
                 FileKind::Other
             } else {
@@ -231,12 +280,36 @@ fn load_project_files(root: &Path, paths: Vec<(PathBuf, FileKind)>) -> Result<Ve
                 line_index,
             }))
         })
-        .filter_map(|result| match result {
-            Ok(Some(file)) => Some(Ok(file)),
-            Ok(None) => None,
-            Err(err) => Some(Err(err)),
-        })
-        .collect()
+        .collect::<Vec<Result<Option<ProjectFile>, SkippedFile>>>();
+    let mut result = DiscoveryResult::default();
+    for item in loaded {
+        match item {
+            Ok(Some(file)) => result.files.push(file),
+            Ok(None) => {}
+            Err(skipped) => result.skipped_files.push(skipped),
+        }
+    }
+    result
+        .files
+        .sort_by(|left, right| left.path.cmp(&right.path));
+    result
+}
+
+fn canonical_within_root(root: &Path, path: &Path) -> Result<PathBuf> {
+    let canonical_root = root
+        .canonicalize()
+        .with_context(|| format!("failed to resolve project root {}", root.display()))?;
+    let canonical = path
+        .canonicalize()
+        .with_context(|| format!("failed to resolve {}", path.display()))?;
+    if !canonical.starts_with(&canonical_root) {
+        anyhow::bail!(
+            "path {} resolves outside project root {}",
+            path.display(),
+            canonical_root.display()
+        );
+    }
+    Ok(canonical)
 }
 
 pub fn classify(path: &Path, root: &Path) -> FileKind {
@@ -434,5 +507,46 @@ mod tests {
             result.skipped_files[0].root_relative_path,
             PathBuf::from("models/large.sql")
         );
+    }
+
+    #[test]
+    fn requested_path_outside_root_is_rejected() {
+        let root = tempfile::tempdir().expect("root");
+        let outside = tempfile::tempdir().expect("outside");
+        fs::write(outside.path().join("model.sql"), "select 1").expect("write outside");
+        let err = discover(root.path(), &[outside.path().join("model.sql")])
+            .expect_err("outside path must fail");
+        assert!(
+            format!("{err:#}").contains("outside project root"),
+            "{err:#}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlink_target_outside_root_is_reported_as_skipped() {
+        use std::os::unix::fs::symlink;
+
+        let root = tempfile::tempdir().expect("root");
+        let outside = tempfile::tempdir().expect("outside");
+        fs::create_dir_all(root.path().join("models")).expect("models");
+        fs::write(outside.path().join("secret.sql"), "select 1").expect("write outside");
+        symlink(
+            outside.path().join("secret.sql"),
+            root.path().join("models/linked.sql"),
+        )
+        .expect("symlink");
+
+        let result = read_existing_paths_with_options(
+            root.path(),
+            &[PathBuf::from("models/linked.sql")],
+            &DiscoveryOptions::default(),
+        )
+        .expect("discover");
+        assert!(result.files.is_empty());
+        assert_eq!(result.skipped_files.len(), 1);
+        assert!(result.skipped_files[0]
+            .reason
+            .contains("outside project root"));
     }
 }

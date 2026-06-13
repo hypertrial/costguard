@@ -98,6 +98,7 @@ class ActionConsumerTest(unittest.TestCase):
                         "COSTGUARD_RELEASE_BASE_URL": base_url,
                         "RUNNER_TEMP": str(root / "runner"),
                         "GITHUB_PATH": str(github_path),
+                        "VERIFY_ATTESTATION_INPUT": "false",
                     },
                 )
             self.assertEqual(completed.returncode, 0, completed.stderr)
@@ -126,6 +127,7 @@ class ActionConsumerTest(unittest.TestCase):
                         "COSTGUARD_RELEASE_BASE_URL": base_url,
                         "RUNNER_TEMP": str(root / "runner"),
                         "GITHUB_PATH": str(root / "github-path"),
+                        "VERIFY_ATTESTATION_INPUT": "false",
                     },
                 )
             self.assertNotEqual(completed.returncode, 0)
@@ -185,6 +187,21 @@ class ActionConsumerTest(unittest.TestCase):
             completed = run_driver(
                 ["plan-compile"],
                 env={**common, "MANIFEST_INPUT": "artifacts/manifest.json"},
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertIn("compile-required=false", output.read_text(encoding="utf-8"))
+
+    def test_compile_defaults_to_artifact_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "dbt_project.yml").write_text("name: sample\n", encoding="utf-8")
+            output = root / "output"
+            completed = run_driver(
+                ["plan-compile"],
+                env={
+                    "GITHUB_WORKSPACE": str(root),
+                    "GITHUB_OUTPUT": str(output),
+                },
             )
             self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertIn("compile-required=false", output.read_text(encoding="utf-8"))
@@ -285,7 +302,110 @@ class ActionConsumerTest(unittest.TestCase):
                 },
             )
             self.assertEqual(completed.returncode, 0, completed.stderr)
-            self.assertEqual(json.loads(completed.stdout)["schema_version"], 1)
+            payload = json.loads(completed.stdout)
+            self.assertEqual(payload["schema_version"], 2)
+            self.assertEqual(payload["analysis"]["policy"], "strict")
+            self.assertTrue(payload["analysis"]["passed"])
+
+    def test_compile_rejects_unlocked_requirements(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "dbt_project.yml").write_text("name: sample\n", encoding="utf-8")
+            (root / "requirements.txt").write_text(
+                "dbt-snowflake==1.9.0\n", encoding="utf-8"
+            )
+            completed = run_driver(
+                ["compile"],
+                env={
+                    "GITHUB_WORKSPACE": str(root),
+                    "DBT_ADAPTER_PACKAGE_INPUT": "dbt-snowflake",
+                    "DBT_INSTALLATION_INPUT": "locked",
+                    "DBT_REQUIREMENTS_FILE_INPUT": "requirements.txt",
+                },
+            )
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("hash-locked", completed.stderr)
+
+    def test_compile_rejects_real_profiles_without_explicit_consent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bin_dir = root / "bin"
+            profiles = root / "profiles"
+            bin_dir.mkdir()
+            profiles.mkdir()
+            (profiles / "profiles.yml").write_text("secret: true\n", encoding="utf-8")
+            fake_dbt = bin_dir / "dbt"
+            fake_dbt.write_text(FAKE_DBT, encoding="utf-8")
+            fake_dbt.chmod(0o755)
+            (root / "dbt_project.yml").write_text("name: root\n", encoding="utf-8")
+            completed = run_driver(
+                ["compile"],
+                env={
+                    "GITHUB_WORKSPACE": str(root),
+                    "COSTGUARD_ACTION_SKIP_DBT_INSTALL": "1",
+                    "DBT_ADAPTER_PACKAGE_INPUT": "dbt-snowflake",
+                    "DBT_PROFILES_DIR_INPUT": str(profiles),
+                    "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+                },
+            )
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("allow-credentialed-compile=true", completed.stderr)
+
+    def test_compile_uses_dummy_profiles_and_strict_deps_failure_is_fatal(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            fake_dbt = bin_dir / "dbt"
+            fake_dbt.write_text(FAKE_DBT, encoding="utf-8")
+            fake_dbt.chmod(0o755)
+            (root / "dbt_project.yml").write_text("name: root\n", encoding="utf-8")
+            (root / "profiles.yml").write_text("real_secret: true\n", encoding="utf-8")
+            profile_log = root / "profile-log"
+            common = {
+                "GITHUB_WORKSPACE": str(root),
+                "COSTGUARD_ACTION_SKIP_DBT_INSTALL": "1",
+                "DBT_ADAPTER_PACKAGE_INPUT": "dbt-snowflake",
+                "FAKE_DBT_PROFILE_LOG": str(profile_log),
+                "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+            }
+            completed = run_driver(["compile"], env=common)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertNotEqual(Path(profile_log.read_text(encoding="utf-8")), root)
+
+            completed = run_driver(
+                ["compile"], env={**common, "FAKE_DBT_DEPS_FAILURE": "1"}
+            )
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("dbt deps failed", completed.stderr)
+
+    def test_attestation_failure_prevents_extraction(self) -> None:
+        target = platform_target()
+        asset_name = f"costguard-{target}.tar.gz"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            fake_gh = bin_dir / "gh"
+            fake_gh.write_text("#!/bin/sh\nexit 7\n", encoding="utf-8")
+            fake_gh.chmod(0o755)
+            (root / asset_name).write_bytes(b"not extracted")
+            digest = hashlib.sha256((root / asset_name).read_bytes()).hexdigest()
+            (root / f"{asset_name}.sha256").write_text(
+                f"{digest}  {asset_name}\n", encoding="utf-8"
+            )
+            with file_server(root) as base_url:
+                completed = run_driver(
+                    ["install", "--mode", "release"],
+                    env={
+                        "COSTGUARD_RELEASE_BASE_URL": base_url,
+                        "RUNNER_TEMP": str(root / "runner"),
+                        "GITHUB_PATH": str(root / "github-path"),
+                        "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+                    },
+                )
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("attestation verification failed", completed.stderr)
 
     def test_requested_missing_manifest_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -311,11 +431,15 @@ def platform_target() -> str:
 
 FAKE_DBT = r'''#!/usr/bin/env python3
 import json
+import os
 import pathlib
 import sys
 
 if sys.argv[1] == "deps":
-    raise SystemExit(0)
+    log = os.environ.get("FAKE_DBT_PROFILE_LOG")
+    if log:
+        pathlib.Path(log).write_text(os.environ.get("DBT_PROFILES_DIR", ""))
+    raise SystemExit(1 if os.environ.get("FAKE_DBT_DEPS_FAILURE") else 0)
 if sys.argv[1] != "compile":
     raise SystemExit(2)
 project = pathlib.Path(sys.argv[sys.argv.index("--project-dir") + 1])

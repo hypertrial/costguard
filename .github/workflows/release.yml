@@ -1,21 +1,22 @@
-name: release-check-manual-mirror
+name: release-v2
 
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: Workspace version to qualify
-        required: true
-        default: 1.1.0
-        type: string
+  push:
+    tags: ["v2.*"]
 
 permissions:
   contents: read
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   qualify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 240
+    outputs:
+      version: ${{ steps.release.outputs.version }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -24,8 +25,123 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.11"
-      - run: cargo install mdbook --version 0.4.40 --locked
-      - run: cargo install cargo-deny --version 0.19.7 --locked
-      - env:
-          VERSION_INPUT: ${{ inputs.version }}
-        run: python3 scripts/release_check.py --version "${VERSION_INPUT}"
+      - name: Verify SSH-signed annotated tag
+        env:
+          SSH_ALLOWED_SIGNERS: ${{ vars.RELEASE_SSH_ALLOWED_SIGNERS }}
+        run: |
+          test -n "${SSH_ALLOWED_SIGNERS}"
+          printf '%s\n' "${SSH_ALLOWED_SIGNERS}" > "${RUNNER_TEMP}/allowed_signers"
+          git config gpg.format ssh
+          git config gpg.ssh.allowedSignersFile "${RUNNER_TEMP}/allowed_signers"
+          test "$(git cat-file -t "refs/tags/${GITHUB_REF_NAME}")" = tag
+          git verify-tag "${GITHUB_REF_NAME}"
+      - id: release
+        name: Validate v2 version
+        run: |
+          [[ "${GITHUB_REF_NAME}" =~ ^v2\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]
+          VERSION="${GITHUB_REF_NAME#v}"
+          test "${VERSION}" = "$(python -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')"
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+      - name: Install qualification tools
+        run: |
+          python -m pip install ruff==0.11.13
+          cargo install mdbook --version 0.4.40 --locked
+          cargo install cargo-deny --version 0.19.7 --locked
+      - run: python scripts/release_check.py --version "${{ steps.release.outputs.version }}"
+      - run: python scripts/generate_sbom.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-evidence
+          path: |
+            dist/release/release-check.json
+            dist/release/costguard.cdx.json
+          if-no-files-found: error
+
+  build:
+    needs: qualify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - os: macos-15
+            target: aarch64-apple-darwin
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+          - os: windows-2025
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
+        with:
+          targets: ${{ matrix.target }}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.11"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: release-evidence
+          path: dist/release
+      - name: Build, package, and smoke
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          VERSION: ${{ needs.qualify.outputs.version }}
+        run: |
+          cargo build --release --locked -p costguard-cli --target "${TARGET}"
+          export SOURCE_DATE_EPOCH="$(git show -s --format=%ct HEAD)"
+          python scripts/package_release_target.py --target "${TARGET}" --version "${VERSION}"
+      - uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661
+        with:
+          subject-path: dist/release/costguard-${{ matrix.target }}.tar.gz
+      - uses: actions/attest-sbom@51e74621a501c89df81fc1391c5a8f4cfc9fab2f
+        with:
+          subject-path: dist/release/costguard-${{ matrix.target }}.tar.gz
+          sbom-path: dist/release/costguard.cdx.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-${{ matrix.target }}
+          path: |
+            dist/release/costguard-${{ matrix.target }}.tar.gz
+            dist/release/costguard-${{ matrix.target }}.tar.gz.sha256
+            dist/release/smoke-${{ matrix.target }}.json
+          if-no-files-found: error
+
+  publish:
+    needs: [qualify, build]
+    runs-on: ubuntu-24.04
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.11"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          path: dist/release
+          merge-multiple: true
+      - name: Verify exact inventory and consumer behavior
+        env:
+          VERSION: ${{ needs.qualify.outputs.version }}
+        run: |
+          python scripts/verify_release_inventory.py --version "${VERSION}"
+          python scripts/release_consumer_smoke.py --version "${VERSION}"
+      - name: Publish immutable exact release and move v2
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.qualify.outputs.version }}
+        run: |
+          gh release create "v${VERSION}" dist/release/* --verify-tag --title "Costguard v${VERSION}" --generate-notes
+          git tag -f v2 "${GITHUB_SHA}"
+          git push origin refs/tags/v2 --force

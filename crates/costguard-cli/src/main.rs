@@ -49,6 +49,8 @@ struct ScanArgs {
     cost: bool,
     #[arg(long)]
     fail_on_cost_delta: Option<f64>,
+    #[arg(long)]
+    analysis_policy: Option<String>,
 }
 
 #[derive(Debug, Parser)]
@@ -62,6 +64,8 @@ struct CostArgs {
     format: Option<FormatArg>,
     #[arg(long)]
     manifest: Option<PathBuf>,
+    #[arg(long)]
+    analysis_policy: Option<String>,
 }
 
 #[derive(Debug, Parser)]
@@ -77,6 +81,8 @@ struct ExplainArgs {
     manifest: Option<PathBuf>,
     #[arg(long)]
     cost: bool,
+    #[arg(long)]
+    analysis_policy: Option<String>,
 }
 
 #[derive(Debug, Parser)]
@@ -101,6 +107,8 @@ struct PrArgs {
     cost: bool,
     #[arg(long)]
     fail_on_cost_delta: Option<f64>,
+    #[arg(long)]
+    analysis_policy: Option<String>,
 }
 
 #[derive(Debug, Parser)]
@@ -257,6 +265,7 @@ fn config_from_scan_args(args: ScanArgs) -> Result<ScanConfig> {
         write_baseline_path: args.write_baseline,
         cost: args.cost,
         fail_on_cost_delta: args.fail_on_cost_delta,
+        analysis_policy: args.analysis_policy,
     }
     .apply_to(&mut config)?;
     validate_scan_config(&config)?;
@@ -271,6 +280,7 @@ fn config_from_explain_args(args: &ExplainArgs) -> Result<ScanConfig> {
         format: args.format.map(Into::into),
         manifest_path: args.manifest.clone(),
         cost: args.cost,
+        analysis_policy: args.analysis_policy.clone(),
         ..ScanRuntimeOverrides::default()
     }
     .apply_to(&mut config)?;
@@ -289,6 +299,7 @@ fn config_from_cost_args(args: CostArgs) -> Result<ScanConfig> {
         format: args.format.map(Into::into),
         manifest_path: args.manifest,
         cost: true,
+        analysis_policy: args.analysis_policy,
         ..ScanRuntimeOverrides::default()
     }
     .apply_to(&mut config)?;
@@ -310,6 +321,7 @@ fn config_from_pr_args(args: PrArgs) -> Result<ScanConfig> {
         baseline_path: args.baseline,
         cost: args.cost,
         fail_on_cost_delta: args.fail_on_cost_delta,
+        analysis_policy: args.analysis_policy,
         ..ScanRuntimeOverrides::default()
     }
     .apply_to(&mut config)?;

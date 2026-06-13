@@ -93,6 +93,7 @@ dependencies = [
  "costguard-diagnostics",
  "costguard-output",
  "costguard-rules",
+ "serde_json",
  "tempfile",
 ]
 
@@ -125,6 +126,7 @@ dependencies = [
  "costguard-diagnostics",
  "serde",
  "serde_json",
+ "toml",
 ]
 
 [[package]]

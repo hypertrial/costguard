@@ -1,5 +1,6 @@
 use crate::baseline::{
-    apply_finding_baseline, load_finding_baseline, write_finding_baseline, FindingBaseline,
+    apply_finding_baseline, load_finding_baseline, validate_finding_baseline,
+    write_finding_baseline, FindingBaseline,
 };
 use crate::config::ScanConfig;
 use crate::dbt_graph::enrich_pr_summary;
@@ -8,7 +9,7 @@ use crate::sql_analysis::{
     analyze_sql_documents, build_file_parse_status, build_scan_metrics, dbt_models_by_path,
     parse_failure_diagnostics,
 };
-use crate::{PrSummary, Project, ScanResult};
+use crate::{AnalysisReport, AnalysisViolation, PrSummary, Project, ScanResult};
 use anyhow::{Context, Result};
 use costguard_cost::{annotate_diagnostics, summarize_features, CostInputs, ModelFeatureSummary};
 use costguard_dbt::{compiled_code_by_model_path, MetadataWarning, MetadataWarningKind};
@@ -149,6 +150,7 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
                 }
                 .as_path(),
             )?;
+            validate_finding_baseline(&existing, config.platform)?;
             let mut combined = existing.findings;
             for diagnostic in &diagnostics {
                 combined.push(crate::baseline::BaselinedFinding {
@@ -177,14 +179,16 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
     }
 
     let baseline = if let Some(path) = &config.baseline_path {
-        Some(load_finding_baseline(
+        let baseline = load_finding_baseline(
             if path.is_absolute() {
                 path.clone()
             } else {
                 root.join(path)
             }
             .as_path(),
-        )?)
+        )?;
+        validate_finding_baseline(&baseline, config.platform)?;
+        Some(baseline)
     } else {
         None
     };
@@ -234,6 +238,7 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
     );
     metrics.baselined_findings = baselined_findings;
     metrics.new_findings = diagnostics.len();
+    let analysis = evaluate_analysis(config, &metrics, skipped_files.len(), metadata_only);
     Ok(ScanResult {
         diagnostics,
         counts: metrics.counts.clone(),
@@ -241,7 +246,81 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
         file_parse_status,
         pr_summary,
         cost_summary,
+        analysis,
     })
+}
+
+fn evaluate_analysis(
+    config: &ScanConfig,
+    metrics: &crate::ScanMetrics,
+    skipped_files: usize,
+    metadata_only: bool,
+) -> AnalysisReport {
+    let analysis = config.analysis.effective();
+    let mut violations = Vec::new();
+    let parse_total = metrics.sql_parse_total + metrics.sql_parse_other_total;
+    let parse_failures = metrics.sql_parse_failures + metrics.sql_parse_other_failures;
+    let parse_failure_rate = if parse_total == 0 {
+        0.0
+    } else {
+        parse_failures as f64 / parse_total as f64
+    };
+    if parse_failure_rate > analysis.max_parse_failure_rate {
+        violations.push(AnalysisViolation {
+            code: "parse_failure_rate".into(),
+            message: format!(
+                "SQL parse failure rate {:.2}% exceeds allowed {:.2}%",
+                parse_failure_rate * 100.0,
+                analysis.max_parse_failure_rate * 100.0
+            ),
+            observed: parse_failure_rate,
+            allowed: analysis.max_parse_failure_rate,
+        });
+    }
+    if metrics.sql_parse_compiled_failures > analysis.max_compiled_parse_failures {
+        violations.push(AnalysisViolation {
+            code: "compiled_parse_failures".into(),
+            message: format!(
+                "{} compiled SQL parse failures exceed allowed {}",
+                metrics.sql_parse_compiled_failures, analysis.max_compiled_parse_failures
+            ),
+            observed: metrics.sql_parse_compiled_failures as f64,
+            allowed: analysis.max_compiled_parse_failures as f64,
+        });
+    }
+    if skipped_files > analysis.max_skipped_files {
+        violations.push(AnalysisViolation {
+            code: "skipped_files".into(),
+            message: format!(
+                "{skipped_files} skipped or unreadable files exceed allowed {}",
+                analysis.max_skipped_files
+            ),
+            observed: skipped_files as f64,
+            allowed: analysis.max_skipped_files as f64,
+        });
+    }
+    let metadata_errors = metrics.yaml_parse_failures + metrics.dbt_project_parse_failures;
+    if analysis.fail_on_metadata_errors && metadata_errors > 0 {
+        violations.push(AnalysisViolation {
+            code: "metadata_errors".into(),
+            message: format!("{metadata_errors} metadata parse errors make analysis incomplete"),
+            observed: metadata_errors as f64,
+            allowed: 0.0,
+        });
+    }
+    if analysis.require_manifest && metadata_only {
+        violations.push(AnalysisViolation {
+            code: "manifest_required".into(),
+            message: "a dbt manifest is required for this analysis policy".into(),
+            observed: 0.0,
+            allowed: 1.0,
+        });
+    }
+    AnalysisReport {
+        policy: analysis.policy,
+        passed: violations.is_empty(),
+        violations,
+    }
 }
 
 fn feature_summaries_by_path(documents: &[SqlDocument]) -> HashMap<PathBuf, ModelFeatureSummary> {

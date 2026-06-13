@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use costguard_diagnostics::Diagnostic;
+use costguard_platform::Platform;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::Path;
@@ -69,6 +70,29 @@ pub fn load_finding_baseline(path: &Path) -> Result<FindingBaseline> {
     let text = std::fs::read_to_string(path)
         .with_context(|| format!("failed to read baseline {}", path.display()))?;
     serde_json::from_str(&text).with_context(|| format!("invalid baseline JSON {}", path.display()))
+}
+
+pub fn validate_finding_baseline(baseline: &FindingBaseline, warehouse: Platform) -> Result<()> {
+    if baseline.version != 1 {
+        anyhow::bail!(
+            "unsupported baseline schema version {}; expected 1",
+            baseline.version
+        );
+    }
+    if let Some(expected) = &baseline.warehouse {
+        let expected_platform = expected
+            .parse::<Platform>()
+            .map_err(anyhow::Error::msg)
+            .with_context(|| format!("invalid baseline warehouse '{expected}'"))?;
+        if expected_platform != warehouse {
+            anyhow::bail!(
+                "baseline warehouse '{}' does not match scan warehouse '{}'",
+                expected_platform,
+                warehouse
+            );
+        }
+    }
+    Ok(())
 }
 
 pub fn write_finding_baseline(path: &Path, baseline: &FindingBaseline) -> Result<()> {
@@ -199,5 +223,14 @@ mod tests {
         assert_eq!(baselined, 1);
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].message, "new finding");
+    }
+
+    #[test]
+    fn baseline_rejects_version_and_warehouse_mismatch() {
+        let mut baseline = FindingBaseline::from_diagnostics(&[], Some("snowflake"));
+        baseline.version = 2;
+        assert!(validate_finding_baseline(&baseline, Platform::Snowflake).is_err());
+        baseline.version = 1;
+        assert!(validate_finding_baseline(&baseline, Platform::BigQuery).is_err());
     }
 }

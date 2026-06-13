@@ -171,7 +171,6 @@ impl VolumeContext<'_> {
 }
 
 pub fn scale_estimate(bytes: Estimate, factor: f64) -> Estimate {
-    assert!(factor > 0.0, "scale factor must be positive");
     Estimate {
         mu: bytes.mu + factor.ln(),
         sigma: bytes.sigma,

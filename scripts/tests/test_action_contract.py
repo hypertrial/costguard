@@ -19,11 +19,27 @@ class ActionContractTest(unittest.TestCase):
         for command in ["install", "plan-compile", "compile", "run"]:
             self.assertIn(f"costguard_action.py\" {command}", action)
 
-    def test_workflows_are_manual_only(self) -> None:
-        for path in (ROOT / ".github/workflows").glob("*.yml"):
-            text = path.read_text(encoding="utf-8")
-            self.assertIn("workflow_dispatch:", text, path.name)
-            self.assertNotRegex(text, r"(?m)^  (pull_request|push):")
+    def test_ci_is_automatic_and_release_is_tag_driven(self) -> None:
+        ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertRegex(ci, r"(?m)^  pull_request:")
+        self.assertRegex(ci, r"(?m)^  push:")
+        self.assertIn("branches: [main]", ci)
+        self.assertIn("cancel-in-progress: true", ci)
+
+        benchmark = (ROOT / ".github/workflows/benchmark.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertRegex(benchmark, r"(?m)^  schedule:")
+        self.assertIn("workflow_dispatch:", benchmark)
+
+        release = (ROOT / ".github/workflows/release.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('tags: ["v2.*"]', release)
+        self.assertIn("environment: release", release)
+        self.assertIn("git verify-tag", release)
+        self.assertIn("actions/attest-build-provenance@", release)
+        self.assertIn("actions/attest-sbom@", release)
 
     def test_action_run_blocks_do_not_interpolate_inputs_directly(self) -> None:
         action = (ROOT / ".github/actions/costguard/action.yml").read_text(encoding="utf-8")
@@ -50,7 +66,20 @@ class ActionContractTest(unittest.TestCase):
         for path in (ROOT / ".github/workflows").glob("*.yml"):
             text = path.read_text(encoding="utf-8")
             self.assertIn("\npermissions:\n  contents: read\n", text, path.name)
-            self.assertNotIn("contents: write", text, path.name)
+            if path.name != "release.yml":
+                self.assertNotIn("contents: write", text, path.name)
+
+    def test_action_defaults_are_artifact_first_and_strict(self) -> None:
+        action = (ROOT / ".github/actions/costguard/action.yml").read_text(encoding="utf-8")
+        compile_block = action.split("compile-dbt:", 1)[1].split("analysis-policy:", 1)[0]
+        self.assertIn('default: "false"', compile_block)
+        analysis_block = action.split("analysis-policy:", 1)[1].split(
+            "verify-attestation:", 1
+        )[0]
+        self.assertIn("default: strict", analysis_block)
+        self.assertIn("allow-credentialed-compile:", action)
+        self.assertIn("dbt-installation:", action)
+        self.assertIn("verify-attestation:", action)
 
 
 def run_blocks(text: str) -> list[str]:

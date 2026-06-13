@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use std::collections::BTreeSet;
 use std::error::Error;
+use std::ffi::OsString;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
@@ -52,9 +53,9 @@ pub fn changed_files(root: &Path, base: &str) -> Result<Vec<PathBuf>> {
         paths.insert(path);
     }
     for args in [
-        &["diff", "--name-only"][..],
-        &["diff", "--cached", "--name-only"][..],
-        &["ls-files", "--others", "--exclude-standard"][..],
+        &["diff", "--name-only", "-z"][..],
+        &["diff", "--cached", "--name-only", "-z"][..],
+        &["ls-files", "--others", "--exclude-standard", "-z"][..],
     ] {
         for path in git_paths(root, args)? {
             paths.insert(path);
@@ -65,10 +66,10 @@ pub fn changed_files(root: &Path, base: &str) -> Result<Vec<PathBuf>> {
 
 fn committed_diff(root: &Path, base: &str) -> Result<Vec<PathBuf>> {
     let range = format!("{base}...HEAD");
-    let merge_base_args = ["diff", "--name-only", range.as_str()];
+    let merge_base_args = ["diff", "--name-only", "-z", range.as_str()];
     let paths = git_paths(root, &merge_base_args)?;
     if paths.is_empty() {
-        git_paths(root, &["diff", "--name-only", base])
+        git_paths(root, &["diff", "--name-only", "-z", base])
     } else {
         Ok(paths)
     }
@@ -92,12 +93,22 @@ fn run_git(root: &Path, args: &[&str]) -> Result<std::process::Output> {
 }
 
 fn parse_paths(bytes: &[u8]) -> Vec<PathBuf> {
-    String::from_utf8_lossy(bytes)
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .map(PathBuf::from)
+    bytes
+        .split(|byte| *byte == 0)
+        .filter(|path| !path.is_empty())
+        .map(path_from_git_bytes)
         .collect()
+}
+
+#[cfg(unix)]
+fn path_from_git_bytes(bytes: &[u8]) -> PathBuf {
+    use std::os::unix::ffi::OsStringExt;
+    PathBuf::from(OsString::from_vec(bytes.to_vec()))
+}
+
+#[cfg(not(unix))]
+fn path_from_git_bytes(bytes: &[u8]) -> PathBuf {
+    PathBuf::from(String::from_utf8_lossy(bytes).into_owned())
 }
 
 #[cfg(test)]
@@ -149,6 +160,72 @@ mod tests {
 
         let err = changed_files(root, "does-not-exist").expect_err("invalid base");
         assert!(err.to_string().contains("does-not-exist"));
+    }
+
+    #[test]
+    fn parse_paths_preserves_whitespace_and_newlines() {
+        let paths =
+            parse_paths(b"models/ leading.sql\0models/tab\tname.sql\0models/new\nline.sql\0");
+        assert_eq!(
+            paths,
+            vec![
+                PathBuf::from("models/ leading.sql"),
+                PathBuf::from("models/tab\tname.sql"),
+                PathBuf::from("models/new\nline.sql"),
+            ]
+        );
+    }
+
+    #[test]
+    fn changed_files_preserves_unusual_paths_and_renames() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let root = tempdir.path();
+        fs::create_dir_all(root.join("models")).expect("create models");
+        for name in [
+            " leading.sql",
+            "tab\tname.sql",
+            "new\nline.sql",
+            "unicodé.sql",
+            "-dash.sql",
+        ] {
+            fs::write(root.join("models").join(name), "select 1\n").expect("write model");
+        }
+        fs::write(root.join("models/rename me.sql"), "select 1\n").expect("write rename source");
+        git(root, &["init"]);
+        git(root, &["checkout", "-b", "main"]);
+        git(root, &["config", "user.email", "costguard@example.com"]);
+        git(root, &["config", "user.name", "Costguard Test"]);
+        git(root, &["add", "."]);
+        git(root, &["commit", "-m", "initial"]);
+        git(root, &["checkout", "-b", "feature"]);
+
+        for name in [
+            " leading.sql",
+            "tab\tname.sql",
+            "new\nline.sql",
+            "unicodé.sql",
+            "-dash.sql",
+        ] {
+            fs::write(root.join("models").join(name), "select 2\n").expect("modify model");
+        }
+        git(root, &["mv", "models/rename me.sql", "models/renamed.sql"]);
+        fs::write(root.join("models/untracked\nmodel.sql"), "select 3\n").expect("write untracked");
+
+        let changed = changed_files(root, "main").expect("changed files");
+        for name in [
+            " leading.sql",
+            "tab\tname.sql",
+            "new\nline.sql",
+            "unicodé.sql",
+            "-dash.sql",
+            "renamed.sql",
+            "untracked\nmodel.sql",
+        ] {
+            assert!(
+                changed.contains(&PathBuf::from("models").join(name)),
+                "missing {name:?}: {changed:?}"
+            );
+        }
     }
 
     #[test]

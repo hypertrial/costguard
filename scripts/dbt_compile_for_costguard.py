@@ -213,10 +213,10 @@ def compile_dbt_project(
     if not (project_dir / "dbt_project.yml").exists():
         raise SystemExit(f"compile enabled but no dbt_project.yml in {project_dir}")
 
-    if (project_dir / "profiles.yml").exists():
-        resolved_profiles_dir = project_dir
-    elif profiles_dir is not None:
+    if profiles_dir is not None:
         resolved_profiles_dir = profiles_dir
+    elif (project_dir / "profiles.yml").exists():
+        resolved_profiles_dir = project_dir
     else:
         resolved_profiles_dir = (checkout / profiles_rel).resolve()
         profile_name = read_dbt_profile_name(project_dir)

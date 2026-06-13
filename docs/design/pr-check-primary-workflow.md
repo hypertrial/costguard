@@ -12,7 +12,7 @@ The current MVP ships the CLI engine and a composite GitHub Action at
 [`.github/actions/costguard`](../../.github/actions/costguard). The PR workflow lives in
 [`.github/workflows/costguard-pr.yml`](../../.github/workflows/costguard-pr.yml).
 
-The GitHub Action runs dbt compile via [`scripts/dbt_compile_for_costguard.py`](../../scripts/dbt_compile_for_costguard.py) by default when `dbt_project.yml` is present (or when `dbt-compile-dirs` is set for monorepos), then passes the merged or single `target/manifest.json` to costguard for compiled SQL parse metrics. Set `compile-dbt: false` to skip. This matches the Spellbook benchmark harness.
+The GitHub Action defaults to `analysis-policy: strict`, which requires a manifest for dbt projects and fails closed on incomplete analysis. Enable `compile-dbt: true` to run dbt compile via [`scripts/dbt_compile_for_costguard.py`](../../scripts/dbt_compile_for_costguard.py) when `dbt_project.yml` is present (or when `dbt-compile-dirs` is set for monorepos), then pass the merged or single `target/manifest.json` to costguard for compiled SQL parse metrics. Alternatively, upload a manifest from an existing dbt job and set `use-existing-manifest: true`. This matches the Spellbook benchmark harness.
 
 Workflow:
 

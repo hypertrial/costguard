@@ -10,7 +10,6 @@ pub struct Estimate {
 
 impl Estimate {
     pub fn from_point(value: f64, cv: Option<f64>) -> Self {
-        assert!(value > 0.0, "estimate value must be positive");
         let cv = cv.unwrap_or(DEFAULT_CV);
         let sigma = (1.0 + cv * cv).ln().sqrt();
         Self {
@@ -20,7 +19,6 @@ impl Estimate {
     }
 
     pub fn from_range(p10: f64, p90: f64) -> Self {
-        assert!(p10 > 0.0 && p90 > p10, "invalid p10/p90 range");
         let z = normal_quantile(0.9) - normal_quantile(0.1);
         let sigma = (p90.ln() - p10.ln()) / z;
         let mu = (p10.ln() + p90.ln()) / 2.0;

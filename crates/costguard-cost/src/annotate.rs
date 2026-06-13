@@ -26,7 +26,10 @@ impl CostInputs {
             if resolved.exists() {
                 Some(load_catalog(&resolved)?)
             } else {
-                None
+                anyhow::bail!(
+                    "configured catalog file does not exist: {}",
+                    resolved.display()
+                )
             }
         } else {
             None
@@ -36,7 +39,10 @@ impl CostInputs {
             if resolved.exists() {
                 Some(load_query_history(&resolved)?)
             } else {
-                None
+                anyhow::bail!(
+                    "configured query history file does not exist: {}",
+                    resolved.display()
+                )
             }
         } else {
             None

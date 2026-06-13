@@ -116,7 +116,7 @@ def verify_receipt(receipt: Path, workdir: Path, target: str, version: str) -> P
     elif target == "aarch64-apple-darwin":
         valid_platform = verified_on.startswith("Darwin-") and method == "native"
     elif target == "x86_64-apple-darwin":
-        valid_platform = verified_on.startswith("Darwin-") and method == "rosetta"
+        valid_platform = verified_on.startswith("Darwin-") and method in {"native", "rosetta"}
     else:
         valid_platform = (verified_on.startswith("Linux-") and method == "native") or (
             verified_on.startswith("Darwin-") and method == "docker"

@@ -24,6 +24,7 @@ Source: `crates/costguard-cli/src/main.rs`
 | `--write-baseline` | scan | Write current findings to a baseline JSON file |
 | `--cost` | scan, explain, pr | Enable cost estimates (uses `[cost]` in `costguard.toml` when present) |
 | `--fail-on-cost-delta` | scan, pr | Fail when deduplicated savings p50 on new findings exceeds threshold (USD) |
+| `--analysis-policy` | scan, explain, pr, cost | `standard` or `strict`; see `[analysis]` in [Configuration](configuration.md) |
 
 ## `scan`
 

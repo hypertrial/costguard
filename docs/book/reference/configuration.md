@@ -70,6 +70,21 @@ Rule IDs are normalized to uppercase (for example `SQLCOST002`).
 | `severity` | string | Override default severity for the rule |
 | `threshold` | integer | Minimum count before some repetition rules fire (default varies by rule; often `2`) |
 
+## `[analysis]`
+
+Optional analysis completeness policy. CLI default is `standard`. The GitHub Action defaults to `strict`.
+
+| Key | Type | Description |
+| --- | --- | --- |
+| `policy` | string | `standard` (best effort) or `strict` (fail closed) |
+| `require_manifest` | bool | Require a dbt manifest for dbt projects |
+| `max_parse_failure_rate` | float | Maximum allowed SQL parse failure rate (`0.0`–`1.0`) |
+| `max_compiled_parse_failures` | integer | Maximum allowed compiled-SQL parse failures |
+| `max_skipped_files` | integer | Maximum allowed skipped or unreadable files |
+| `fail_on_metadata_errors` | bool | Fail when YAML or dbt project metadata cannot be parsed |
+
+When `policy = "strict"`, Costguard enforces manifest presence, zero parse failures, zero skipped files, and metadata errors regardless of the other thresholds above.
+
 ## `[cost]`
 
 Optional cost-estimation settings. See [Cost estimates](cost-estimates.md) for the full guide.

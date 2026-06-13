@@ -22,10 +22,22 @@ pub fn parse_catalog_text(text: &str) -> Result<CatalogStats> {
     for section in ["nodes", "sources"] {
         if let Some(entries) = value.get(section).and_then(Value::as_object) {
             for (key, node) in entries {
-                if let Some(num_bytes) = node.pointer("/stats/num_bytes").and_then(Value::as_u64) {
+                if let Some(value) = node.pointer("/stats/num_bytes") {
+                    let num_bytes = value.as_u64().with_context(|| {
+                        format!("catalog num_bytes for {key} must be a positive integer")
+                    })?;
+                    if num_bytes == 0 {
+                        anyhow::bail!("catalog num_bytes for {key} must be greater than zero");
+                    }
                     stats.bytes_by_key.insert(key.clone(), num_bytes);
                 }
-                if let Some(row_count) = node.pointer("/stats/row_count").and_then(Value::as_u64) {
+                if let Some(value) = node.pointer("/stats/row_count") {
+                    let row_count = value.as_u64().with_context(|| {
+                        format!("catalog row_count for {key} must be a positive integer")
+                    })?;
+                    if row_count == 0 {
+                        anyhow::bail!("catalog row_count for {key} must be greater than zero");
+                    }
                     stats.rows_by_key.insert(key.clone(), row_count);
                 }
             }
@@ -49,5 +61,11 @@ mod tests {
         }"#;
         let stats = parse_catalog_text(text).unwrap();
         assert_eq!(stats.bytes_by_key["model.project.fct_orders"], 1000);
+    }
+
+    #[test]
+    fn rejects_zero_catalog_stats() {
+        let text = r#"{"nodes":{"model.project.zero":{"stats":{"num_bytes":0}}}}"#;
+        assert!(parse_catalog_text(text).is_err());
     }
 }

@@ -6,6 +6,12 @@ fn bin() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_costguard"))
 }
 
+fn costguard_command() -> Command {
+    let mut command = Command::new(bin());
+    command.current_dir(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."));
+    command
+}
+
 fn fixture(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures")
@@ -14,7 +20,7 @@ fn fixture(name: &str) -> PathBuf {
 
 #[test]
 fn scan_text_reports_mvp_diagnostics() {
-    let output = Command::new(bin())
+    let output = costguard_command()
         .arg("scan")
         .arg(fixture("dbt_incremental"))
         .arg("--warehouse")
@@ -40,7 +46,7 @@ fn scan_text_reports_mvp_diagnostics() {
 
 #[test]
 fn scan_json_outputs_diagnostics_array() {
-    let output = Command::new(bin())
+    let output = costguard_command()
         .arg("scan")
         .arg(fixture("dbt_incremental"))
         .arg("--format")
@@ -56,7 +62,7 @@ fn scan_json_outputs_diagnostics_array() {
 
 #[test]
 fn scan_github_outputs_annotations() {
-    let output = Command::new(bin())
+    let output = costguard_command()
         .arg("scan")
         .arg(fixture("dbt_incremental"))
         .arg("--format")
@@ -71,7 +77,7 @@ fn scan_github_outputs_annotations() {
 
 #[test]
 fn scan_markdown_outputs_pr_summary_shape() {
-    let output = Command::new(bin())
+    let output = costguard_command()
         .arg("scan")
         .arg(fixture("corpus/incremental_missing"))
         .arg("--format")
@@ -119,7 +125,7 @@ fn pr_mode_scans_changed_files_but_uses_transitive_context() {
     git(root, &["commit", "-m", "initial"]);
     fs::write(root.join("models/marts/a.sql"), "select 2 as id\n").expect("modify a");
 
-    let output = Command::new(bin())
+    let output = costguard_command()
         .arg("pr")
         .arg("--base")
         .arg("HEAD")
@@ -147,8 +153,117 @@ fn pr_mode_scans_changed_files_but_uses_transitive_context() {
 }
 
 #[test]
+fn pr_mode_scans_newline_filename_without_bypass() {
+    let tempdir = tempfile::tempdir().expect("tempdir");
+    let root = tempdir.path();
+    fs::create_dir_all(root.join("queries")).expect("queries");
+    let path = root.join("queries/risky\nmodel.sql");
+    fs::write(&path, "select 1 as id\n").expect("write initial");
+    git(root, &["init"]);
+    git(root, &["checkout", "-b", "main"]);
+    git(root, &["config", "user.email", "costguard@example.com"]);
+    git(root, &["config", "user.name", "Costguard Test"]);
+    git(root, &["add", "."]);
+    git(root, &["commit", "-m", "initial"]);
+    git(root, &["checkout", "-b", "feature"]);
+    fs::write(&path, "select * from a cross join b\n").expect("write risky");
+
+    let output = costguard_command()
+        .arg("pr")
+        .arg("--base")
+        .arg("main")
+        .arg("--format")
+        .arg("json")
+        .arg("--analysis-policy")
+        .arg("strict")
+        .current_dir(root)
+        .output()
+        .expect("run costguard");
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("json");
+    assert_eq!(json["metrics"]["counts"]["sql"], 1);
+    assert!(json["pr_summary"]["changed_files"]
+        .as_array()
+        .expect("changed files")
+        .iter()
+        .any(|changed| changed.as_str() == Some("queries/risky\nmodel.sql")));
+}
+
+#[test]
+fn strict_analysis_requires_manifest_for_dbt_projects() {
+    let output = costguard_command()
+        .arg("scan")
+        .arg(fixture("dbt_incremental"))
+        .arg("--format")
+        .arg("json")
+        .arg("--analysis-policy")
+        .arg("strict")
+        .arg("--fail-on")
+        .arg("critical")
+        .output()
+        .expect("run costguard");
+    assert_eq!(output.status.code(), Some(1));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("json");
+    assert_eq!(json["analysis"]["passed"], false);
+    assert!(json["analysis"]["violations"]
+        .as_array()
+        .expect("violations")
+        .iter()
+        .any(|violation| violation["code"] == "manifest_required"));
+}
+
+#[test]
+fn zero_runs_cost_config_is_configuration_error_not_panic() {
+    let tempdir = tempfile::tempdir().expect("tempdir");
+    fs::create_dir_all(tempdir.path().join("models")).expect("models");
+    fs::write(tempdir.path().join("models/model.sql"), "select 1\n").expect("model");
+    fs::write(
+        tempdir.path().join("costguard.toml"),
+        "[cost]\nenabled = true\ndefault_runs_per_month = 0\n",
+    )
+    .expect("config");
+    let output = costguard_command()
+        .arg("scan")
+        .arg("--cost")
+        .current_dir(tempdir.path())
+        .output()
+        .expect("run costguard");
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("greater than zero"), "{stderr}");
+    assert!(!stderr.contains("panicked"), "{stderr}");
+}
+
+#[test]
+fn baseline_warehouse_mismatch_is_configuration_error() {
+    let tempdir = tempfile::tempdir().expect("tempdir");
+    let baseline = tempdir.path().join("baseline.json");
+    fs::write(
+        &baseline,
+        r#"{"version":1,"warehouse":"snowflake","findings":[]}"#,
+    )
+    .expect("baseline");
+    let output = costguard_command()
+        .arg("scan")
+        .arg(fixture("dbt_incremental"))
+        .arg("--warehouse")
+        .arg("bigquery")
+        .arg("--baseline")
+        .arg(&baseline)
+        .output()
+        .expect("run costguard");
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("does not match"));
+}
+
+#[test]
 fn rules_command_lists_rules() {
-    let output = Command::new(bin())
+    let output = costguard_command()
         .arg("rules")
         .output()
         .expect("run costguard");
@@ -160,7 +275,7 @@ fn rules_command_lists_rules() {
 
 #[test]
 fn version_reports_workspace_version() {
-    let output = Command::new(bin())
+    let output = costguard_command()
         .arg("--version")
         .output()
         .expect("run costguard");
@@ -174,7 +289,7 @@ fn version_reports_workspace_version() {
 #[test]
 fn version_propagates_to_every_subcommand() {
     for subcommand in ["scan", "pr", "explain", "rules"] {
-        let output = Command::new(bin())
+        let output = costguard_command()
             .args([subcommand, "--version"])
             .output()
             .expect("run costguard subcommand version");
@@ -189,7 +304,7 @@ fn version_propagates_to_every_subcommand() {
 
 #[test]
 fn invalid_config_flag_exits_with_configuration_code() {
-    let output = Command::new(bin())
+    let output = costguard_command()
         .arg("scan")
         .arg("--fail-on")
         .arg("not-a-severity")
@@ -208,7 +323,7 @@ fn unknown_config_field_exits_with_configuration_code() {
         "[scan]\nunknown = true\n",
     )
     .expect("write config");
-    let output = Command::new(bin())
+    let output = costguard_command()
         .arg("scan")
         .current_dir(tempdir.path())
         .output()
@@ -225,7 +340,7 @@ fn unknown_config_section_exits_with_configuration_code() {
         "[unknown]\nvalue = true\n",
     )
     .expect("write config");
-    let output = Command::new(bin())
+    let output = costguard_command()
         .arg("scan")
         .current_dir(tempdir.path())
         .output()
@@ -242,7 +357,7 @@ fn unknown_rule_id_exits_with_configuration_code() {
         "[rules.SQLCOST999]\nenabled = false\n",
     )
     .expect("write config");
-    let output = Command::new(bin())
+    let output = costguard_command()
         .arg("scan")
         .current_dir(tempdir.path())
         .output()
@@ -259,7 +374,7 @@ fn unknown_rule_setting_exits_with_configuration_code() {
         "[rules.SQLCOST001]\nunknown = true\n",
     )
     .expect("write config");
-    let output = Command::new(bin())
+    let output = costguard_command()
         .arg("scan")
         .current_dir(tempdir.path())
         .output()
@@ -272,16 +387,19 @@ fn unknown_rule_setting_exits_with_configuration_code() {
 fn scan_uses_config_paths_when_no_paths_are_passed() {
     let tempdir = tempfile::tempdir().expect("tempdir");
     let root = tempdir.path();
+    fs::create_dir_all(root.join("models/marts")).expect("models dir");
+    fs::write(
+        root.join("models/marts/fct_sessions.sql"),
+        "select * from source_table\n",
+    )
+    .expect("write model");
     fs::write(
         root.join("costguard.toml"),
-        format!(
-            "[scan]\npaths = [\"{}\"]\n",
-            fixture("dbt_incremental/models/marts/fct_sessions.sql").display()
-        ),
+        "[scan]\npaths = [\"models/marts/fct_sessions.sql\"]\n",
     )
     .expect("write config");
 
-    let output = Command::new(bin())
+    let output = costguard_command()
         .arg("scan")
         .arg("--fail-on")
         .arg("critical")
@@ -296,7 +414,7 @@ fn scan_uses_config_paths_when_no_paths_are_passed() {
 
 #[test]
 fn missing_manifest_flag_fails_with_configuration_code() {
-    let output = Command::new(bin())
+    let output = costguard_command()
         .arg("scan")
         .arg(fixture("dbt_incremental"))
         .arg("--manifest")
@@ -312,17 +430,25 @@ fn missing_manifest_flag_fails_with_configuration_code() {
 fn scan_config_ignore_excludes_paths() {
     let tempdir = tempfile::tempdir().expect("tempdir");
     let root = tempdir.path();
+    fs::create_dir_all(root.join("models/marts")).expect("marts dir");
+    fs::create_dir_all(root.join("models/staging")).expect("staging dir");
+    fs::write(
+        root.join("models/marts/fct_sessions.sql"),
+        "select * from source_table\n",
+    )
+    .expect("write mart");
+    fs::write(
+        root.join("models/staging/stg_events.sql"),
+        "select json_extract(payload, '$.a'), json_extract(payload, '$.b') from events\n",
+    )
+    .expect("write staging");
     fs::write(
         root.join("costguard.toml"),
-        format!(
-            "[scan]\npaths = [\"{}\"]\nignore = [\"{}\"]\n",
-            fixture("dbt_incremental").display(),
-            fixture("dbt_incremental/models/staging").display()
-        ),
+        "[scan]\npaths = [\"models\"]\nignore = [\"models/staging\"]\n",
     )
     .expect("write config");
 
-    let output = Command::new(bin())
+    let output = costguard_command()
         .arg("scan")
         .arg("--fail-on")
         .arg("critical")
@@ -343,7 +469,7 @@ fn scan_config_max_file_bytes_skips_large_files() {
     fs::write(root.join("models/large.sql"), "select 1\nselect 2\n").expect("write sql");
     fs::write(root.join("costguard.toml"), "[scan]\nmax_file_bytes = 4\n").expect("write config");
 
-    let output = Command::new(bin())
+    let output = costguard_command()
         .arg("scan")
         .arg("--fail-on")
         .arg("critical")
@@ -377,7 +503,7 @@ fn pr_mode_fails_in_non_git_directory() {
     let root = tempdir.path();
     fs::write(root.join("model.sql"), "select 1\n").expect("write model");
 
-    let output = Command::new(bin())
+    let output = costguard_command()
         .arg("pr")
         .current_dir(root)
         .output()
@@ -399,7 +525,7 @@ fn pr_mode_fails_for_invalid_base_ref() {
     git(root, &["add", "."]);
     git(root, &["commit", "-m", "initial"]);
 
-    let output = Command::new(bin())
+    let output = costguard_command()
         .arg("pr")
         .arg("--base")
         .arg("does-not-exist")
@@ -414,7 +540,7 @@ fn pr_mode_fails_for_invalid_base_ref() {
 #[test]
 fn scan_min_confidence_suppresses_low_confidence_high_severity() {
     let path = fixture("min_confidence_low_comma.sql");
-    let without_floor = Command::new(bin())
+    let without_floor = costguard_command()
         .arg("scan")
         .arg(&path)
         .arg("--warehouse")
@@ -430,7 +556,7 @@ fn scan_min_confidence_suppresses_low_confidence_high_severity() {
         String::from_utf8_lossy(&without_floor.stdout)
     );
 
-    let with_floor = Command::new(bin())
+    let with_floor = costguard_command()
         .arg("scan")
         .arg(&path)
         .arg("--warehouse")
@@ -451,7 +577,7 @@ fn scan_min_confidence_suppresses_low_confidence_high_severity() {
 
 #[test]
 fn scan_sarif_outputs_valid_schema_fields() {
-    let output = Command::new(bin())
+    let output = costguard_command()
         .arg("scan")
         .arg(fixture("dbt_incremental"))
         .arg("--format")
@@ -471,7 +597,7 @@ fn baseline_grandfathers_known_findings() {
     let baseline_path = tempdir.path().join("baseline.json");
     let fixture = fixture("dbt_incremental");
 
-    let write = Command::new(bin())
+    let write = costguard_command()
         .arg("scan")
         .arg(&fixture)
         .arg("--warehouse")
@@ -483,7 +609,7 @@ fn baseline_grandfathers_known_findings() {
     assert_eq!(write.status.code(), Some(1));
     assert!(baseline_path.exists());
 
-    let with_baseline = Command::new(bin())
+    let with_baseline = costguard_command()
         .arg("scan")
         .arg(&fixture)
         .arg("--warehouse")
@@ -507,7 +633,7 @@ fn baseline_grandfathers_known_findings() {
 #[test]
 fn scan_cost_estimate_json_includes_cost_fields() {
     let fixture = fixture("cost_estimate");
-    let output = Command::new(bin())
+    let output = costguard_command()
         .current_dir(&fixture)
         .arg("scan")
         .arg(".")
@@ -529,7 +655,7 @@ fn scan_cost_estimate_json_includes_cost_fields() {
 #[test]
 fn scan_cost_summary_json_includes_cost_block() {
     let fixture = fixture("cost_estimate");
-    let output = Command::new(bin())
+    let output = costguard_command()
         .current_dir(&fixture)
         .arg("scan")
         .arg(".")
@@ -551,7 +677,7 @@ fn scan_cost_summary_json_includes_cost_block() {
 #[test]
 fn cost_command_renders_project_report() {
     let fixture = fixture("cost_estimate");
-    let output = Command::new(bin())
+    let output = costguard_command()
         .current_dir(&fixture)
         .arg("cost")
         .arg(".")
@@ -569,7 +695,7 @@ fn cost_command_renders_project_report() {
 #[test]
 fn scan_cost_delta_gate_fails_when_threshold_exceeded() {
     let fixture = fixture("cost_estimate");
-    let output = Command::new(bin())
+    let output = costguard_command()
         .current_dir(&fixture)
         .arg("scan")
         .arg(".")

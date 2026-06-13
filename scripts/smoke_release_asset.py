@@ -20,6 +20,8 @@ def command_prefix(binary: Path, target: str, extract_dir: Path) -> tuple[list[s
     if target == "aarch64-apple-darwin" and system == "Darwin" and machine == "arm64":
         return [str(binary)], "native"
     if target == "x86_64-apple-darwin" and system == "Darwin":
+        if machine in {"x86_64", "amd64"}:
+            return [str(binary)], "native"
         return ["arch", "-x86_64", str(binary)], "rosetta"
     if target == "x86_64-unknown-linux-gnu" and system == "Linux":
         return [str(binary)], "native"

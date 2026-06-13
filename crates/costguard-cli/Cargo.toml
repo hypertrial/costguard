@@ -19,3 +19,4 @@ costguard-rules = { path = "../costguard-rules" }
 
 [dev-dependencies]
 tempfile.workspace = true
+serde_json.workspace = true

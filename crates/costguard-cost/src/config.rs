@@ -81,12 +81,13 @@ pub enum TableSizeClass {
 }
 
 impl TableSizeClass {
-    pub fn parse(value: &str) -> Self {
+    pub fn parse(value: &str) -> anyhow::Result<Self> {
         match value.trim().to_ascii_lowercase().as_str() {
-            "small" | "s" => Self::Small,
-            "large" | "l" => Self::Large,
-            "xlarge" | "xl" | "extra_large" => Self::Xlarge,
-            _ => Self::Medium,
+            "small" | "s" => Ok(Self::Small),
+            "medium" | "m" => Ok(Self::Medium),
+            "large" | "l" => Ok(Self::Large),
+            "xlarge" | "xl" | "extra_large" => Ok(Self::Xlarge),
+            other => anyhow::bail!("unknown cost table size class '{other}'"),
         }
     }
 
@@ -144,23 +145,21 @@ impl Default for CostConfig {
 }
 
 impl CostConfig {
-    pub fn from_section(section: CostSection) -> Self {
+    pub fn from_section(section: CostSection) -> anyhow::Result<Self> {
         let default_table_size = section
             .default_table_size
             .as_deref()
             .map(TableSizeClass::parse)
+            .transpose()?
             .unwrap_or(TableSizeClass::Medium);
-        Self {
+        let config = Self {
             enabled: section.enabled.unwrap_or(true),
-            interval: section.interval.unwrap_or(0.80).clamp(0.5, 0.99),
-            default_runs_per_month: section.default_runs_per_month.unwrap_or(30.0).max(0.0),
+            interval: section.interval.unwrap_or(0.80),
+            default_runs_per_month: section.default_runs_per_month.unwrap_or(30.0),
             default_table_size,
             fail_on_monthly_delta: section.fail_on_monthly_delta,
             fail_on_monthly_delta_gb: section.fail_on_monthly_delta_gb,
-            incremental_fraction: section
-                .incremental_fraction
-                .unwrap_or(0.05)
-                .clamp(0.001, 1.0),
+            incremental_fraction: section.incremental_fraction.unwrap_or(0.05),
             pricing: section.pricing.unwrap_or(CostPricingSection {
                 model: None,
                 usd_per_tb: None,
@@ -178,11 +177,84 @@ impl CostConfig {
                 .into_iter()
                 .map(|(k, v)| (k.to_ascii_uppercase(), v))
                 .collect(),
-        }
+        };
+        config.validate()?;
+        Ok(config)
     }
 
     pub fn dollar_mode(&self) -> bool {
         self.pricing.model.is_some()
+    }
+
+    pub fn validate(&self) -> anyhow::Result<()> {
+        validate_finite_range("cost.interval", self.interval, 0.5, 0.99)?;
+        validate_positive("cost.default_runs_per_month", self.default_runs_per_month)?;
+        validate_finite_range(
+            "cost.incremental_fraction",
+            self.incremental_fraction,
+            0.001,
+            1.0,
+        )?;
+        validate_optional_positive("cost.fail_on_monthly_delta", self.fail_on_monthly_delta)?;
+        validate_optional_positive(
+            "cost.fail_on_monthly_delta_gb",
+            self.fail_on_monthly_delta_gb,
+        )?;
+
+        match self
+            .pricing
+            .model
+            .as_deref()
+            .map(|value| value.to_ascii_lowercase())
+        {
+            None => {
+                if self.pricing.usd_per_tb.is_some()
+                    || self.pricing.usd_per_credit.is_some()
+                    || self.pricing.tb_per_credit_hour.is_some()
+                {
+                    anyhow::bail!("cost.pricing.model is required when pricing values are set");
+                }
+            }
+            Some(model) if model == "scan" => {
+                validate_optional_positive("cost.pricing.usd_per_tb", self.pricing.usd_per_tb)?;
+            }
+            Some(model) if model == "compute" => {
+                validate_optional_positive(
+                    "cost.pricing.usd_per_credit",
+                    self.pricing.usd_per_credit,
+                )?;
+                if let Some(spec) = &self.pricing.tb_per_credit_hour {
+                    validate_range_or_point("cost.pricing.tb_per_credit_hour", spec)?;
+                }
+            }
+            Some(model) => anyhow::bail!("unknown cost pricing model '{model}'"),
+        }
+
+        for (name, source) in &self.sources {
+            if let Some(bytes) = &source.bytes {
+                let value = parse_bytes_spec(bytes)?;
+                validate_positive(&format!("cost.sources.{name}.bytes"), value)?;
+            }
+            if let Some(rows) = &source.rows {
+                validate_range_or_point(&format!("cost.sources.{name}.rows"), rows)?;
+            }
+            validate_optional_positive(
+                &format!("cost.sources.{name}.avg_row_bytes"),
+                source.avg_row_bytes,
+            )?;
+        }
+        for (name, model) in &self.models {
+            validate_optional_positive(
+                &format!("cost.models.{name}.runs_per_month"),
+                model.runs_per_month,
+            )?;
+        }
+        for (rule, override_config) in &self.rules {
+            if let Some(multiplier) = &override_config.multiplier {
+                validate_range_or_point(&format!("cost.rules.{rule}.multiplier"), multiplier)?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -194,10 +266,12 @@ pub fn range_or_point_to_estimate(spec: &RangeOrPoint, default_cv: Option<f64>) 
 }
 
 pub fn parse_bytes_spec(spec: &BytesSpec) -> anyhow::Result<f64> {
-    match spec {
+    let value = match spec {
         BytesSpec::Number(n) => Ok(*n),
         BytesSpec::Text(text) => parse_human_bytes(text),
-    }
+    }?;
+    validate_positive("bytes", value)?;
+    Ok(value)
 }
 
 pub fn parse_human_bytes(text: &str) -> anyhow::Result<f64> {
@@ -215,12 +289,51 @@ pub fn parse_human_bytes(text: &str) -> anyhow::Result<f64> {
             let value: f64 = num
                 .parse()
                 .map_err(|_| anyhow::anyhow!("invalid bytes '{text}'"))?;
-            return Ok(value * factor);
+            let bytes = value * factor;
+            validate_positive("bytes", bytes)?;
+            return Ok(bytes);
         }
     }
-    trimmed
+    let bytes = trimmed
         .parse::<f64>()
-        .map_err(|_| anyhow::anyhow!("invalid bytes '{text}'"))
+        .map_err(|_| anyhow::anyhow!("invalid bytes '{text}'"))?;
+    validate_positive("bytes", bytes)?;
+    Ok(bytes)
+}
+
+fn validate_optional_positive(name: &str, value: Option<f64>) -> anyhow::Result<()> {
+    if let Some(value) = value {
+        validate_positive(name, value)?;
+    }
+    Ok(())
+}
+
+fn validate_positive(name: &str, value: f64) -> anyhow::Result<()> {
+    if !value.is_finite() || value <= 0.0 {
+        anyhow::bail!("{name} must be finite and greater than zero");
+    }
+    Ok(())
+}
+
+fn validate_finite_range(name: &str, value: f64, min: f64, max: f64) -> anyhow::Result<()> {
+    if !value.is_finite() || value < min || value > max {
+        anyhow::bail!("{name} must be finite and between {min} and {max}");
+    }
+    Ok(())
+}
+
+fn validate_range_or_point(name: &str, spec: &RangeOrPoint) -> anyhow::Result<()> {
+    match spec {
+        RangeOrPoint::Point(value) => validate_positive(name, *value),
+        RangeOrPoint::Range { p10, p90 } => {
+            validate_positive(&format!("{name}.p10"), *p10)?;
+            validate_positive(&format!("{name}.p90"), *p90)?;
+            if p90 <= p10 {
+                anyhow::bail!("{name}.p90 must be greater than p10");
+            }
+            Ok(())
+        }
+    }
 }
 
 #[cfg(test)]
@@ -231,5 +344,24 @@ mod tests {
     fn parses_human_bytes() {
         assert_eq!(parse_human_bytes("12TB").unwrap(), 12_000_000_000_000.0);
         assert_eq!(parse_human_bytes("500 GB").unwrap(), 500_000_000_000.0);
+    }
+
+    #[test]
+    fn rejects_invalid_cost_values_instead_of_clamping() {
+        let section: CostSection = toml::from_str(
+            r#"
+default_runs_per_month = 0
+"#,
+        )
+        .expect("parse section");
+        assert!(CostConfig::from_section(section).is_err());
+
+        let section: CostSection = toml::from_str(
+            r#"
+default_table_size = "enormous"
+"#,
+        )
+        .expect("parse section");
+        assert!(CostConfig::from_section(section).is_err());
     }
 }

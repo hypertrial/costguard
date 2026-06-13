@@ -1,22 +1,21 @@
-name: benchmark-manual-mirror
+name: enterprise-benchmarks
 
 on:
+  schedule:
+    - cron: "17 4 * * 1"
   workflow_dispatch:
-    inputs:
-      target:
-        description: Benchmark target to run
-        required: true
-        default: vendored
-        type: choice
-        options: [vendored, jaffle-shop, spellbook-smoke, spellbook, precision, all]
 
 permissions:
   contents: read
 
+concurrency:
+  group: enterprise-benchmarks
+  cancel-in-progress: false
+
 jobs:
-  benchmark:
-    runs-on: ubuntu-latest
-    timeout-minutes: 180
+  full-evidence-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
@@ -24,25 +23,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: cargo build --release --locked -p costguard-cli
-      - name: Run selected benchmark
-        shell: bash
+      - name: Run external evidence and precision gates
         env:
-          TARGET_INPUT: ${{ inputs.target }}
           COSTGUARD_BUILD_PROFILE: release
-        run: |
-          case "${TARGET_INPUT}" in
-            vendored) python3 scripts/benchmark_external_repo.py --all-vendored ;;
-            jaffle-shop) python3 scripts/benchmark_external_repo.py --repo jaffle-shop ;;
-            spellbook-smoke) python3 scripts/benchmark_external_repo.py --repo spellbook --smoke ;;
-            spellbook) python3 scripts/benchmark_external_repo.py --repo spellbook ;;
-            precision)
-              python3 scripts/benchmark_external_repo.py --repo spellbook
-              python3 scripts/precision_triage.py --repo spellbook --sample-size 200
-              ;;
-            all)
-              python3 scripts/benchmark_external_repo.py --all-vendored
-              python3 scripts/benchmark_external_repo.py --repo jaffle-shop
-              python3 scripts/benchmark_external_repo.py --repo spellbook
-              python3 scripts/precision_triage.py --repo spellbook --sample-size 200
-              ;;
-          esac
+        run: python scripts/support_matrix.py --run-benchmarks --verify

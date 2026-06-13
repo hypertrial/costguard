@@ -7,6 +7,7 @@ use serde::Serialize;
 #[derive(Debug, Serialize)]
 struct JsonOutput<'a> {
     schema_version: u8,
+    analysis: &'a costguard_core::AnalysisReport,
     metrics: &'a costguard_core::ScanMetrics,
     #[serde(skip_serializing_if = "Option::is_none")]
     cost: Option<&'a ProjectCostSummary>,
@@ -21,6 +22,7 @@ pub fn render(result: &ScanResult, format: OutputFormat) -> Result<String> {
         OutputFormat::Text => Ok(render_text(result)),
         OutputFormat::Json => Ok(serde_json::to_string_pretty(&JsonOutput {
             schema_version: 2,
+            analysis: &result.analysis,
             metrics: &result.metrics,
             cost: result.cost_summary.as_ref(),
             diagnostics: &result.diagnostics,
@@ -95,35 +97,42 @@ pub fn render_rules(
 
 fn render_text(result: &ScanResult) -> String {
     let mut output = String::new();
+    append_analysis_text(&mut output, result);
     if let Some(summary) = &result.pr_summary {
         output.push_str("Changed files:\n");
         if summary.changed_files.is_empty() {
             output.push_str("  none\n");
         } else {
             for path in &summary.changed_files {
-                output.push_str(&format!("  - {}\n", path.display()));
+                output.push_str(&format!(
+                    "  - {}\n",
+                    escape_text(&path.display().to_string())
+                ));
             }
         }
         if !summary.changed_models.is_empty() {
             output.push_str("\nChanged dbt models:\n");
             for model in &summary.changed_models {
-                output.push_str(&format!("  - {model}\n"));
+                output.push_str(&format!("  - {}\n", escape_text(model)));
             }
         }
         if !summary.affected_downstream.is_empty() {
             output.push_str("\nAffected downstream:\n");
             for node in &summary.affected_downstream {
-                output.push_str(&format!("  - {node}\n"));
+                output.push_str(&format!("  - {}\n", escape_text(node)));
             }
         }
         if !summary.affected_exposures.is_empty() {
             output.push_str("\nAffected exposures:\n");
             for exposure in &summary.affected_exposures {
-                output.push_str(&format!("  - exposure: {exposure}\n"));
+                output.push_str(&format!("  - exposure: {}\n", escape_text(exposure)));
             }
         }
         if let Some(command) = &summary.recommended_dbt_command {
-            output.push_str(&format!("\nRecommended dbt command:\n  {command}\n"));
+            output.push_str(&format!(
+                "\nRecommended dbt command:\n  {}\n",
+                escape_text(command)
+            ));
         }
         output.push('\n');
     }
@@ -141,11 +150,11 @@ fn render_text(result: &ScanResult) -> String {
             "{}  {} {}:{}:{}\n",
             diagnostic.severity.label(),
             diagnostic.rule_id,
-            diagnostic.path.display(),
+            escape_text(&diagnostic.path.display().to_string()),
             diagnostic.line,
             diagnostic.column
         ));
-        output.push_str(&format!("      {}\n", diagnostic.message));
+        output.push_str(&format!("      {}\n", escape_text(&diagnostic.message)));
         if let Some(risk) = &diagnostic.risk {
             output.push_str(&format!("      Risk: {risk}\n"));
         }
@@ -195,6 +204,13 @@ fn append_top_cost_findings(output: &mut String, diagnostics: &[Diagnostic]) {
 
 fn render_github(result: &ScanResult) -> String {
     let mut output = String::new();
+    for violation in &result.analysis.violations {
+        output.push_str(&format!(
+            "::error title=Costguard analysis {}::{}\n",
+            escape_github_property(&violation.code),
+            escape_github_message(&violation.message)
+        ));
+    }
     for diagnostic in &result.diagnostics {
         let level = match diagnostic.severity {
             Severity::Critical | Severity::High => "error",
@@ -244,7 +260,17 @@ fn render_markdown(result: &ScanResult) -> String {
         .iter()
         .filter(|diagnostic| diagnostic.severity >= Severity::High)
         .count();
-    if high_count > 0 {
+    if !result.analysis.passed {
+        output.push_str("# Costguard analysis incomplete\n\n");
+        for violation in &result.analysis.violations {
+            output.push_str(&format!(
+                "- `{}` {}\n",
+                escape_markdown(&violation.code),
+                escape_markdown(&violation.message)
+            ));
+        }
+        output.push('\n');
+    } else if high_count > 0 {
         output.push_str(&format!(
             "# Costguard failed this PR\n\n{high_count} high-risk cost finding"
         ));
@@ -271,7 +297,8 @@ fn render_markdown(result: &ScanResult) -> String {
         );
         if let Some(command) = &summary.recommended_dbt_command {
             output.push_str(&format!(
-                "Recommended dbt command:\n\n```bash\n{command}\n```\n\n"
+                "Recommended dbt command:\n\n```bash\n{}\n```\n\n",
+                escape_fenced_code(command)
             ));
         }
     }
@@ -282,7 +309,7 @@ fn render_markdown(result: &ScanResult) -> String {
             output.push_str(&format!(
                 "1. `{}` {}:{}:{}\n   {}\n",
                 diagnostic.rule_id,
-                diagnostic.path.display(),
+                escape_markdown(&diagnostic.path.display().to_string()),
                 diagnostic.line,
                 diagnostic.column,
                 escape_markdown(&diagnostic.message)
@@ -335,7 +362,7 @@ fn append_top_cost_findings_markdown(output: &mut String, diagnostics: &[Diagnos
         output.push_str(&format!(
             "- `{}` {}:{} — {}\n",
             diagnostic.rule_id,
-            diagnostic.path.display(),
+            escape_markdown(&diagnostic.path.display().to_string()),
             diagnostic.line,
             escape_markdown(&format_cost_line(cost))
         ));
@@ -385,12 +412,15 @@ fn append_cost_summary(output: &mut String, summary: Option<&ProjectCostSummary>
             if let Some(p50) = model.p50_usd_per_month {
                 output.push_str(&format!(
                     "    - {} — ~${p50:.0}/mo (grade {})\n",
-                    model.model_id, model.grade
+                    escape_markdown(&model.model_id),
+                    model.grade
                 ));
             } else {
                 output.push_str(&format!(
                     "    - {} — {:.0} GB-mo (grade {})\n",
-                    model.model_id, model.gb_months, model.grade
+                    escape_markdown(&model.model_id),
+                    model.gb_months,
+                    model.grade
                 ));
             }
         }
@@ -492,23 +522,77 @@ fn summary_sentence(summary: &PrSummary) -> String {
 }
 
 fn escape_github_property(value: &str) -> String {
-    value
-        .replace('%', "%25")
-        .replace('\r', "%0D")
-        .replace('\n', "%0A")
-        .replace(',', "%2C")
-        .replace(':', "%3A")
+    escape_github(value, true)
 }
 
 fn escape_github_message(value: &str) -> String {
-    value
-        .replace('%', "%25")
-        .replace('\r', "%0D")
-        .replace('\n', "%0A")
+    escape_github(value, false)
 }
 
 fn escape_markdown(value: &str) -> String {
-    value.replace('|', "\\|")
+    let mut escaped = String::new();
+    for ch in value.chars() {
+        match ch {
+            '\\' => escaped.push_str("\\\\"),
+            '`' => escaped.push_str("\\`"),
+            '|' => escaped.push_str("\\|"),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\t' => escaped.push_str("\\t"),
+            ch if ch.is_control() => escaped.push_str(&format!("\\u{:04X}", ch as u32)),
+            ch => escaped.push(ch),
+        }
+    }
+    escaped
+}
+
+fn escape_fenced_code(value: &str) -> String {
+    escape_text(value).replace("```", "` ` `")
+}
+
+fn escape_text(value: &str) -> String {
+    let mut escaped = String::new();
+    for ch in value.chars() {
+        match ch {
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\t' => escaped.push_str("\\t"),
+            ch if ch.is_control() => escaped.push_str(&format!("\\u{:04X}", ch as u32)),
+            ch => escaped.push(ch),
+        }
+    }
+    escaped
+}
+
+fn escape_github(value: &str, property: bool) -> String {
+    let mut escaped = String::new();
+    for ch in value.chars() {
+        match ch {
+            '%' => escaped.push_str("%25"),
+            ',' if property => escaped.push_str("%2C"),
+            ':' if property => escaped.push_str("%3A"),
+            ch if ch.is_ascii_control() => {
+                escaped.push_str(&format!("%{:02X}", ch as u32));
+            }
+            ch => escaped.push(ch),
+        }
+    }
+    escaped
+}
+
+fn append_analysis_text(output: &mut String, result: &ScanResult) {
+    if result.analysis.passed {
+        return;
+    }
+    output.push_str("Analysis incomplete:\n");
+    for violation in &result.analysis.violations {
+        output.push_str(&format!(
+            "  - {}: {}\n",
+            escape_text(&violation.code),
+            escape_text(&violation.message)
+        ));
+    }
+    output.push('\n');
 }
 
 fn sarif_level(severity: Severity) -> &'static str {
@@ -649,6 +733,7 @@ mod tests {
                 ..PrSummary::default()
             }),
             cost_summary: None,
+            analysis: costguard_core::AnalysisReport::default(),
         }
     }
 
@@ -711,6 +796,8 @@ mod tests {
         let rendered = render(&result, OutputFormat::Json).expect("json render");
         let value: serde_json::Value = serde_json::from_str(&rendered).expect("parse json");
         assert_eq!(value["schema_version"], 2);
+        assert_eq!(value["analysis"]["policy"], "standard");
+        assert_eq!(value["analysis"]["passed"], true);
         assert!(value["cost"].is_null());
         assert_eq!(value["metrics"]["sql_parse_total"], 3);
         assert_eq!(value["metrics"]["sql_parse_failures"], 1);
@@ -752,5 +839,16 @@ mod tests {
         assert_eq!(value["version"], "2.1.0");
         assert_eq!(value["runs"][0]["tool"]["driver"]["name"], "costguard");
         assert_eq!(value["runs"][0]["results"][0]["ruleId"], "SQLCOST005");
+    }
+
+    #[test]
+    fn markdown_and_workflow_output_escape_control_characters() {
+        let mut result = sample_result(true);
+        result.diagnostics[0].path = PathBuf::from("models/`bad|name\n.sql");
+        let markdown = render_markdown(&result);
+        assert!(markdown.contains("\\`bad\\|name\\n.sql"), "{markdown}");
+        let github = render_github(&result);
+        assert!(github.contains("%0A"), "{github}");
+        assert_eq!(github.lines().count(), 2, "{github}");
     }
 }
