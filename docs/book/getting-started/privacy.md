@@ -6,7 +6,7 @@ Costguard is a **local static analyzer**. It is suitable for enterprise security
 
 - Does **not** connect to Snowflake, BigQuery, Trino, or any warehouse.
 - Does **not** execute SQL against production or development databases.
-- Does **not** read warehouse credentials (dbt compile uses dummy `profiles.yml` in CI helpers).
+- Does **not** read warehouse credentials. Benchmark scripts may run `dbt compile` with dummy `profiles.yml`; your CI job owns real dbt compilation.
 - Does **not** send telemetry, crash reports, or usage analytics to Hypertrial or third parties.
 - Does **not** upload repository contents during scan (GitHub Action downloads the Costguard binary only).
 

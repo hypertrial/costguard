@@ -6,8 +6,9 @@ Canonical terminology for Costguard documentation. Prefer these definitions in R
 
 | Term | Definition |
 | --- | --- |
-| **PR check** | Primary product workflow: scan changed files on a pull request and fail on high-risk findings |
+| **PR check** | Primary product workflow: `costguard pr` scans changed files against the git base and fails on high-confidence, high-severity findings |
 | **CLI engine** | Local `costguard` binary powering PR checks, scans, and CI |
+| **Cost regression guardrail** | Local, dbt-aware static analysis that catches expensive SQL before it merges—not a FinOps billing or observability platform |
 | **Blast radius** | Downstream models affected by a changed upstream model (PR summary enrichment) |
 
 ## Platform and configuration

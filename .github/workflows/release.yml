@@ -114,41 +114,8 @@ jobs:
             dist/release/smoke-${{ matrix.target }}.json
           if-no-files-found: error
 
-  server-image:
-    needs: qualify
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-      attestations: write
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-      - name: Build and scan server image
-        env:
-          VERSION: ${{ needs.qualify.outputs.version }}
-        run: python scripts/server_image_check.py --version "${VERSION}"
-      - name: Publish immutable server image
-        id: image
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ needs.qualify.outputs.version }}
-        run: |
-          OWNER="${GITHUB_REPOSITORY_OWNER,,}"
-          IMAGE="ghcr.io/${OWNER}/costguard-server:${VERSION}"
-          echo "${GH_TOKEN}" | docker login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
-          docker tag "costguard-server:${VERSION}" "${IMAGE}"
-          docker push "${IMAGE}"
-          DIGEST="$(docker inspect --format='{{index .RepoDigests 0}}' "${IMAGE}" | cut -d@ -f2)"
-          echo "name=ghcr.io/${OWNER}/costguard-server" >> "${GITHUB_OUTPUT}"
-          echo "digest=${DIGEST}" >> "${GITHUB_OUTPUT}"
-      - uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661
-        with:
-          subject-name: ${{ steps.image.outputs.name }}
-          subject-digest: ${{ steps.image.outputs.digest }}
-
   publish:
-    needs: [qualify, build, server-image]
+    needs: [qualify, build]
     runs-on: ubuntu-24.04
     environment: release
     permissions:

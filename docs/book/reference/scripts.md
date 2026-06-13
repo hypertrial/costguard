@@ -2,11 +2,11 @@
 
 Helper scripts live under [`scripts/`](../../../scripts/) at the repository root. Prefer `python3` when invoking them.
 
-For Spellbook, the script compiles five subprojects and **merges** their manifests into `target/manifest.json` at the repo root before scanning. The GitHub Action uses the same merge logic via [`dbt_compile_for_costguard.py`](../../../scripts/dbt_compile_for_costguard.py).
+For Spellbook and other external benchmarks, the script compiles subprojects and **merges** their manifests into `target/manifest.json` at the repo root before scanning. Run `dbt compile` in your own CI job before the Costguard Action; this helper is for benchmarks and local development only.
 
 ## `dbt_compile_for_costguard.py`
 
-Shared dbt compile and manifest merge helper used by the GitHub Action and `benchmark_external_repo.py`. Subproject compiles run in parallel when multiple `--compile-dirs` are provided (`COSTGUARD_DBT_COMPILE_JOBS=1` forces serial). Manifest outputs are cached per repo commit and packages fingerprint when `--cache-dir` is set from the benchmark script.
+Shared dbt compile and manifest merge helper used by `benchmark_external_repo.py` and local Spellbook stress tests. Subproject compiles run in parallel when multiple `--compile-dirs` are provided (`COSTGUARD_DBT_COMPILE_JOBS=1` forces serial). Manifest outputs are cached per repo commit and packages fingerprint when `--cache-dir` is set from the benchmark script.
 
 ```bash
 python3 scripts/dbt_compile_for_costguard.py \
@@ -249,7 +249,7 @@ Requires a cached checkout with `target/manifest.json` from `benchmark_external_
 
 ## `precision_triage.py`
 
-Sample external-repo findings and compute precision against [`fp_registry.toml`](../../../tests/benchmarks/fp_registry.toml) bucket verdicts. Used for Spellbook enterprise readiness gates (≥90% high, ≥80% overall).
+Sample external-repo findings and compute precision against [`fp_registry.toml`](../../../tests/benchmarks/fp_registry.toml) bucket verdicts. Used for Spellbook governance readiness gates (≥90% high, ≥80% overall).
 
 ```bash
 python3 scripts/precision_triage.py --repo spellbook --sample-size 200

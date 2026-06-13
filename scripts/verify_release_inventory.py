@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify the exact hosted-release asset inventory and consolidated checksums."""
+"""Verify the exact GitHub release asset inventory and consolidated checksums."""
 
 from __future__ import annotations
 

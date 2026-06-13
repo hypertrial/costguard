@@ -1,19 +1,22 @@
 # costguard
 
-Costguard is a PR-first check for catching expensive dbt and warehouse SQL before it merges.
+Costguard is a local, dbt-aware cost regression guardrail for git workflows.
 
-Runs locally as a fast Rust CLI. No warehouse credentials required.
+One binary and one simple CI Action. `costguard pr` scans changed models against the git base. Runs locally as a fast Rust CLI with no warehouse credentials required.
 
-Costguard 2.0 is an MIT-licensed, self-hostable enterprise foundation. Generic SQL, Snowflake, BigQuery, and Trino scanning are production-ready; Databricks, Redshift, Postgres, and DuckDB support is preview.
+Generic SQL, Snowflake, BigQuery, and Trino scanning are production-ready; Databricks, Redshift, Postgres, and DuckDB support is preview.
 
 ## Quick start
 
 Use the GitHub Action at the moving compatible major tag `@v2`, pin exact behavior with `@v2.0.0`, or download a checksum-protected binary from GitHub Releases.
 
+Run Costguard after your existing dbt compile step so `target/manifest.json` is available when you want manifest-backed analysis.
+
 ```yaml
 - uses: actions/checkout@v4
   with:
     fetch-depth: 0
+- run: dbt compile --target dev
 - uses: hypertrial/costguard/.github/actions/costguard@v2
   with:
     base: origin/main
@@ -62,10 +65,12 @@ mdbook serve
 - uses: actions/checkout@v4
   with:
     fetch-depth: 0
+- run: dbt compile --target dev
 - uses: hypertrial/costguard/.github/actions/costguard@v2
   with:
     base: origin/main
     warehouse: snowflake
+    manifest: target/manifest.json
     fail-on: high
     min-confidence: high
     format: github
@@ -73,15 +78,15 @@ mdbook serve
 
 When developing Costguard itself, use the same action with `install-mode: source` so the workflow builds the checked-out code instead of downloading a release.
 
-When dbt compilation is enabled, the Action derives the dbt adapter from `warehouse`. For `warehouse: generic`, set `dbt-adapter-package` explicitly.
+The Action does not install or compile dbt. It auto-detects `target/manifest.json` when present; raw analysis still works without a manifest.
 
-Recommended for macro-heavy dbt repos: pair `--fail-on high` with `--min-confidence high` to suppress regex-only findings while keeping AST-confirmed high-risk hits.
+Only high-confidence, high-severity findings fail the PR by default. Pair `fail-on: high` with `min-confidence: high` on macro-heavy dbt repos.
 
-See [Quick start (PR check)](docs/book/getting-started/quick-start.md) for inputs and dbt compile behavior.
+See [Quick start (PR check)](docs/book/getting-started/quick-start.md) for inputs and workflow guidance.
 
 ## What it detects
 
-Costguard ships **35 SQLCOST rules** for incremental safety, join risk, warehouse cost patterns, and dbt anti-patterns. Optional **[cost estimates](docs/book/reference/cost-estimates.md)** resolve per-model monthly spend once, attribute deduplicated savings to findings, and rank explicit savings intervals with provenance grades. Use `costguard cost report` for a project cost report. See the [rule catalog](docs/book/rules/index.md) for severity and fix guidance.
+Costguard ships **35 SQLCOST rules** for incremental safety, join risk, warehouse cost patterns, and dbt anti-patterns. Optional **[cost estimates](docs/book/reference/cost-estimates.md)** rank findings for prioritization using local catalog stats and offline exports—they are advisory, not a billing system. Severity and confidence remain the enforcement contract. See the [rule catalog](docs/book/rules/index.md) for severity and fix guidance.
 
 ## Benchmark smoke tests
 
@@ -125,4 +130,4 @@ Full schema: [Configuration](docs/book/reference/configuration.md).
 
 ## Status
 
-The local scanner is production-ready and the 2.0 control plane is the enterprise foundation release. See the [support policy](SUPPORT.md), [compatibility policy](docs/book/reference/compatibility.md), and [security policy](SECURITY.md).
+The local scanner and PR check workflow are production-ready. See the [support policy](SUPPORT.md), [compatibility policy](docs/book/reference/compatibility.md), and [security policy](SECURITY.md).

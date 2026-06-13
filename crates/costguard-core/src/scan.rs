@@ -339,11 +339,11 @@ fn load_managed_policy(
     root: &Path,
     now: chrono::DateTime<chrono::Utc>,
 ) -> Result<Option<ManagedPolicy>> {
-    let Some(bundle_path) = &config.enterprise_policy.bundle_path else {
+    let Some(bundle_path) = &config.signed_policy.bundle_path else {
         return Ok(None);
     };
     let trust_path = config
-        .enterprise_policy
+        .signed_policy
         .trust_store_path
         .as_ref()
         .context("policy trust store is required")?;
@@ -358,12 +358,12 @@ fn load_managed_policy(
     let trust = read_trust_store(&resolve_path(trust_path))?;
     let document = verify_policy(&signed, &trust, now)?;
     let organization = config
-        .enterprise_policy
+        .signed_policy
         .organization
         .clone()
         .unwrap_or_else(|| document.organization.clone());
     let repository = config
-        .enterprise_policy
+        .signed_policy
         .repository
         .clone()
         .or_else(|| std::env::var("GITHUB_REPOSITORY").ok())
@@ -376,7 +376,7 @@ fn load_managed_policy(
         &document,
         &ResolutionContext {
             organization: &organization,
-            team: config.enterprise_policy.team.as_deref(),
+            team: config.signed_policy.team.as_deref(),
             repository: &repository,
             path: None,
         },
@@ -385,7 +385,7 @@ fn load_managed_policy(
         document,
         digest: resolved.digest,
         organization,
-        team: config.enterprise_policy.team.clone(),
+        team: config.signed_policy.team.clone(),
         repository,
     }))
 }

@@ -1,4 +1,4 @@
-name: enterprise-benchmarks
+name: costguard-benchmarks
 
 on:
   schedule:
@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: enterprise-benchmarks
+  group: costguard-benchmarks
   cancel-in-progress: false
 
 jobs:

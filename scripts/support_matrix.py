@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate and execute the pinned enterprise support matrix."""
+"""Validate and execute the pinned release support matrix."""
 
 from __future__ import annotations
 

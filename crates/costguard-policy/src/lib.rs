@@ -857,7 +857,7 @@ mod tests {
     fn policy(now: DateTime<Utc>) -> PolicyDocumentV1 {
         PolicyDocumentV1 {
             schema_version: 1,
-            id: "enterprise-default".into(),
+            id: "org-default".into(),
             version: "2026.06".into(),
             organization: "acme".into(),
             issued_at: now.to_rfc3339(),

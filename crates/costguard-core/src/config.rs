@@ -120,7 +120,7 @@ pub struct ScanConfig {
     pub write_baseline_path: Option<PathBuf>,
     pub cost: Option<CostConfig>,
     pub analysis: AnalysisConfig,
-    pub enterprise_policy: EnterprisePolicyConfig,
+    pub signed_policy: SignedPolicyConfig,
 }
 
 impl Default for ScanConfig {
@@ -142,7 +142,7 @@ impl Default for ScanConfig {
             write_baseline_path: None,
             cost: None,
             analysis: AnalysisConfig::default(),
-            enterprise_policy: EnterprisePolicyConfig::default(),
+            signed_policy: SignedPolicyConfig::default(),
         }
     }
 }
@@ -158,7 +158,7 @@ pub struct FileConfig {
     pub rules: Option<RuleOverrides>,
     pub cost: Option<CostSection>,
     pub analysis: Option<AnalysisSection>,
-    pub policy: Option<EnterprisePolicySection>,
+    pub policy: Option<SignedPolicySection>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -196,7 +196,7 @@ pub struct AnalysisSection {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct EnterprisePolicyConfig {
+pub struct SignedPolicyConfig {
     pub bundle_path: Option<PathBuf>,
     pub trust_store_path: Option<PathBuf>,
     pub organization: Option<String>,
@@ -207,7 +207,7 @@ pub struct EnterprisePolicyConfig {
 
 #[derive(Debug, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
-pub struct EnterprisePolicySection {
+pub struct SignedPolicySection {
     pub bundle: Option<PathBuf>,
     pub trust_store: Option<PathBuf>,
     pub organization: Option<String>,
@@ -300,12 +300,12 @@ pub fn apply_file_config(mut config: ScanConfig, file_config: FileConfig) -> Res
         }
     }
     if let Some(policy) = file_config.policy {
-        config.enterprise_policy.bundle_path = policy.bundle;
-        config.enterprise_policy.trust_store_path = policy.trust_store;
-        config.enterprise_policy.organization = policy.organization;
-        config.enterprise_policy.team = policy.team;
-        config.enterprise_policy.repository = policy.repository;
-        config.enterprise_policy.required = policy.required.unwrap_or(false);
+        config.signed_policy.bundle_path = policy.bundle;
+        config.signed_policy.trust_store_path = policy.trust_store;
+        config.signed_policy.organization = policy.organization;
+        config.signed_policy.team = policy.team;
+        config.signed_policy.repository = policy.repository;
+        config.signed_policy.required = policy.required.unwrap_or(false);
     }
     Ok(config)
 }
@@ -373,19 +373,19 @@ impl ScanRuntimeOverrides {
             config.analysis.policy = policy.parse().map_err(anyhow::Error::msg)?;
         }
         if let Some(path) = &self.policy_bundle_path {
-            config.enterprise_policy.bundle_path = Some(path.clone());
+            config.signed_policy.bundle_path = Some(path.clone());
         }
         if let Some(path) = &self.trust_store_path {
-            config.enterprise_policy.trust_store_path = Some(path.clone());
+            config.signed_policy.trust_store_path = Some(path.clone());
         }
         if let Some(value) = &self.policy_organization {
-            config.enterprise_policy.organization = Some(value.clone());
+            config.signed_policy.organization = Some(value.clone());
         }
         if let Some(value) = &self.policy_team {
-            config.enterprise_policy.team = Some(value.clone());
+            config.signed_policy.team = Some(value.clone());
         }
         if let Some(value) = &self.policy_repository {
-            config.enterprise_policy.repository = Some(value.clone());
+            config.signed_policy.repository = Some(value.clone());
         }
         Ok(())
     }
@@ -418,22 +418,18 @@ pub fn validate_scan_config(config: &ScanConfig) -> Result<()> {
     if let Some(cost) = &config.cost {
         cost.validate()?;
     }
-    if config.enterprise_policy.required && config.enterprise_policy.bundle_path.is_none() {
-        anyhow::bail!("enterprise policy is required but no bundle is configured");
+    if config.signed_policy.required && config.signed_policy.bundle_path.is_none() {
+        anyhow::bail!("signed policy is required but no bundle is configured");
     }
-    if config.enterprise_policy.bundle_path.is_some()
-        && config.enterprise_policy.trust_store_path.is_none()
+    if config.signed_policy.bundle_path.is_some() && config.signed_policy.trust_store_path.is_none()
     {
         anyhow::bail!("policy.trust_store is required when policy.bundle is configured");
     }
     for (label, path) in [
-        (
-            "policy bundle",
-            config.enterprise_policy.bundle_path.as_ref(),
-        ),
+        ("policy bundle", config.signed_policy.bundle_path.as_ref()),
         (
             "policy trust store",
-            config.enterprise_policy.trust_store_path.as_ref(),
+            config.signed_policy.trust_store_path.as_ref(),
         ),
     ] {
         if let Some(path) = path {

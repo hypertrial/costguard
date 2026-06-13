@@ -17,16 +17,18 @@ costguard pr --base origin/main --warehouse snowflake --fail-on high --min-confi
 
 ## GitHub Action
 
-Use the published composite action:
+Use the published composite action after your existing dbt compile step:
 
 ```yaml
 - uses: actions/checkout@v4
   with:
     fetch-depth: 0
+- run: dbt compile --target dev
 - uses: hypertrial/costguard/.github/actions/costguard@v2
   with:
     base: origin/main
     warehouse: snowflake
+    manifest: target/manifest.json
     fail-on: high
     min-confidence: high
     format: github
@@ -38,19 +40,15 @@ For Costguard contributor workflows that need to run the checked-out source inst
     install-mode: source
 ```
 
-Inputs include local scan settings, release installation, strict analysis, locked dbt compilation, and enterprise publication (`server-url`, `publication-mode`, `trust-store`, `organization`, `token`). Use `@v2` for compatible updates or `@v2.0.0` for an immutable pin. Network access remains off when `publication-mode: off`.
+Core inputs: `base`, `warehouse`, `manifest`, `fail-on`, and `baseline`. The Action also supports `min-confidence`, `format`, `analysis-policy`, and optional cost flags. Use `@v2` for compatible updates or `@v2.0.0` for an immutable pin.
+
+The Action does not install or compile dbt. Run `dbt compile` in a prior step so `target/manifest.json` is available when you want manifest-backed analysis.
 
 Pair `fail-on: high` with `min-confidence: high` on macro-heavy dbt projects so PR gates keep AST-confirmed findings and ignore regex-only noise (for example SQLCOST012 comma joins detected without a successful parse).
 
-The Action defaults to `analysis-policy: strict`, which requires a dbt manifest for dbt projects and fails closed on parse or metadata gaps. Set `analysis-policy: standard` for best-effort analysis when a manifest is unavailable.
+The Action defaults to `analysis-policy: standard`. Costguard auto-detects `target/manifest.json` when present; raw analysis still works without a manifest. Set `analysis-policy: strict` in the Action or committed `costguard.toml` when git-native governance requires manifest-backed analysis.
 
-When `compile-dbt: true`, the action runs the shared [`dbt_compile_for_costguard.py`](../../../scripts/dbt_compile_for_costguard.py) helper (same logic as the Spellbook benchmark harness): `dbt deps`, `dbt compile`, optional multi-subproject manifest merge, then passes `--manifest` when present. Compile uses a dummy local profile by default (no warehouse connection). Set `allow-credentialed-compile: true` only when you explicitly configure a real profiles directory. Use `dbt-installation: locked` with a hash-locked `dbt-requirements-file` for reproducible adapter installs. The adapter package is derived from `warehouse`; `generic` requires an explicit `dbt-adapter-package`. Set `dbt-profile-type` only when the package name does not identify the profile type.
-
-Enterprise dbt repos should pin dbt dependencies with `dbt-requirements-file` or `dbt-constraints-file`, pass required compile variables through `dbt-vars`, and set `fail-on-deps-failure: true` when package resolution must be enforced. If another workflow already uploads `target/manifest.json`, set `use-existing-manifest: true` and provide `manifest` or `manifest-output` to run Costguard in artifact-only mode.
-
-For monorepos with multiple dbt subprojects (Spellbook-style), set `dbt-compile-dirs` to a comma- or newline-separated list and `manifest-output` to the merged root manifest path (default `target/manifest.json`).
-
-For dbt Cloud or private-package workflows, let your existing authenticated dbt job produce a manifest artifact, download it before this action, and run with `use-existing-manifest: true`. Costguard does not require warehouse credentials.
+For dbt Cloud or private-package workflows, let your existing authenticated dbt job produce a manifest artifact, download it before this action, and set `manifest: target/manifest.json`. Costguard does not require warehouse credentials.
 
 ## CI output formats
 
@@ -63,16 +61,18 @@ costguard pr --base origin/main --warehouse snowflake --fail-on high --min-confi
 - `github` — annotation commands for GitHub Checks
 - `markdown` — PR-summary-oriented report
 - `json` — structured `diagnostics` and optional `pr_summary`
+- `sarif` — retained by your CI platform for audit and triage
 
 See [Output formats](../reference/output.md) for the JSON schema.
 
 ## Manifest and compiled SQL
 
-For Jinja-heavy dbt models, run `dbt compile` first (or enable compile in the Action). Costguard loads `compiled_code` from the manifest for parse metrics. When a finding is only available from compiled SQL and cannot be mapped back to raw source, JSON output marks it as `source_provenance: "compiled_unmapped"` and includes the compiled line and column.
+For Jinja-heavy dbt models, run `dbt compile` in your existing CI job before Costguard. Costguard loads `compiled_code` from the manifest for parse metrics. When a finding is only available from compiled SQL and cannot be mapped back to raw source, JSON output marks it as `source_provenance: "compiled_unmapped"` and includes the compiled line and column.
 
 If `--manifest` is omitted, Costguard auto-loads `target/manifest.json` when that file exists in the scan root.
 
 ## Related
 
 - [PR check primary workflow](../../design/pr-check-primary-workflow.md)
+- [Enterprise adoption](enterprise-adoption.md)
 - [Suppressions](../reference/suppressions.md)

@@ -1,5 +1,5 @@
 use chrono::Utc;
-use costguard_core::{scan, EnterprisePolicyConfig, ScanConfig};
+use costguard_core::{scan, ScanConfig, SignedPolicyConfig};
 use costguard_diagnostics::Severity;
 use costguard_policy::{
     generate_key, sign_policy, DeclarativeRule, PolicyDocumentV1, PolicyPermissions, PolicyScope,
@@ -23,7 +23,7 @@ fn managed_scan(enforcement: EnforcementMode) -> costguard_core::ScanResult {
     let now = Utc::now();
     let policy = PolicyDocumentV1 {
         schema_version: 1,
-        id: "enterprise-default".into(),
+        id: "org-default".into(),
         version: "2026.06".into(),
         organization: "acme".into(),
         issued_at: (now - chrono::Duration::minutes(1)).to_rfc3339(),
@@ -41,7 +41,7 @@ fn managed_scan(enforcement: EnforcementMode) -> costguard_core::ScanResult {
                 severity: Severity::High,
                 confidence: costguard_diagnostics::Confidence::High,
                 enforcement: EnforcementMode::Block,
-                message: "Mart SQL requires enterprise review.".into(),
+                message: "Mart SQL requires policy review.".into(),
                 risk: None,
                 suggestion: None,
                 cost_multiplier: Some(1.25),
@@ -75,13 +75,13 @@ fn managed_scan(enforcement: EnforcementMode) -> costguard_core::ScanResult {
         root: temp.path().to_path_buf(),
         paths: vec![temp.path().join("models")],
         fail_on: Some(Severity::Medium),
-        enterprise_policy: EnterprisePolicyConfig {
+        signed_policy: SignedPolicyConfig {
             bundle_path: Some(bundle),
             trust_store_path: Some(trust_store),
             organization: Some("acme".into()),
             repository: Some("acme/warehouse".into()),
             required: true,
-            ..EnterprisePolicyConfig::default()
+            ..SignedPolicyConfig::default()
         },
         ..ScanConfig::default()
     })

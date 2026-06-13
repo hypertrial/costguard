@@ -67,7 +67,7 @@ costguard scan dbt_subprojects --warehouse trino --manifest target/manifest.json
 costguard scan . --warehouse trino --manifest target/manifest.json --fail-on high
 ```
 
-PR-first output smoke checks:
+PR check output smoke checks:
 
 ```bash
 costguard pr --base origin/main --warehouse trino --manifest target/manifest.json --fail-on high --format github

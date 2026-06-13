@@ -4,6 +4,8 @@ use costguard_cost::{format_cost_line, format_usd_interval, ProjectCostSummary};
 use costguard_diagnostics::{Diagnostic, Severity};
 use serde::Serialize;
 
+const OUTPUT_SCHEMA_VERSION: u8 = 3;
+
 #[derive(Debug, Serialize)]
 struct JsonOutput<'a> {
     schema_version: u8,
@@ -23,7 +25,7 @@ pub fn render(result: &ScanResult, format: OutputFormat) -> Result<String> {
     match format {
         OutputFormat::Text => Ok(render_text(result)),
         OutputFormat::Json => Ok(serde_json::to_string_pretty(&JsonOutput {
-            schema_version: costguard_protocol::SCAN_SCHEMA_VERSION,
+            schema_version: OUTPUT_SCHEMA_VERSION,
             run: &result.run,
             policy: &result.policy,
             analysis: &result.analysis,
@@ -487,7 +489,7 @@ fn append_cost_summary_markdown(output: &mut String, summary: Option<&ProjectCos
 }
 
 fn render_cost_text(result: &ScanResult) -> String {
-    let mut output = String::from("Costguard project cost report\n\n");
+    let mut output = String::from("Costguard cost prioritization summary\n\n");
     append_cost_summary(&mut output, result.cost_summary.as_ref());
     if !result.diagnostics.is_empty() {
         append_top_cost_findings(&mut output, &result.diagnostics);
@@ -496,7 +498,7 @@ fn render_cost_text(result: &ScanResult) -> String {
 }
 
 fn render_cost_markdown(result: &ScanResult) -> String {
-    let mut output = String::from("# Costguard project cost report\n\n");
+    let mut output = String::from("# Costguard cost prioritization summary\n\n");
     append_cost_summary_markdown(&mut output, result.cost_summary.as_ref());
     if !result.diagnostics.is_empty() {
         append_top_cost_findings_markdown(&mut output, &result.diagnostics);

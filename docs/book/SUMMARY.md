@@ -7,17 +7,14 @@
 - [Quick start (PR check)](getting-started/quick-start.md)
 - [Local scan and explain](getting-started/local-scan.md)
 - [Pre-commit hook](getting-started/pre-commit.md)
-- [Enterprise adoption](getting-started/enterprise-adoption.md)
 - [GitLab CI](getting-started/gitlab-ci.md)
 - [Jenkins](getting-started/jenkins.md)
 - [Privacy and local-only guarantees](getting-started/privacy.md)
 
-# Enterprise
+# Governance (git-native)
 
-- [Self-hosted deployment](enterprise/deployment.md)
-- [Signed policy and exceptions](enterprise/policy.md)
-- [GitHub App](enterprise/github-app.md)
-- [Operations, privacy, and recovery](enterprise/operations.md)
+- [Enterprise adoption](getting-started/enterprise-adoption.md)
+- [Signed policy and exceptions](governance/policy.md)
 
 # Reference
 

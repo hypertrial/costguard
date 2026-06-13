@@ -4,7 +4,7 @@ Automated PR review is Costguard's main use case.
 
 Primary positioning:
 
-> Costguard is a GitHub PR check that catches expensive dbt and warehouse SQL before it merges.
+> Costguard is a local, dbt-aware cost regression guardrail for git workflows.
 
 The local Rust CLI is the engine that powers the workflow. It is important for developer debugging,
 pre-commit usage, and CI portability, but product decisions should optimize first for PR checks.
@@ -12,7 +12,7 @@ The current MVP ships the CLI engine and a composite GitHub Action at
 [`.github/actions/costguard`](../../.github/actions/costguard). The PR workflow lives in
 [`.github/workflows/costguard-pr.yml`](../../.github/workflows/costguard-pr.yml).
 
-The GitHub Action defaults to `analysis-policy: strict`, which requires a manifest for dbt projects and fails closed on incomplete analysis. Enable `compile-dbt: true` to run dbt compile via [`scripts/dbt_compile_for_costguard.py`](../../scripts/dbt_compile_for_costguard.py) when `dbt_project.yml` is present (or when `dbt-compile-dirs` is set for monorepos), then pass the merged or single `target/manifest.json` to costguard for compiled SQL parse metrics. Alternatively, upload a manifest from an existing dbt job and set `use-existing-manifest: true`. This matches the Spellbook benchmark harness.
+Run `dbt compile` in your existing CI job before the Action. Costguard auto-detects `target/manifest.json` when present; raw analysis still works without it. The Action does not install or compile dbt.
 
 Workflow:
 

@@ -15,8 +15,7 @@ class ActionContractTest(unittest.TestCase):
         action = (ROOT / ".github/actions/costguard/action.yml").read_text(encoding="utf-8")
         self.assertIn('${GITHUB_ACTION_PATH}/scripts/costguard_action.py', action)
         self.assertNotIn('${GITHUB_WORKSPACE}/scripts/dbt_compile_for_costguard.py', action)
-        self.assertIn("default: \"\"", action.split("dbt-adapter-package:", 1)[1].split("dbt-profile-type:", 1)[0])
-        for command in ["install", "plan-compile", "compile", "run"]:
+        for command in ["install", "run"]:
             self.assertIn(f"costguard_action.py\" {command}", action)
 
     def test_ci_is_automatic_and_release_is_tag_driven(self) -> None:
@@ -69,17 +68,18 @@ class ActionContractTest(unittest.TestCase):
             if path.name != "release.yml":
                 self.assertNotIn("contents: write", text, path.name)
 
-    def test_action_defaults_are_artifact_first_and_strict(self) -> None:
+    def test_action_defaults_are_manifest_first_and_standard(self) -> None:
         action = (ROOT / ".github/actions/costguard/action.yml").read_text(encoding="utf-8")
-        compile_block = action.split("compile-dbt:", 1)[1].split("analysis-policy:", 1)[0]
-        self.assertIn('default: "false"', compile_block)
+        self.assertNotIn("compile-dbt:", action)
+        self.assertNotIn("server-url:", action)
+        self.assertNotIn("publication-mode:", action)
         analysis_block = action.split("analysis-policy:", 1)[1].split(
             "verify-attestation:", 1
         )[0]
-        self.assertIn("default: strict", analysis_block)
-        self.assertIn("allow-credentialed-compile:", action)
-        self.assertIn("dbt-installation:", action)
+        self.assertIn("default: standard", analysis_block)
         self.assertIn("verify-attestation:", action)
+        self.assertIn("manifest:", action)
+        self.assertIn("baseline:", action)
 
 
 def run_blocks(text: str) -> list[str]:

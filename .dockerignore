@@ -1,9 +1,0 @@
-.git
-.github
-target
-dist
-tests
-docs
-*.log
-.env
-.DS_Store

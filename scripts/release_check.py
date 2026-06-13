@@ -92,7 +92,6 @@ def main() -> int:
     run(["./scripts/ci_local.sh", "--spellbook-smoke"] if not args.skip_external else ["./scripts/ci_local.sh"])
     run([sys.executable, "scripts/scale_check.py"])
     run([sys.executable, "scripts/support_matrix.py", "--verify"])
-    run([sys.executable, "scripts/server_image_check.py", "--version", version])
     if not args.skip_external:
         run([sys.executable, "scripts/benchmark_external_repo.py", "--repo", "jaffle-shop", "--force-compile"])
         run([sys.executable, "scripts/benchmark_external_repo.py", "--repo", "spellbook", "--force-compile"])

@@ -8,7 +8,7 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 - **Model-centric cost engine (v2):** per-model monthly cost index, deduplicated project totals, savings attribution with per-model caps, structure factors from SQL features, and lineage fan-out weighting.
 - `ProjectCostSummary` on scan results; JSON schema version 2 with top-level `cost` block.
-- `costguard cost` subcommand for project cost reports without requiring findings.
+- `costguard cost` subcommand for local cost prioritization summaries without requiring findings.
 - `--cost` on `explain`; `fail_on_monthly_delta_gb` for GB-month savings gating without pricing.
 - New `CostEstimate` fields: `model_id`, `model_monthly_p50_usd`, `savings_p*_usd_per_month`.
 

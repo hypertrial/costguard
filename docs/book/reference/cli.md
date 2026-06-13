@@ -9,7 +9,7 @@ Source: `crates/costguard-cli/src/main.rs`
 | `scan` | Scan one or more paths (default: entire cwd) |
 | `explain` | Analyze a single SQL/dbt file |
 | `pr` | Scan git-changed files against a base ref |
-| `cost` | Project cost report (model-centric totals) |
+| `cost` | Local cost prioritization summary (model-centric totals for ranking) |
 | `rules` | List registered rules |
 
 ## Shared flags
@@ -25,6 +25,11 @@ Source: `crates/costguard-cli/src/main.rs`
 | `--cost` | scan, explain, pr | Enable cost estimates (uses `[cost]` in `costguard.toml` when present) |
 | `--fail-on-cost-delta` | scan, pr | Fail when deduplicated savings p50 on new findings exceeds threshold (USD) |
 | `--analysis-policy` | scan, explain, pr, cost | `standard` or `strict`; see `[analysis]` in [Configuration](configuration.md) |
+| `--policy` | scan, explain, pr, cost | Signed policy bundle JSON path; see `[policy]` in [Configuration](configuration.md) |
+| `--trust-store` | scan, explain, pr, cost | Public trust store for `--policy` verification |
+| `--policy-organization` | scan, explain, pr, cost | Organization slug for signed policy resolution |
+| `--policy-team` | scan, explain, pr, cost | Optional team slug for signed policy resolution |
+| `--policy-repository` | scan, explain, pr, cost | Repository slug (`owner/repo`) for signed policy resolution |
 
 ## `scan`
 
@@ -38,7 +43,7 @@ costguard scan [PATHS...] [OPTIONS]
 | `--min-confidence` | unset | Optional floor: `low`, `medium`/`med`, `high`. Recommended for noisy repos: `--fail-on high --min-confidence high` |
 | `--baseline` | unset | Suppress findings matching baseline fingerprints |
 | `--write-baseline` | unset | Snapshot findings to a baseline JSON file |
-| `--cost` | unset | Enable per-finding savings estimates and project cost summary |
+| `--cost` | unset | Enable per-finding savings estimates and cost prioritization summary |
 | `--fail-on-cost-delta` | unset | Optional deduplicated savings p50 gate (USD) on new findings |
 
 ## `explain`
@@ -54,10 +59,9 @@ Requires exactly one file path. Supports `--cost`. Does not support `--fail-on`.
 ```bash
 costguard cost report [PATHS...] [OPTIONS]
 costguard cost normalize INPUT OUTPUT --source snowflake --organization ORG --repository OWNER/REPO --provenance EXPORT_ID
-costguard cost publish BUNDLE --server-url https://costguard.example.com
 ```
 
-Renders a project cost report (model totals, top models, optional finding savings). Cost is always enabled; uses `[cost]` from `costguard.toml` when present.
+Renders a local cost prioritization summary (model totals, top models, optional finding savings). Cost is always enabled; uses `[cost]` from `costguard.toml` when present.
 
 ## `pr`
 
@@ -71,10 +75,23 @@ costguard pr [OPTIONS]
 | `--fail-on` | `high` | Same severity values as `scan` |
 | `--min-confidence` | unset | Same confidence values as `scan` |
 | `--baseline` | unset | Suppress findings matching baseline fingerprints |
-| `--cost` | unset | Enable per-finding savings estimates and project cost summary |
+| `--cost` | unset | Enable per-finding savings estimates and cost prioritization summary |
 | `--fail-on-cost-delta` | unset | Optional deduplicated savings p50 gate (USD) on new findings |
 
 Invalid git bases and non-git directories fail the check instead of silently scanning zero files.
+
+## `policy`
+
+```bash
+costguard policy keygen KEY_ID --private-key PATH --trust-store PATH
+costguard policy compile INPUT.toml OUTPUT.json
+costguard policy sign POLICY.json KEY.private.json OUTPUT.signed.json
+costguard policy verify BUNDLE.json TRUST.json
+costguard policy resolve BUNDLE.json TRUST.json --organization ORG --repository OWNER/REPO [--team TEAM] [--path PATH]
+costguard policy inspect BUNDLE.json TRUST.json
+```
+
+Signed policy bundles are distributed as pinned git artifacts. See [Signed policy and exceptions](../governance/policy.md).
 
 ## `rules`
 

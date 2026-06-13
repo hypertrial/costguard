@@ -10,7 +10,6 @@ anyhow.workspace = true
 costguard-cost = { path = "../costguard-cost" }
 costguard-core = { path = "../costguard-core" }
 costguard-diagnostics = { path = "../costguard-diagnostics" }
-costguard-protocol = { path = "../costguard-protocol" }
 serde.workspace = true
 serde_json.workspace = true
 

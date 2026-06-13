@@ -72,7 +72,7 @@ Rule IDs are normalized to uppercase (for example `SQLCOST002`).
 
 ## `[analysis]`
 
-Optional analysis completeness policy. CLI default is `standard`. The GitHub Action defaults to `strict`.
+Optional analysis completeness policy. CLI and GitHub Action default is `standard`.
 
 | Key | Type | Description |
 | --- | --- | --- |
@@ -84,6 +84,32 @@ Optional analysis completeness policy. CLI default is `standard`. The GitHub Act
 | `fail_on_metadata_errors` | bool | Fail when YAML or dbt project metadata cannot be parsed |
 
 When `policy = "strict"`, Costguard enforces manifest presence, zero parse failures, zero skipped files, and metadata errors regardless of the other thresholds above.
+
+## `[policy]`
+
+Optional signed-policy bundle for git-native governance. See [Signed policy and exceptions](../governance/policy.md).
+
+| Key | Type | Description |
+| --- | --- | --- |
+| `bundle` | string | Path to a signed policy bundle JSON file |
+| `trust_store` | string | Path to the committed public trust store (for example `.costguard/trust.json`) |
+| `organization` | string | Organization slug for policy resolution |
+| `team` | string | Optional team slug for narrower scope |
+| `repository` | string | Repository slug (`owner/repo`) for policy resolution |
+| `required` | bool | Fail when the bundle or trust store is missing (default `false`) |
+
+Example:
+
+```toml
+[policy]
+bundle = "policy/policy.signed.json"
+trust_store = ".costguard/trust.json"
+organization = "acme"
+repository = "acme/warehouse"
+required = true
+```
+
+CLI flags `--policy`, `--trust-store`, `--policy-organization`, `--policy-team`, and `--policy-repository` override these values.
 
 ## `[cost]`
 
@@ -121,8 +147,8 @@ Override bytes, runs per month, or rule multiplier priors. Source keys match dbt
 
 ## Related
 
+- [Signed policy and exceptions](../governance/policy.md)
 - [Cost estimates](cost-estimates.md)
-
 - [CLI reference](cli.md)
 - [Rule catalog](../rules/index.md)
 - [Compatibility](compatibility.md)

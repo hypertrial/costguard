@@ -1,6 +1,6 @@
 # Cost estimates
 
-Costguard attaches **estimated monthly savings** to each behavioral finding and **deduplicated project totals** to every cost-enabled scan. Estimates are computed entirely from local files—no warehouse connections or credentials.
+Costguard attaches **estimated monthly savings** to each behavioral finding for **prioritization**. Estimates are advisory—not a billing system of record. Severity and confidence remain the enforcement contract. Estimates are computed entirely from local files—no warehouse connections or credentials.
 
 ## Concepts
 
@@ -77,9 +77,8 @@ costguard cost report . --manifest target/manifest.json
 
 - `--cost` on `scan`, `pr`, and `explain` enables cost annotation
 - `--fail-on-cost-delta` gates on deduplicated **savings p50** (also enables cost)
-- `costguard cost report` renders the project cost report without requiring findings
+- `costguard cost report` renders a local cost prioritization summary without requiring findings
 - `costguard cost normalize` converts offline warehouse exports into the normalized metadata-only cost schema
-- `costguard cost publish` uploads a validated normalized bundle using a token read from an environment variable
 
 ## Output
 

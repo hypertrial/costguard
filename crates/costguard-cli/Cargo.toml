@@ -22,7 +22,6 @@ costguard-rules = { path = "../costguard-rules" }
 chrono.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-reqwest.workspace = true
 
 [dev-dependencies]
 chrono.workspace = true

@@ -1,10 +1,10 @@
 # Costguard
 
-Costguard is a PR-first check for catching expensive dbt and warehouse SQL before it merges.
+Costguard is a local, dbt-aware cost regression guardrail for git workflows.
 
-Runs locally as a fast Rust CLI. No warehouse credentials required.
+One binary and one simple CI Action. `costguard pr` scans changed models against the git base. Runs locally as a fast Rust CLI with no warehouse credentials required.
 
-Version 1.1 is production-ready for Generic SQL, Snowflake, BigQuery, and Trino. See [Platforms and warehouses](reference/platforms.md) for preview dialects and the [compatibility policy](reference/compatibility.md) for stable interfaces.
+Version 2.x is production-ready for Generic SQL, Snowflake, BigQuery, and Trino. See [Platforms and warehouses](reference/platforms.md) for preview dialects and the [compatibility policy](reference/compatibility.md) for stable interfaces.
 
 ## Why
 

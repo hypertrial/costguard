@@ -10,16 +10,20 @@ inputs:
     description: Warehouse platform for rule context
     required: false
     default: generic
+  manifest:
+    description: Optional explicit dbt manifest path (defaults to target/manifest.json when present)
+    required: false
+    default: ""
   fail-on:
     description: Minimum severity that fails the check
     required: false
     default: high
-  min-confidence:
-    description: Minimum diagnostic confidence required to fail (low, medium/med, high). Empty omits the flag.
-    required: false
-    default: ""
   baseline:
     description: Finding baseline JSON path for grandfathering known findings
+    required: false
+    default: ""
+  min-confidence:
+    description: Minimum diagnostic confidence required to fail (low, medium/med, high). Empty omits the flag.
     required: false
     default: ""
   format:
@@ -34,108 +38,24 @@ inputs:
     description: Exact Costguard release version override (defaults to the Action checkout workspace version)
     required: false
     default: ""
-  manifest:
-    description: Optional explicit dbt manifest path
-    required: false
-    default: ""
   working-directory:
     description: Directory containing the dbt project
     required: false
     default: .
-  compile-dbt:
-    description: Run dbt compile before scan when dbt_project.yml is present (network and credential access may occur)
-    required: false
-    default: "false"
   analysis-policy:
     description: Analysis completeness policy (standard or strict)
     required: false
-    default: strict
+    default: standard
   verify-attestation:
     description: Verify the GitHub artifact attestation before extracting a release archive
     required: false
     default: "true"
-  allow-credentialed-compile:
-    description: Permit dbt compile to read the explicitly configured real profiles directory
-    required: false
-    default: "false"
-  dbt-installation:
-    description: dbt dependency source for compilation (system or locked)
-    required: false
-    default: system
-  dbt-target:
-    description: dbt --target value for compile
-    required: false
-    default: dev
-  dbt-project-dir:
-    description: Directory containing dbt_project.yml (defaults to working-directory)
-    required: false
-    default: ""
-  dbt-profiles-dir:
-    description: Directory for profiles.yml (defaults to dbt-project-dir)
-    required: false
-    default: ""
-  dbt-adapter-package:
-    description: dbt adapter package used for profile selection; derived from warehouse when empty
-    required: false
-    default: ""
-  dbt-profile-type:
-    description: Dummy profiles.yml adapter type (defaults from dbt-adapter-package when empty)
-    required: false
-    default: ""
-  dbt-compile-dirs:
-    description: Comma or newline separated dbt subproject paths to compile and merge
-    required: false
-    default: ""
-  manifest-output:
-    description: Path for merged manifest output relative to working-directory
-    required: false
-    default: target/manifest.json
-  dbt-requirements-file:
-    description: Hash-locked pip requirements file required by dbt-installation=locked
-    required: false
-    default: ""
-  dbt-constraints-file:
-    description: Optional pip constraints file for dbt dependencies
-    required: false
-    default: ""
-  dbt-vars:
-    description: Optional YAML string passed to dbt compile --vars
-    required: false
-    default: ""
-  fail-on-deps-failure:
-    description: Fail when dbt deps fails instead of warning and continuing
-    required: false
-    default: "false"
-  use-existing-manifest:
-    description: Skip dbt compile and use manifest-output or manifest input as an existing artifact
-    required: false
-    default: "false"
   cost:
     description: Enable cost estimates (uses [cost] in costguard.toml when present)
     required: false
     default: "false"
   fail-on-cost-delta:
     description: Fail when deduplicated savings p50 on new findings exceeds this USD threshold
-    required: false
-    default: ""
-  server-url:
-    description: Costguard control-plane base URL. Empty keeps the scan fully local.
-    required: false
-    default: ""
-  publication-mode:
-    description: Metadata publication behavior (off, optional, or required)
-    required: false
-    default: off
-  trust-store:
-    description: Repository-pinned public-key trust store used to verify organization policy
-    required: false
-    default: .costguard/trust.json
-  organization:
-    description: Costguard organization slug used for policy resolution and publication
-    required: false
-    default: ""
-  token:
-    description: Organization-scoped Costguard service token; pass a GitHub secret
     required: false
     default: ""
 
@@ -158,51 +78,6 @@ runs:
           --mode "${INSTALL_MODE_INPUT}" \
           --version "${VERSION_INPUT}"
 
-    - name: Plan dbt compile
-      id: dbt-plan
-      shell: bash
-      env:
-        COMPILE_DBT_INPUT: ${{ inputs.compile-dbt }}
-        USE_EXISTING_MANIFEST_INPUT: ${{ inputs.use-existing-manifest }}
-        WORKING_DIRECTORY_INPUT: ${{ inputs.working-directory }}
-        DBT_PROJECT_DIR_INPUT: ${{ inputs.dbt-project-dir }}
-        DBT_COMPILE_DIRS_INPUT: ${{ inputs.dbt-compile-dirs }}
-        DBT_ADAPTER_PACKAGE_INPUT: ${{ inputs.dbt-adapter-package }}
-        MANIFEST_INPUT: ${{ inputs.manifest }}
-        WAREHOUSE_INPUT: ${{ inputs.warehouse }}
-      run: |
-        PYTHON="$(command -v python3 || command -v python)"
-        "${PYTHON}" "${GITHUB_ACTION_PATH}/scripts/costguard_action.py" plan-compile
-
-    - name: Set up Python
-      if: steps.dbt-plan.outputs.compile-required == 'true'
-      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
-      with:
-        python-version: "3.11"
-
-    - name: Compile dbt project
-      if: steps.dbt-plan.outputs.compile-required == 'true'
-      shell: bash
-      env:
-        WORKING_DIRECTORY_INPUT: ${{ inputs.working-directory }}
-        DBT_PROJECT_DIR_INPUT: ${{ inputs.dbt-project-dir }}
-        DBT_PROFILES_DIR_INPUT: ${{ inputs.dbt-profiles-dir }}
-        DBT_PROFILE_TYPE_INPUT: ${{ inputs.dbt-profile-type }}
-        DBT_COMPILE_DIRS_INPUT: ${{ inputs.dbt-compile-dirs }}
-        DBT_ADAPTER_PACKAGE_INPUT: ${{ steps.dbt-plan.outputs.adapter-package }}
-        DBT_INSTALLATION_INPUT: ${{ inputs.dbt-installation }}
-        DBT_TARGET_INPUT: ${{ inputs.dbt-target }}
-        DBT_REQUIREMENTS_FILE_INPUT: ${{ inputs.dbt-requirements-file }}
-        DBT_CONSTRAINTS_FILE_INPUT: ${{ inputs.dbt-constraints-file }}
-        DBT_VARS_INPUT: ${{ inputs.dbt-vars }}
-        FAIL_ON_DEPS_FAILURE_INPUT: ${{ inputs.fail-on-deps-failure }}
-        ANALYSIS_POLICY_INPUT: ${{ inputs.analysis-policy }}
-        ALLOW_CREDENTIALED_COMPILE_INPUT: ${{ inputs.allow-credentialed-compile }}
-        MANIFEST_OUTPUT_INPUT: ${{ inputs.manifest-output }}
-      run: |
-        PYTHON="$(command -v python3 || command -v python)"
-        "${PYTHON}" "${GITHUB_ACTION_PATH}/scripts/costguard_action.py" compile
-
     - name: Run costguard pr
       shell: bash
       env:
@@ -215,15 +90,8 @@ runs:
         COST_INPUT: ${{ inputs.cost }}
         FAIL_ON_COST_DELTA_INPUT: ${{ inputs.fail-on-cost-delta }}
         MANIFEST_INPUT: ${{ inputs.manifest }}
-        MANIFEST_OUTPUT_INPUT: ${{ inputs.manifest-output }}
-        USE_EXISTING_MANIFEST_INPUT: ${{ inputs.use-existing-manifest }}
         WORKING_DIRECTORY_INPUT: ${{ inputs.working-directory }}
         ANALYSIS_POLICY_INPUT: ${{ inputs.analysis-policy }}
-        SERVER_URL_INPUT: ${{ inputs.server-url }}
-        PUBLICATION_MODE_INPUT: ${{ inputs.publication-mode }}
-        TRUST_STORE_INPUT: ${{ inputs.trust-store }}
-        ORGANIZATION_INPUT: ${{ inputs.organization }}
-        COSTGUARD_TOKEN_INPUT: ${{ inputs.token }}
       run: |
         PYTHON="$(command -v python3 || command -v python)"
         "${PYTHON}" "${GITHUB_ACTION_PATH}/scripts/costguard_action.py" run

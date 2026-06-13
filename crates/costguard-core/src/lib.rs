@@ -12,8 +12,8 @@ pub use baseline::{
 };
 pub use config::{
     apply_file_config, load_config, validate_scan_config, AnalysisConfig, AnalysisPolicy,
-    AnalysisSection, DbtSection, EnterprisePolicyConfig, EnterprisePolicySection, FileConfig,
-    OutputFormat, OutputSection, ScanConfig, ScanRuntimeOverrides, ScanSection,
+    AnalysisSection, DbtSection, FileConfig, OutputFormat, OutputSection, ScanConfig,
+    ScanRuntimeOverrides, ScanSection, SignedPolicyConfig, SignedPolicySection,
 };
 pub use costguard_cost::CostConfig;
 pub use costguard_cost::ProjectCostSummary;
@@ -23,7 +23,6 @@ pub use costguard_dbt::{
 };
 pub use costguard_diagnostics::{Confidence, LineIndex, Span};
 pub use costguard_platform::Platform;
-pub use costguard_protocol::{RepositoryRefV1, ScanEnvelopeV1};
 pub use costguard_rules::{Rule, RuleContext, RuleMetadata, RuleOverrides};
 pub use costguard_scanner::{FileKind as ProjectFileKind, ProjectFile as ScannedProjectFile};
 pub use costguard_sql::{
@@ -111,87 +110,6 @@ pub struct PolicyMetadata {
 }
 
 impl ScanResult {
-    pub fn to_envelope(
-        &self,
-        repository: costguard_protocol::RepositoryRefV1,
-        attempt: u32,
-    ) -> anyhow::Result<costguard_protocol::ScanEnvelopeV1> {
-        let findings = self
-            .diagnostics
-            .iter()
-            .map(|diagnostic| {
-                Ok(costguard_protocol::FindingV1 {
-                    finding_id: diagnostic.governance.finding_id.clone(),
-                    evidence_key: diagnostic.governance.evidence_key.clone(),
-                    rule_id: diagnostic.rule_id.clone(),
-                    severity: diagnostic.severity.to_string(),
-                    confidence: match diagnostic.confidence {
-                        costguard_diagnostics::Confidence::Low => "low",
-                        costguard_diagnostics::Confidence::Medium => "medium",
-                        costguard_diagnostics::Confidence::High => "high",
-                    }
-                    .into(),
-                    path: diagnostic.path.to_string_lossy().replace('\\', "/"),
-                    line: diagnostic.line,
-                    column: diagnostic.column,
-                    message: diagnostic.message.clone(),
-                    enforcement: diagnostic.governance.enforcement,
-                    policy: diagnostic.governance.policy.clone(),
-                    exception: diagnostic.governance.exception.clone(),
-                    cost: diagnostic
-                        .cost_estimate
-                        .as_ref()
-                        .map(serde_json::to_value)
-                        .transpose()?,
-                })
-            })
-            .collect::<anyhow::Result<Vec<_>>>()?;
-        let files = self
-            .file_parse_status
-            .iter()
-            .map(|file| costguard_protocol::FileStatusV1 {
-                path: file.path.to_string_lossy().replace('\\', "/"),
-                parse_input: match file.parse_input {
-                    costguard_sql::ParseInput::Raw => "raw",
-                    costguard_sql::ParseInput::Compiled => "compiled",
-                    costguard_sql::ParseInput::CompiledWithRawFallback => {
-                        "compiled_with_raw_fallback"
-                    }
-                }
-                .into(),
-                parsed: file.parsed,
-                feature_extraction_used_ast: file.feature_extraction_used_ast,
-            })
-            .collect();
-        Ok(costguard_protocol::ScanEnvelopeV1 {
-            schema_version: costguard_protocol::SCAN_SCHEMA_VERSION,
-            run: costguard_protocol::ScanRunV1 {
-                id: self.run.id.clone(),
-                attempt,
-                started_at: self.run.started_at.clone(),
-                completed_at: self.run.completed_at.clone(),
-                duration_ms: self.run.duration_ms,
-                tool_version: self.run.tool_version.clone(),
-            },
-            repository,
-            policy_digest: self.policy.digest.clone(),
-            analysis: serde_json::to_value(&self.analysis)?,
-            metrics: serde_json::to_value(&self.metrics)?,
-            cost: self
-                .cost_summary
-                .as_ref()
-                .map(serde_json::to_value)
-                .transpose()?,
-            findings,
-            files,
-            pr_summary: self
-                .pr_summary
-                .as_ref()
-                .map(serde_json::to_value)
-                .transpose()?,
-        })
-    }
-
     pub fn should_fail(
         &self,
         fail_on: Option<costguard_diagnostics::Severity>,
@@ -360,34 +278,5 @@ mod tests {
         let result = result_with(vec![diag]);
         assert!(!result.should_fail(None, None, Some(600.0), None));
         assert!(result.should_fail(None, None, Some(500.0), None));
-    }
-
-    #[test]
-    fn envelope_contains_metadata_without_source_content_fields() {
-        let result = result_with(vec![diagnostic(Severity::High, Confidence::High)]);
-        let envelope = result
-            .to_envelope(
-                costguard_protocol::RepositoryRefV1 {
-                    organization: "acme".into(),
-                    repository: "warehouse".into(),
-                    commit_sha: "abc123".into(),
-                    pull_request: Some(42),
-                    base_sha: Some("def456".into()),
-                },
-                1,
-            )
-            .unwrap();
-        let value = serde_json::to_value(envelope).unwrap();
-        let object = value.as_object().unwrap();
-        for forbidden in [
-            "sql",
-            "yaml",
-            "python",
-            "manifest",
-            "snippet",
-            "source_text",
-        ] {
-            assert!(!object.contains_key(forbidden));
-        }
     }
 }

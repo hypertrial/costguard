@@ -17,7 +17,7 @@ costguard:
     - echo "$(cat /tmp/costguard.tgz.sha256 | awk '{print $1}')  /tmp/costguard.tgz" | sha256sum -c -
     - tar -xzf /tmp/costguard.tgz -C /usr/local/bin
   script:
-    - dbt compile --target dev   # optional; or use use-existing-manifest
+    - dbt compile --target dev
     - costguard pr --base "${CI_MERGE_REQUEST_DIFF_BASE_SHA:-origin/main}" \
         --warehouse trino \
         --manifest target/manifest.json \
@@ -35,4 +35,4 @@ costguard:
 - Use `--format sarif` for GitLab SAST report ingestion (`reports: sast`).
 - Use `--format json` for custom gates or merge-request comments via a small script.
 - Pin the release version and verify SHA-256 checksums before extracting the binary.
-- Optional: enable `[cost]` in `costguard.toml` or pass `--cost` and `--fail-on-cost-delta` for spend-aware gating. See [Cost estimates](../reference/cost-estimates.md).
+- Optional: enable `[cost]` in `costguard.toml` or pass `--cost` for advisory cost prioritization. See [Cost estimates](../reference/cost-estimates.md). Severity and confidence remain the default enforcement contract.

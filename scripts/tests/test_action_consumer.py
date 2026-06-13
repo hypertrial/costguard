@@ -9,7 +9,6 @@ import http.server
 import importlib.util
 import json
 import os
-import shutil
 import subprocess
 import sys
 import tarfile
@@ -161,118 +160,14 @@ class ActionConsumerTest(unittest.TestCase):
                 ROOT / "target" / "release",
             )
 
-    def test_compile_plan_skips_non_dbt_and_existing_manifest(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            output = root / "output"
-            common = {
-                "GITHUB_WORKSPACE": str(root),
-                "GITHUB_OUTPUT": str(output),
-                "COMPILE_DBT_INPUT": "true",
-                "WAREHOUSE_INPUT": "generic",
-            }
-            completed = run_driver(["plan-compile"], env=common)
-            self.assertEqual(completed.returncode, 0, completed.stderr)
-            self.assertIn("compile-required=false", output.read_text(encoding="utf-8"))
-
-            output.write_text("", encoding="utf-8")
-            completed = run_driver(
-                ["plan-compile"],
-                env={**common, "USE_EXISTING_MANIFEST_INPUT": "true"},
-            )
-            self.assertEqual(completed.returncode, 0, completed.stderr)
-            self.assertIn("compile-required=false", output.read_text(encoding="utf-8"))
-
-            output.write_text("", encoding="utf-8")
-            completed = run_driver(
-                ["plan-compile"],
-                env={**common, "MANIFEST_INPUT": "artifacts/manifest.json"},
-            )
-            self.assertEqual(completed.returncode, 0, completed.stderr)
-            self.assertIn("compile-required=false", output.read_text(encoding="utf-8"))
-
-    def test_compile_defaults_to_artifact_only(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            (root / "dbt_project.yml").write_text("name: sample\n", encoding="utf-8")
-            output = root / "output"
-            completed = run_driver(
-                ["plan-compile"],
-                env={
-                    "GITHUB_WORKSPACE": str(root),
-                    "GITHUB_OUTPUT": str(output),
-                },
-            )
-            self.assertEqual(completed.returncode, 0, completed.stderr)
-            self.assertIn("compile-required=false", output.read_text(encoding="utf-8"))
-
-    def test_compile_plan_derives_adapter_and_rejects_generic(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            (root / "dbt_project.yml").write_text("name: sample\n", encoding="utf-8")
-            output = root / "output"
-            common = {
-                "GITHUB_WORKSPACE": str(root),
-                "GITHUB_OUTPUT": str(output),
-                "COMPILE_DBT_INPUT": "true",
-            }
-            completed = run_driver(
-                ["plan-compile"], env={**common, "WAREHOUSE_INPUT": "snowflake"}
-            )
-            self.assertEqual(completed.returncode, 0, completed.stderr)
-            text = output.read_text(encoding="utf-8")
-            self.assertIn("compile-required=true", text)
-            self.assertIn("adapter-package=dbt-snowflake", text)
-
-            completed = run_driver(
-                ["plan-compile"], env={**common, "WAREHOUSE_INPUT": "generic"}
-            )
-            self.assertNotEqual(completed.returncode, 0)
-            self.assertIn("dbt-adapter-package is required", completed.stderr)
-
-    def test_compile_single_project_and_monorepo(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            bin_dir = root / "bin"
-            bin_dir.mkdir()
-            fake_dbt = bin_dir / "dbt"
-            fake_dbt.write_text(FAKE_DBT, encoding="utf-8")
-            fake_dbt.chmod(0o755)
-            base_env = {
-                "GITHUB_WORKSPACE": str(root),
-                "COSTGUARD_ACTION_SKIP_DBT_INSTALL": "1",
-                "DBT_ADAPTER_PACKAGE_INPUT": "dbt-snowflake",
-                "MANIFEST_OUTPUT_INPUT": "target/manifest.json",
-                "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
-            }
-
-            (root / "dbt_project.yml").write_text("name: root\n", encoding="utf-8")
-            completed = run_driver(["compile"], env=base_env)
-            self.assertEqual(completed.returncode, 0, completed.stderr)
-            manifest = json.loads((root / "target/manifest.json").read_text(encoding="utf-8"))
-            self.assertIn("model.fake.root", manifest["nodes"])
-
-            shutil.rmtree(root / "target")
-            for name in ["alpha", "beta"]:
-                project = root / name
-                project.mkdir()
-                (project / "dbt_project.yml").write_text(f"name: {name}\n", encoding="utf-8")
-            completed = run_driver(
-                ["compile"],
-                env={
-                    **base_env,
-                    "DBT_COMPILE_DIRS_INPUT": "alpha,beta",
-                    "COSTGUARD_DBT_COMPILE_JOBS": "1",
-                },
-            )
-            self.assertEqual(completed.returncode, 0, completed.stderr)
-            manifest = json.loads((root / "target/manifest.json").read_text(encoding="utf-8"))
-            self.assertEqual(set(manifest["nodes"]), {"model.fake.alpha", "model.fake.beta"})
-            paths = {node["original_file_path"] for node in manifest["nodes"].values()}
-            self.assertEqual(paths, {"alpha/models/model.sql", "beta/models/model.sql"})
-
-    def test_run_from_working_directory_with_existing_manifest(self) -> None:
+    def test_run_auto_detects_manifest_in_working_directory(self) -> None:
         binary_dir = ROOT / "target" / "release"
+        if not (binary_dir / "costguard").exists():
+            subprocess.run(
+                ["cargo", "build", "--release", "--locked", "-p", "costguard-cli"],
+                cwd=ROOT,
+                check=True,
+            )
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp)
             project = workspace / "analytics"
@@ -297,87 +192,26 @@ class ActionConsumerTest(unittest.TestCase):
                     "WAREHOUSE_INPUT": "generic",
                     "FAIL_ON_INPUT": "high",
                     "FORMAT_INPUT": "json",
-                    "MANIFEST_OUTPUT_INPUT": "target/manifest.json",
                     "PATH": f"{binary_dir}{os.pathsep}{os.environ['PATH']}",
                 },
             )
             self.assertEqual(completed.returncode, 0, completed.stderr)
             payload = json.loads(completed.stdout)
             self.assertEqual(payload["schema_version"], 3)
-            self.assertEqual(payload["analysis"]["policy"], "strict")
+            self.assertEqual(payload["analysis"]["policy"], "standard")
             self.assertTrue(payload["analysis"]["passed"])
 
-    def test_compile_rejects_unlocked_requirements(self) -> None:
+    def test_requested_missing_manifest_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            (root / "dbt_project.yml").write_text("name: sample\n", encoding="utf-8")
-            (root / "requirements.txt").write_text(
-                "dbt-snowflake==1.9.0\n", encoding="utf-8"
-            )
             completed = run_driver(
-                ["compile"],
+                ["run"],
                 env={
-                    "GITHUB_WORKSPACE": str(root),
-                    "DBT_ADAPTER_PACKAGE_INPUT": "dbt-snowflake",
-                    "DBT_INSTALLATION_INPUT": "locked",
-                    "DBT_REQUIREMENTS_FILE_INPUT": "requirements.txt",
+                    "GITHUB_WORKSPACE": tmp,
+                    "MANIFEST_INPUT": "target/manifest.json",
                 },
             )
             self.assertNotEqual(completed.returncode, 0)
-            self.assertIn("hash-locked", completed.stderr)
-
-    def test_compile_rejects_real_profiles_without_explicit_consent(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            bin_dir = root / "bin"
-            profiles = root / "profiles"
-            bin_dir.mkdir()
-            profiles.mkdir()
-            (profiles / "profiles.yml").write_text("secret: true\n", encoding="utf-8")
-            fake_dbt = bin_dir / "dbt"
-            fake_dbt.write_text(FAKE_DBT, encoding="utf-8")
-            fake_dbt.chmod(0o755)
-            (root / "dbt_project.yml").write_text("name: root\n", encoding="utf-8")
-            completed = run_driver(
-                ["compile"],
-                env={
-                    "GITHUB_WORKSPACE": str(root),
-                    "COSTGUARD_ACTION_SKIP_DBT_INSTALL": "1",
-                    "DBT_ADAPTER_PACKAGE_INPUT": "dbt-snowflake",
-                    "DBT_PROFILES_DIR_INPUT": str(profiles),
-                    "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
-                },
-            )
-            self.assertNotEqual(completed.returncode, 0)
-            self.assertIn("allow-credentialed-compile=true", completed.stderr)
-
-    def test_compile_uses_dummy_profiles_and_strict_deps_failure_is_fatal(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            bin_dir = root / "bin"
-            bin_dir.mkdir()
-            fake_dbt = bin_dir / "dbt"
-            fake_dbt.write_text(FAKE_DBT, encoding="utf-8")
-            fake_dbt.chmod(0o755)
-            (root / "dbt_project.yml").write_text("name: root\n", encoding="utf-8")
-            (root / "profiles.yml").write_text("real_secret: true\n", encoding="utf-8")
-            profile_log = root / "profile-log"
-            common = {
-                "GITHUB_WORKSPACE": str(root),
-                "COSTGUARD_ACTION_SKIP_DBT_INSTALL": "1",
-                "DBT_ADAPTER_PACKAGE_INPUT": "dbt-snowflake",
-                "FAKE_DBT_PROFILE_LOG": str(profile_log),
-                "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
-            }
-            completed = run_driver(["compile"], env=common)
-            self.assertEqual(completed.returncode, 0, completed.stderr)
-            self.assertNotEqual(Path(profile_log.read_text(encoding="utf-8")), root)
-
-            completed = run_driver(
-                ["compile"], env={**common, "FAKE_DBT_DEPS_FAILURE": "1"}
-            )
-            self.assertNotEqual(completed.returncode, 0)
-            self.assertIn("dbt deps failed", completed.stderr)
+            self.assertIn("manifest does not exist", completed.stderr)
 
     def test_attestation_failure_prevents_extraction(self) -> None:
         target = platform_target()
@@ -407,19 +241,6 @@ class ActionConsumerTest(unittest.TestCase):
             self.assertNotEqual(completed.returncode, 0)
             self.assertIn("attestation verification failed", completed.stderr)
 
-    def test_requested_missing_manifest_fails(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            completed = run_driver(
-                ["run"],
-                env={
-                    "GITHUB_WORKSPACE": tmp,
-                    "USE_EXISTING_MANIFEST_INPUT": "true",
-                    "MANIFEST_OUTPUT_INPUT": "target/manifest.json",
-                },
-            )
-            self.assertNotEqual(completed.returncode, 0)
-            self.assertIn("requested existing manifest does not exist", completed.stderr)
-
 
 def platform_target() -> str:
     if sys.platform == "darwin":
@@ -427,40 +248,6 @@ def platform_target() -> str:
     if sys.platform.startswith("linux"):
         return "x86_64-unknown-linux-gnu"
     raise unittest.SkipTest(f"unsupported test platform: {sys.platform}")
-
-
-FAKE_DBT = r'''#!/usr/bin/env python3
-import json
-import os
-import pathlib
-import sys
-
-if sys.argv[1] == "deps":
-    log = os.environ.get("FAKE_DBT_PROFILE_LOG")
-    if log:
-        pathlib.Path(log).write_text(os.environ.get("DBT_PROFILES_DIR", ""))
-    raise SystemExit(1 if os.environ.get("FAKE_DBT_DEPS_FAILURE") else 0)
-if sys.argv[1] != "compile":
-    raise SystemExit(2)
-project = pathlib.Path(sys.argv[sys.argv.index("--project-dir") + 1])
-name = project.name if project.name else "root"
-if (project / "dbt_project.yml").read_text().startswith("name: root"):
-    name = "root"
-target = project / "target"
-target.mkdir(parents=True, exist_ok=True)
-(target / "manifest.json").write_text(json.dumps({
-    "nodes": {
-        f"model.fake.{name}": {
-            "resource_type": "model",
-            "name": name,
-            "original_file_path": "models/model.sql",
-            "compiled_code": "select 1 as id"
-        }
-    },
-    "sources": {},
-    "exposures": {}
-}))
-'''
 
 
 if __name__ == "__main__":

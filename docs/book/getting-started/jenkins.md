@@ -53,7 +53,7 @@ pipeline {
 - Archive `costguard.sarif` as a build artifact.
 - Optionally publish with a SARIF plugin if your controller supports it.
 - Use `--format json` and parse `metrics.new_findings` for simple pass/fail gates.
-- Optional cost estimates: configure `[cost]` in `costguard.toml` or pass `--cost`; gate on new spend with `--fail-on-cost-delta`. See [Cost estimates](../reference/cost-estimates.md).
+- Optional cost estimates: configure `[cost]` in `costguard.toml` or pass `--cost` for advisory prioritization. See [Cost estimates](../reference/cost-estimates.md).
 
 ## Baseline workflow
 

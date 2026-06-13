@@ -31,7 +31,7 @@ fn policy_cli_compiles_signs_and_verifies() {
         &source,
         format!(
             r#"schema_version = 1
-id = "enterprise-default"
+id = "org-default"
 version = "2026.06"
 organization = "acme"
 issued_at = "{}"
@@ -123,43 +123,6 @@ fn scan_json_outputs_diagnostics_array() {
     assert!(stdout.contains("\"diagnostics\""));
     assert!(stdout.contains("\"metrics\""));
     assert!(stdout.contains("\"rule_id\""));
-}
-
-#[test]
-fn scan_writes_metadata_only_publication_envelope() {
-    let temp = tempfile::tempdir().unwrap();
-    let envelope = temp.path().join("envelope.json");
-    let output = costguard_command()
-        .arg("scan")
-        .arg(fixture("dbt_incremental"))
-        .args([
-            "--format",
-            "json",
-            "--envelope-output",
-            envelope.to_str().unwrap(),
-            "--publication-organization",
-            "acme",
-            "--publication-repository",
-            "acme/warehouse",
-            "--commit-sha",
-            "abc123",
-        ])
-        .output()
-        .unwrap();
-    assert_eq!(output.status.code(), Some(1));
-    let value: serde_json::Value = serde_json::from_slice(&fs::read(envelope).unwrap()).unwrap();
-    assert_eq!(value["schema_version"], 3);
-    assert_eq!(value["repository"]["commit_sha"], "abc123");
-    for forbidden in [
-        "sql",
-        "yaml",
-        "python",
-        "manifest",
-        "snippet",
-        "source_text",
-    ] {
-        assert!(value.get(forbidden).is_none());
-    }
 }
 
 #[test]
@@ -790,7 +753,7 @@ fn cost_command_renders_project_report() {
         .expect("run costguard cost");
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("Cost summary") || stdout.contains("project cost report"),
+        stdout.contains("Cost summary") || stdout.contains("cost prioritization summary"),
         "expected cost report output:\n{stdout}"
     );
 }

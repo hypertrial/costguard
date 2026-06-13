@@ -4,7 +4,6 @@ use schemars::{schema::RootSchema, JsonSchema};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub const SCAN_SCHEMA_VERSION: u8 = 3;
 pub const POLICY_SCHEMA_VERSION: u8 = 1;
 pub const BASELINE_SCHEMA_VERSION: u8 = 2;
 
@@ -67,55 +66,6 @@ pub struct FindingV1 {
     pub cost: Option<Value>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct RepositoryRefV1 {
-    pub organization: String,
-    pub repository: String,
-    pub commit_sha: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub pull_request: Option<u64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub base_sha: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct ScanRunV1 {
-    pub id: String,
-    pub attempt: u32,
-    pub started_at: String,
-    pub completed_at: String,
-    pub duration_ms: u64,
-    pub tool_version: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct ScanEnvelopeV1 {
-    pub schema_version: u8,
-    pub run: ScanRunV1,
-    pub repository: RepositoryRefV1,
-    pub policy_digest: String,
-    pub analysis: Value,
-    pub metrics: Value,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cost: Option<Value>,
-    pub findings: Vec<FindingV1>,
-    pub files: Vec<FileStatusV1>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub pr_summary: Option<Value>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct FileStatusV1 {
-    pub path: String,
-    pub parse_input: String,
-    pub parsed: bool,
-    pub feature_extraction_used_ast: bool,
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CostObservationBundleV1 {
@@ -156,24 +106,4 @@ pub struct SignedDocumentV1 {
 
 pub fn schema_for<T: JsonSchema>() -> RootSchema {
     schemars::schema_for!(T)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn scan_schema_rejects_source_content_fields() {
-        let schema = serde_json::to_string(&schema_for::<ScanEnvelopeV1>()).unwrap();
-        for forbidden in [
-            "sql",
-            "yaml",
-            "python",
-            "manifest",
-            "snippet",
-            "source_text",
-        ] {
-            assert!(!schema.contains(&format!("\"{forbidden}\"")));
-        }
-    }
 }

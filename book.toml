@@ -1,7 +1,7 @@
 [book]
 title = "Costguard"
 authors = ["Costguard Contributors"]
-description = "Documentation for Costguard — PR-first cost and performance guardrails for dbt and warehouse SQL."
+description = "Documentation for Costguard — a local, dbt-aware cost regression guardrail for git workflows."
 language = "en"
 src = "docs/book"
 

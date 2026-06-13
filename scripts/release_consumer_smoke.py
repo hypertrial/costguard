@@ -95,7 +95,7 @@ def main() -> int:
                 "WAREHOUSE_INPUT": "generic",
                 "FAIL_ON_INPUT": "critical",
                 "FORMAT_INPUT": "json",
-                "ANALYSIS_POLICY_INPUT": "strict",
+                "ANALYSIS_POLICY_INPUT": "standard",
                 "PATH": f"{installed_path}{os.pathsep}{os.environ.get('PATH', '')}",
             },
         )
