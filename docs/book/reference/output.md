@@ -10,7 +10,7 @@ Structured scan result:
 
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "analysis": { "...": "..." },
   "metrics": { "...": "..." },
   "cost": { "...": "..." },
@@ -22,7 +22,7 @@ Structured scan result:
 
 | Field | Present when | Description |
 | --- | --- | --- |
-| `schema_version` | Always | JSON schema version (`2` adds optional `cost` block) |
+| `schema_version` | Always | JSON schema version (`3` is the Costguard 2.0 contract) |
 | `analysis` | Always | Completeness report: `policy`, `passed`, and optional `violations` with `code`, `message`, `observed`, and `allowed` |
 | `metrics` | Always | Scan counters including parse metrics (see [Parse metrics](parse-metrics.md)) |
 | `cost` | `[cost]` enabled | Project cost summary: deduplicated model totals, savings sum, top models, grade mix (see [Cost estimates](cost-estimates.md)) |

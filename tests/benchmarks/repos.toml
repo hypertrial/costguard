@@ -39,6 +39,7 @@ max_parse_failure_rate = 0.35
 
 [[repo]]
 name = "mattermost-warehouse"
+required = false
 url = "https://github.com/mattermost/mattermost-data-warehouse.git"
 commit = "61af2424d790a8f83267f2b9ee12589fd32bcfa9"
 warehouse = "snowflake"

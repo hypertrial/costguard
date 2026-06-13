@@ -52,7 +52,9 @@ Requires exactly one file path. Supports `--cost`. Does not support `--fail-on`.
 ## `cost`
 
 ```bash
-costguard cost [PATHS...] [OPTIONS]
+costguard cost report [PATHS...] [OPTIONS]
+costguard cost normalize INPUT OUTPUT --source snowflake --organization ORG --repository OWNER/REPO --provenance EXPORT_ID
+costguard cost publish BUNDLE --server-url https://costguard.example.com
 ```
 
 Renders a project cost report (model totals, top models, optional finding savings). Cost is always enabled; uses `[cost]` from `costguard.toml` when present.

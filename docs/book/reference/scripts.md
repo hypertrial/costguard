@@ -51,7 +51,7 @@ Shared helper for locating/building the CLI. Benchmark and doc scripts default t
 Authoritative pre-release qualification gate. It requires the verified signed version tag at `HEAD`, validates the requested workspace version, runs local CI and consumer Action tests, executes pinned external benchmarks, enforces the 10,000-model performance budget, checks external documentation links, and writes `dist/release/release-check.json` bound to the commit.
 
 ```bash
-python3 scripts/release_check.py --version 1.1.0
+python3 scripts/release_check.py --version 2.0.0
 ```
 
 `--development`, `--skip-external`, and `--skip-external-links` are development aids. Development mode does not write a release qualification receipt. Strict qualification also requires `mdbook` and `cargo-deny` so documentation and dependency policy checks cannot be silently skipped.
@@ -69,8 +69,8 @@ python3 scripts/verify_release_assets.py
 Strict local release publisher for when GitHub Actions credits are unavailable. It requires a clean checkout at a verified signed annotated tag, builds all four release targets, creates deterministic archives, validates native smoke receipts, signs provenance, and creates a new immutable GitHub release.
 
 ```bash
-./scripts/publish_release_local.sh --package-only --version 1.1.0
-./scripts/publish_release_local.sh --publish --version 1.1.0 \
+./scripts/publish_release_local.sh --package-only --version 2.0.0
+./scripts/publish_release_local.sh --publish --version 2.0.0 \
   --receipt /path/to/smoke-x86_64-pc-windows-msvc.json
 ```
 
@@ -101,18 +101,18 @@ Runs `--version` and `rules --format json` from an extracted native release bina
 python3 scripts/smoke_release_asset.py \
   --asset costguard-x86_64-pc-windows-msvc.tar.gz \
   --target x86_64-pc-windows-msvc \
-  --version 1.1.0 \
+  --version 2.0.0 \
   --receipt smoke-x86_64-pc-windows-msvc.json
 ```
 
 ### No Actions credits (operator checklist)
 
 1. Install the cross toolchains from the matrix above.
-2. Create the signed exact tag and qualify locally: `python3 scripts/release_check.py --version 1.1.0`.
+2. Create the signed exact tag and qualify locally: `python3 scripts/release_check.py --version 2.0.0`.
 3. Package with `--package-only`, inspect `SHA256SUMS`, and send the Windows archive for native smoke testing.
 4. Follow the [release checklist](../contributing/releasing.md), including the returned Windows receipt.
 5. Publish with `--publish`; it validates qualification, creates signed provenance, and rejects existing releases.
-6. Smoke-test `uses: hypertrial/costguard/.github/actions/costguard@v1.1.0`, then move `v1`.
+6. Smoke-test `uses: hypertrial/costguard/.github/actions/costguard@v2.0.0`, then move `v2`.
 
 Hosted workflows are manual mirrors only and never publish a release.
 

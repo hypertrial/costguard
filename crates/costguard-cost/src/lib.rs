@@ -4,6 +4,7 @@ mod catalog;
 mod config;
 mod estimate;
 mod format;
+mod import;
 mod model_cost;
 mod multipliers;
 mod pricing;
@@ -11,8 +12,8 @@ mod query_history;
 mod volume;
 
 pub use annotate::{
-    annotate_diagnostics, run_cost_analysis, total_p50_usd_per_month, total_savings_gb_months,
-    CostAnalysisResult, CostInputs,
+    run_cost_analysis, total_p50_usd_per_month, total_savings_gb_months, CostAnalysisResult,
+    CostInputs,
 };
 pub use attribution::{
     build_downstream_counts, build_exposure_counts, summarize_features, ModelFeatureSummary,
@@ -27,6 +28,9 @@ pub use estimate::{
     sum_lognormals, Estimate,
 };
 pub use format::format_cost_line;
+pub use import::{
+    normalize_cost_export, validate_cost_bundle, CostExportFormat, NormalizeCostOptions,
+};
 pub use model_cost::{
     build_model_cost_index, lookup_model_entry, summarize_project_costs, ModelCostEntry,
     ModelCostIndex, ProjectCostSummary, TopModelCost,

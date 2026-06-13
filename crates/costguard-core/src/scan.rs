@@ -13,7 +13,7 @@ use crate::{
     AnalysisReport, AnalysisViolation, PolicyMetadata, PrSummary, Project, RunMetadata, ScanResult,
 };
 use anyhow::{Context, Result};
-use costguard_cost::{annotate_diagnostics, summarize_features, CostInputs, ModelFeatureSummary};
+use costguard_cost::{run_cost_analysis, summarize_features, CostInputs, ModelFeatureSummary};
 use costguard_dbt::{compiled_code_by_model_path, MetadataWarning, MetadataWarningKind};
 use costguard_diagnostics::{apply_suppressions, Diagnostic, Severity};
 use costguard_policy::{
@@ -226,14 +226,16 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
     let cost_summary = if let Some(cost_config) = &config.cost {
         if cost_config.enabled {
             let inputs = CostInputs::load(&root, cost_config)?;
-            Some(annotate_diagnostics(
-                &mut diagnostics,
-                cost_config,
-                project.dbt.as_ref(),
-                &inputs,
-                &root,
-                &features_by_path,
-            ))
+            Some(
+                run_cost_analysis(
+                    cost_config,
+                    project.dbt.as_ref(),
+                    &inputs,
+                    &mut diagnostics,
+                    &features_by_path,
+                )
+                .summary,
+            )
         } else {
             None
         }

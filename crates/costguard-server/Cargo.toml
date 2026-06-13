@@ -1,0 +1,39 @@
+[package]
+name = "costguard-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "costguard-server"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+argon2.workspace = true
+askama.workspace = true
+axum.workspace = true
+base64.workspace = true
+chrono.workspace = true
+costguard-policy = { path = "../costguard-policy" }
+costguard-protocol = { path = "../costguard-protocol" }
+hmac.workspace = true
+http.workspace = true
+jsonwebtoken.workspace = true
+prometheus.workspace = true
+rand_core.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+sqlx.workspace = true
+subtle.workspace = true
+tokio.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

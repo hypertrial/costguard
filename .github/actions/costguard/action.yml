@@ -118,6 +118,26 @@ inputs:
     description: Fail when deduplicated savings p50 on new findings exceeds this USD threshold
     required: false
     default: ""
+  server-url:
+    description: Costguard control-plane base URL. Empty keeps the scan fully local.
+    required: false
+    default: ""
+  publication-mode:
+    description: Metadata publication behavior (off, optional, or required)
+    required: false
+    default: off
+  trust-store:
+    description: Repository-pinned public-key trust store used to verify organization policy
+    required: false
+    default: .costguard/trust.json
+  organization:
+    description: Costguard organization slug used for policy resolution and publication
+    required: false
+    default: ""
+  token:
+    description: Organization-scoped Costguard service token; pass a GitHub secret
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -199,6 +219,11 @@ runs:
         USE_EXISTING_MANIFEST_INPUT: ${{ inputs.use-existing-manifest }}
         WORKING_DIRECTORY_INPUT: ${{ inputs.working-directory }}
         ANALYSIS_POLICY_INPUT: ${{ inputs.analysis-policy }}
+        SERVER_URL_INPUT: ${{ inputs.server-url }}
+        PUBLICATION_MODE_INPUT: ${{ inputs.publication-mode }}
+        TRUST_STORE_INPUT: ${{ inputs.trust-store }}
+        ORGANIZATION_INPUT: ${{ inputs.organization }}
+        COSTGUARD_TOKEN_INPUT: ${{ inputs.token }}
       run: |
         PYTHON="$(command -v python3 || command -v python)"
         "${PYTHON}" "${GITHUB_ACTION_PATH}/scripts/costguard_action.py" run

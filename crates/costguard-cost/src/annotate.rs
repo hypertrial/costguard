@@ -104,18 +104,6 @@ pub fn run_cost_analysis(
     }
 }
 
-/// Backward-compatible entry point used by scan pipeline.
-pub fn annotate_diagnostics(
-    diagnostics: &mut [Diagnostic],
-    config: &CostConfig,
-    dbt: Option<&DbtProject>,
-    inputs: &CostInputs,
-    _root: &Path,
-    features_by_path: &HashMap<PathBuf, ModelFeatureSummary>,
-) -> ProjectCostSummary {
-    run_cost_analysis(config, dbt, inputs, diagnostics, features_by_path).summary
-}
-
 pub fn total_p50_usd_per_month(diagnostics: &[Diagnostic]) -> f64 {
     diagnostics
         .iter()
@@ -165,14 +153,8 @@ mod tests {
             cost_estimate: None,
         }];
         let inputs = CostInputs::default();
-        let summary = annotate_diagnostics(
-            &mut diagnostics,
-            &config,
-            None,
-            &inputs,
-            Path::new("."),
-            &HashMap::new(),
-        );
+        let summary =
+            run_cost_analysis(&config, None, &inputs, &mut diagnostics, &HashMap::new()).summary;
         assert!(diagnostics[0].cost_estimate.is_some());
         assert!(
             diagnostics[0]

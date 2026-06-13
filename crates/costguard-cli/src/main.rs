@@ -4,12 +4,16 @@ use costguard_core::{
     apply_file_config, explain, load_config, rules, scan, validate_scan_config, OutputFormat,
     ScanConfig, ScanRuntimeOverrides,
 };
+use costguard_cost::{
+    normalize_cost_export, validate_cost_bundle, CostExportFormat, NormalizeCostOptions,
+};
 use costguard_output::{render, render_rules};
 use costguard_policy::{
     canonical_json, compile_toml, generate_key, policy_digest, read_signed_policy,
     read_trust_store, resolve_policy, sign_policy, verify_policy, PolicyDocumentV1,
     ResolutionContext, TrustStoreV1, TrustedKeyV1,
 };
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -127,10 +131,46 @@ struct ScanArgs {
     analysis_policy: Option<String>,
     #[command(flatten)]
     policy: PolicyArgs,
+    #[command(flatten)]
+    envelope: EnvelopeArgs,
 }
 
 #[derive(Debug, Parser)]
 struct CostArgs {
+    #[command(subcommand)]
+    command: CostCommand,
+}
+
+#[derive(Debug, Subcommand)]
+enum CostCommand {
+    Report(CostReportArgs),
+    Normalize {
+        input: PathBuf,
+        output: PathBuf,
+        #[arg(long, value_enum)]
+        source: CostSourceArg,
+        #[arg(long)]
+        organization: String,
+        #[arg(long)]
+        repository: String,
+        #[arg(long)]
+        provenance: String,
+        #[arg(long, default_value = "USD")]
+        currency: String,
+        #[arg(long)]
+        model_mapping: Option<PathBuf>,
+    },
+    Publish {
+        input: PathBuf,
+        #[arg(long)]
+        server_url: String,
+        #[arg(long, default_value = "COSTGUARD_TOKEN")]
+        token_env: String,
+    },
+}
+
+#[derive(Debug, Parser)]
+struct CostReportArgs {
     paths: Vec<PathBuf>,
     #[arg(long)]
     warehouse: Option<String>,
@@ -144,6 +184,29 @@ struct CostArgs {
     analysis_policy: Option<String>,
     #[command(flatten)]
     policy: PolicyArgs,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum CostSourceArg {
+    Normalized,
+    Snowflake,
+    Bigquery,
+    Databricks,
+    Trino,
+    Generic,
+}
+
+impl From<CostSourceArg> for CostExportFormat {
+    fn from(value: CostSourceArg) -> Self {
+        match value {
+            CostSourceArg::Normalized => Self::Normalized,
+            CostSourceArg::Snowflake => Self::Snowflake,
+            CostSourceArg::Bigquery => Self::BigQuery,
+            CostSourceArg::Databricks => Self::Databricks,
+            CostSourceArg::Trino => Self::Trino,
+            CostSourceArg::Generic => Self::Generic,
+        }
+    }
 }
 
 #[derive(Debug, Parser)]
@@ -191,6 +254,8 @@ struct PrArgs {
     analysis_policy: Option<String>,
     #[command(flatten)]
     policy: PolicyArgs,
+    #[command(flatten)]
+    envelope: EnvelopeArgs,
 }
 
 #[derive(Debug, Parser, Default)]
@@ -205,6 +270,24 @@ struct PolicyArgs {
     team: Option<String>,
     #[arg(long = "policy-repository")]
     repository: Option<String>,
+}
+
+#[derive(Debug, Clone, Parser, Default)]
+struct EnvelopeArgs {
+    #[arg(long)]
+    envelope_output: Option<PathBuf>,
+    #[arg(long = "publication-organization")]
+    publication_organization: Option<String>,
+    #[arg(long = "publication-repository")]
+    publication_repository: Option<String>,
+    #[arg(long)]
+    commit_sha: Option<String>,
+    #[arg(long)]
+    pull_request: Option<u64>,
+    #[arg(long)]
+    base_sha: Option<String>,
+    #[arg(long, default_value_t = 1)]
+    attempt: u32,
 }
 
 #[derive(Debug, Parser)]
@@ -248,11 +331,13 @@ fn run() -> Result<u8> {
     let cli = Cli::parse();
     match cli.command {
         Command::Scan(args) => {
+            let envelope = args.envelope.clone();
             let config = match config_from_scan_args(args).context("configuration error") {
                 Ok(config) => config,
                 Err(err) => return configuration_error(err),
             };
             let result = scan(&config)?;
+            write_scan_envelope(&result, &envelope)?;
             print!("{}", render(&result, config.format)?);
             Ok(
                 if result.should_fail(
@@ -288,11 +373,13 @@ fn run() -> Result<u8> {
             )
         }
         Command::Pr(args) => {
+            let envelope = args.envelope.clone();
             let config = match config_from_pr_args(args).context("configuration error") {
                 Ok(config) => config,
                 Err(err) => return configuration_error(err),
             };
             let result = scan(&config)?;
+            write_scan_envelope(&result, &envelope)?;
             print!("{}", render(&result, config.format)?);
             Ok(
                 if result.should_fail(
@@ -307,18 +394,7 @@ fn run() -> Result<u8> {
                 },
             )
         }
-        Command::Cost(args) => {
-            let config = match config_from_cost_args(args).context("configuration error") {
-                Ok(config) => config,
-                Err(err) => return configuration_error(err),
-            };
-            let result = scan(&config)?;
-            print!(
-                "{}",
-                costguard_output::render_cost_report(&result, config.format)?
-            );
-            Ok(0)
-        }
+        Command::Cost(args) => run_cost_command(args.command),
         Command::Rules(args) => {
             let format = args
                 .format
@@ -369,6 +445,98 @@ fn run() -> Result<u8> {
         },
         Command::Policy(args) => run_policy_command(args.command),
     }
+}
+
+fn run_cost_command(command: CostCommand) -> Result<u8> {
+    match command {
+        CostCommand::Report(args) => {
+            let config = match config_from_cost_args(args).context("configuration error") {
+                Ok(config) => config,
+                Err(err) => return configuration_error(err),
+            };
+            let result = scan(&config)?;
+            print!(
+                "{}",
+                costguard_output::render_cost_report(&result, config.format)?
+            );
+            Ok(0)
+        }
+        CostCommand::Normalize {
+            input,
+            output,
+            source,
+            organization,
+            repository,
+            provenance,
+            currency,
+            model_mapping,
+        } => {
+            let text = std::fs::read_to_string(&input)
+                .with_context(|| format!("failed to read cost export {}", input.display()))?;
+            let model_mapping = model_mapping
+                .map(|path| read_json::<BTreeMap<String, String>>(&path, "model mapping"))
+                .transpose()?
+                .unwrap_or_default();
+            let bundle = normalize_cost_export(
+                &text,
+                source.into(),
+                &NormalizeCostOptions {
+                    organization,
+                    repository,
+                    currency,
+                    provenance,
+                    model_mapping,
+                },
+            )?;
+            write_json(&output, &bundle)?;
+            println!(
+                "normalized {} model cost observations to {}",
+                bundle.observations.len(),
+                output.display()
+            );
+            Ok(0)
+        }
+        CostCommand::Publish {
+            input,
+            server_url,
+            token_env,
+        } => {
+            validate_server_url(&server_url)?;
+            let bundle: costguard_protocol::CostObservationBundleV1 =
+                read_json(&input, "cost observation bundle")?;
+            validate_cost_bundle(&bundle)?;
+            let token = std::env::var(&token_env)
+                .with_context(|| format!("{token_env} is required for cost publication"))?;
+            let response = reqwest::blocking::Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()?
+                .post(format!(
+                    "{}/api/v1/cost-observations",
+                    server_url.trim_end_matches('/')
+                ))
+                .bearer_auth(token)
+                .json(&bundle)
+                .send()
+                .context("failed to publish cost observations")?
+                .error_for_status()
+                .context("cost observation publication was rejected")?;
+            println!(
+                "published {} observations ({})",
+                bundle.observations.len(),
+                response.status()
+            );
+            Ok(0)
+        }
+    }
+}
+
+fn validate_server_url(value: &str) -> Result<()> {
+    let url = reqwest::Url::parse(value).context("invalid server URL")?;
+    let local = matches!(url.host_str(), Some("127.0.0.1" | "localhost" | "::1"));
+    if url.scheme() != "https" && !(url.scheme() == "http" && local) {
+        anyhow::bail!("server URL must use HTTPS (HTTP is allowed only for localhost)");
+    }
+    Ok(())
 }
 
 fn run_policy_command(command: PolicyCommand) -> Result<u8> {
@@ -538,6 +706,47 @@ fn write_private_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<()>
     Ok(())
 }
 
+fn write_scan_envelope(result: &costguard_core::ScanResult, args: &EnvelopeArgs) -> Result<()> {
+    let Some(output) = &args.envelope_output else {
+        return Ok(());
+    };
+    let github_repository = std::env::var("GITHUB_REPOSITORY").ok();
+    let organization = args
+        .publication_organization
+        .clone()
+        .or_else(|| {
+            github_repository
+                .as_deref()
+                .and_then(|value| value.split_once('/').map(|(owner, _)| owner.to_string()))
+        })
+        .context("--publication-organization is required when writing a scan envelope")?;
+    let repository = args
+        .publication_repository
+        .clone()
+        .or(github_repository)
+        .context("--publication-repository is required when writing a scan envelope")?;
+    let commit_sha = args
+        .commit_sha
+        .clone()
+        .or_else(|| std::env::var("GITHUB_SHA").ok())
+        .context("--commit-sha is required when writing a scan envelope")?;
+    let attempt = std::env::var("GITHUB_RUN_ATTEMPT")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(args.attempt);
+    let envelope = result.to_envelope(
+        costguard_core::RepositoryRefV1 {
+            organization,
+            repository,
+            commit_sha,
+            pull_request: args.pull_request,
+            base_sha: args.base_sha.clone(),
+        },
+        attempt,
+    )?;
+    write_json(output, &envelope)
+}
+
 fn configuration_error(err: anyhow::Error) -> Result<u8> {
     eprintln!("error: {err:#}");
     Ok(2)
@@ -602,7 +811,7 @@ fn config_from_explain_args(args: &ExplainArgs) -> Result<ScanConfig> {
     Ok(config)
 }
 
-fn config_from_cost_args(args: CostArgs) -> Result<ScanConfig> {
+fn config_from_cost_args(args: CostReportArgs) -> Result<ScanConfig> {
     let mut config = base_config()?;
     if !args.paths.is_empty() {
         config.paths = args.paths;

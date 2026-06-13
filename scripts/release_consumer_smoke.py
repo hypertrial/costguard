@@ -102,7 +102,7 @@ def main() -> int:
         if scan.returncode != 0:
             raise SystemExit(scan.stderr or scan.stdout)
         payload = json.loads(scan.stdout)
-        if payload.get("schema_version") != 2 or not payload.get("analysis", {}).get("passed"):
+        if payload.get("schema_version") != 3 or not payload.get("analysis", {}).get("passed"):
             raise SystemExit("consumer smoke returned an invalid or incomplete scan")
     print(f"consumer repository smoke passed for {args.version}")
     return 0

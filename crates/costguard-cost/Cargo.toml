@@ -7,8 +7,10 @@ repository.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+chrono.workspace = true
 costguard-dbt = { path = "../costguard-dbt" }
 costguard-diagnostics = { path = "../costguard-diagnostics" }
+costguard-protocol = { path = "../costguard-protocol" }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 

@@ -12,6 +12,13 @@
 - [Jenkins](getting-started/jenkins.md)
 - [Privacy and local-only guarantees](getting-started/privacy.md)
 
+# Enterprise
+
+- [Self-hosted deployment](enterprise/deployment.md)
+- [Signed policy and exceptions](enterprise/policy.md)
+- [GitHub App](enterprise/github-app.md)
+- [Operations, privacy, and recovery](enterprise/operations.md)
+
 # Reference
 
 - [CLI](reference/cli.md)

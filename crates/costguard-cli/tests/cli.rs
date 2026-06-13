@@ -126,6 +126,43 @@ fn scan_json_outputs_diagnostics_array() {
 }
 
 #[test]
+fn scan_writes_metadata_only_publication_envelope() {
+    let temp = tempfile::tempdir().unwrap();
+    let envelope = temp.path().join("envelope.json");
+    let output = costguard_command()
+        .arg("scan")
+        .arg(fixture("dbt_incremental"))
+        .args([
+            "--format",
+            "json",
+            "--envelope-output",
+            envelope.to_str().unwrap(),
+            "--publication-organization",
+            "acme",
+            "--publication-repository",
+            "acme/warehouse",
+            "--commit-sha",
+            "abc123",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    let value: serde_json::Value = serde_json::from_slice(&fs::read(envelope).unwrap()).unwrap();
+    assert_eq!(value["schema_version"], 3);
+    assert_eq!(value["repository"]["commit_sha"], "abc123");
+    for forbidden in [
+        "sql",
+        "yaml",
+        "python",
+        "manifest",
+        "snippet",
+        "source_text",
+    ] {
+        assert!(value.get(forbidden).is_none());
+    }
+}
+
+#[test]
 fn scan_github_outputs_annotations() {
     let output = costguard_command()
         .arg("scan")
@@ -745,6 +782,7 @@ fn cost_command_renders_project_report() {
     let output = costguard_command()
         .current_dir(&fixture)
         .arg("cost")
+        .arg("report")
         .arg(".")
         .arg("--manifest")
         .arg("target/manifest.json")

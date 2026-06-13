@@ -4,17 +4,17 @@ Costguard is a PR-first check for catching expensive dbt and warehouse SQL befor
 
 Runs locally as a fast Rust CLI. No warehouse credentials required.
 
-Costguard 1.1 is production-ready for Generic SQL, Snowflake, BigQuery, and Trino. Databricks, Redshift, Postgres, and DuckDB support is preview.
+Costguard 2.0 is an MIT-licensed, self-hostable enterprise foundation. Generic SQL, Snowflake, BigQuery, and Trino scanning are production-ready; Databricks, Redshift, Postgres, and DuckDB support is preview.
 
 ## Quick start
 
-Use the GitHub Action at the moving compatible major tag `@v1`, pin exact behavior with `@v1.1.0`, or download a checksum-protected binary from GitHub Releases.
+Use the GitHub Action at the moving compatible major tag `@v2`, pin exact behavior with `@v2.0.0`, or download a checksum-protected binary from GitHub Releases.
 
 ```yaml
 - uses: actions/checkout@v4
   with:
     fetch-depth: 0
-- uses: hypertrial/costguard/.github/actions/costguard@v1
+- uses: hypertrial/costguard/.github/actions/costguard@v2
   with:
     base: origin/main
     warehouse: snowflake
@@ -25,7 +25,7 @@ Use the GitHub Action at the moving compatible major tag `@v1`, pin exact behavi
 Install an exact release binary by selecting one of `aarch64-apple-darwin`, `x86_64-apple-darwin`, or `x86_64-unknown-linux-gnu`:
 
 ```bash
-VERSION=v1.1.0
+VERSION=v2.0.0
 TARGET=aarch64-apple-darwin
 curl -LO "https://github.com/hypertrial/costguard/releases/download/${VERSION}/costguard-${TARGET}.tar.gz"
 curl -LO "https://github.com/hypertrial/costguard/releases/download/${VERSION}/costguard-${TARGET}.tar.gz.sha256"
@@ -62,7 +62,7 @@ mdbook serve
 - uses: actions/checkout@v4
   with:
     fetch-depth: 0
-- uses: hypertrial/costguard/.github/actions/costguard@v1
+- uses: hypertrial/costguard/.github/actions/costguard@v2
   with:
     base: origin/main
     warehouse: snowflake
@@ -81,7 +81,7 @@ See [Quick start (PR check)](docs/book/getting-started/quick-start.md) for input
 
 ## What it detects
 
-Costguard ships **35 SQLCOST rules** for incremental safety, join risk, warehouse cost patterns, and dbt anti-patterns. Optional **[cost estimates](docs/book/reference/cost-estimates.md)** resolve per-model monthly spend once, attribute deduplicated savings to findings, and rank by p10/p50/p90 intervals with provenance grades. Use `costguard cost` for a project cost report. See the [rule catalog](docs/book/rules/index.md) for severity and fix guidance.
+Costguard ships **35 SQLCOST rules** for incremental safety, join risk, warehouse cost patterns, and dbt anti-patterns. Optional **[cost estimates](docs/book/reference/cost-estimates.md)** resolve per-model monthly spend once, attribute deduplicated savings to findings, and rank explicit savings intervals with provenance grades. Use `costguard cost report` for a project cost report. See the [rule catalog](docs/book/rules/index.md) for severity and fix guidance.
 
 ## Benchmark smoke tests
 
@@ -125,4 +125,4 @@ Full schema: [Configuration](docs/book/reference/configuration.md).
 
 ## Status
 
-Production-ready. See the [support policy](SUPPORT.md), [compatibility policy](docs/book/reference/compatibility.md), and [security policy](SECURITY.md).
+The local scanner is production-ready and the 2.0 control plane is the enterprise foundation release. See the [support policy](SUPPORT.md), [compatibility policy](docs/book/reference/compatibility.md), and [security policy](SECURITY.md).

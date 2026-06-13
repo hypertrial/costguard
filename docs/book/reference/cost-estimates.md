@@ -72,12 +72,14 @@ costguard scan --cost
 costguard scan --cost --fail-on-cost-delta 500
 costguard pr --cost --fail-on-cost-delta 500
 costguard explain models/marts/fct.sql --cost
-costguard cost . --manifest target/manifest.json
+costguard cost report . --manifest target/manifest.json
 ```
 
 - `--cost` on `scan`, `pr`, and `explain` enables cost annotation
 - `--fail-on-cost-delta` gates on deduplicated **savings p50** (also enables cost)
-- `costguard cost` renders the project cost report without requiring findings
+- `costguard cost report` renders the project cost report without requiring findings
+- `costguard cost normalize` converts offline warehouse exports into the normalized metadata-only cost schema
+- `costguard cost publish` uploads a validated normalized bundle using a token read from an environment variable
 
 ## Output
 
@@ -92,7 +94,7 @@ JSON schema version is **2** with optional top-level `cost` object.
 ## GitHub Action
 
 ```yaml
-- uses: hypertrial/costguard/.github/actions/costguard@v1
+- uses: hypertrial/costguard/.github/actions/costguard@v2
   with:
     cost: "true"
     fail-on-cost-delta: "500"

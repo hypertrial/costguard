@@ -4,12 +4,14 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
 import sys
 import tarfile
 import tempfile
+import urllib.parse
 import urllib.request
 import venv
 from pathlib import Path
@@ -323,6 +325,10 @@ def validate_locked_requirements(path: Path, adapter: str) -> None:
 
 def command_run() -> int:
     root = consumer_root()
+    publication_mode = env("PUBLICATION_MODE_INPUT", "off").lower()
+    if publication_mode not in {"off", "optional", "required"}:
+        raise SystemExit("publication-mode must be off, optional, or required")
+    publication = prepare_publication(root, publication_mode)
     command = [
         "costguard",
         "pr",
@@ -337,6 +343,31 @@ def command_run() -> int:
         "--analysis-policy",
         env("ANALYSIS_POLICY_INPUT", "strict"),
     ]
+    if publication is not None:
+        command.extend(
+            [
+                "--policy",
+                str(publication["policy_bundle"]),
+                "--trust-store",
+                str(publication["trust_store"]),
+                "--policy-organization",
+                publication["organization"],
+                "--policy-repository",
+                publication["repository"],
+                "--envelope-output",
+                str(publication["envelope"]),
+                "--publication-organization",
+                publication["organization"],
+                "--publication-repository",
+                publication["repository"],
+                "--commit-sha",
+                publication["commit_sha"],
+            ]
+        )
+        if publication["pull_request"] is not None:
+            command.extend(["--pull-request", str(publication["pull_request"])])
+        if publication["base_sha"]:
+            command.extend(["--base-sha", publication["base_sha"]])
     min_confidence = env("MIN_CONFIDENCE_INPUT")
     if min_confidence:
         command.extend(["--min-confidence", min_confidence])
@@ -364,7 +395,114 @@ def command_run() -> int:
     summary = env("GITHUB_STEP_SUMMARY")
     if env("FORMAT_INPUT") == "markdown" and summary:
         append_file(Path(summary), completed.stdout.rstrip("\n"))
+    if publication is not None and publication["envelope"].is_file():
+        try:
+            publish_envelope(publication)
+        except Exception as exc:  # urllib exposes multiple transport error types
+            if publication_mode == "required":
+                sys.stderr.write(f"required Costguard publication failed: {exc}\n")
+                return 3
+            sys.stderr.write(f"::warning title=Costguard publication failed::{exc}\n")
     return completed.returncode
+
+
+def prepare_publication(root: Path, mode: str) -> dict[str, object] | None:
+    if mode == "off":
+        return None
+    server_url = env("SERVER_URL_INPUT").rstrip("/")
+    organization = env("ORGANIZATION_INPUT")
+    token = env("COSTGUARD_TOKEN_INPUT")
+    repository = env("GITHUB_REPOSITORY")
+    commit_sha = env("GITHUB_SHA")
+    for label, value in [
+        ("server-url", server_url),
+        ("organization", organization),
+        ("token", token),
+        ("GITHUB_REPOSITORY", repository),
+        ("GITHUB_SHA", commit_sha),
+    ]:
+        if not value:
+            raise SystemExit(f"{label} is required when publication-mode is {mode}")
+    validate_server_url(server_url)
+    trust_store = contained_file(
+        root, env("TRUST_STORE_INPUT", ".costguard/trust.json"), "policy trust store"
+    )
+    runner_temp = Path(env("RUNNER_TEMP", tempfile.gettempdir())).resolve()
+    runner_temp.mkdir(parents=True, exist_ok=True)
+    run_id = env("GITHUB_RUN_ID", "local")
+    policy_bundle = runner_temp / f"costguard-policy-{run_id}.json"
+    envelope = runner_temp / f"costguard-envelope-{run_id}.json"
+    query = urllib.parse.urlencode(
+        {"organization": organization, "repository": repository}
+    )
+    request = urllib.request.Request(
+        f"{server_url}/api/v1/policies/resolved?{query}",
+        headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            body = response.read(2 * 1024 * 1024 + 1)
+    except Exception as exc:
+        raise SystemExit(f"required Costguard policy fetch failed: {exc}") from exc
+    if len(body) > 2 * 1024 * 1024:
+        raise SystemExit("required Costguard policy fetch exceeded 2 MiB")
+    policy_bundle.write_bytes(body)
+    event = github_event()
+    return {
+        "server_url": server_url,
+        "organization": organization,
+        "repository": repository,
+        "commit_sha": commit_sha,
+        "pull_request": event.get("pull_request"),
+        "base_sha": event.get("base_sha"),
+        "policy_bundle": policy_bundle,
+        "trust_store": trust_store,
+        "envelope": envelope,
+        "token": token,
+    }
+
+
+def github_event() -> dict[str, object]:
+    path = env("GITHUB_EVENT_PATH")
+    if not path:
+        return {}
+    try:
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+        pull_request = payload.get("pull_request") or {}
+        return {
+            "pull_request": pull_request.get("number") or payload.get("number"),
+            "base_sha": (pull_request.get("base") or {}).get("sha"),
+        }
+    except (OSError, ValueError, TypeError):
+        return {}
+
+
+def validate_server_url(value: str) -> None:
+    parsed = urllib.parse.urlparse(value)
+    if parsed.scheme == "https" and parsed.netloc:
+        return
+    if parsed.scheme == "http" and parsed.hostname in {"127.0.0.1", "localhost", "::1"}:
+        return
+    raise SystemExit("server-url must use HTTPS (HTTP is allowed only for localhost)")
+
+
+def publish_envelope(publication: dict[str, object]) -> None:
+    envelope = Path(publication["envelope"])
+    body = envelope.read_bytes()
+    if len(body) > 10 * 1024 * 1024:
+        raise ValueError("scan envelope exceeds 10 MiB")
+    request = urllib.request.Request(
+        f"{publication['server_url']}/api/v1/scan-runs",
+        data=body,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {publication['token']}",
+            "Content-Type": "application/json",
+            "User-Agent": "costguard-action/2",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        response.read(1024 * 1024)
 
 
 def parser() -> argparse.ArgumentParser:
