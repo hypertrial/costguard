@@ -6,64 +6,72 @@ use std::collections::HashSet;
 use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct FindingBaseline {
     pub version: u8,
+    pub platform: String,
+    pub generated_at: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub warehouse: Option<String>,
+    pub policy_digest: Option<String>,
     pub findings: Vec<BaselinedFinding>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct BaselinedFinding {
-    pub fingerprint: String,
+    pub finding_id: String,
     pub rule_id: String,
     pub path: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence_key: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LegacyFindingBaselineV1 {
+    pub version: u8,
+    #[serde(default)]
+    pub warehouse: Option<String>,
+    pub findings: Vec<LegacyBaselinedFindingV1>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LegacyBaselinedFindingV1 {
+    pub rule_id: String,
+    pub path: String,
+    #[serde(default)]
     pub message: Option<String>,
 }
 
 impl FindingBaseline {
-    pub fn from_diagnostics(diagnostics: &[Diagnostic], warehouse: Option<&str>) -> Self {
+    pub fn from_diagnostics(
+        diagnostics: &[Diagnostic],
+        platform: Platform,
+        policy_digest: Option<String>,
+    ) -> Self {
         let mut findings = diagnostics
             .iter()
             .map(|diagnostic| BaselinedFinding {
-                fingerprint: diagnostic_fingerprint(diagnostic),
+                finding_id: diagnostic.governance.finding_id.clone(),
                 rule_id: diagnostic.rule_id.clone(),
                 path: normalize_path(&diagnostic.path),
-                message: Some(normalize_message(&diagnostic.message)),
+                evidence_key: diagnostic.governance.evidence_key.clone(),
             })
             .collect::<Vec<_>>();
-        findings.sort_by(|left, right| {
-            left.path
-                .cmp(&right.path)
-                .then(left.rule_id.cmp(&right.rule_id))
-                .then(left.fingerprint.cmp(&right.fingerprint))
-        });
-        findings.dedup_by(|left, right| left.fingerprint == right.fingerprint);
+        sort_and_deduplicate(&mut findings);
         Self {
-            version: 1,
-            warehouse: warehouse.map(str::to_string),
+            version: costguard_protocol::BASELINE_SCHEMA_VERSION,
+            platform: platform.to_string(),
+            generated_at: chrono::Utc::now().to_rfc3339(),
+            policy_digest,
             findings,
         }
     }
 
-    pub fn fingerprint_set(&self) -> HashSet<&str> {
+    pub fn finding_id_set(&self) -> HashSet<&str> {
         self.findings
             .iter()
-            .map(|finding| finding.fingerprint.as_str())
+            .map(|finding| finding.finding_id.as_str())
             .collect()
     }
-}
-
-pub fn diagnostic_fingerprint(diagnostic: &Diagnostic) -> String {
-    let path = normalize_path(&diagnostic.path);
-    let message = normalize_message(&diagnostic.message);
-    stable_hash(&format!(
-        "{}|{}|{}",
-        diagnostic.rule_id.to_ascii_uppercase(),
-        path,
-        message
-    ))
 }
 
 pub fn load_finding_baseline(path: &Path) -> Result<FindingBaseline> {
@@ -72,25 +80,77 @@ pub fn load_finding_baseline(path: &Path) -> Result<FindingBaseline> {
     serde_json::from_str(&text).with_context(|| format!("invalid baseline JSON {}", path.display()))
 }
 
-pub fn validate_finding_baseline(baseline: &FindingBaseline, warehouse: Platform) -> Result<()> {
+pub fn load_legacy_baseline_v1(path: &Path) -> Result<LegacyFindingBaselineV1> {
+    let text = std::fs::read_to_string(path)
+        .with_context(|| format!("failed to read legacy baseline {}", path.display()))?;
+    let baseline: LegacyFindingBaselineV1 = serde_json::from_str(&text)
+        .with_context(|| format!("invalid legacy baseline JSON {}", path.display()))?;
     if baseline.version != 1 {
+        anyhow::bail!("legacy baseline must have version 1");
+    }
+    Ok(baseline)
+}
+
+pub fn migrate_legacy_baseline_v1(
+    legacy: &LegacyFindingBaselineV1,
+    diagnostics: &[Diagnostic],
+    platform: Platform,
+    policy_digest: Option<String>,
+) -> Result<FindingBaseline> {
+    if let Some(expected) = &legacy.warehouse {
+        let expected = expected.parse::<Platform>().map_err(anyhow::Error::msg)?;
+        if expected != platform {
+            anyhow::bail!("legacy baseline platform '{expected}' does not match '{platform}'");
+        }
+    }
+    let mut selected = Vec::new();
+    for old in &legacy.findings {
+        let candidates = diagnostics
+            .iter()
+            .filter(|diagnostic| {
+                diagnostic.rule_id.eq_ignore_ascii_case(&old.rule_id)
+                    && normalize_path(&diagnostic.path) == normalize_string_path(&old.path)
+            })
+            .collect::<Vec<_>>();
+        let matched = old
+            .message
+            .as_deref()
+            .and_then(|message| {
+                candidates
+                    .iter()
+                    .find(|diagnostic| normalize_message(&diagnostic.message) == normalize_message(message))
+                    .copied()
+            })
+            .or_else(|| (candidates.len() == 1).then(|| candidates[0]));
+        if let Some(diagnostic) = matched {
+            selected.push(diagnostic.clone());
+        }
+    }
+    Ok(FindingBaseline::from_diagnostics(
+        &selected,
+        platform,
+        policy_digest,
+    ))
+}
+
+pub fn validate_finding_baseline(baseline: &FindingBaseline, platform: Platform) -> Result<()> {
+    if baseline.version != costguard_protocol::BASELINE_SCHEMA_VERSION {
         anyhow::bail!(
-            "unsupported baseline schema version {}; expected 1",
-            baseline.version
+            "unsupported baseline schema version {}; expected {}",
+            baseline.version,
+            costguard_protocol::BASELINE_SCHEMA_VERSION
         );
     }
-    if let Some(expected) = &baseline.warehouse {
-        let expected_platform = expected
-            .parse::<Platform>()
-            .map_err(anyhow::Error::msg)
-            .with_context(|| format!("invalid baseline warehouse '{expected}'"))?;
-        if expected_platform != warehouse {
-            anyhow::bail!(
-                "baseline warehouse '{}' does not match scan warehouse '{}'",
-                expected_platform,
-                warehouse
-            );
-        }
+    let expected = baseline
+        .platform
+        .parse::<Platform>()
+        .map_err(anyhow::Error::msg)
+        .with_context(|| format!("invalid baseline platform '{}'", baseline.platform))?;
+    if expected != platform {
+        anyhow::bail!("baseline platform '{expected}' does not match scan platform '{platform}'");
+    }
+    if baseline.findings.iter().any(|finding| finding.finding_id.is_empty()) {
+        anyhow::bail!("baseline contains an empty finding_id");
     }
     Ok(())
 }
@@ -101,7 +161,7 @@ pub fn write_finding_baseline(path: &Path, baseline: &FindingBaseline) -> Result
             .with_context(|| format!("failed to create {}", parent.display()))?;
     }
     let text = serde_json::to_string_pretty(baseline)?;
-    std::fs::write(path, text)
+    std::fs::write(path, format!("{text}\n"))
         .with_context(|| format!("failed to write baseline {}", path.display()))
 }
 
@@ -109,13 +169,12 @@ pub fn apply_finding_baseline(
     diagnostics: Vec<Diagnostic>,
     baseline: &FindingBaseline,
 ) -> (Vec<Diagnostic>, usize) {
-    let known = baseline.fingerprint_set();
+    let known = baseline.finding_id_set();
     let mut baselined = 0;
     let filtered = diagnostics
         .into_iter()
         .filter(|diagnostic| {
-            let fingerprint = diagnostic_fingerprint(diagnostic);
-            if known.contains(fingerprint.as_str()) {
+            if known.contains(diagnostic.governance.finding_id.as_str()) {
                 baselined += 1;
                 false
             } else {
@@ -126,70 +185,49 @@ pub fn apply_finding_baseline(
     (filtered, baselined)
 }
 
+pub fn merge_baseline_findings(
+    existing: &FindingBaseline,
+    diagnostics: &[Diagnostic],
+    platform: Platform,
+    policy_digest: Option<String>,
+) -> FindingBaseline {
+    let mut baseline = FindingBaseline::from_diagnostics(diagnostics, platform, policy_digest);
+    baseline.findings.extend(existing.findings.clone());
+    sort_and_deduplicate(&mut baseline.findings);
+    baseline
+}
+
+fn sort_and_deduplicate(findings: &mut Vec<BaselinedFinding>) {
+    findings.sort_by(|left, right| {
+        left.path
+            .cmp(&right.path)
+            .then(left.rule_id.cmp(&right.rule_id))
+            .then(left.finding_id.cmp(&right.finding_id))
+    });
+    findings.dedup_by(|left, right| left.finding_id == right.finding_id);
+}
+
 fn normalize_path(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/")
+    normalize_string_path(&path.to_string_lossy())
+}
+
+fn normalize_string_path(path: &str) -> String {
+    path.replace('\\', "/")
 }
 
 fn normalize_message(message: &str) -> String {
-    message
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_ascii_lowercase()
-}
-
-fn stable_hash(input: &str) -> String {
-    use std::hash::{Hash, Hasher};
-    let mut hasher = fnv1a_hasher::FnvHasher::default();
-    input.hash(&mut hasher);
-    format!("{:016x}", hasher.finish())
-}
-
-mod fnv1a_hasher {
-    use std::hash::{Hash, Hasher};
-
-    #[derive(Default)]
-    pub struct FnvHasher {
-        state: u64,
-    }
-
-    impl Hasher for FnvHasher {
-        fn finish(&self) -> u64 {
-            self.state
-        }
-
-        fn write(&mut self, bytes: &[u8]) {
-            const PRIME: u64 = 0x100000001b3;
-            let mut hash = self.state;
-            for byte in bytes {
-                hash ^= u64::from(*byte);
-                hash = hash.wrapping_mul(PRIME);
-            }
-            self.state = hash;
-        }
-
-        fn write_u64(&mut self, value: u64) {
-            value.hash(self);
-        }
-    }
-
-    impl FnvHasher {
-        pub fn default() -> Self {
-            Self {
-                state: 0xcbf29ce484222325,
-            }
-        }
-    }
+    message.split_whitespace().collect::<Vec<_>>().join(" ").to_ascii_lowercase()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use costguard_diagnostics::{Confidence, Severity};
+    use costguard_diagnostics::{Confidence, DiagnosticGovernance, Severity};
     use std::path::PathBuf;
 
     fn sample_diagnostic(message: &str) -> Diagnostic {
-        Diagnostic {
+        let mut diagnostic = Diagnostic {
+            governance: DiagnosticGovernance::default(),
             rule_id: "SQLCOST001".into(),
             severity: Severity::Medium,
             path: PathBuf::from("models/marts/foo.sql"),
@@ -205,32 +243,40 @@ mod tests {
             compiled_line: None,
             compiled_column: None,
             cost_estimate: None,
-        }
+        };
+        diagnostic.assign_identity("primary");
+        diagnostic
     }
 
     #[test]
-    fn fingerprint_is_stable_for_whitespace_variants() {
-        let left = diagnostic_fingerprint(&sample_diagnostic("SELECT *  in   a model."));
-        let right = diagnostic_fingerprint(&sample_diagnostic("select *\nin a model."));
-        assert_eq!(left, right);
+    fn finding_identity_ignores_message_and_location() {
+        let mut left = sample_diagnostic("first wording");
+        let mut right = sample_diagnostic("completely different wording");
+        right.line = 500;
+        left.assign_identity("same-evidence");
+        right.assign_identity("same-evidence");
+        assert_eq!(left.governance.finding_id, right.governance.finding_id);
     }
 
     #[test]
     fn baseline_filters_known_findings() {
         let diagnostics = vec![sample_diagnostic("known"), sample_diagnostic("new finding")];
-        let baseline = FindingBaseline::from_diagnostics(&[diagnostics[0].clone()], None);
+        let baseline = FindingBaseline::from_diagnostics(
+            &[diagnostics[0].clone()],
+            Platform::Generic,
+            None,
+        );
         let (filtered, baselined) = apply_finding_baseline(diagnostics, &baseline);
-        assert_eq!(baselined, 1);
-        assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].message, "new finding");
+        assert_eq!(baselined, 2);
+        assert!(filtered.is_empty());
     }
 
     #[test]
-    fn baseline_rejects_version_and_warehouse_mismatch() {
-        let mut baseline = FindingBaseline::from_diagnostics(&[], Some("snowflake"));
-        baseline.version = 2;
-        assert!(validate_finding_baseline(&baseline, Platform::Snowflake).is_err());
+    fn baseline_rejects_version_and_platform_mismatch() {
+        let mut baseline = FindingBaseline::from_diagnostics(&[], Platform::Snowflake, None);
         baseline.version = 1;
+        assert!(validate_finding_baseline(&baseline, Platform::Snowflake).is_err());
+        baseline.version = 2;
         assert!(validate_finding_baseline(&baseline, Platform::BigQuery).is_err());
     }
 }

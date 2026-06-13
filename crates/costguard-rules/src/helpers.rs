@@ -1,4 +1,4 @@
-use crate::registry::{RuleContext, Warehouse};
+use crate::registry::{Platform, RuleContext};
 use costguard_diagnostics::{Diagnostic, Severity, Span};
 use std::path::Path;
 
@@ -138,15 +138,15 @@ fn source_scope_lacks_partition_predicate(scope: &str) -> bool {
     !has_bounded_incremental_predicate(scope)
 }
 
-pub(crate) fn incremental_predicate_suggestion(warehouse: Warehouse) -> &'static str {
-    match warehouse {
-        Warehouse::BigQuery => {
+pub(crate) fn incremental_predicate_suggestion(platform: Platform) -> &'static str {
+    match platform {
+        Platform::BigQuery => {
             "add a partition predicate such as _PARTITIONDATE or an event_date filter."
         }
-        Warehouse::Snowflake => {
+        Platform::Snowflake => {
             "add an updated_at/event_date predicate to improve pruning on clustered or micro-partitioned data."
         }
-        Warehouse::Databricks => "add a partition or date predicate to limit incremental reads.",
+        Platform::Databricks => "add a partition or date predicate to limit incremental reads.",
         _ => "add an updated_at, created_at, event_date, block_time, ingested_at, or partition predicate.",
     }
 }

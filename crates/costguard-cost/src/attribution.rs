@@ -308,9 +308,6 @@ fn apply_attributions(
 
         diagnostics[item.diagnostic_index].cost_estimate = Some(CostEstimate {
             relative_index,
-            p10_usd_per_month: usd_p10,
-            p50_usd_per_month: usd_p50,
-            p90_usd_per_month: usd_p90,
             grade: item.grade,
             basis,
             currency: "USD".into(),
@@ -413,6 +410,7 @@ mod tests {
         let index = build_model_cost_index(&config, Some(&dbt), &CostInputs::default());
         let mut diagnostics = vec![
             Diagnostic {
+                governance: Default::default(),
                 rule_id: "SQLCOST014".into(),
                 severity: Severity::Medium,
                 path: PathBuf::from("models/m.sql"),
@@ -430,6 +428,7 @@ mod tests {
                 cost_estimate: None,
             },
             Diagnostic {
+                governance: Default::default(),
                 rule_id: "SQLCOST018".into(),
                 severity: Severity::Medium,
                 path: PathBuf::from("models/m.sql"),

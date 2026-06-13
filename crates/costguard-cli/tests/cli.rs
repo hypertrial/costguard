@@ -245,7 +245,7 @@ fn baseline_warehouse_mismatch_is_configuration_error() {
     let baseline = tempdir.path().join("baseline.json");
     fs::write(
         &baseline,
-        r#"{"version":1,"warehouse":"snowflake","findings":[]}"#,
+        r#"{"version":2,"platform":"snowflake","generated_at":"2026-01-01T00:00:00Z","findings":[]}"#,
     )
     .expect("baseline");
     let output = costguard_command()
@@ -282,7 +282,7 @@ fn version_reports_workspace_version() {
     assert!(output.status.success());
     assert_eq!(
         String::from_utf8_lossy(&output.stdout).trim(),
-        "costguard 1.1.0"
+        "costguard 2.0.0"
     );
 }
 
@@ -296,7 +296,7 @@ fn version_propagates_to_every_subcommand() {
         assert!(output.status.success(), "{subcommand}");
         assert_eq!(
             String::from_utf8_lossy(&output.stdout).trim(),
-            format!("costguard-{subcommand} 1.1.0"),
+            format!("costguard-{subcommand} 2.0.0"),
             "{subcommand}"
         );
     }
@@ -649,7 +649,7 @@ fn scan_cost_estimate_json_includes_cost_fields() {
         "expected cost_estimate in output:\n{stdout}"
     );
     assert!(stdout.contains("\"relative_index\""), "{stdout}");
-    assert!(stdout.contains("\"p50_usd_per_month\""), "{stdout}");
+    assert!(stdout.contains("\"savings_p50_usd_per_month\""), "{stdout}");
 }
 
 #[test]

@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/costguard-cli",
+    "crates/costguard-protocol",
     "crates/costguard-core",
     "crates/costguard-scanner",
     "crates/costguard-sql",
@@ -15,20 +16,24 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "1.1.0"
+version = "2.0.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/hypertrial/costguard"
 
 [workspace.dependencies]
 anyhow = "1"
+base64 = "0.22"
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 clap = { version = "4", default-features = false, features = ["derive", "std", "help", "usage", "error-context"] }
 ignore = "0.4"
 rayon = "1"
 regex = "1"
+schemars = { version = "0.8", features = ["chrono"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
+sha2 = "0.10"
 sqlparser = "0.51"
 tempfile = "3"
 toml = "0.8"

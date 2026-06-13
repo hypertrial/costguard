@@ -8,8 +8,8 @@ mod registry;
 mod sql_shape;
 
 pub use registry::{
-    ProjectIndexes, Rule, RuleContext, RuleMetadata, RuleOverride, RuleOverrides, RuleRegistry,
-    Warehouse,
+    Platform, ProjectIndexes, Rule, RuleContext, RuleMetadata, RuleOverride, RuleOverrides,
+    RuleRegistry,
 };
 
 #[cfg(test)]

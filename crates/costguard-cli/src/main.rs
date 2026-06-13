@@ -24,6 +24,26 @@ enum Command {
     Pr(PrArgs),
     Cost(CostArgs),
     Rules(RulesArgs),
+    Baseline(BaselineArgs),
+}
+
+#[derive(Debug, Parser)]
+struct BaselineArgs {
+    #[command(subcommand)]
+    command: BaselineCommand,
+}
+
+#[derive(Debug, Subcommand)]
+enum BaselineCommand {
+    MigrateV1 {
+        input: PathBuf,
+        output: PathBuf,
+        #[arg(long)]
+        warehouse: Option<String>,
+        #[arg(long)]
+        manifest: Option<PathBuf>,
+        paths: Vec<PathBuf>,
+    },
 }
 
 #[derive(Debug, Parser)]
@@ -231,6 +251,46 @@ fn run() -> Result<u8> {
             print!("{}", render_rules(&rules(), format)?);
             Ok(0)
         }
+        Command::Baseline(args) => match args.command {
+            BaselineCommand::MigrateV1 {
+                input,
+                output,
+                warehouse,
+                manifest,
+                paths,
+            } => {
+                let mut config = base_config()?;
+                if !paths.is_empty() {
+                    config.paths = paths;
+                }
+                ScanRuntimeOverrides {
+                    warehouse,
+                    manifest_path: manifest,
+                    ..ScanRuntimeOverrides::default()
+                }
+                .apply_to(&mut config)?;
+                config.baseline_path = None;
+                config.write_baseline_path = None;
+                config.fail_on = None;
+                validate_scan_config(&config)?;
+                let result = scan(&config)?;
+                let legacy = costguard_core::load_legacy_baseline_v1(&input)?;
+                let migrated = costguard_core::migrate_legacy_baseline_v1(
+                    &legacy,
+                    &result.diagnostics,
+                    config.platform,
+                    Some(result.policy.digest),
+                )?;
+                costguard_core::write_finding_baseline(&output, &migrated)?;
+                println!(
+                    "migrated {} of {} legacy findings to {}",
+                    migrated.findings.len(),
+                    legacy.findings.len(),
+                    output.display()
+                );
+                Ok(0)
+            }
+        },
     }
 }
 

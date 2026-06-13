@@ -122,7 +122,7 @@ pub fn total_p50_usd_per_month(diagnostics: &[Diagnostic]) -> f64 {
         .filter_map(|d| {
             d.cost_estimate
                 .as_ref()
-                .and_then(|c| c.savings_p50_usd_per_month.or(c.p50_usd_per_month))
+                .and_then(|c| c.savings_p50_usd_per_month)
         })
         .sum()
 }
@@ -147,6 +147,7 @@ mod tests {
             ..CostConfig::default()
         };
         let mut diagnostics = vec![Diagnostic {
+            governance: Default::default(),
             rule_id: "SQLCOST014".into(),
             severity: Severity::Medium,
             path: PathBuf::from("models/marts/fct.sql"),

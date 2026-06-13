@@ -5,7 +5,7 @@ use costguard_sql::SqlDocument;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-pub use costguard_platform::Platform as Warehouse;
+pub use costguard_platform::Platform;
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -47,7 +47,7 @@ impl ProjectIndexes {
 }
 
 pub struct RuleContext<'a> {
-    pub warehouse: Warehouse,
+    pub warehouse: Platform,
     pub file: &'a ProjectFile,
     pub sql: Option<&'a SqlDocument>,
     pub dbt_model: Option<&'a DbtModel>,
@@ -62,7 +62,7 @@ pub trait Rule: Send + Sync {
     fn description(&self) -> &'static str;
     fn default_severity(&self) -> Severity;
 
-    fn applies_to(&self, _warehouse: Warehouse) -> bool {
+    fn applies_to(&self, _platform: Platform) -> bool {
         true
     }
 

@@ -93,9 +93,6 @@ impl Platform {
     }
 }
 
-pub type Warehouse = Platform;
-pub type SqlDialect = Platform;
-
 #[cfg(test)]
 mod tests {
     use super::*;

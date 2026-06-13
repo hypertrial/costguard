@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::path::PathBuf;
@@ -96,6 +97,8 @@ impl Span {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Diagnostic {
+    #[serde(flatten)]
+    pub governance: DiagnosticGovernance,
     pub rule_id: String,
     pub severity: Severity,
     pub path: PathBuf,
@@ -121,6 +124,20 @@ pub struct Diagnostic {
     pub cost_estimate: Option<CostEstimate>,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DiagnosticGovernance {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub finding_id: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub evidence_key: String,
+    #[serde(default)]
+    pub enforcement: costguard_protocol::EnforcementOutcome,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy: Option<costguard_protocol::PolicyProvenanceV1>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exception: Option<costguard_protocol::AppliedExceptionV1>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum CostGrade {
@@ -143,12 +160,6 @@ impl fmt::Display for CostGrade {
 pub struct CostEstimate {
     /// Estimated monthly savings (GB-months when pricing is disabled).
     pub relative_index: f64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub p10_usd_per_month: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub p50_usd_per_month: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub p90_usd_per_month: Option<f64>,
     pub grade: CostGrade,
     pub basis: String,
     pub currency: String,
@@ -190,6 +201,7 @@ impl Diagnostic {
             span
         };
         Self {
+            governance: DiagnosticGovernance::default(),
             rule_id: rule_id.into(),
             severity,
             path,
@@ -232,6 +244,23 @@ impl Diagnostic {
         self.warehouse = Some(warehouse.into());
         self
     }
+
+    pub fn assign_identity(&mut self, evidence_key: impl Into<String>) {
+        self.governance.evidence_key = evidence_key.into();
+        let path = self.path.to_string_lossy().replace('\\', "/");
+        let material = format!(
+            "{}|{}|{}",
+            self.rule_id.to_ascii_uppercase(),
+            path,
+            self.governance.evidence_key
+        );
+        self.governance.finding_id = format!("cgf_{}", hex_sha256(material.as_bytes()));
+    }
+}
+
+fn hex_sha256(bytes: &[u8]) -> String {
+    let digest = Sha256::digest(bytes);
+    digest.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 #[derive(Debug, Clone)]

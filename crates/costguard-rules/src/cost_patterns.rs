@@ -1,5 +1,5 @@
 use crate::helpers::{diagnostic, is_downstream_model, is_staging_model};
-use crate::registry::{Rule, RuleContext, Warehouse};
+use crate::registry::{Platform, Rule, RuleContext};
 use costguard_diagnostics::{Confidence, Diagnostic, Severity};
 use costguard_sql::JoinKind;
 
@@ -239,8 +239,8 @@ impl Rule for WildcardTableScanRule {
     fn default_severity(&self) -> Severity {
         Severity::Medium
     }
-    fn applies_to(&self, warehouse: Warehouse) -> bool {
-        warehouse == Warehouse::BigQuery
+    fn applies_to(&self, platform: Platform) -> bool {
+        platform == Platform::BigQuery
     }
     fn check(&self, ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
         let Some(sql) = ctx.sql else {
@@ -512,8 +512,8 @@ impl Rule for CrossCatalogJoinRule {
     fn default_severity(&self) -> Severity {
         Severity::Medium
     }
-    fn applies_to(&self, warehouse: Warehouse) -> bool {
-        matches!(warehouse, Warehouse::Trino | Warehouse::Databricks)
+    fn applies_to(&self, platform: Platform) -> bool {
+        matches!(platform, Platform::Trino | Platform::Databricks)
     }
     fn check(&self, ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
         let Some(sql) = ctx.sql else {

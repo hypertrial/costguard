@@ -7,6 +7,8 @@ use serde::Serialize;
 #[derive(Debug, Serialize)]
 struct JsonOutput<'a> {
     schema_version: u8,
+    run: &'a costguard_core::RunMetadata,
+    policy: &'a costguard_core::PolicyMetadata,
     analysis: &'a costguard_core::AnalysisReport,
     metrics: &'a costguard_core::ScanMetrics,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -21,7 +23,9 @@ pub fn render(result: &ScanResult, format: OutputFormat) -> Result<String> {
     match format {
         OutputFormat::Text => Ok(render_text(result)),
         OutputFormat::Json => Ok(serde_json::to_string_pretty(&JsonOutput {
-            schema_version: 2,
+            schema_version: costguard_protocol::SCAN_SCHEMA_VERSION,
+            run: &result.run,
+            policy: &result.policy,
             analysis: &result.analysis,
             metrics: &result.metrics,
             cost: result.cost_summary.as_ref(),
@@ -181,11 +185,11 @@ fn append_top_cost_findings(output: &mut String, diagnostics: &[Diagnostic]) {
     }
     ranked.sort_by(|(_left, left_cost), (_right, right_cost)| {
         right_cost
-            .p50_usd_per_month
+            .savings_p50_usd_per_month
             .unwrap_or(right_cost.relative_index)
             .partial_cmp(
                 &left_cost
-                    .p50_usd_per_month
+                    .savings_p50_usd_per_month
                     .unwrap_or(left_cost.relative_index),
             )
             .unwrap_or(std::cmp::Ordering::Equal)
@@ -348,11 +352,11 @@ fn append_top_cost_findings_markdown(output: &mut String, diagnostics: &[Diagnos
     }
     ranked.sort_by(|(_left, left_cost), (_right, right_cost)| {
         right_cost
-            .p50_usd_per_month
+            .savings_p50_usd_per_month
             .unwrap_or(right_cost.relative_index)
             .partial_cmp(
                 &left_cost
-                    .p50_usd_per_month
+                    .savings_p50_usd_per_month
                     .unwrap_or(left_cost.relative_index),
             )
             .unwrap_or(std::cmp::Ordering::Equal)
@@ -686,6 +690,7 @@ mod tests {
     fn sample_result(high: bool) -> ScanResult {
         let diagnostics = if high {
             vec![Diagnostic {
+                governance: Default::default(),
                 rule_id: "SQLCOST005".into(),
                 severity: Severity::High,
                 path: PathBuf::from("models/marts/a,sql"),
@@ -706,6 +711,18 @@ mod tests {
             Vec::new()
         };
         ScanResult {
+            run: costguard_core::RunMetadata {
+                id: "test-run".into(),
+                started_at: "2026-01-01T00:00:00Z".into(),
+                completed_at: "2026-01-01T00:00:01Z".into(),
+                duration_ms: 1,
+                tool_version: env!("CARGO_PKG_VERSION").into(),
+            },
+            policy: costguard_core::PolicyMetadata {
+                digest: "local-unmanaged".into(),
+                version: env!("CARGO_PKG_VERSION").into(),
+                scope: "local".into(),
+            },
             diagnostics,
             counts: ScanCounts::default(),
             metrics: ScanMetrics {
@@ -795,7 +812,7 @@ mod tests {
 
         let rendered = render(&result, OutputFormat::Json).expect("json render");
         let value: serde_json::Value = serde_json::from_str(&rendered).expect("parse json");
-        assert_eq!(value["schema_version"], 2);
+        assert_eq!(value["schema_version"], 3);
         assert_eq!(value["analysis"]["policy"], "standard");
         assert_eq!(value["analysis"]["passed"], true);
         assert!(value["cost"].is_null());

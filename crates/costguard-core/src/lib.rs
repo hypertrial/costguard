@@ -6,8 +6,9 @@ mod scan;
 mod sql_analysis;
 
 pub use baseline::{
-    apply_finding_baseline, diagnostic_fingerprint, load_finding_baseline,
-    validate_finding_baseline, write_finding_baseline, BaselinedFinding, FindingBaseline,
+    apply_finding_baseline, load_finding_baseline, load_legacy_baseline_v1,
+    merge_baseline_findings, migrate_legacy_baseline_v1, validate_finding_baseline,
+    write_finding_baseline, BaselinedFinding, FindingBaseline, LegacyFindingBaselineV1,
 };
 pub use config::{
     apply_file_config, load_config, validate_scan_config, AnalysisConfig, AnalysisPolicy,
@@ -22,11 +23,9 @@ pub use costguard_dbt::{
 };
 pub use costguard_diagnostics::{Confidence, LineIndex, Span};
 pub use costguard_platform::Platform;
-pub use costguard_rules::{Rule, RuleContext, RuleMetadata, RuleOverrides, Warehouse};
+pub use costguard_rules::{Rule, RuleContext, RuleMetadata, RuleOverrides};
 pub use costguard_scanner::{FileKind as ProjectFileKind, ProjectFile as ScannedProjectFile};
-pub use costguard_sql::{
-    CteFeature, ExpressionFeature, JoinFeature, ParseInput, SqlDialect, SqlFeatures, WindowFeature,
-};
+pub use costguard_sql::{CteFeature, ExpressionFeature, JoinFeature, ParseInput, SqlFeatures, WindowFeature};
 pub use scan::{explain, rules, scan};
 
 use costguard_dbt::DbtProject;
@@ -80,6 +79,8 @@ pub struct FileParseStatus {
 
 #[derive(Debug, Clone)]
 pub struct ScanResult {
+    pub run: RunMetadata,
+    pub policy: PolicyMetadata,
     pub diagnostics: Vec<Diagnostic>,
     pub counts: ScanCounts,
     pub metrics: ScanMetrics,
@@ -87,6 +88,22 @@ pub struct ScanResult {
     pub pr_summary: Option<PrSummary>,
     pub cost_summary: Option<ProjectCostSummary>,
     pub analysis: AnalysisReport,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RunMetadata {
+    pub id: String,
+    pub started_at: String,
+    pub completed_at: String,
+    pub duration_ms: u64,
+    pub tool_version: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PolicyMetadata {
+    pub digest: String,
+    pub version: String,
+    pub scope: String,
 }
 
 impl ScanResult {
@@ -172,6 +189,7 @@ mod tests {
 
     fn diagnostic(severity: Severity, confidence: Confidence) -> Diagnostic {
         Diagnostic {
+            governance: Default::default(),
             rule_id: "SQLCOST012".into(),
             severity,
             path: PathBuf::from("models/a.sql"),
@@ -192,6 +210,18 @@ mod tests {
 
     fn result_with(diagnostics: Vec<Diagnostic>) -> ScanResult {
         ScanResult {
+            run: RunMetadata {
+                id: "test-run".into(),
+                started_at: "2026-01-01T00:00:00Z".into(),
+                completed_at: "2026-01-01T00:00:01Z".into(),
+                duration_ms: 1,
+                tool_version: env!("CARGO_PKG_VERSION").into(),
+            },
+            policy: PolicyMetadata {
+                digest: "local-unmanaged".into(),
+                version: env!("CARGO_PKG_VERSION").into(),
+                scope: "local".into(),
+            },
             diagnostics,
             counts: ScanCounts::default(),
             metrics: ScanMetrics {
@@ -230,9 +260,6 @@ mod tests {
         let mut diag = diagnostic(Severity::Low, Confidence::High);
         diag.cost_estimate = Some(costguard_diagnostics::CostEstimate {
             relative_index: 100.0,
-            p10_usd_per_month: Some(400.0),
-            p50_usd_per_month: Some(500.0),
-            p90_usd_per_month: Some(900.0),
             grade: costguard_diagnostics::CostGrade::C,
             basis: "test".into(),
             currency: "USD".into(),

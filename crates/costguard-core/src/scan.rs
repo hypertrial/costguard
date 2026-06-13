@@ -1,6 +1,6 @@
 use crate::baseline::{
     apply_finding_baseline, load_finding_baseline, validate_finding_baseline,
-    write_finding_baseline, FindingBaseline,
+    write_finding_baseline,
 };
 use crate::config::ScanConfig;
 use crate::dbt_graph::enrich_pr_summary;
@@ -9,7 +9,7 @@ use crate::sql_analysis::{
     analyze_sql_documents, build_file_parse_status, build_scan_metrics, dbt_models_by_path,
     parse_failure_diagnostics,
 };
-use crate::{AnalysisReport, AnalysisViolation, PrSummary, Project, ScanResult};
+use crate::{AnalysisReport, AnalysisViolation, PolicyMetadata, PrSummary, Project, RunMetadata, ScanResult};
 use anyhow::{Context, Result};
 use costguard_cost::{annotate_diagnostics, summarize_features, CostInputs, ModelFeatureSummary};
 use costguard_dbt::{compiled_code_by_model_path, MetadataWarning, MetadataWarningKind};
@@ -24,6 +24,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
+    let started = std::time::Instant::now();
+    let started_at = chrono::Utc::now();
     let root = config
         .root
         .canonicalize()
@@ -134,6 +136,7 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
     }
 
     diagnostics.extend(parse_failure_diagnostics(&context_sql_documents, &root));
+    assign_finding_identities(&mut diagnostics);
 
     if let Some(path) = &config.write_baseline_path {
         let output = if path.is_absolute() {
@@ -151,29 +154,9 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
                 .as_path(),
             )?;
             validate_finding_baseline(&existing, config.platform)?;
-            let mut combined = existing.findings;
-            for diagnostic in &diagnostics {
-                combined.push(crate::baseline::BaselinedFinding {
-                    fingerprint: crate::baseline::diagnostic_fingerprint(diagnostic),
-                    rule_id: diagnostic.rule_id.clone(),
-                    path: diagnostic.path.to_string_lossy().replace('\\', "/"),
-                    message: Some(diagnostic.message.clone()),
-                });
-            }
-            combined.sort_by(|left, right| {
-                left.path
-                    .cmp(&right.path)
-                    .then(left.rule_id.cmp(&right.rule_id))
-                    .then(left.fingerprint.cmp(&right.fingerprint))
-            });
-            combined.dedup_by(|left, right| left.fingerprint == right.fingerprint);
-            FindingBaseline {
-                version: 1,
-                warehouse: Some(config.platform.to_string()),
-                findings: combined,
-            }
+            crate::baseline::merge_baseline_findings(&existing, &diagnostics, config.platform, None)
         } else {
-            FindingBaseline::from_diagnostics(&diagnostics, Some(&config.platform.to_string()))
+            crate::FindingBaseline::from_diagnostics(&diagnostics, config.platform, None)
         };
         write_finding_baseline(&output, &baseline_to_write)?;
     }
@@ -239,7 +222,20 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
     metrics.baselined_findings = baselined_findings;
     metrics.new_findings = diagnostics.len();
     let analysis = evaluate_analysis(config, &metrics, skipped_files.len(), metadata_only);
+    let completed_at = chrono::Utc::now();
     Ok(ScanResult {
+        run: RunMetadata {
+            id: format!("scan-{}-{}", started_at.timestamp_millis(), std::process::id()),
+            started_at: started_at.to_rfc3339(),
+            completed_at: completed_at.to_rfc3339(),
+            duration_ms: started.elapsed().as_millis().try_into().unwrap_or(u64::MAX),
+            tool_version: env!("CARGO_PKG_VERSION").to_string(),
+        },
+        policy: PolicyMetadata {
+            digest: "local-unmanaged".into(),
+            version: env!("CARGO_PKG_VERSION").into(),
+            scope: "local".into(),
+        },
         diagnostics,
         counts: metrics.counts.clone(),
         metrics,
@@ -248,6 +244,28 @@ pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
         cost_summary,
         analysis,
     })
+}
+
+fn assign_finding_identities(diagnostics: &mut [Diagnostic]) {
+    diagnostics.sort_by(|left, right| {
+        left.path
+            .cmp(&right.path)
+            .then(left.rule_id.cmp(&right.rule_id))
+            .then(left.line.cmp(&right.line))
+            .then(left.column.cmp(&right.column))
+    });
+    let mut occurrences = std::collections::HashMap::<(PathBuf, String), usize>::new();
+    for diagnostic in diagnostics {
+        let key = (diagnostic.path.clone(), diagnostic.rule_id.to_ascii_uppercase());
+        let ordinal = occurrences.entry(key).or_default();
+        let evidence_key = if diagnostic.governance.evidence_key.is_empty() {
+            format!("occurrence:{ordinal}")
+        } else {
+            diagnostic.governance.evidence_key.clone()
+        };
+        *ordinal += 1;
+        diagnostic.assign_identity(evidence_key);
+    }
 }
 
 fn evaluate_analysis(

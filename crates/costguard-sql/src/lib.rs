@@ -9,7 +9,6 @@ mod features;
 mod parse;
 mod strip;
 
-pub use costguard_platform::Platform as SqlDialect;
 pub use parse::{normalize_for_parse, try_parse_compiled_sql, try_parse_compiled_sql_error};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

@@ -3,15 +3,9 @@ use costguard_diagnostics::CostEstimate;
 
 pub fn format_cost_line(estimate: &CostEstimate) -> String {
     if let (Some(p10), Some(p50), Some(p90)) = (
-        estimate
-            .savings_p10_usd_per_month
-            .or(estimate.p10_usd_per_month),
-        estimate
-            .savings_p50_usd_per_month
-            .or(estimate.p50_usd_per_month),
-        estimate
-            .savings_p90_usd_per_month
-            .or(estimate.p90_usd_per_month),
+        estimate.savings_p10_usd_per_month,
+        estimate.savings_p50_usd_per_month,
+        estimate.savings_p90_usd_per_month,
     ) {
         let model_note = estimate
             .model_monthly_p50_usd

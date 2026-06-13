@@ -7,11 +7,13 @@ repository.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+chrono.workspace = true
 costguard-cost = { path = "../costguard-cost" }
 costguard-dbt = { path = "../costguard-dbt" }
 costguard-diagnostics = { path = "../costguard-diagnostics" }
 costguard-git = { path = "../costguard-git" }
 costguard-platform = { path = "../costguard-platform" }
+costguard-protocol = { path = "../costguard-protocol" }
 costguard-rules = { path = "../costguard-rules" }
 costguard-scanner = { path = "../costguard-scanner" }
 costguard-sql = { path = "../costguard-sql" }

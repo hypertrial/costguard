@@ -2,7 +2,7 @@ use crate::helpers::{
     diagnostic, has_bounded_incremental_predicate, incremental_predicate_suggestion,
     incremental_source_filter_deferred, normalized_path,
 };
-use crate::registry::{Rule, RuleContext, Warehouse};
+use crate::registry::{Platform, Rule, RuleContext};
 use costguard_dbt::DbtConfig;
 use costguard_diagnostics::{Diagnostic, Severity};
 
@@ -241,10 +241,10 @@ impl Rule for MissingPartitionClusterRule {
     fn default_severity(&self) -> Severity {
         Severity::High
     }
-    fn applies_to(&self, warehouse: Warehouse) -> bool {
+    fn applies_to(&self, platform: Platform) -> bool {
         matches!(
-            warehouse,
-            Warehouse::BigQuery | Warehouse::Snowflake | Warehouse::Databricks
+            platform,
+            Platform::BigQuery | Platform::Snowflake | Platform::Databricks
         )
     }
     fn check(&self, ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
