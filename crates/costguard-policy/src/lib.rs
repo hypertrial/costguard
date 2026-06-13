@@ -922,6 +922,56 @@ mod tests {
     }
 
     #[test]
+    fn unknown_policy_key_fails_closed() {
+        let now = Utc::now();
+        let key = generate_key("unknown-root", now).unwrap();
+        let signed = sign_policy(&policy(now), &key).unwrap();
+        let trust = TrustStoreV1 {
+            version: 1,
+            keys: vec![],
+        };
+        let error = verify_policy(&signed, &trust, now).unwrap_err().to_string();
+        assert!(error.contains("unknown policy signing key"), "{error}");
+    }
+
+    #[test]
+    fn more_specific_scopes_override_broader_scopes() {
+        let now = Utc::now();
+        let mut document = policy(now);
+        document.scopes.push(PolicyScope {
+            id: "repository".into(),
+            kind: ScopeKind::Repository,
+            selector: "acme/warehouse".into(),
+            priority: 0,
+            enforcement: EnforcementMode::Observe,
+            rules: BTreeMap::from([(
+                "SQLCOST001".into(),
+                RulePolicy {
+                    severity: Some(Severity::Medium),
+                    ..RulePolicy::default()
+                },
+            )]),
+            custom_rules: vec![],
+            exceptions: vec![],
+        });
+        let resolved = resolve_policy(
+            &document,
+            &ResolutionContext {
+                organization: "acme",
+                repository: "acme/warehouse",
+                ..ResolutionContext::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(resolved.scope_ids, vec!["org", "repository"]);
+        assert_eq!(resolved.enforcement, EnforcementMode::Observe);
+        assert_eq!(
+            resolved.rules["SQLCOST001"].severity,
+            Some(Severity::Medium)
+        );
+    }
+
+    #[test]
     fn declarative_rules_are_bounded_and_evaluated() {
         let rule = DeclarativeRule {
             id: "acme/no-large-joins".into(),

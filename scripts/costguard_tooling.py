@@ -8,8 +8,11 @@ import json
 import os
 import platform
 import subprocess
+import tempfile
+import time
 import tomllib
 from pathlib import Path
+from statistics import median
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,6 +20,11 @@ CRATES = ROOT / "crates"
 REPOS_TOML = ROOT / "tests" / "benchmarks" / "repos.toml"
 RELEASE_BIN_NAME = "costguard"
 WINDOWS_BIN_NAME = "costguard.exe"
+
+
+def max_rss_bytes(raw: int) -> int:
+    """Normalize wait4 ru_maxrss to bytes on macOS and Linux."""
+    return raw if raw > 10_000_000 else raw * 1024
 
 
 def build_profile(*, release: bool | None = None) -> str:
@@ -173,3 +181,76 @@ def run_costguard_scan(
         raise SystemExit("costguard JSON output missing 'metrics'")
 
     return payload, completed.returncode
+
+
+def measure_costguard_scan(
+    workdir: Path,
+    *,
+    warehouse: str,
+    scan_paths: list[str],
+    fail_on: str = "critical",
+    manifest: Path | None = None,
+) -> dict[str, Any]:
+    """Run one scan and return its payload plus wall-clock and peak-RSS data."""
+    cmd = [
+        str(costguard_binary()),
+        "scan",
+        "--warehouse",
+        warehouse,
+        "--fail-on",
+        fail_on,
+        "--format",
+        "json",
+    ]
+    if manifest is not None:
+        if manifest.is_absolute():
+            manifest_arg = (
+                manifest.relative_to(workdir) if manifest.is_relative_to(workdir) else manifest
+            )
+        else:
+            manifest_arg = manifest
+        cmd.extend(["--manifest", str(manifest_arg)])
+    cmd.extend(scan_paths)
+
+    with tempfile.TemporaryDirectory(prefix="costguard-measure-") as tmp:
+        output = Path(tmp) / "stdout.json"
+        errors = Path(tmp) / "stderr.txt"
+        started = time.monotonic()
+        with output.open("wb") as stdout, errors.open("wb") as stderr:
+            process = subprocess.Popen(cmd, cwd=workdir, stdout=stdout, stderr=stderr)
+            _, status, usage = os.wait4(process.pid, 0)
+            process.returncode = os.waitstatus_to_exitcode(status)
+        runtime_ms = int((time.monotonic() - started) * 1000)
+        stdout_text = output.read_text(encoding="utf-8")
+        stderr_text = errors.read_text(encoding="utf-8")
+
+    if process.returncode not in (0, 1):
+        raise SystemExit(
+            f"costguard scan failed (exit {process.returncode}):\n{stderr_text.strip()}"
+        )
+    try:
+        payload = json.loads(stdout_text)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(
+            f"failed to parse costguard JSON output: {exc}\nstdout:\n{stdout_text}"
+        ) from exc
+    if "metrics" not in payload:
+        raise SystemExit("costguard JSON output missing 'metrics'")
+    return {
+        "payload": payload,
+        "exit_code": process.returncode,
+        "runtime_ms": runtime_ms,
+        "max_rss_bytes": max_rss_bytes(usage.ru_maxrss),
+    }
+
+
+def summarize_measurements(measurements: list[dict[str, Any]]) -> dict[str, Any]:
+    if not measurements:
+        raise ValueError("at least one measurement is required")
+    runtime_samples = [int(item["runtime_ms"]) for item in measurements]
+    return {
+        "runtime_samples_ms": runtime_samples,
+        "runtime_median_ms": int(median(runtime_samples)),
+        "runtime_max_ms": max(runtime_samples),
+        "max_rss_bytes": max(int(item["max_rss_bytes"]) for item in measurements),
+    }

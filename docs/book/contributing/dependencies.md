@@ -31,7 +31,7 @@ cargo deny check
 python3 scripts/validate_workspace_deps.py
 ```
 
-The authoritative local CI gate runs both. Hosted workflows are manual mirrors only while GitHub Actions credits are unavailable.
+The local CI gate runs both for developer feedback. GitHub Actions is the authoritative publication and hosted qualification environment.
 
 ## Audit binary feature
 

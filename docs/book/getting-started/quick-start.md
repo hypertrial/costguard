@@ -20,11 +20,11 @@ costguard pr --base origin/main --warehouse snowflake --fail-on high --min-confi
 Use the published composite action after your existing dbt compile step:
 
 ```yaml
-- uses: actions/checkout@v4
+- uses: actions/checkout@v6
   with:
     fetch-depth: 0
 - run: dbt compile --target dev
-- uses: hypertrial/costguard/.github/actions/costguard@v2
+- uses: hypertrial/costguard/.github/actions/costguard@v2.0.0-rc.1
   with:
     base: origin/main
     warehouse: snowflake
@@ -40,7 +40,18 @@ For Costguard contributor workflows that need to run the checked-out source inst
     install-mode: source
 ```
 
-Core inputs: `base`, `warehouse`, `manifest`, `fail-on`, and `baseline`. The Action also supports `min-confidence`, `format`, `analysis-policy`, and optional cost flags. Use `@v2` for compatible updates or `@v2.0.0` for an immutable pin.
+Core inputs: `base`, `warehouse`, `manifest`, `fail-on`, and `baseline`. The Action also supports `min-confidence`, `format`, `analysis-policy`, optional cost flags, and signed-policy inputs. Pin `@v2.0.0-rc.1` during the RC soak; use `@v2` only after GA.
+
+Enterprise strict mode passes only configured governance values:
+
+```yaml
+    analysis-policy: strict
+    policy: .costguard/policy.signed.json
+    trust-store: .costguard/trust.json
+    policy-organization: acme
+    policy-team: data-platform
+    policy-repository: acme/warehouse
+```
 
 The Action does not install or compile dbt. Run `dbt compile` in a prior step so `target/manifest.json` is available when you want manifest-backed analysis.
 

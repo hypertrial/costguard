@@ -8,16 +8,16 @@ Generic SQL, Snowflake, BigQuery, and Trino scanning are production-ready; Datab
 
 ## Quick start
 
-Use the GitHub Action at the moving compatible major tag `@v2`, pin exact behavior with `@v2.0.0`, or download a checksum-protected binary from GitHub Releases.
+During the release-candidate soak, pin the exact Action tag `@v2.0.0-rc.1` or download the matching checksum-protected binary. The moving `@v2` tag is created only after stable GA consumer tests pass.
 
 Run Costguard after your existing dbt compile step so `target/manifest.json` is available when you want manifest-backed analysis.
 
 ```yaml
-- uses: actions/checkout@v4
+- uses: actions/checkout@v6
   with:
     fetch-depth: 0
 - run: dbt compile --target dev
-- uses: hypertrial/costguard/.github/actions/costguard@v2
+- uses: hypertrial/costguard/.github/actions/costguard@v2.0.0-rc.1
   with:
     base: origin/main
     warehouse: snowflake
@@ -28,7 +28,7 @@ Run Costguard after your existing dbt compile step so `target/manifest.json` is 
 Install an exact release binary by selecting one of `aarch64-apple-darwin`, `x86_64-apple-darwin`, or `x86_64-unknown-linux-gnu`:
 
 ```bash
-VERSION=v2.0.0
+VERSION=v2.0.0-rc.1
 TARGET=aarch64-apple-darwin
 curl -LO "https://github.com/hypertrial/costguard/releases/download/${VERSION}/costguard-${TARGET}.tar.gz"
 curl -LO "https://github.com/hypertrial/costguard/releases/download/${VERSION}/costguard-${TARGET}.tar.gz.sha256"
@@ -62,11 +62,11 @@ mdbook serve
 ## GitHub Action
 
 ```yaml
-- uses: actions/checkout@v4
+- uses: actions/checkout@v6
   with:
     fetch-depth: 0
 - run: dbt compile --target dev
-- uses: hypertrial/costguard/.github/actions/costguard@v2
+- uses: hypertrial/costguard/.github/actions/costguard@v2.0.0-rc.1
   with:
     base: origin/main
     warehouse: snowflake
@@ -130,4 +130,4 @@ Full schema: [Configuration](docs/book/reference/configuration.md).
 
 ## Status
 
-The local scanner and PR check workflow are production-ready. See the [support policy](SUPPORT.md), [compatibility policy](docs/book/reference/compatibility.md), and [security policy](SECURITY.md).
+`v2.0.0-rc.1` is a production candidate under soak, not GA. The codebase has startup and Git-native enterprise modes; stable production status begins only after the RC acceptance criteria and published consumer matrix pass. See the [support policy](SUPPORT.md), [compatibility policy](docs/book/reference/compatibility.md), and [security policy](SECURITY.md).

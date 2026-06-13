@@ -8,7 +8,6 @@ import json
 import os
 import subprocess
 import sys
-import time
 from pathlib import Path
 from typing import Any
 
@@ -16,8 +15,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from costguard_tooling import (  # noqa: E402
+    measure_costguard_scan,
     repo_by_name,
-    run_costguard_scan,
+    summarize_measurements,
 )
 from dbt_compile_for_costguard import compile_dbt_repo, write_json  # noqa: E402
 
@@ -38,24 +38,36 @@ def run_costguard(
     scan_paths: list[str],
     fail_on: str,
     manifest: Path | None = None,
+    measured_runs: int = 1,
+    warmup: bool = False,
 ) -> dict[str, Any]:
-    started = time.monotonic()
-    payload, exit_code = run_costguard_scan(
-        workdir,
-        warehouse=warehouse,
-        scan_paths=scan_paths,
-        fail_on=fail_on,
-        manifest=manifest,
-    )
-    elapsed_ms = int((time.monotonic() - started) * 1000)
-
-    metrics = payload["metrics"]
-
+    if measured_runs < 1:
+        raise ValueError("measured_runs must be at least one")
+    scan_args = {
+        "workdir": workdir,
+        "warehouse": warehouse,
+        "scan_paths": scan_paths,
+        "fail_on": fail_on,
+        "manifest": manifest,
+    }
+    if warmup:
+        measure_costguard_scan(**scan_args)
+    measurements = [measure_costguard_scan(**scan_args) for _ in range(measured_runs)]
+    first = measurements[0]
+    first_payload = first["payload"]
+    for measurement in measurements[1:]:
+        payload = measurement["payload"]
+        if measurement["exit_code"] != first["exit_code"]:
+            raise SystemExit("benchmark exit code changed between measured runs")
+        if payload["metrics"] != first_payload["metrics"]:
+            raise SystemExit("benchmark metrics changed between measured runs")
+        if payload.get("diagnostics") != first_payload.get("diagnostics"):
+            raise SystemExit("benchmark diagnostics changed between measured runs")
     return {
-        "exit_code": exit_code,
-        "runtime_ms": elapsed_ms,
-        "metrics": metrics,
-        "diagnostics_count": len(payload.get("diagnostics", [])),
+        "exit_code": first["exit_code"],
+        "metrics": first_payload["metrics"],
+        "diagnostics_count": len(first_payload.get("diagnostics", [])),
+        **summarize_measurements(measurements),
     }
 
 
@@ -102,12 +114,15 @@ def build_report(
     compile_cache: str | None = None,
 ) -> dict[str, Any]:
     report = {
-        "version": 1,
+        "version": 2,
         "target": target,
         "kind": kind,
         "warehouse": warehouse,
         "metrics": scan_result["metrics"],
-        "runtime_ms": scan_result["runtime_ms"],
+        "runtime_samples_ms": scan_result["runtime_samples_ms"],
+        "runtime_median_ms": scan_result["runtime_median_ms"],
+        "runtime_max_ms": scan_result["runtime_max_ms"],
+        "max_rss_bytes": scan_result["max_rss_bytes"],
         "exit_code": scan_result["exit_code"],
         "diagnostics_count": scan_result["diagnostics_count"],
     }
@@ -205,13 +220,25 @@ def compare_report(report: dict[str, Any], baseline: dict[str, Any]) -> list[str
                 f"rule {rule} count {actual_count} > max {ceiling}"
             )
 
-    max_runtime_ms = thresholds.get("max_runtime_ms")
-    if max_runtime_ms is not None:
-        actual_runtime = report.get("runtime_ms", 0)
-        if actual_runtime > max_runtime_ms:
+    max_runtime_median_ms = thresholds.get("max_runtime_median_ms")
+    if max_runtime_median_ms is not None:
+        actual_runtime = report.get("runtime_median_ms", 0)
+        if actual_runtime > max_runtime_median_ms:
             errors.append(
-                f"runtime_ms {actual_runtime} > allowed {max_runtime_ms}"
+                f"runtime_median_ms {actual_runtime} > allowed {max_runtime_median_ms}"
             )
+    max_runtime_max_ms = thresholds.get("max_runtime_max_ms")
+    if max_runtime_max_ms is not None:
+        actual_runtime = report.get("runtime_max_ms", 0)
+        if actual_runtime > max_runtime_max_ms:
+            errors.append(
+                f"runtime_max_ms {actual_runtime} > allowed {max_runtime_max_ms}"
+            )
+    max_rss = thresholds.get("max_rss_bytes")
+    if max_rss is not None and report.get("max_rss_bytes", 0) > max_rss:
+        errors.append(
+            f"max_rss_bytes {report.get('max_rss_bytes', 0)} > allowed {max_rss}"
+        )
 
     return errors
 
@@ -242,7 +269,7 @@ def run_fixture(
     baseline_file = baseline_path(target)
     if update_baseline or not baseline_file.exists():
         baseline = {
-            "version": 1,
+            "version": 2,
             "target": target,
             "kind": "vendored",
             "warehouse": wh,
@@ -265,7 +292,7 @@ def run_fixture(
             print(f"FAIL {target}: {error}", file=sys.stderr)
         return 1
 
-    print(f"PASS {target} ({report['runtime_ms']} ms)")
+    print(f"PASS {target} ({report['runtime_median_ms']} ms)")
     return 0
 
 
@@ -299,6 +326,8 @@ def run_external(
         scan_paths=scan_paths,
         fail_on=repo.get("fail_on", "critical"),
         manifest=manifest if manifest.exists() else None,
+        measured_runs=3,
+        warmup=True,
     )
     report = build_report(
         target,
@@ -318,13 +347,16 @@ def run_external(
                 "thresholds", {}
             )
         baseline = {
-            "version": 1,
+            "version": 2,
             "target": target,
             "kind": "external",
             "warehouse": repo.get("warehouse", "generic"),
             "commit": repo["commit"],
             "metrics": report["metrics"],
-            "runtime_ms": report["runtime_ms"],
+            "runtime_samples_ms": report["runtime_samples_ms"],
+            "runtime_median_ms": report["runtime_median_ms"],
+            "runtime_max_ms": report["runtime_max_ms"],
+            "max_rss_bytes": report["max_rss_bytes"],
             "thresholds": {
                 "max_parse_failure_delta": existing_thresholds.get("max_parse_failure_delta", 50),
                 "max_sql_parse_compiled_failures": existing_thresholds.get(
@@ -333,10 +365,21 @@ def run_external(
                 "max_diagnostics_by_rule": existing_thresholds.get(
                     "max_diagnostics_by_rule", {}
                 ),
-                "max_runtime_ms": existing_thresholds.get(
-                    "max_runtime_ms",
-                    max(int(report["runtime_ms"] * 1.25), report["runtime_ms"] + 1000),
+                "max_runtime_median_ms": existing_thresholds.get(
+                    "max_runtime_median_ms",
+                    max(
+                        int(report["runtime_median_ms"] * 1.25),
+                        report["runtime_median_ms"] + 1000,
+                    ),
                 ),
+                "max_runtime_max_ms": existing_thresholds.get(
+                    "max_runtime_max_ms",
+                    max(
+                        int(report["runtime_max_ms"] * 1.5),
+                        report["runtime_max_ms"] + 2000,
+                    ),
+                ),
+                "max_rss_bytes": existing_thresholds.get("max_rss_bytes", 1024**3),
             },
         }
         parse_total = report["metrics"].get("sql_parse_total", 0)
@@ -368,7 +411,8 @@ def run_external(
         return 1
 
     print(
-        f"PASS {target} ({report['runtime_ms']} ms, "
+        f"PASS {target} (median {report['runtime_median_ms']} ms, "
+        f"max {report['runtime_max_ms']} ms, "
         f"{report['metrics']['sql_parse_failures']} parse failures"
         f"{f', compile_cache={compile_cache}' if compile_cache != 'skip' else ''})"
     )

@@ -110,7 +110,7 @@ mod tests {
     }
 
     #[test]
-    fn v1_support_tiers_are_explicit() {
+    fn production_support_tiers_are_explicit() {
         for platform in [
             Platform::Generic,
             Platform::Snowflake,

@@ -32,14 +32,15 @@
     "sql_parse_total": 13,
     "yaml_parse_failures": 0
   },
-  "runtime_ms": 26,
   "target": "external/jaffle-shop",
   "thresholds": {
     "max_diagnostics_by_rule": {},
     "max_parse_failure_delta": 5,
-    "max_runtime_ms": 1026,
+    "max_rss_bytes": 1073741824,
+    "max_runtime_max_ms": 5000,
+    "max_runtime_median_ms": 2000,
     "max_sql_parse_compiled_failures": 0
   },
-  "version": 1,
+  "version": 2,
   "warehouse": "generic"
 }

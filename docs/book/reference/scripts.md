@@ -51,7 +51,7 @@ Shared helper for locating/building the CLI. Benchmark and doc scripts default t
 Authoritative pre-release qualification gate. It requires the verified signed version tag at `HEAD`, validates the requested workspace version, runs local CI and consumer Action tests, executes pinned external benchmarks, enforces the 10,000-model performance budget, checks external documentation links, and writes `dist/release/release-check.json` bound to the commit.
 
 ```bash
-python3 scripts/release_check.py --version 2.0.0
+python3 scripts/release_check.py --version 2.0.0-rc.1
 ```
 
 `--development`, `--skip-external`, and `--skip-external-links` are development aids. Development mode does not write a release qualification receipt. Strict qualification also requires `mdbook` and `cargo-deny` so documentation and dependency policy checks cannot be silently skipped.
@@ -66,22 +66,18 @@ python3 scripts/verify_release_assets.py
 
 ## `publish_release_local.py`
 
-Strict local release publisher for when GitHub Actions credits are unavailable. It requires a clean checkout at a verified signed annotated tag, builds all four release targets, creates deterministic archives, validates native smoke receipts, signs provenance, and creates a new immutable GitHub release.
+Local package-recovery tool. It requires a clean checkout at a verified signed annotated tag, builds all four release targets, creates deterministic archives, and validates available native smoke receipts. It cannot publish; GitHub Actions is the sole publication authority.
 
 ```bash
-./scripts/publish_release_local.sh --package-only --version 2.0.0
-./scripts/publish_release_local.sh --publish --version 2.0.0 \
-  --receipt /path/to/smoke-x86_64-pc-windows-msvc.json
+./scripts/publish_release_local.sh --package-only --version 2.0.0-rc.1
 ```
 
 | Flag | Description |
 | --- | --- |
 | `--package-only` | Build deterministic assets and available local smoke receipts for inspection and Windows transfer |
-| `--publish` | Upload assets with `gh` after all four targets pass |
 | `--version` | Required version; must equal the workspace version and signed tag |
 | `--workdir` | Output directory (default `dist/release`) |
-| `--notes-file` | Optional release notes for `gh release create` |
-| `--receipt` | Native smoke receipt; supply the Windows receipt when publishing elsewhere |
+| `--receipt` | Optional native smoke receipt to validate and retain with recovery artifacts |
 | `--qualification-receipt` | Qualification evidence (default `WORKDIR/release-check.json`) |
 
 ### Cross-compile toolchain matrix (strict all-target builds)
@@ -101,20 +97,16 @@ Runs `--version` and `rules --format json` from an extracted native release bina
 python3 scripts/smoke_release_asset.py \
   --asset costguard-x86_64-pc-windows-msvc.tar.gz \
   --target x86_64-pc-windows-msvc \
-  --version 2.0.0 \
+  --version 2.0.0-rc.1 \
   --receipt smoke-x86_64-pc-windows-msvc.json
 ```
 
-### No Actions credits (operator checklist)
+### Packaging recovery checklist
 
 1. Install the cross toolchains from the matrix above.
-2. Create the signed exact tag and qualify locally: `python3 scripts/release_check.py --version 2.0.0`.
-3. Package with `--package-only`, inspect `SHA256SUMS`, and send the Windows archive for native smoke testing.
-4. Follow the [release checklist](../contributing/releasing.md), including the returned Windows receipt.
-5. Publish with `--publish`; it validates qualification, creates signed provenance, and rejects existing releases.
-6. Smoke-test `uses: hypertrial/costguard/.github/actions/costguard@v2.0.0`, then move `v2`.
-
-Hosted workflows are manual mirrors only and never publish a release.
+2. Qualify the exact signed tag locally with `python3 scripts/release_check.py --version 2.0.0-rc.1`.
+3. Package with `--package-only`, inspect `SHA256SUMS`, and run native smoke tests as needed.
+4. Restore GitHub Actions publication and rerun the immutable tag workflow. Do not upload recovery artifacts manually or replace an exact release.
 
 ## `ci_local.sh`
 
@@ -140,7 +132,7 @@ Validates repository-local Markdown links during every local CI run. Release qua
 
 ## `scale_check.py`
 
-Generates and scans 10,000 clean models in release mode. The default budget is 10 seconds and 1 GiB maximum RSS with zero parse failures and zero diagnostics.
+Generates and scans 10,000 clean models in release mode. It runs one warmup plus three measured scans and requires median ≤10 seconds, maximum ≤15 seconds, peak RSS ≤1 GiB, zero parse failures, and zero diagnostics. The benchmark report uses internal schema version 2 and records all runtime samples.
 
 ## `benchmark_external_repo.py`
 

@@ -5,15 +5,21 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import urllib.request
 from pathlib import Path
+from urllib.error import URLError
 
 DEFAULT_MANIFEST = "target/manifest.json"
+PRODUCER_REPOSITORY = "hypertrial/costguard"
+DOWNLOAD_ATTEMPTS = 3
+DOWNLOAD_TIMEOUT_SECONDS = 30
 
 
 def env(name: str, default: str = "") -> str:
@@ -58,8 +64,20 @@ def runner_target() -> tuple[str, str]:
 
 
 def download(url: str, destination: Path) -> None:
-    with urllib.request.urlopen(url) as response, destination.open("wb") as output:
-        shutil.copyfileobj(response, output)
+    last_error: Exception | None = None
+    for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):
+        try:
+            with urllib.request.urlopen(
+                url, timeout=DOWNLOAD_TIMEOUT_SECONDS
+            ) as response, destination.open("wb") as output:
+                shutil.copyfileobj(response, output)
+            return
+        except (OSError, URLError) as exc:
+            last_error = exc
+            destination.unlink(missing_ok=True)
+            if attempt < DOWNLOAD_ATTEMPTS:
+                time.sleep(attempt)
+    raise SystemExit(f"failed to download {url} after {DOWNLOAD_ATTEMPTS} attempts: {last_error}")
 
 
 def sha256(path: Path) -> str:
@@ -87,15 +105,23 @@ def install_release(version: str) -> None:
         download(f"{base_url}/{asset_name}.sha256", checksum)
         if env("VERIFY_ATTESTATION_INPUT", "true").lower() == "true":
             verify_attestation(asset)
-        expected = checksum.read_text(encoding="utf-8").split()[0]
+        checksum_fields = checksum.read_text(encoding="utf-8").split()
+        if (
+            len(checksum_fields) != 2
+            or checksum_fields[1] != asset_name
+            or re.fullmatch(r"[0-9a-fA-F]{64}", checksum_fields[0]) is None
+        ):
+            raise SystemExit(f"invalid checksum file for {asset_name}")
+        expected = checksum_fields[0]
         actual = sha256(asset)
         if actual != expected:
             raise SystemExit(
                 f"checksum mismatch for {asset_name}: expected {expected}, got {actual}"
             )
         with tarfile.open(asset, "r:gz") as archive:
-            names = archive.getnames()
-            if names != [bin_name]:
+            members = archive.getmembers()
+            names = [member.name for member in members]
+            if names != [bin_name] or not members[0].isfile():
                 raise SystemExit(f"unexpected archive layout: {names}")
             archive.extractall(install_dir, filter="data")
     if bin_name != "costguard.exe":
@@ -107,9 +133,8 @@ def verify_attestation(asset: Path) -> None:
     gh = shutil.which("gh")
     if gh is None:
         raise SystemExit("gh is required to verify release artifact attestations")
-    repository = env("GITHUB_REPOSITORY", "hypertrial/costguard")
     completed = subprocess.run(
-        [gh, "attestation", "verify", str(asset), "--repo", repository],
+        [gh, "attestation", "verify", str(asset), "--repo", PRODUCER_REPOSITORY],
         capture_output=True,
         text=True,
         check=False,
@@ -192,6 +217,17 @@ def command_run() -> int:
         if not manifest_path.is_file():
             raise SystemExit(f"manifest does not exist: {manifest}")
         command.extend(["--manifest", manifest])
+    optional_pairs = [
+        ("POLICY_BUNDLE_INPUT", "--policy"),
+        ("TRUST_STORE_INPUT", "--trust-store"),
+        ("POLICY_ORGANIZATION_INPUT", "--policy-organization"),
+        ("POLICY_TEAM_INPUT", "--policy-team"),
+        ("POLICY_REPOSITORY_INPUT", "--policy-repository"),
+    ]
+    for env_name, flag in optional_pairs:
+        value = env(env_name)
+        if value:
+            command.extend([flag, value])
     completed = subprocess.run(command, cwd=root, capture_output=True, text=True, check=False)
     sys.stdout.write(completed.stdout)
     sys.stderr.write(completed.stderr)

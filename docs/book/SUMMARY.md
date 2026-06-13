@@ -14,7 +14,9 @@
 # Governance (git-native)
 
 - [Enterprise adoption](getting-started/enterprise-adoption.md)
+- [Enterprise operations reference](getting-started/enterprise-operations.md)
 - [Signed policy and exceptions](governance/policy.md)
+- [Threat model](security/threat-model.md)
 
 # Reference
 

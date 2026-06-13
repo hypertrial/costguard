@@ -15,7 +15,7 @@ Costguard uses a single `Platform` enum for warehouse SQL dialect selection. CLI
 | `postgres` | `postgresql` | Preview | PostgreSQL SQL |
 | `duckdb` | - | Preview | DuckDB SQL |
 
-Production platforms have zero-parse-failure release fixtures and are covered by the v1 compatibility policy. Preview platforms have deterministic smoke coverage but may receive parser and rule behavior changes in minor releases.
+Production platforms have zero-parse-failure release fixtures and are covered by the `2.x` compatibility policy. Preview platforms have deterministic smoke coverage but may receive parser and rule behavior changes in minor releases.
 
 ## Choosing a platform
 

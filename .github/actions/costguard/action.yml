@@ -58,6 +58,26 @@ inputs:
     description: Fail when deduplicated savings p50 on new findings exceeds this USD threshold
     required: false
     default: ""
+  policy:
+    description: Optional signed policy bundle path
+    required: false
+    default: ""
+  trust-store:
+    description: Public trust store used to verify the signed policy bundle
+    required: false
+    default: ""
+  policy-organization:
+    description: Organization slug for signed policy resolution
+    required: false
+    default: ""
+  policy-team:
+    description: Optional team slug for signed policy resolution
+    required: false
+    default: ""
+  policy-repository:
+    description: Repository slug for signed policy resolution
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -92,6 +112,11 @@ runs:
         MANIFEST_INPUT: ${{ inputs.manifest }}
         WORKING_DIRECTORY_INPUT: ${{ inputs.working-directory }}
         ANALYSIS_POLICY_INPUT: ${{ inputs.analysis-policy }}
+        POLICY_BUNDLE_INPUT: ${{ inputs.policy }}
+        TRUST_STORE_INPUT: ${{ inputs.trust-store }}
+        POLICY_ORGANIZATION_INPUT: ${{ inputs.policy-organization }}
+        POLICY_TEAM_INPUT: ${{ inputs.policy-team }}
+        POLICY_REPOSITORY_INPUT: ${{ inputs.policy-repository }}
       run: |
         PYTHON="$(command -v python3 || command -v python)"
         "${PYTHON}" "${GITHUB_ACTION_PATH}/scripts/costguard_action.py" run

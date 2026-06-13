@@ -9,7 +9,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/hypertrial/costguard
-    rev: v1
+    rev: v2.0.0-rc.1
     hooks:
       - id: costguard-pr
 ```

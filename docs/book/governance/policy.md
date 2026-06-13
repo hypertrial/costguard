@@ -22,3 +22,5 @@ Every exception requires an immutable ID, finding or rule scope, repository and 
 Use signed policy bundles via `[policy]` in `costguard.toml` or with `--policy` and `--trust-store` on `scan` and `pr`. For highly regulated teams, signed bundles provide a defensible audit trail while remaining distributable as pinned git artifacts.
 
 See [Configuration](../reference/configuration.md#policy) for the committed config schema.
+
+See [Enterprise operations](../getting-started/enterprise-operations.md) for rotation, exception, retention, baseline, and rollback procedures, and the [threat model](../security/threat-model.md) for trust boundaries and residual risks.

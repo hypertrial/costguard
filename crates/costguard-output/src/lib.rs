@@ -623,7 +623,14 @@ fn render_sarif(result: &ScanResult) -> Result<String> {
                     "rules": sarif_rule_definitions(&rules)
                 }
             },
-            "results": sarif_results(result)
+            "results": sarif_results(result),
+            "properties": {
+                "costguard": {
+                    "run": result.run,
+                    "policy": result.policy,
+                    "analysis": result.analysis
+                }
+            }
         }]
     });
     Ok(serde_json::to_string_pretty(&payload)?)
@@ -650,12 +657,18 @@ fn sarif_results(result: &ScanResult) -> Vec<serde_json::Value> {
                             "startColumn": diagnostic.column
                         }
                     }
-                }]
+                }],
+                "properties": {
+                    "findingId": diagnostic.governance.finding_id,
+                    "evidenceKey": diagnostic.governance.evidence_key,
+                    "confidence": diagnostic.confidence,
+                    "enforcementOutcome": diagnostic.governance.enforcement,
+                    "policyProvenance": diagnostic.governance.policy,
+                    "appliedException": diagnostic.governance.exception
+                }
             });
             if let Some(cost) = &diagnostic.cost_estimate {
-                result["properties"] = serde_json::json!({
-                    "costEstimate": cost
-                });
+                result["properties"]["costEstimate"] = serde_json::json!(cost);
             }
             result
         })
@@ -853,11 +866,26 @@ mod tests {
 
     #[test]
     fn sarif_output_has_required_fields() {
-        let rendered = render(&sample_result(true), OutputFormat::Sarif).expect("sarif render");
+        let mut result = sample_result(true);
+        result.diagnostics[0].assign_identity("raw:select-star");
+        let rendered = render(&result, OutputFormat::Sarif).expect("sarif render");
         let value: serde_json::Value = serde_json::from_str(&rendered).expect("parse sarif");
         assert_eq!(value["version"], "2.1.0");
         assert_eq!(value["runs"][0]["tool"]["driver"]["name"], "costguard");
         assert_eq!(value["runs"][0]["results"][0]["ruleId"], "SQLCOST005");
+        assert_eq!(
+            value["runs"][0]["properties"]["costguard"]["policy"]["digest"],
+            "local-unmanaged"
+        );
+        let properties = &value["runs"][0]["results"][0]["properties"];
+        assert!(properties["findingId"]
+            .as_str()
+            .is_some_and(|value| !value.is_empty()));
+        assert_eq!(properties["evidenceKey"], "raw:select-star");
+        assert_eq!(properties["confidence"], "high");
+        assert_eq!(properties["enforcementOutcome"], "observed");
+        assert!(properties.get("policyProvenance").is_some());
+        assert!(properties.get("appliedException").is_some());
     }
 
     #[test]

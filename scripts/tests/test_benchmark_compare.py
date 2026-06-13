@@ -53,14 +53,34 @@ class CompareReportTests(unittest.TestCase):
         baseline = {"metrics": {"sql_parse_failures": 0}, "thresholds": {"max_diagnostics_by_rule": {"SQLCOST012": 815}}}
         self.assertEqual(compare_report(report, baseline), [])
 
-    def test_max_runtime_ms_gate(self) -> None:
-        report = {"runtime_ms": 2000, "metrics": {"sql_parse_failures": 0, "sql_parse_total": 1, "diagnostics_by_rule": {}}}
-        baseline = {"metrics": {"sql_parse_failures": 0}, "thresholds": {"max_runtime_ms": 15000}}
+    def test_repeated_runtime_and_memory_gates(self) -> None:
+        report = {
+            "runtime_median_ms": 2000,
+            "runtime_max_ms": 3000,
+            "max_rss_bytes": 100,
+            "metrics": {
+                "sql_parse_failures": 0,
+                "sql_parse_total": 1,
+                "diagnostics_by_rule": {},
+            },
+        }
+        baseline = {
+            "metrics": {"sql_parse_failures": 0},
+            "thresholds": {
+                "max_runtime_median_ms": 15000,
+                "max_runtime_max_ms": 20000,
+                "max_rss_bytes": 1000,
+            },
+        }
         self.assertEqual(compare_report(report, baseline), [])
-        report["runtime_ms"] = 20000
+        report["runtime_median_ms"] = 16000
+        report["runtime_max_ms"] = 21000
+        report["max_rss_bytes"] = 1001
         errors = compare_report(report, baseline)
-        self.assertEqual(len(errors), 1)
-        self.assertIn("runtime_ms", errors[0])
+        self.assertEqual(len(errors), 3)
+        self.assertTrue(any("runtime_median_ms" in error for error in errors))
+        self.assertTrue(any("runtime_max_ms" in error for error in errors))
+        self.assertTrue(any("max_rss_bytes" in error for error in errors))
 
 
 if __name__ == "__main__":

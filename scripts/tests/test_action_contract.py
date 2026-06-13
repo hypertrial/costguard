@@ -39,6 +39,16 @@ class ActionContractTest(unittest.TestCase):
         self.assertIn("git verify-tag", release)
         self.assertIn("actions/attest-build-provenance@", release)
         self.assertIn("actions/attest-sbom@", release)
+        self.assertIn("--prerelease", release)
+        self.assertIn("needs.qualify.outputs.prerelease == 'false'", release)
+        self.assertIn("ubuntu-24.04, macos-15, macos-15-intel, windows-2025", release)
+        self.assertIn("verify_ci_history.py", release)
+        self.assertIn("release_consumer_smoke.py", release)
+
+    def test_local_release_tool_cannot_publish(self) -> None:
+        publisher = (ROOT / "scripts/publish_release_local.py").read_text(encoding="utf-8")
+        self.assertNotIn('add_argument("--publish"', publisher)
+        self.assertNotIn("gh release create", publisher)
 
     def test_action_run_blocks_do_not_interpolate_inputs_directly(self) -> None:
         action = (ROOT / ".github/actions/costguard/action.yml").read_text(encoding="utf-8")
@@ -64,7 +74,9 @@ class ActionContractTest(unittest.TestCase):
     def test_workflows_use_read_only_permissions(self) -> None:
         for path in (ROOT / ".github/workflows").glob("*.yml"):
             text = path.read_text(encoding="utf-8")
-            self.assertIn("\npermissions:\n  contents: read\n", text, path.name)
+            workflow_permissions = text.split("\njobs:\n", 1)[0]
+            self.assertIn("\npermissions:\n", workflow_permissions, path.name)
+            self.assertIn("  contents: read\n", workflow_permissions, path.name)
             if path.name != "release.yml":
                 self.assertNotIn("contents: write", text, path.name)
 
@@ -80,6 +92,14 @@ class ActionContractTest(unittest.TestCase):
         self.assertIn("verify-attestation:", action)
         self.assertIn("manifest:", action)
         self.assertIn("baseline:", action)
+        for policy_input in [
+            "policy:",
+            "trust-store:",
+            "policy-organization:",
+            "policy-team:",
+            "policy-repository:",
+        ]:
+            self.assertIn(policy_input, action)
 
 
 def run_blocks(text: str) -> list[str]:

@@ -7,6 +7,7 @@ import functools
 import hashlib
 import http.server
 import importlib.util
+import io
 import json
 import os
 import subprocess
@@ -16,6 +17,8 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
+from unittest import mock
+from urllib.error import URLError
 
 ROOT = Path(__file__).resolve().parents[2]
 ACTION_PATH = ROOT / ".github" / "actions" / "costguard"
@@ -68,7 +71,7 @@ def git(root: Path, *args: str) -> None:
 
 class ActionConsumerTest(unittest.TestCase):
     def test_floating_major_action_uses_exact_workspace_release(self) -> None:
-        self.assertEqual(load_driver_module().action_release_version(), "v2.0.0")
+        self.assertEqual(load_driver_module().action_release_version(), "v2.0.0-rc.1")
 
     def test_release_install_from_local_server(self) -> None:
         binary = ROOT / "target" / "release" / "costguard"
@@ -92,7 +95,7 @@ class ActionConsumerTest(unittest.TestCase):
             github_path = root / "github-path"
             with file_server(root) as base_url:
                 completed = run_driver(
-                    ["install", "--mode", "release", "--version", "v2.0.0"],
+                    ["install", "--mode", "release", "--version", "v2.0.0-rc.1"],
                     env={
                         "COSTGUARD_RELEASE_BASE_URL": base_url,
                         "RUNNER_TEMP": str(root / "runner"),
@@ -131,6 +134,126 @@ class ActionConsumerTest(unittest.TestCase):
                 )
             self.assertNotEqual(completed.returncode, 0)
             self.assertIn("checksum mismatch", completed.stderr)
+
+    def test_release_install_rejects_checksum_for_another_asset(self) -> None:
+        target = platform_target()
+        asset_name = f"costguard-{target}.tar.gz"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / asset_name).write_bytes(b"archive")
+            digest = hashlib.sha256(b"archive").hexdigest()
+            (root / f"{asset_name}.sha256").write_text(
+                f"{digest}  another-asset.tar.gz\n", encoding="utf-8"
+            )
+            with file_server(root) as base_url:
+                completed = run_driver(
+                    ["install", "--mode", "release"],
+                    env={
+                        "COSTGUARD_RELEASE_BASE_URL": base_url,
+                        "RUNNER_TEMP": str(root / "runner"),
+                        "GITHUB_PATH": str(root / "github-path"),
+                        "VERIFY_ATTESTATION_INPUT": "false",
+                    },
+                )
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("invalid checksum file", completed.stderr)
+
+    def test_release_install_rejects_malformed_checksum_digest(self) -> None:
+        target = platform_target()
+        asset_name = f"costguard-{target}.tar.gz"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / asset_name).write_bytes(b"archive")
+            (root / f"{asset_name}.sha256").write_text(
+                f"not-a-sha256  {asset_name}\n", encoding="utf-8"
+            )
+            with file_server(root) as base_url:
+                completed = run_driver(
+                    ["install", "--mode", "release"],
+                    env={
+                        "COSTGUARD_RELEASE_BASE_URL": base_url,
+                        "RUNNER_TEMP": str(root / "runner"),
+                        "GITHUB_PATH": str(root / "github-path"),
+                        "VERIFY_ATTESTATION_INPUT": "false",
+                    },
+                )
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("invalid checksum file", completed.stderr)
+
+    def test_release_install_rejects_unexpected_archive_layout(self) -> None:
+        target = platform_target()
+        asset_name = f"costguard-{target}.tar.gz"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            asset = root / asset_name
+            unexpected = root / "unexpected"
+            unexpected.write_text("bad", encoding="utf-8")
+            with tarfile.open(asset, "w:gz") as archive:
+                archive.add(unexpected, arcname="unexpected")
+            digest = hashlib.sha256(asset.read_bytes()).hexdigest()
+            (root / f"{asset_name}.sha256").write_text(
+                f"{digest}  {asset_name}\n", encoding="utf-8"
+            )
+            with file_server(root) as base_url:
+                completed = run_driver(
+                    ["install", "--mode", "release"],
+                    env={
+                        "COSTGUARD_RELEASE_BASE_URL": base_url,
+                        "RUNNER_TEMP": str(root / "runner"),
+                        "GITHUB_PATH": str(root / "github-path"),
+                        "VERIFY_ATTESTATION_INPUT": "false",
+                    },
+                )
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("unexpected archive layout", completed.stderr)
+
+    def test_release_install_rejects_link_named_as_binary(self) -> None:
+        target = platform_target()
+        asset_name = f"costguard-{target}.tar.gz"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            asset = root / asset_name
+            link = tarfile.TarInfo("costguard")
+            link.type = tarfile.SYMTYPE
+            link.linkname = "/tmp/not-costguard"
+            with tarfile.open(asset, "w:gz") as archive:
+                archive.addfile(link)
+            digest = hashlib.sha256(asset.read_bytes()).hexdigest()
+            (root / f"{asset_name}.sha256").write_text(
+                f"{digest}  {asset_name}\n", encoding="utf-8"
+            )
+            with file_server(root) as base_url:
+                completed = run_driver(
+                    ["install", "--mode", "release"],
+                    env={
+                        "COSTGUARD_RELEASE_BASE_URL": base_url,
+                        "RUNNER_TEMP": str(root / "runner"),
+                        "GITHUB_PATH": str(root / "github-path"),
+                        "VERIFY_ATTESTATION_INPUT": "false",
+                    },
+                )
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("unexpected archive layout", completed.stderr)
+
+    def test_download_retries_with_bounded_timeout(self) -> None:
+        driver = load_driver_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            destination = Path(tmp) / "asset"
+            with (
+                mock.patch.object(
+                    driver.urllib.request,
+                    "urlopen",
+                    side_effect=[URLError("one"), URLError("two"), io.BytesIO(b"ok")],
+                ) as urlopen,
+                mock.patch.object(driver.time, "sleep") as sleep,
+            ):
+                driver.download("https://example.invalid/asset", destination)
+            self.assertEqual(destination.read_bytes(), b"ok")
+            self.assertEqual(urlopen.call_count, 3)
+            self.assertEqual(
+                urlopen.call_args.kwargs["timeout"], driver.DOWNLOAD_TIMEOUT_SECONDS
+            )
+            self.assertEqual(sleep.call_count, 2)
 
     def test_source_install_uses_action_repository(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -201,6 +324,40 @@ class ActionConsumerTest(unittest.TestCase):
             self.assertEqual(payload["analysis"]["policy"], "standard")
             self.assertTrue(payload["analysis"]["passed"])
 
+    def test_run_passes_only_configured_policy_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            bin_dir = workspace / "bin"
+            bin_dir.mkdir()
+            args_path = workspace / "args.txt"
+            fake = bin_dir / "costguard"
+            fake.write_text(
+                "#!/bin/sh\n"
+                f"printf '%s\\n' \"$@\" > '{args_path}'\n"
+                "printf '%s\\n' '{\"schema_version\":3,\"analysis\":{\"passed\":true}}'\n",
+                encoding="utf-8",
+            )
+            fake.chmod(0o755)
+            completed = run_driver(
+                ["run"],
+                env={
+                    "GITHUB_WORKSPACE": str(workspace),
+                    "POLICY_BUNDLE_INPUT": "policy.signed.json",
+                    "TRUST_STORE_INPUT": ".costguard/trust.json",
+                    "POLICY_ORGANIZATION_INPUT": "acme",
+                    "POLICY_REPOSITORY_INPUT": "acme/warehouse",
+                    "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+                },
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            arguments = args_path.read_text(encoding="utf-8").splitlines()
+            self.assertIn("--policy", arguments)
+            self.assertIn("policy.signed.json", arguments)
+            self.assertIn("--trust-store", arguments)
+            self.assertIn("--policy-organization", arguments)
+            self.assertIn("--policy-repository", arguments)
+            self.assertNotIn("--policy-team", arguments)
+
     def test_requested_missing_manifest_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             completed = run_driver(
@@ -240,6 +397,27 @@ class ActionConsumerTest(unittest.TestCase):
                 )
             self.assertNotEqual(completed.returncode, 0)
             self.assertIn("attestation verification failed", completed.stderr)
+
+    def test_attestation_is_bound_to_producer_repository(self) -> None:
+        driver = load_driver_module()
+        completed = subprocess.CompletedProcess([], 0, "", "")
+        with (
+            mock.patch.object(driver.shutil, "which", return_value="/usr/bin/gh"),
+            mock.patch.object(driver.subprocess, "run", return_value=completed) as run,
+            mock.patch.dict(os.environ, {"GITHUB_REPOSITORY": "consumer/example"}),
+        ):
+            driver.verify_attestation(Path("asset.tar.gz"))
+        self.assertEqual(
+            run.call_args.args[0],
+            [
+                "/usr/bin/gh",
+                "attestation",
+                "verify",
+                "asset.tar.gz",
+                "--repo",
+                "hypertrial/costguard",
+            ],
+        )
 
 
 def platform_target() -> str:

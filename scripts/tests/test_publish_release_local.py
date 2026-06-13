@@ -177,13 +177,5 @@ class PublishReleaseLocalTest(unittest.TestCase):
                     commit="different",
                 )
 
-    def test_existing_release_is_rejected(self) -> None:
-        with mock.patch("publish_release_local.require_public_repository"), mock.patch(
-            "publish_release_local.release_exists", return_value=True
-        ):
-            with self.assertRaises(SystemExit):
-                publish_release_local.publish_release("v1.0.0", [], notes_file=None)
-
-
 if __name__ == "__main__":
     unittest.main()

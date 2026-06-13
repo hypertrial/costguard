@@ -40,6 +40,6 @@
     },
     "max_sql_parse_failures": 0
   },
-  "version": 1,
+  "version": 2,
   "warehouse": "snowflake"
 }

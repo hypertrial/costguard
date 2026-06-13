@@ -32,6 +32,8 @@ Run `dbt compile` in your existing CI job before Costguard. The Action auto-dete
 
 Publish a reusable workflow or shared pipeline template that pins the Costguard release version, sets `fail-on: high` and `min-confidence: high`, and passes a committed baseline path. Retain JSON and SARIF artifacts in your existing CI platform for audit and triage.
 
+Use the [enterprise operations reference](enterprise-operations.md) for strict signed-policy Action configuration, baseline rollout, key rotation, exception lifecycle, SARIF retention, and rollback.
+
 ## Scheduled full-repository scans
 
 Keep PR checks changed-file scoped. Add a scheduled job (nightly or weekly) that runs `costguard scan` on the default branch with `--format sarif` or `--format json` for repo hygiene and drift detection.

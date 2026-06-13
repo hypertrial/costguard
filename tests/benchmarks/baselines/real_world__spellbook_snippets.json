@@ -32,6 +32,6 @@
     },
     "max_sql_parse_failures": 1
   },
-  "version": 1,
+  "version": 2,
   "warehouse": "generic"
 }

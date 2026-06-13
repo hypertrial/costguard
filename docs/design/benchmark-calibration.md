@@ -58,7 +58,7 @@ Baselines live in [`tests/benchmarks/baselines/`](../../tests/benchmarks/baselin
 | Target kind | Pass criteria |
 | --- | --- |
 | Vendored | Exact rule counts, parse failure ceiling, forbidden rules |
-| External | Crash-free, model parse failures ≤ baseline + delta, optional parse failure rate cap, `max_diagnostics_by_rule` ceilings on triaged rules, optional `max_runtime_ms` |
+| External | Crash-free, model parse failures ≤ baseline + delta, optional parse failure rate cap, `max_diagnostics_by_rule` ceilings on triaged rules, median/maximum runtime, and peak RSS |
 
 ### Enterprise readiness gates (Spellbook)
 
@@ -68,7 +68,7 @@ Baselines live in [`tests/benchmarks/baselines/`](../../tests/benchmarks/baselin
 | High-severity sampled precision | ≥ 90% (`scripts/precision_triage.py`) |
 | Overall sampled precision | ≥ 80% |
 | Per-rule sampled precision | ≥ 70% for each classified rule |
-| Full scan runtime | ≤ 15 s and ≤ 1 GiB RSS (recorded in baseline `max_runtime_ms`) |
+| Full scan runtime | One warmup plus three measured runs; median ≤15 s, maximum ≤20 s, and peak RSS ≤1 GiB |
 | Baseline workflow | Rescan with `--baseline` reports 0 new findings on unchanged tree |
 
 ### False-positive registry

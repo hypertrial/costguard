@@ -88,12 +88,12 @@ Text and markdown scans append:
 - Top findings by estimated monthly savings
 - Cost summary with project total, grade mix, and top models
 
-JSON schema version is **2** with optional top-level `cost` object.
+JSON schema version is **3** with an optional top-level `cost` object.
 
 ## GitHub Action
 
 ```yaml
-- uses: hypertrial/costguard/.github/actions/costguard@v2
+- uses: hypertrial/costguard/.github/actions/costguard@v2.0.0-rc.1
   with:
     cost: "true"
     fail-on-cost-delta: "500"

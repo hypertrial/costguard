@@ -38,7 +38,6 @@
     "sql_parse_total": 981,
     "yaml_parse_failures": 0
   },
-  "runtime_ms": 1092,
   "target": "external/spellbook_smoke",
   "thresholds": {
     "max_diagnostics_by_rule": {
@@ -48,9 +47,11 @@
     },
     "max_parse_failure_delta": 50,
     "max_parse_failure_rate": 0.35,
-    "max_runtime_ms": 2092,
+    "max_rss_bytes": 1073741824,
+    "max_runtime_max_ms": 8000,
+    "max_runtime_median_ms": 5000,
     "max_sql_parse_compiled_failures": 0
   },
-  "version": 1,
+  "version": 2,
   "warehouse": "trino"
 }

@@ -11,9 +11,9 @@ SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from check_docs import check_internal, markdown_files, slug  # noqa: E402
+from costguard_tooling import max_rss_bytes, summarize_measurements  # noqa: E402
 from generate_recall_corpus import FIXTURES, write_fixtures  # noqa: E402
 from generate_rule_docs import validate_rule_guides  # noqa: E402
-from scale_check import max_rss_bytes  # noqa: E402
 
 
 class GateScriptTests(unittest.TestCase):
@@ -31,6 +31,19 @@ class GateScriptTests(unittest.TestCase):
     def test_scale_check_max_rss_bytes(self) -> None:
         self.assertEqual(max_rss_bytes(20_000_000), 20_000_000)
         self.assertEqual(max_rss_bytes(2048), 2048 * 1024)
+
+    def test_measurement_summary_uses_median_max_and_peak_rss(self) -> None:
+        summary = summarize_measurements(
+            [
+                {"runtime_ms": 300, "max_rss_bytes": 30},
+                {"runtime_ms": 100, "max_rss_bytes": 10},
+                {"runtime_ms": 200, "max_rss_bytes": 20},
+            ]
+        )
+        self.assertEqual(summary["runtime_samples_ms"], [300, 100, 200])
+        self.assertEqual(summary["runtime_median_ms"], 200)
+        self.assertEqual(summary["runtime_max_ms"], 300)
+        self.assertEqual(summary["max_rss_bytes"], 30)
 
     def test_markdown_files_includes_readme(self) -> None:
         paths = markdown_files()
