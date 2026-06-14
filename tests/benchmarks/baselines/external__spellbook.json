@@ -1,12 +1,13 @@
 {
-  "commit": "031a5053dd9608ce7e6b9f2d9b16dd9a2fbeba10",
+  "commit": "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738",
   "kind": "external",
+  "max_rss_bytes": 2721267712,
   "metrics": {
     "counts": {
       "manifest": 0,
       "other": 0,
       "python": 1,
-      "sql": 8511,
+      "sql": 8516,
       "yaml": 1807
     },
     "dbt_project_parse_failures": 0,
@@ -15,15 +16,15 @@
       "SQLCOST003": 17,
       "SQLCOST004": 1,
       "SQLCOST005": 1,
-      "SQLCOST006": 86,
-      "SQLCOST008": 426,
+      "SQLCOST006": 87,
+      "SQLCOST008": 428,
       "SQLCOST012": 25,
       "SQLCOST013": 168,
-      "SQLCOST014": 831,
-      "SQLCOST015": 774,
+      "SQLCOST014": 832,
+      "SQLCOST015": 785,
       "SQLCOST017": 69,
-      "SQLCOST018": 528,
-      "SQLCOST019": 65,
+      "SQLCOST018": 529,
+      "SQLCOST019": 67,
       "SQLCOST026": 1,
       "SQLCOST029": 113,
       "SQLCOST030": 7,
@@ -31,21 +32,28 @@
       "SQLCOST035": 111
     },
     "diagnostics_by_severity": {
-      "high": 74,
-      "low": 832,
-      "med": 2726
+      "high": 76,
+      "low": 833,
+      "med": 2741
     },
     "metadata_only_scan": false,
     "metadata_warnings": 1,
-    "new_findings": 3632,
+    "new_findings": 3650,
     "sql_parse_compiled_failures": 0,
-    "sql_parse_compiled_total": 8030,
+    "sql_parse_compiled_total": 8033,
     "sql_parse_failures": 0,
-    "sql_parse_other_failures": 402,
-    "sql_parse_other_total": 481,
-    "sql_parse_total": 8030,
+    "sql_parse_other_failures": 403,
+    "sql_parse_other_total": 483,
+    "sql_parse_total": 8033,
     "yaml_parse_failures": 0
   },
+  "runtime_max_ms": 7128,
+  "runtime_median_ms": 7014,
+  "runtime_samples_ms": [
+    6914,
+    7014,
+    7128
+  ],
   "target": "external/spellbook",
   "thresholds": {
     "max_diagnostics_by_rule": {
@@ -53,7 +61,7 @@
       "SQLCOST012": 25,
       "SQLCOST016": 15,
       "SQLCOST017": 69,
-      "SQLCOST019": 65
+      "SQLCOST019": 67
     },
     "max_parse_failure_delta": 50,
     "max_parse_failure_rate": 0.35,

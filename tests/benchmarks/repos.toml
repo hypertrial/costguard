@@ -1,7 +1,7 @@
 [[repo]]
 name = "jaffle-shop"
 url = "https://github.com/dbt-labs/jaffle-shop.git"
-commit = "7be2c5838dbdeca8e915d4e46db70e910753d7f6"
+commit = "08ef1d578de5b55f226aae34f30d7077df8e9f35"
 warehouse = "generic"
 compile_dbt = true
 dbt_adapter = "dbt-duckdb"
@@ -12,7 +12,7 @@ fail_on = "critical"
 [[repo]]
 name = "spellbook"
 url = "https://github.com/duneanalytics/spellbook.git"
-commit = "031a5053dd9608ce7e6b9f2d9b16dd9a2fbeba10"
+commit = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
 warehouse = "trino"
 compile_dbt = true
 dbt_adapter = "dbt-trino"

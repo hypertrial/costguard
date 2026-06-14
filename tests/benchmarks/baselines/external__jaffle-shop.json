@@ -1,6 +1,7 @@
 {
-  "commit": "7be2c5838dbdeca8e915d4e46db70e910753d7f6",
+  "commit": "08ef1d578de5b55f226aae34f30d7077df8e9f35",
   "kind": "external",
+  "max_rss_bytes": 34029568,
   "metrics": {
     "counts": {
       "manifest": 0,
@@ -32,6 +33,13 @@
     "sql_parse_total": 13,
     "yaml_parse_failures": 0
   },
+  "runtime_max_ms": 29,
+  "runtime_median_ms": 28,
+  "runtime_samples_ms": [
+    28,
+    29,
+    28
+  ],
   "target": "external/jaffle-shop",
   "thresholds": {
     "max_diagnostics_by_rule": {},
