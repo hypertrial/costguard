@@ -99,7 +99,7 @@ cargo test -p costguard-core --test corpus
 
 Layer definitions: [Benchmark tiers](docs/book/contributing/benchmark-tiers.md).
 
-Run the PR-equivalent local gate with `./scripts/ci_local.sh`. Authoritative release qualification uses `python3 scripts/release_check.py --version <version>` and additionally requires signed-tag and external evidence.
+Run the PR-equivalent local gate with `./scripts/ci_local.sh`. Authoritative release qualification uses `python3 scripts/release_check.py --version <version>` and additionally requires exact-SHA push/dispatch CI history, signed-tag, and external evidence.
 
 ## Configuration sketch
 

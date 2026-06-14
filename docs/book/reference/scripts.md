@@ -56,6 +56,28 @@ python3 scripts/release_check.py --version 2.0.0-rc.2
 
 `--development`, `--skip-external`, and `--skip-external-links` are development aids. Development mode does not write a release qualification receipt. Strict qualification also requires `mdbook` and `cargo-deny` so documentation and dependency policy checks cannot be silently skipped.
 
+## `configure_github_release.py`
+
+Plans, applies, and verifies public GitHub production controls. It manages the Matt-only `release-owners` bypass team, public security features, protected release environment, existing SSH allowed signer, and named branch rulesets. It never changes repository visibility and refuses to apply while a repository is private.
+
+```bash
+export GH_TOKEN="$(gh auth token)"
+python3 scripts/configure_github_release.py --plan
+python3 scripts/configure_github_release.py --apply
+python3 scripts/configure_github_release.py --verify
+
+python3 scripts/configure_github_release.py \
+  --repository hypertrial/costguard-consumer-smoke \
+  --profile consumer \
+  --verify
+```
+
+The primary profile requires `pr-gate`, `scale`, and `costguard`. The consumer profile requires `standard` and `strict`. Both profiles block force pushes and default-branch deletion without bypass.
+
+## `verify_ci_history.py`
+
+Release qualification helper used by `release.yml`. For the exact release SHA it requires the latest three completed `ci.yml` runs to be one push and two workflow dispatches, all successful, with successful `pr-gate`, `scale`, and `spellbook-smoke` jobs.
+
 ## `verify_release_assets.py`
 
 Builds a host-platform release tarball using the same layout as [`.github/workflows/release.yml`](../../../.github/workflows/release.yml), verifies its checksum, and smoke-tests the extracted binary. The local release gate runs this before publication.
