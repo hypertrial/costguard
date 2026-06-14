@@ -9,26 +9,101 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from verify_ci_history import successful_runs  # noqa: E402
+from verify_ci_history import qualifying_runs  # noqa: E402
 
 
 class VerifyCiHistoryTest(unittest.TestCase):
-    def test_requires_three_latest_matching_runs_to_succeed(self) -> None:
+    def setUp(self) -> None:
+        self.jobs = {
+            run_id: {
+                "jobs": [
+                    {"name": name, "status": "completed", "conclusion": "success"}
+                    for name in ["pr-gate", "scale", "spellbook-smoke"]
+                ]
+            }
+            for run_id in [1, 2, 3, 4]
+        }
+
+    def test_requires_one_push_and_two_dispatch_runs(self) -> None:
         payload = {
             "workflow_runs": [
-                {"head_sha": "release", "conclusion": "success", "id": 3},
-                {"head_sha": "other", "conclusion": "failure", "id": 9},
-                {"head_sha": "release", "conclusion": "success", "id": 2},
-                {"head_sha": "release", "conclusion": "success", "id": 1},
+                run(3, "release", "workflow_dispatch"),
+                run(9, "other", "push", conclusion="failure"),
+                run(2, "release", "workflow_dispatch"),
+                run(1, "release", "push"),
             ]
         }
-        self.assertEqual(len(successful_runs(payload, "release", 3)), 3)
+        self.assertEqual(len(qualifying_runs(payload, "release", self.jobs)), 3)
 
-    def test_rejects_failure_or_insufficient_history(self) -> None:
+    def test_rejects_wrong_event_mix(self) -> None:
         with self.assertRaises(SystemExit):
-            successful_runs({"workflow_runs": [{"head_sha": "x", "conclusion": "failure"}]}, "x", 1)
+            qualifying_runs(
+                {
+                    "workflow_runs": [
+                        run(3, "release", "push"),
+                        run(2, "release", "push"),
+                        run(1, "release", "workflow_dispatch"),
+                    ]
+                },
+                "release",
+                self.jobs,
+            )
+
+    def test_rejects_wrong_sha_and_insufficient_history(self) -> None:
         with self.assertRaises(SystemExit):
-            successful_runs({"workflow_runs": []}, "x", 3)
+            qualifying_runs(
+                {"workflow_runs": [run(1, "other", "push")]},
+                "release",
+                self.jobs,
+            )
+
+    def test_rejects_failed_run(self) -> None:
+        payload = {
+            "workflow_runs": [
+                run(3, "release", "workflow_dispatch", conclusion="failure"),
+                run(2, "release", "workflow_dispatch"),
+                run(1, "release", "push"),
+            ]
+        }
+        with self.assertRaises(SystemExit):
+            qualifying_runs(payload, "release", self.jobs)
+
+    def test_rejects_missing_failed_or_skipped_job(self) -> None:
+        payload = {
+            "workflow_runs": [
+                run(3, "release", "workflow_dispatch"),
+                run(2, "release", "workflow_dispatch"),
+                run(1, "release", "push"),
+            ]
+        }
+        for jobs in [
+            {"jobs": self.jobs[1]["jobs"][:-1]},
+            {
+                "jobs": [
+                    *self.jobs[1]["jobs"][:-1],
+                    {"name": "spellbook-smoke", "status": "completed", "conclusion": "skipped"},
+                ]
+            },
+        ]:
+            with self.subTest(jobs=jobs):
+                with self.assertRaises(SystemExit):
+                    qualifying_runs(payload, "release", {**self.jobs, 1: jobs})
+
+
+def run(
+    run_id: int,
+    sha: str,
+    event: str,
+    *,
+    conclusion: str = "success",
+) -> dict[str, object]:
+    return {
+        "id": run_id,
+        "head_sha": sha,
+        "event": event,
+        "status": "completed",
+        "conclusion": conclusion,
+    }
 
 
 if __name__ == "__main__":

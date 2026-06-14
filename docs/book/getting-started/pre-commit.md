@@ -9,7 +9,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/hypertrial/costguard
-    rev: v2.0.0-rc.1
+    rev: v2.0.0-rc.2
     hooks:
       - id: costguard-pr
 ```
@@ -37,7 +37,7 @@ Install a checksum-verified release binary on your `PATH` as shown in the [quick
 
 This repository includes [`.pre-commit-config.yaml`](../../../.pre-commit-config.yaml) pointing at the local hook script for development.
 
-While GitHub Actions CI is unavailable, run the full local gate with:
+Run the PR-equivalent local gate with:
 
 ```bash
 ./scripts/ci_local.sh

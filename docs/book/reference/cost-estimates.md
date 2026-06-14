@@ -93,7 +93,7 @@ JSON schema version is **3** with an optional top-level `cost` object.
 ## GitHub Action
 
 ```yaml
-- uses: hypertrial/costguard/.github/actions/costguard@v2.0.0-rc.1
+- uses: hypertrial/costguard/.github/actions/costguard@v2.0.0-rc.2
   with:
     cost: "true"
     fail-on-cost-delta: "500"

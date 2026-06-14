@@ -1,0 +1,5 @@
+# Release and policy changes require maintainer review.
+* @mattfaltyn
+/.github/ @mattfaltyn
+/.costguard/ @mattfaltyn
+/costguard-baseline.json @mattfaltyn

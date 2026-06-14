@@ -24,6 +24,10 @@ class ActionContractTest(unittest.TestCase):
         self.assertRegex(ci, r"(?m)^  push:")
         self.assertIn("branches: [main]", ci)
         self.assertIn("cancel-in-progress: true", ci)
+        scale = ci.split("  scale:", 1)[1].split("  spellbook-smoke:", 1)[0]
+        self.assertNotIn("github.event_name == 'push'", scale)
+        spellbook = ci.split("  spellbook-smoke:", 1)[1]
+        self.assertIn("github.event_name != 'pull_request'", spellbook)
 
         benchmark = (ROOT / ".github/workflows/benchmark.yml").read_text(
             encoding="utf-8"
