@@ -1,5 +1,6 @@
 [package]
 name = "costguard-cost"
+description = "Advisory lognormal cost estimation for Costguard"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

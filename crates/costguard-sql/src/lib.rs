@@ -1,3 +1,9 @@
+//! SQL parsing and feature extraction.
+//!
+//! Strips Jinja, parses SQL with sqlparser using the warehouse
+//! [`Platform`] dialect, and extracts shape
+//! features (joins, CTEs, windows, etc.) used by the rule engine.
+
 use costguard_dbt::DbtSqlFeatures;
 use costguard_diagnostics::Span;
 use costguard_platform::Platform;
@@ -11,6 +17,7 @@ mod strip;
 
 pub use parse::{normalize_for_parse, try_parse_compiled_sql, try_parse_compiled_sql_error};
 
+/// Which SQL representation was used for parsing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ParseInput {
@@ -35,6 +42,7 @@ pub struct SqlDocument {
     pub feature_extraction_used_ast: bool,
 }
 
+/// Extracted SQL shape features used by the rule engine.
 #[derive(Debug, Clone, Default)]
 pub struct SqlFeatures {
     pub select_stars: Vec<ExpressionFeature>,
@@ -64,6 +72,7 @@ pub struct ExpressionFeature {
     pub key: String,
 }
 
+/// A detected join with kind, predicate, and risk flags.
 #[derive(Debug, Clone)]
 pub struct JoinFeature {
     pub span: Span,
@@ -92,6 +101,7 @@ pub struct WindowFeature {
     pub has_partition_by: bool,
 }
 
+/// A common table expression (CTE) definition.
 #[derive(Debug, Clone)]
 pub struct CteFeature {
     pub name: String,

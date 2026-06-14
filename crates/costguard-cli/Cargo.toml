@@ -1,5 +1,6 @@
 [package]
 name = "costguard-cli"
+description = "Costguard CLI binary for local, dbt-aware cost regression checks"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

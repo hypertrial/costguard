@@ -1,5 +1,6 @@
 [package]
 name = "costguard-policy"
+description = "Signed policy compilation, verification, and enforcement for Costguard"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

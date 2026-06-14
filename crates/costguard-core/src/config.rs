@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
+/// Strictness policy controlling parse-failure and metadata error tolerance.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AnalysisPolicy {
@@ -27,6 +28,7 @@ impl FromStr for AnalysisPolicy {
     }
 }
 
+/// Thresholds and flags that determine whether a scan is considered complete.
 #[derive(Debug, Clone)]
 pub struct AnalysisConfig {
     pub policy: AnalysisPolicy,
@@ -76,6 +78,7 @@ impl AnalysisConfig {
     }
 }
 
+/// Output format for scan results and rule listings.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum OutputFormat {
@@ -102,6 +105,7 @@ impl FromStr for OutputFormat {
     }
 }
 
+/// Full configuration for a scan or explain run.
 #[derive(Debug, Clone)]
 pub struct ScanConfig {
     pub root: PathBuf,

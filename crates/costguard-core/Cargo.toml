@@ -1,5 +1,6 @@
 [package]
 name = "costguard-core"
+description = "Scan orchestration, configuration, and baseline management for Costguard"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

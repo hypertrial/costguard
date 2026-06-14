@@ -1,5 +1,6 @@
 [package]
 name = "costguard-git"
+description = "Git changed-file detection for Costguard PR scans"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

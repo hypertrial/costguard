@@ -1,5 +1,6 @@
 [package]
 name = "costguard-output"
+description = "Scan result rendering (text, JSON, GitHub, markdown, SARIF) for Costguard"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

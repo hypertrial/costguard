@@ -7,6 +7,7 @@ use std::collections::{BTreeSet, HashMap};
 
 pub use costguard_platform::Platform;
 
+/// Per-rule override from configuration (enable, severity, threshold).
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RuleOverride {
@@ -15,8 +16,10 @@ pub struct RuleOverride {
     pub threshold: Option<usize>,
 }
 
+/// Map of rule ID to [`RuleOverride`] from `costguard.toml`.
 pub type RuleOverrides = HashMap<String, RuleOverride>;
 
+/// Cross-file indexes built once per scan for rules that need project-wide context.
 #[derive(Debug, Clone, Default)]
 pub struct ProjectIndexes {
     pub expensive_expression_file_counts: HashMap<String, usize>,
@@ -46,6 +49,7 @@ impl ProjectIndexes {
     }
 }
 
+/// Input context passed to each rule during evaluation.
 pub struct RuleContext<'a> {
     pub warehouse: Platform,
     pub file: &'a ProjectFile,
@@ -56,6 +60,7 @@ pub struct RuleContext<'a> {
     pub overrides: &'a RuleOverrides,
 }
 
+/// A single SQLCOST rule that inspects a [`RuleContext`] and returns diagnostics.
 pub trait Rule: Send + Sync {
     fn id(&self) -> &'static str;
     fn name(&self) -> &'static str;
@@ -69,6 +74,7 @@ pub trait Rule: Send + Sync {
     fn check(&self, ctx: &RuleContext<'_>) -> Vec<Diagnostic>;
 }
 
+/// Static metadata for a registered rule (id, name, description, default severity).
 #[derive(Debug, Clone, Serialize)]
 pub struct RuleMetadata {
     pub id: &'static str,
@@ -77,6 +83,7 @@ pub struct RuleMetadata {
     pub severity: Severity,
 }
 
+/// Registry of all built-in SQLCOST rules.
 pub struct RuleRegistry {
     rules: Vec<Box<dyn Rule>>,
 }

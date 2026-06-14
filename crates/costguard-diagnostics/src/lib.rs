@@ -1,3 +1,9 @@
+//! Diagnostic types for rule findings.
+//!
+//! Defines [`Diagnostic`], [`Severity`], [`Confidence`], source [`Span`]s, and
+//! inline suppression parsing. Findings flow from rules through cost
+//! annotation to output renderers.
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -6,6 +12,7 @@ use std::fmt;
 use std::path::PathBuf;
 use std::str::FromStr;
 
+/// Finding severity, ordered from Info (lowest) to Critical (highest).
 #[derive(
     Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
 )]
@@ -65,6 +72,7 @@ impl fmt::Display for Severity {
     }
 }
 
+/// Confidence in a finding's accuracy, used for CI gating with `--min-confidence`.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
 )]
@@ -75,6 +83,7 @@ pub enum Confidence {
     High,
 }
 
+/// Byte and line/column range in a source file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Span {
     pub byte_start: usize,
@@ -100,6 +109,7 @@ impl Span {
     }
 }
 
+/// A rule finding with location, severity, and optional cost estimate.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Diagnostic {
     #[serde(flatten)]
@@ -268,6 +278,7 @@ fn hex_sha256(bytes: &[u8]) -> String {
     digest.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
+/// Precomputed newline offsets for mapping byte positions to line/column.
 #[derive(Debug, Clone)]
 pub struct LineIndex {
     starts: Vec<usize>,

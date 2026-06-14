@@ -1,5 +1,6 @@
 [package]
 name = "costguard-protocol"
+description = "Shared JSON schema types for Costguard signed documents and baselines"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

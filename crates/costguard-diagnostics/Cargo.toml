@@ -1,5 +1,6 @@
 [package]
 name = "costguard-diagnostics"
+description = "Diagnostic types, severity, and suppression handling for Costguard"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

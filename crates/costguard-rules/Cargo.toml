@@ -1,5 +1,6 @@
 [package]
 name = "costguard-rules"
+description = "SQLCOST rule implementations and registry for Costguard"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

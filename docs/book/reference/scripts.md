@@ -140,7 +140,7 @@ PR-equivalent local gate mirrored by the required `pr-gate` job in [`.github/wor
 ./scripts/ci_local.sh --precision
 ```
 
-The gate runs workspace dependency validation, `ruff check` on Python scripts, Rust fmt/clippy/build/test, Python unit tests, fp-registry and recall coverage checks, recall corpus drift detection (`generate_recall_corpus.py --check`), vendored benchmarks, rule-doc sync, internal link validation, mdBook build, and `cargo deny` when installed.
+The gate runs workspace dependency validation, `ruff check` on Python scripts, Rust fmt/clippy/rustdoc/build/test, Python unit tests, fp-registry and recall coverage checks, recall corpus drift detection (`generate_recall_corpus.py --check`), vendored benchmarks, rule-doc sync, internal link validation, mdBook build, and `cargo deny` when installed.
 
 Unit tests:
 

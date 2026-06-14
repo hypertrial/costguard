@@ -1,3 +1,8 @@
+//! Warehouse platform and SQL dialect mapping.
+//!
+//! Maps each supported warehouse to a sqlparser dialect and a production or
+//! preview support tier.
+
 mod trino;
 
 use serde::{Deserialize, Serialize};

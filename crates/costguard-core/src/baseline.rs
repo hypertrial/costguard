@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::Path;
 
+/// Versioned baseline of accepted findings, keyed by stable [`finding_id`](BaselinedFinding::finding_id).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct FindingBaseline {
@@ -16,6 +17,7 @@ pub struct FindingBaseline {
     pub findings: Vec<BaselinedFinding>,
 }
 
+/// A single baselined finding identified by rule, path, and evidence key.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct BaselinedFinding {

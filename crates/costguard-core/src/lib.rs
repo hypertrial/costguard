@@ -1,3 +1,10 @@
+//! Scan orchestration for Costguard.
+//!
+//! Loads configuration, discovers project files, parses SQL and dbt metadata,
+//! runs the rule engine, applies baselines and signed policy, and returns
+//! a [`ScanResult`]. This crate is the integration layer between the CLI and
+//! the lower-level parsing, rules, and output crates.
+
 mod baseline;
 mod config;
 mod dbt_graph;
@@ -38,6 +45,7 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+/// A discovered project with its classified files and optional dbt metadata.
 #[derive(Debug, Clone)]
 pub struct Project {
     pub root: PathBuf,
@@ -45,6 +53,7 @@ pub struct Project {
     pub dbt: Option<DbtProject>,
 }
 
+/// Parse and scan counters collected during a run.
 #[derive(Debug, Clone, Serialize)]
 pub struct ScanMetrics {
     pub counts: ScanCounts,
@@ -80,6 +89,7 @@ pub struct FileParseStatus {
     pub feature_extraction_used_ast: bool,
 }
 
+/// Complete output of a scan run, including diagnostics, metrics, and optional PR summary.
 #[derive(Debug, Clone)]
 pub struct ScanResult {
     pub run: RunMetadata,
@@ -110,6 +120,7 @@ pub struct PolicyMetadata {
 }
 
 impl ScanResult {
+    /// Returns whether the scan should fail CI given severity, confidence, and cost thresholds.
     pub fn should_fail(
         &self,
         fail_on: Option<costguard_diagnostics::Severity>,

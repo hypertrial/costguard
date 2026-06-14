@@ -1,3 +1,8 @@
+//! Scan result rendering.
+//!
+//! Formats [`ScanResult`] as text, JSON (schema v3),
+//! GitHub workflow annotations, markdown, or SARIF.
+
 use anyhow::Result;
 use costguard_core::{OutputFormat, PrSummary, ScanResult};
 use costguard_cost::{format_cost_line, format_usd_interval, ProjectCostSummary};
@@ -21,6 +26,7 @@ struct JsonOutput<'a> {
     pr_summary: Option<&'a PrSummary>,
 }
 
+/// Render a scan result in the requested [`OutputFormat`].
 pub fn render(result: &ScanResult, format: OutputFormat) -> Result<String> {
     match format {
         OutputFormat::Text => Ok(render_text(result)),
@@ -49,6 +55,7 @@ pub fn render_cost_report(result: &ScanResult, format: OutputFormat) -> Result<S
     }
 }
 
+/// Render rule metadata in the requested output format.
 pub fn render_rules(
     rules: &[costguard_core::RuleMetadata],
     format: OutputFormat,

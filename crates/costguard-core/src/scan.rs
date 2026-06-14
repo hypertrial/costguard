@@ -29,6 +29,7 @@ use costguard_sql::{JoinKind, SqlDocument};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+/// Run a full project scan and return diagnostics, metrics, and optional cost summary.
 pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
     let started = std::time::Instant::now();
     let started_at = chrono::Utc::now();
@@ -616,12 +617,14 @@ fn feature_summaries_by_path(documents: &[SqlDocument]) -> HashMap<PathBuf, Mode
         .collect()
 }
 
+/// Scan a single file path (equivalent to `scan` with `paths` narrowed to one file).
 pub fn explain(config: &ScanConfig, path: &Path) -> Result<ScanResult> {
     let mut config = config.clone();
     config.paths = vec![path.to_path_buf()];
     scan(&config)
 }
 
+/// Return metadata for all registered SQLCOST rules.
 pub fn rules() -> Vec<RuleMetadata> {
     RuleRegistry::default_rules().metadata()
 }

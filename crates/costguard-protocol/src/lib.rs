@@ -1,5 +1,11 @@
 #![forbid(unsafe_code)]
 
+//! Shared JSON schema types.
+//!
+//! Protocol types for signed documents, baselines, cost observation bundles,
+//! and enforcement outcomes. All public structs derive [`JsonSchema`] for
+//! schema generation.
+
 use schemars::{schema::RootSchema, JsonSchema};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -7,6 +13,7 @@ use serde_json::Value;
 pub const POLICY_SCHEMA_VERSION: u8 = 1;
 pub const BASELINE_SCHEMA_VERSION: u8 = 2;
 
+/// Policy enforcement mode: observe, warn, or block findings.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum EnforcementMode {
@@ -16,6 +23,7 @@ pub enum EnforcementMode {
     Block,
 }
 
+/// Resolved enforcement outcome after policy and exception evaluation.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum EnforcementOutcome {
@@ -26,6 +34,7 @@ pub enum EnforcementOutcome {
     Excepted,
 }
 
+/// Provenance linking a finding to the signed policy that governed it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PolicyProvenanceV1 {
@@ -34,6 +43,7 @@ pub struct PolicyProvenanceV1 {
     pub scope: String,
 }
 
+/// An approved exception that suppresses enforcement for a matching finding.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct AppliedExceptionV1 {
@@ -95,6 +105,7 @@ pub struct ModelCostObservationV1 {
     pub cost_usd: Option<f64>,
 }
 
+/// Ed25519-signed document envelope (policy, baseline, or cost bundle payload).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SignedDocumentV1 {
@@ -104,6 +115,7 @@ pub struct SignedDocumentV1 {
     pub signature: String,
 }
 
+/// Generate a JSON Schema for a protocol type.
 pub fn schema_for<T: JsonSchema>() -> RootSchema {
     schemars::schema_for!(T)
 }

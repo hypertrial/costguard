@@ -1,5 +1,6 @@
 [package]
 name = "costguard-sql"
+description = "SQL parsing and feature extraction for Costguard"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

@@ -1,3 +1,9 @@
+//! Advisory cost estimation.
+//!
+//! Applies a lognormal cost model to diagnostics using catalog stats,
+//! query-history imports, and rule-specific multipliers. Estimates are
+//! local and do not require warehouse credentials.
+
 mod annotate;
 mod attribution;
 mod catalog;

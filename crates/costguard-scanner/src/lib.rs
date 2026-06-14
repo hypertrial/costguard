@@ -1,3 +1,9 @@
+//! Project file discovery and classification.
+//!
+//! Walks the project tree (or reads explicit paths), classifies files as SQL,
+//! dbt YAML, Python, or manifest JSON, and returns [`ProjectFile`] records
+//! ready for downstream parsing.
+
 use anyhow::{Context, Result};
 use costguard_diagnostics::LineIndex;
 use ignore::{DirEntry, WalkBuilder};

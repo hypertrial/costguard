@@ -1,3 +1,8 @@
+//! Git integration for PR-scoped scans.
+//!
+//! Detects changed files against a base branch (committed, staged, unstaged,
+//! and untracked) for the `costguard pr` workflow.
+
 use anyhow::{Context, Result};
 use std::collections::BTreeSet;
 use std::error::Error;

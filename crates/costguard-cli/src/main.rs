@@ -1,3 +1,9 @@
+//! Costguard CLI binary.
+//!
+//! Entry point for `scan`, `explain`, `pr`, `cost`, `rules`, `baseline`, and
+//! `policy` subcommands. Delegates scan orchestration to
+//! [`costguard_core`].
+
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use costguard_core::{

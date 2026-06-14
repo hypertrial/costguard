@@ -1,3 +1,9 @@
+//! dbt project metadata parsing.
+//!
+//! Loads manifest JSON, YAML schema files, and `dbt_project.yml` folder
+//! configs to build a [`DbtProject`] graph and extract Jinja-level SQL
+//! features (refs, sources, incremental blocks).
+
 mod manifest;
 mod project_config;
 mod sql_features;

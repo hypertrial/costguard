@@ -1,5 +1,11 @@
 #![forbid(unsafe_code)]
 
+//! Signed policy compilation, verification, and enforcement.
+//!
+//! Enterprise git-native governance: Ed25519-signed policy documents, scope
+//! resolution, declarative custom rules, and exception handling applied to
+//! [`Diagnostic`] findings.
+
 use anyhow::{Context, Result};
 use base64::Engine;
 use chrono::{DateTime, Utc};
@@ -22,6 +28,7 @@ const MAX_PREDICATE_DEPTH: usize = 12;
 const MAX_REGEX_BYTES: usize = 512;
 const MAX_MESSAGE_BYTES: usize = 4096;
 
+/// Versioned signed policy document with scopes, rules, and exceptions.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PolicyDocumentV1 {
@@ -232,6 +239,7 @@ pub struct ResolutionContext<'a> {
     pub path: Option<&'a str>,
 }
 
+/// Policy resolved for a specific organization, team, repository, and path.
 #[derive(Debug, Clone, Serialize)]
 pub struct ResolvedPolicy {
     pub document: PolicyDocumentV1,
