@@ -8,7 +8,7 @@ Generic SQL, Snowflake, BigQuery, and Trino scanning are production-ready; Datab
 
 ## Quick start
 
-Pin the exact Action tag `@v2.0.0` or use the moving compatible major tag `@v2`. Release binaries are checksum-protected and include provenance attestations.
+Pin the exact Action tag `@v2.0.0` or use the moving compatible major tag `@v2`. Release binaries are checksum-protected and include provenance attestations. Until the `v2.0.0` GitHub release finishes publishing, pin `@main` and set `install-mode: source` (see [GitHub Action](#github-action)).
 
 Run Costguard after your existing dbt compile step so `target/manifest.json` is available when you want manifest-backed analysis.
 
@@ -76,7 +76,17 @@ mdbook serve
     format: github
 ```
 
-When developing Costguard itself, use the same action with `install-mode: source` so the workflow builds the checked-out code instead of downloading a release.
+Use `install-mode: source` to build the checked-out Action code instead of downloading a release binary. This is required for Costguard development and works immediately before the first `v2.0.0` release artifacts are published:
+
+```yaml
+- uses: hypertrial/costguard/.github/actions/costguard@main
+  with:
+    install-mode: source
+    base: origin/main
+    warehouse: snowflake
+    fail-on: high
+    min-confidence: high
+```
 
 The Action does not install or compile dbt. It auto-detects `target/manifest.json` when present; raw analysis still works without a manifest.
 

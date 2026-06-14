@@ -45,4 +45,4 @@ See [Quick start (PR check)](getting-started/quick-start.md) for GitHub Action s
 
 ## Status
 
-Release candidate. Startup standard mode and Git-native enterprise strict mode are technically complete; hosted control plane, SSO, commercial SLA, and procurement services are outside the product scope.
+`v2.0.0` is the MVP production release. Startup standard mode and Git-native enterprise strict mode are technically complete; hosted control plane, SSO, commercial SLA, and procurement services are outside the product scope.
