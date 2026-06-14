@@ -30,8 +30,22 @@ def require_release_tag(version: str) -> tuple[str, str]:
     tag = f"v{version}"
     if git_output("cat-file", "-t", f"refs/tags/{tag}") != "tag":
         raise SystemExit(f"release tag {tag} must be annotated")
+    allowed_signers = ROOT / ".github" / "release_allowed_signers"
     verify = subprocess.run(
-        ["git", "tag", "-v", tag], cwd=ROOT, capture_output=True, text=True, check=False
+        [
+            "git",
+            "-c",
+            "gpg.format=ssh",
+            "-c",
+            f"gpg.ssh.allowedSignersFile={allowed_signers}",
+            "tag",
+            "-v",
+            tag,
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     if verify.returncode != 0:
         raise SystemExit(f"release tag signature verification failed:\n{verify.stderr}")
