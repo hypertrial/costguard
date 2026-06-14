@@ -168,11 +168,7 @@ pub fn summarize_project_costs(index: &ModelCostIndex, config: &CostConfig) -> P
             .total_cmp(left_score)
             .then_with(|| left.model_id.cmp(&right.model_id))
     });
-    let top_models = ranked
-        .into_iter()
-        .take(5)
-        .map(|(_, model)| model)
-        .collect();
+    let top_models = ranked.into_iter().take(5).map(|(_, model)| model).collect();
 
     let total = sum_lognormals(&cost_estimates);
     let (project_p10, project_p50, project_p90) = if has_pricing {
