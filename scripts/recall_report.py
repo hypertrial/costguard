@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CORPUS_MANIFEST = ROOT / "tests" / "fixtures" / "corpus" / "manifest.toml"
 
 BEHAVIORAL_RULES = [f"SQLCOST{idx:03d}" for idx in range(1, 23)] + [
-    f"SQLCOST{idx:03d}" for idx in range(28, 36)
+    f"SQLCOST{idx:03d}" for idx in range(28, 45)
 ]
 MIN_EXPECT_CASES = 2
 MIN_FORBID_CASES = 1

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate recall corpus fixtures for behavioral rules SQLCOST001-022 and SQLCOST028-035."""
+"""Generate recall corpus fixtures for behavioral rules SQLCOST001-022 and SQLCOST028-044."""
 
 from __future__ import annotations
 
@@ -381,6 +381,167 @@ FIXTURES: dict[str, dict[str, str]] = {
         "models/marts/fct_same_cat.sql": (
             "select * from hive.default.orders o join hive.default.users u on o.id = u.id\n"
         ),
+    },
+    "recall_row_explosion_plain": {
+        "models/marts/fct_tags.sql": (
+            "select distinct user_id from orders cross join unnest(tag_list) as tag\n"
+        ),
+    },
+    "recall_row_explosion_jinja": {
+        "models/marts/fct_tags_jinja.sql": (
+            "select distinct user_id from {{ ref('stg_orders') }} cross join unnest(tag_list) as tag\n"
+        ),
+    },
+    "recall_row_explosion_ok": {
+        "models/marts/fct_tags_ok.sql": (
+            "select user_id, tag from orders cross join unnest(tag_list) as tag\n"
+        ),
+    },
+    "recall_not_in_subquery_plain": {
+        "models/marts/fct_orders.sql": (
+            "select id from orders where id not in (select order_id from returns)\n"
+        ),
+    },
+    "recall_not_in_subquery_jinja": {
+        "models/marts/fct_orders_jinja.sql": (
+            "select id from orders where id not in (select order_id from {{ ref('stg_returns') }})\n"
+        ),
+    },
+    "recall_in_subquery_ok": {
+        "models/marts/fct_orders_ok.sql": (
+            "select id from orders where id in (select order_id from returns)\n"
+        ),
+    },
+    "recall_fan_out_join_plain": {
+        "models/marts/dim_users.sql": (
+            "{{ config(unique_key='user_id') }} select user_id, email from users\n"
+        ),
+        "models/marts/fct_orders.sql": (
+            "select * from orders join dim_users on orders.email = dim_users.email\n"
+        ),
+    },
+    "recall_fan_out_join_jinja": {
+        "models/marts/dim_users.sql": (
+            "{{ config(unique_key='user_id') }} select user_id, email from users\n"
+        ),
+        "models/marts/fct_orders.sql": (
+            "select * from orders join {{ ref('dim_users') }} u on orders.email = u.email\n"
+        ),
+    },
+    "recall_fan_out_join_ok": {
+        "models/marts/dim_users.sql": (
+            "{{ config(unique_key='user_id') }} select user_id, email from users\n"
+        ),
+        "models/marts/fct_orders.sql": (
+            "select * from orders join dim_users on orders.user_id = dim_users.user_id\n"
+        ),
+    },
+    "recall_heavy_view_plain": {
+        "models/intermediate/int_shared.sql": (
+            "{{ config(materialized='view') }} select id, event_date from base\n"
+        ),
+        "models/marts/fct_a.sql": "select id from {{ ref('int_shared') }}\n",
+        "models/marts/fct_b.sql": "select id from {{ ref('int_shared') }}\n",
+        "models/marts/fct_c.sql": "select id from {{ ref('int_shared') }}\n",
+        "models/marts/fct_d.sql": "select id from {{ ref('int_shared') }}\n",
+    },
+    "recall_heavy_view_jinja": {
+        "models/intermediate/int_shared.sql": (
+            "{{ config(materialized='view') }} select id, event_date from {{ ref('stg_base') }}\n"
+        ),
+        "models/marts/fct_a.sql": "select id from {{ ref('int_shared') }}\n",
+        "models/marts/fct_b.sql": "select id from {{ ref('int_shared') }}\n",
+        "models/marts/fct_c.sql": "select id from {{ ref('int_shared') }}\n",
+        "models/marts/fct_d.sql": "select id from {{ ref('int_shared') }}\n",
+    },
+    "recall_heavy_view_ok": {
+        "models/intermediate/int_shared.sql": (
+            "{{ config(materialized='table') }} select id, event_date from base\n"
+        ),
+        "models/marts/fct_a.sql": "select id from {{ ref('int_shared') }}\n",
+    },
+    "recall_table_should_incremental_plain": {
+        "models/marts/fct_events.sql": (
+            "{{ config(materialized='table') }} select id, event_date from events\n"
+        ),
+    },
+    "recall_table_should_incremental_jinja": {
+        "models/marts/fct_events.sql": (
+            "{{ config(materialized='table') }} select id, event_date from {{ ref('stg_events') }}\n"
+        ),
+    },
+    "recall_table_incremental_ok": {
+        "models/marts/fct_events.sql": (
+            "{{ config(materialized='incremental', unique_key='id') }} select id, event_date from events\n"
+        ),
+    },
+    "recall_unbounded_window_plain": {
+        "models/marts/fct_window.sql": (
+            "select sum(amount) over (partition by user_id order by ts "
+            "rows between unbounded preceding and unbounded following) from events\n"
+        ),
+    },
+    "recall_unbounded_window_jinja": {
+        "models/marts/fct_window_jinja.sql": (
+            "select sum(amount) over (partition by user_id order by {{ adapter.quote('ts') }} "
+            "rows between unbounded preceding and unbounded following) from events\n"
+        ),
+    },
+    "recall_bounded_window_ok": {
+        "models/marts/fct_window_ok.sql": (
+            "select sum(amount) over (partition by user_id order by ts "
+            "rows between 29 preceding and current row) from events\n"
+        ),
+    },
+    "recall_bq_missing_partition_plain": {
+        "models/marts/fct_events.sql": "select * from {{ ref('stg_events') }}\n",
+    },
+    "recall_bq_missing_partition_jinja": {
+        "models/marts/fct_events_jinja.sql": (
+            "select * from {{ ref('stg_events') }} where status = 'active'\n"
+        ),
+    },
+    "recall_bq_partition_filter_ok": {
+        "models/marts/fct_events_ok.sql": (
+            "select * from {{ ref('stg_events') }} "
+            "where _PARTITIONDATE >= date_sub(current_date(), interval 3 day)\n"
+        ),
+    },
+    "recall_merge_no_pruning_plain": {
+        "models/marts/fct_events.sql": (
+            "{{ config(materialized='incremental', incremental_strategy='merge', unique_key='id') }}\n"
+            "select id, updated_at from events\n"
+            "{% if is_incremental() %}\nwhere updated_at >= current_date - 3\n{% endif %}\n"
+        ),
+    },
+    "recall_merge_no_pruning_jinja": {
+        "models/marts/fct_events_jinja.sql": (
+            "{{ config(materialized='incremental', incremental_strategy='merge', unique_key='id') }}\n"
+            "select id, updated_at from {{ ref('stg_events') }}\n"
+            "{% if is_incremental() %}\nwhere updated_at >= current_date - 3\n{% endif %}\n"
+        ),
+    },
+    "recall_merge_pruning_ok": {
+        "models/marts/fct_events_ok.sql": (
+            "{{ config(materialized='incremental', incremental_strategy='merge', unique_key='id', "
+            "incremental_predicates=[\"DBT_INTERNAL_DEST.updated_at >= current_date - 3\"]) }}\n"
+            "select id, updated_at from events\n"
+        ),
+    },
+    "recall_recursive_cte_plain": {
+        "models/marts/fct_graph.sql": (
+            "with recursive graph as (select 1 as n union all select n + 1 from graph where n < 5) "
+            "select * from graph\n"
+        ),
+    },
+    "recall_recursive_cte_jinja": {
+        "models/marts/fct_graph_jinja.sql": (
+            "with recursive graph as (select 1 as n union all select n + 1 from graph where n < 5) "
+            "select * from graph\n"
+        ),
+    },
+    "recall_non_recursive_cte_ok": {
+        "models/marts/fct_graph_ok.sql": "with graph as (select 1 as n) select * from graph\n",
     },
 }
 

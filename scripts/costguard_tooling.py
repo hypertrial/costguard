@@ -137,6 +137,7 @@ def run_costguard_scan(
     scan_paths: list[str],
     fail_on: str = "critical",
     manifest: Path | None = None,
+    cost: bool = False,
 ) -> dict[str, Any]:
     cmd = [
         str(costguard_binary()),
@@ -148,6 +149,8 @@ def run_costguard_scan(
         "--format",
         "json",
     ]
+    if cost:
+        cmd.append("--cost")
     if manifest is not None:
         if manifest.is_absolute():
             manifest_arg = (
@@ -190,6 +193,7 @@ def measure_costguard_scan(
     scan_paths: list[str],
     fail_on: str = "critical",
     manifest: Path | None = None,
+    cost: bool = False,
 ) -> dict[str, Any]:
     """Run one scan and return its payload plus wall-clock and peak-RSS data."""
     cmd = [
@@ -202,6 +206,8 @@ def measure_costguard_scan(
         "--format",
         "json",
     ]
+    if cost:
+        cmd.append("--cost")
     if manifest is not None:
         if manifest.is_absolute():
             manifest_arg = (

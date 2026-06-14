@@ -437,6 +437,21 @@ fn fan_out_join_rule_uses_project_indexes() {
 }
 
 #[test]
+fn fan_out_join_rule_matches_ref_aliases() {
+    let dim_users = sql_file(
+        "models/marts/dim_users.sql",
+        "{{ config(unique_key='user_id') }} select user_id, email from users",
+    );
+    let fct = sql_file(
+        "models/marts/fct_orders.sql",
+        "select * from orders join {{ ref('dim_users') }} u on orders.email = u.email",
+    );
+    let docs = vec![analyze(&dim_users), analyze(&fct)];
+    let ids = run_for_rule("SQLCOST038", &fct, &docs);
+    assert!(ids.contains(&"SQLCOST038".to_string()));
+}
+
+#[test]
 fn heavily_referenced_view_rule_uses_project_indexes() {
     let shared = sql_file(
         "models/intermediate/int_shared.sql",

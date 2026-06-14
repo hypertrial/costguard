@@ -561,4 +561,76 @@ verdict = "tp"
 corpus_case = "recall_pattern_join_plain"
 notes = "pattern-matching join predicates are valid high-severity cost signals"
 
+[[finding]]
+rule = "SQLCOST036"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "recall_row_explosion_plain"
+notes = "row-exploding unnest plus dedup is a valid high-severity cost signal"
+
+[[finding]]
+rule = "SQLCOST037"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "recall_not_in_subquery_plain"
+notes = "NOT IN subqueries are valid high-severity cost signals"
+
+[[finding]]
+rule = "SQLCOST038"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "recall_fan_out_join_plain"
+notes = "fan-out joins on non-unique keys are valid high-severity cost signals"
+
+[[finding]]
+rule = "SQLCOST039"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "recall_heavy_view_plain"
+notes = "heavily referenced views are valid medium-severity cost signals"
+
+[[finding]]
+rule = "SQLCOST040"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "recall_table_should_incremental_plain"
+notes = "append-only table models with date columns are valid medium-severity cost signals"
+
+[[finding]]
+rule = "SQLCOST041"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "recall_unbounded_window_plain"
+notes = "unbounded window frames are valid medium-severity cost signals"
+
+[[finding]]
+rule = "SQLCOST042"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "recall_bq_missing_partition_plain"
+notes = "BigQuery models without partition filters are valid medium-severity cost signals"
+
+[[finding]]
+rule = "SQLCOST043"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "recall_merge_no_pruning_plain"
+notes = "Snowflake merge models without target pruning are valid medium-severity cost signals"
+
+[[finding]]
+rule = "SQLCOST044"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "recall_recursive_cte_plain"
+notes = "recursive CTEs are valid medium-severity cost signals"
+
 

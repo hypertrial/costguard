@@ -40,6 +40,7 @@ def run_costguard(
     manifest: Path | None = None,
     measured_runs: int = 1,
     warmup: bool = False,
+    cost: bool = False,
 ) -> dict[str, Any]:
     if measured_runs < 1:
         raise ValueError("measured_runs must be at least one")
@@ -49,6 +50,7 @@ def run_costguard(
         "scan_paths": scan_paths,
         "fail_on": fail_on,
         "manifest": manifest,
+        "cost": cost,
     }
     if warmup:
         measure_costguard_scan(**scan_args)
@@ -63,12 +65,17 @@ def run_costguard(
             raise SystemExit("benchmark metrics changed between measured runs")
         if payload.get("diagnostics") != first_payload.get("diagnostics"):
             raise SystemExit("benchmark diagnostics changed between measured runs")
-    return {
+        if cost and payload.get("cost") != first_payload.get("cost"):
+            raise SystemExit("benchmark cost summary changed between measured runs")
+    result = {
         "exit_code": first["exit_code"],
         "metrics": first_payload["metrics"],
         "diagnostics_count": len(first_payload.get("diagnostics", [])),
         **summarize_measurements(measurements),
     }
+    if cost:
+        result["cost"] = first_payload.get("cost")
+    return result
 
 
 def clone_repo(repo: dict[str, Any], cache_dir: Path) -> Path:
@@ -128,6 +135,8 @@ def build_report(
     }
     if compile_cache is not None:
         report["compile_cache"] = compile_cache
+    if "cost" in scan_result:
+        report["cost"] = scan_result["cost"]
     return report
 
 
@@ -303,6 +312,7 @@ def run_external(
     cache_dir: Path,
     smoke: bool = False,
     force_compile: bool = False,
+    cost: bool = False,
 ) -> int:
     repo = repo_by_name(repo_name)
     checkout = clone_repo(repo, cache_dir)
@@ -320,6 +330,7 @@ def run_external(
         scan_paths = repo.get("scan_paths", ["."])
         target = f"external/{repo_name}"
     manifest = checkout / "target" / "manifest.json"
+    enable_cost = cost or bool(repo.get("cost", False))
     scan_result = run_costguard(
         checkout,
         warehouse=repo.get("warehouse", "generic"),
@@ -328,6 +339,7 @@ def run_external(
         manifest=manifest if manifest.exists() else None,
         measured_runs=3,
         warmup=True,
+        cost=enable_cost,
     )
     report = build_report(
         target,
@@ -452,6 +464,11 @@ def main() -> int:
         action="store_true",
         help="bypass cached dbt manifest and recompile",
     )
+    parser.add_argument(
+        "--cost",
+        action="store_true",
+        help="include cost summary in benchmark reports (also enabled per-repo in repos.toml)",
+    )
     args = parser.parse_args()
 
     if args.all_vendored:
@@ -481,6 +498,7 @@ def main() -> int:
         cache_dir=Path(args.cache),
         smoke=args.smoke,
         force_compile=args.force_compile,
+        cost=args.cost,
     )
 
 

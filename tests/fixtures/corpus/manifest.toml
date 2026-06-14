@@ -738,3 +738,180 @@ platform = "trino"
 expect_rules = []
 forbid_rules = ["SQLCOST035"]
 
+# --- Recall coverage: SQLCOST036 ---
+[[case]]
+name = "recall_row_explosion_plain"
+path = "recall_row_explosion_plain"
+expect_rules = ["SQLCOST036"]
+forbid_rules = []
+
+[[case]]
+name = "recall_row_explosion_jinja"
+path = "recall_row_explosion_jinja"
+expect_rules = ["SQLCOST036"]
+forbid_rules = []
+
+[[case]]
+name = "recall_row_explosion_ok"
+path = "recall_row_explosion_ok"
+expect_rules = []
+forbid_rules = ["SQLCOST036"]
+
+# --- Recall coverage: SQLCOST037 ---
+[[case]]
+name = "recall_not_in_subquery_plain"
+path = "recall_not_in_subquery_plain"
+expect_rules = ["SQLCOST037"]
+forbid_rules = []
+
+[[case]]
+name = "recall_not_in_subquery_jinja"
+path = "recall_not_in_subquery_jinja"
+expect_rules = ["SQLCOST037"]
+forbid_rules = []
+
+[[case]]
+name = "recall_in_subquery_ok"
+path = "recall_in_subquery_ok"
+expect_rules = []
+forbid_rules = ["SQLCOST037"]
+
+# --- Recall coverage: SQLCOST038 ---
+[[case]]
+name = "recall_fan_out_join_plain"
+path = "recall_fan_out_join_plain"
+expect_rules = ["SQLCOST038"]
+forbid_rules = []
+
+[[case]]
+name = "recall_fan_out_join_jinja"
+path = "recall_fan_out_join_jinja"
+expect_rules = ["SQLCOST038"]
+forbid_rules = []
+
+[[case]]
+name = "recall_fan_out_join_ok"
+path = "recall_fan_out_join_ok"
+expect_rules = []
+forbid_rules = ["SQLCOST038"]
+
+# --- Recall coverage: SQLCOST039 ---
+[[case]]
+name = "recall_heavy_view_plain"
+path = "recall_heavy_view_plain"
+expect_rules = ["SQLCOST039"]
+forbid_rules = []
+
+[[case]]
+name = "recall_heavy_view_jinja"
+path = "recall_heavy_view_jinja"
+expect_rules = ["SQLCOST039"]
+forbid_rules = []
+
+[[case]]
+name = "recall_heavy_view_ok"
+path = "recall_heavy_view_ok"
+expect_rules = []
+forbid_rules = ["SQLCOST039"]
+
+# --- Recall coverage: SQLCOST040 ---
+[[case]]
+name = "recall_table_should_incremental_plain"
+path = "recall_table_should_incremental_plain"
+expect_rules = ["SQLCOST040"]
+forbid_rules = []
+
+[[case]]
+name = "recall_table_should_incremental_jinja"
+path = "recall_table_should_incremental_jinja"
+expect_rules = ["SQLCOST040"]
+forbid_rules = []
+
+[[case]]
+name = "recall_table_incremental_ok"
+path = "recall_table_incremental_ok"
+expect_rules = []
+forbid_rules = ["SQLCOST040"]
+
+# --- Recall coverage: SQLCOST041 ---
+[[case]]
+name = "recall_unbounded_window_plain"
+path = "recall_unbounded_window_plain"
+expect_rules = ["SQLCOST041"]
+forbid_rules = []
+
+[[case]]
+name = "recall_unbounded_window_jinja"
+path = "recall_unbounded_window_jinja"
+expect_rules = ["SQLCOST041"]
+forbid_rules = []
+
+[[case]]
+name = "recall_bounded_window_ok"
+path = "recall_bounded_window_ok"
+expect_rules = []
+forbid_rules = ["SQLCOST041"]
+
+# --- Recall coverage: SQLCOST042 ---
+[[case]]
+name = "recall_bq_missing_partition_plain"
+path = "recall_bq_missing_partition_plain"
+platform = "bigquery"
+expect_rules = ["SQLCOST042"]
+forbid_rules = []
+
+[[case]]
+name = "recall_bq_missing_partition_jinja"
+path = "recall_bq_missing_partition_jinja"
+platform = "bigquery"
+expect_rules = ["SQLCOST042"]
+forbid_rules = []
+
+[[case]]
+name = "recall_bq_partition_filter_ok"
+path = "recall_bq_partition_filter_ok"
+platform = "bigquery"
+expect_rules = []
+forbid_rules = ["SQLCOST042"]
+
+# --- Recall coverage: SQLCOST043 ---
+[[case]]
+name = "recall_merge_no_pruning_plain"
+path = "recall_merge_no_pruning_plain"
+platform = "snowflake"
+expect_rules = ["SQLCOST043"]
+forbid_rules = []
+
+[[case]]
+name = "recall_merge_no_pruning_jinja"
+path = "recall_merge_no_pruning_jinja"
+platform = "snowflake"
+expect_rules = ["SQLCOST043"]
+forbid_rules = []
+
+[[case]]
+name = "recall_merge_pruning_ok"
+path = "recall_merge_pruning_ok"
+platform = "snowflake"
+expect_rules = []
+forbid_rules = ["SQLCOST043"]
+
+# --- Recall coverage: SQLCOST044 ---
+[[case]]
+name = "recall_recursive_cte_plain"
+path = "recall_recursive_cte_plain"
+expect_rules = ["SQLCOST044"]
+forbid_rules = []
+
+[[case]]
+name = "recall_recursive_cte_jinja"
+path = "recall_recursive_cte_jinja"
+expect_rules = ["SQLCOST044"]
+forbid_rules = []
+
+[[case]]
+name = "recall_non_recursive_cte_ok"
+path = "recall_non_recursive_cte_ok"
+expect_rules = []
+forbid_rules = ["SQLCOST044"]
+

@@ -191,9 +191,10 @@ Common flags:
 | `--update-baseline` | Write report metrics to baseline JSON |
 | `--smoke` | Run repo smoke profile (`smoke_*` keys in `repos.toml`; Spellbook: `tokens` + `dbt_macros`) |
 | `--force-compile` | Bypass cached dbt manifest and recompile |
+| `--cost` | Include cost summary in benchmark JSON reports (also enabled per-repo via `cost = true` in `repos.toml`) |
 | `--warehouse` | Override scan warehouse (defaults per target) |
 
-Reports include `compile_cache: hit|miss|skip` when dbt compile is enabled. Benchmark scripts use release CLI builds via `costguard_tooling.py`.
+Reports include `compile_cache: hit|miss|skip` when dbt compile is enabled. External reports may include a `cost` block when cost estimation is enabled. Benchmark scripts use release CLI builds via `costguard_tooling.py`.
 
 Validate vendored baselines in Rust:
 
@@ -288,7 +289,7 @@ Exit code `1` when precision gates fail.
 
 ## `recall_report.py`
 
-Validate corpus recall coverage for behavioral rules (SQLCOST001–022 and SQLCOST028–035): at least two `expect_rules` cases and one `forbid_rules` case per rule in [`tests/fixtures/corpus/manifest.toml`](../../../tests/fixtures/corpus/manifest.toml).
+Validate corpus recall coverage for behavioral rules (SQLCOST001–022 and SQLCOST028–044): at least two `expect_rules` cases and one `forbid_rules` case per rule in [`tests/fixtures/corpus/manifest.toml`](../../../tests/fixtures/corpus/manifest.toml).
 
 ```bash
 python3 scripts/recall_report.py

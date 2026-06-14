@@ -36,6 +36,7 @@ scan_paths = [
 ]
 fail_on = "critical"
 max_parse_failure_rate = 0.35
+cost = true
 
 [[repo]]
 name = "mattermost-warehouse"
