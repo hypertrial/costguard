@@ -103,7 +103,9 @@ Costguard ships **35 SQLCOST rules** for incremental safety, join risk, warehous
 ```bash
 python3 scripts/benchmark_external_repo.py --all-vendored
 python3 scripts/benchmark_external_repo.py --repo spellbook --smoke
+python3 scripts/benchmark_external_repo.py --repo data-infra --smoke
 python3 scripts/benchmark_external_repo.py --repo spellbook   # full gate (manual / baseline refresh)
+python3 scripts/benchmark_external_repo.py --repo data-infra    # full gate (manual / baseline refresh)
 cargo test -p costguard-core --test corpus
 ```
 

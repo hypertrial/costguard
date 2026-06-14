@@ -30,6 +30,7 @@ Minimal offline projects adapted from public repos. See [`tests/fixtures/real_wo
 ```bash
 python3 scripts/benchmark_external_repo.py --fixture real_world/jaffle_snippets
 python3 scripts/benchmark_external_repo.py --fixture real_world/spellbook_snippets
+python3 scripts/benchmark_external_repo.py --fixture real_world/data_infra_snippets
 python3 scripts/benchmark_external_repo.py --fixture real_world/manifest_graph
 ```
 

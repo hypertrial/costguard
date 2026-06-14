@@ -458,6 +458,7 @@ def main() -> int:
         fixtures = [
             "real_world/jaffle_snippets",
             "real_world/spellbook_snippets",
+            "real_world/data_infra_snippets",
             "real_world/snowflake_snippets",
             "real_world/manifest_graph",
             "real_world/multi_dbt",

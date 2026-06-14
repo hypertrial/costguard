@@ -10,7 +10,7 @@ import re
 from typing import Any
 from urllib.request import Request, urlopen
 
-REQUIRED_JOBS = ("pr-gate", "scale", "spellbook-smoke")
+REQUIRED_JOBS = ("pr-gate", "scale", "spellbook-smoke", "data-infra-smoke")
 
 
 def qualifying_runs(

@@ -137,9 +137,20 @@ Add focused rule/regression cases under [`tests/fixtures/corpus/`](../../tests/f
 2. Register the case in [`tests/fixtures/corpus/manifest.toml`](../../tests/fixtures/corpus/manifest.toml) with `expect_rules` and/or `forbid_rules`.
 3. Run `cargo test -p costguard-core --test corpus`.
 
-Secondary repos to add after Spellbook:
+Secondary repos integrated or planned after Spellbook:
 
-- Mattermost data warehouse: <https://github.com/mattermost/mattermost-data-warehouse/tree/master/transform/snowflake-dbt>
-- Cal-ITP data infrastructure: <https://github.com/cal-itp/data-infra/>
+- Mattermost data warehouse (observational): <https://github.com/mattermost/mattermost-data-warehouse/tree/master/transform/snowflake-dbt>
+- Cal-ITP data infrastructure (observational, BigQuery): <https://github.com/cal-itp/data-infra/> — dbt project in `warehouse/`, smoke scans `warehouse/models/mart`
 - dbt Jaffle Shop smoke test: <https://github.com/dbt-labs/jaffle-shop>
 - Public dbt corpus: <https://github.com/InfuseAI/awesome-public-dbt-projects>
+
+### Cal-ITP data-infra (BigQuery external benchmark)
+
+Use the same benchmark harness as Spellbook:
+
+```bash
+python3 scripts/benchmark_external_repo.py --repo data-infra
+python3 scripts/benchmark_external_repo.py --repo data-infra --smoke
+```
+
+Pinned commit and scan paths are in [`tests/benchmarks/repos.toml`](../../tests/benchmarks/repos.toml). Unlike Spellbook, `dbt-bigquery compile` requires Application Default Credentials, so the benchmark runs as a metadata-only raw scan (`compile_dbt = false`) and is observational (`required = false`). Push CI runs the smoke profile via the `data-infra-smoke` job in [`ci.yml`](../../.github/workflows/ci.yml).

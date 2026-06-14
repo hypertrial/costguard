@@ -6,7 +6,7 @@ Matt (`mattfaltyn`) is the sole release owner. The `release-owners` team contain
 
 1. Merge or directly push the release commit to `main` as Matt. PRs are recommended for reviewability but do not require another approver.
 2. Complete full-history secret/customer-data scanning, then explicitly make the repository public. Run `configure_github_release.py` in `--plan`, `--apply`, and `--verify` modes to enable public security features, the Matt-only bypass, branch rules, the release environment, and `RELEASE_SSH_ALLOWED_SIGNERS`.
-3. Produce one successful push-triggered `ci.yml` run for the exact release commit. The run must complete `pr-gate`, `scale`, and `spellbook-smoke`; the release workflow enforces this by commit SHA.
+3. Produce one successful push-triggered `ci.yml` run for the exact release commit. The run must complete `pr-gate`, `scale`, `spellbook-smoke`, and `data-infra-smoke`; the release workflow enforces this by commit SHA.
 4. Use Matt's existing passphrase-protected `~/.ssh/id_ed25519` key to create signed annotated `v2.0.0`. Do not add another key or change global Git configuration.
 5. Confirm the workflow publishes the exact stable tag and passes Linux, macOS ARM/x86, and Windows packaging and consumer smoke with checksums, SBOMs, and attestations.
 6. Perform a clean-machine installation and one credential-free scan from the published package.

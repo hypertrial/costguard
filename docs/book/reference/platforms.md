@@ -32,6 +32,7 @@ Production platforms have zero-parse-failure release fixtures and are covered by
 | --- | --- | --- |
 | PR examples / MVP docs | `snowflake` (illustrative) | `high` |
 | External benchmark: spellbook | `trino` | `critical` |
+| External benchmark: data-infra | `bigquery` | `critical` |
 | External benchmark: jaffle-shop | `generic` | `critical` |
 | Vendored harness | `generic` | `critical` |
 | This repo's PR workflow | `generic` | `high` |

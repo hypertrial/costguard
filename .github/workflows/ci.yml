@@ -99,3 +99,29 @@ jobs:
           name: spellbook-smoke-report
           path: tests/benchmarks/reports/external__spellbook_smoke.json
           if-no-files-found: error
+
+  data-infra-smoke:
+    if: github.event_name != 'pull_request'
+    needs: pr-gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        with:
+          python-version: "3.11"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: ci-release-binary
+          path: target/release
+      - run: chmod +x target/release/costguard
+      - env:
+          COSTGUARD_BUILD_PROFILE: release
+        run: python scripts/benchmark_external_repo.py --repo data-infra --smoke
+      - name: Upload data-infra smoke report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: data-infra-smoke-report
+          path: tests/benchmarks/reports/external__data-infra_smoke.json
+          if-no-files-found: error

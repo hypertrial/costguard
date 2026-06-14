@@ -1,0 +1,11 @@
+version: 2
+
+sources:
+  - name: gtfs
+    tables:
+      - name: trips
+
+models:
+  - name: fct_gtfs_trips
+    config:
+      tags: [data_infra_snippet]

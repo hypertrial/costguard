@@ -76,7 +76,7 @@ The primary profile requires `pr-gate`, `scale`, and `costguard`. The consumer p
 
 ## `verify_ci_history.py`
 
-Release qualification helper used by `release.yml`. For the exact release SHA it requires the latest three completed `ci.yml` runs to be one push and two workflow dispatches, all successful, with successful `pr-gate`, `scale`, and `spellbook-smoke` jobs.
+Release qualification helper used by `release.yml`. For the exact release SHA it requires the latest three completed `ci.yml` runs to be one push and two workflow dispatches, all successful, with successful `pr-gate`, `scale`, `spellbook-smoke`, and `data-infra-smoke` jobs.
 
 ## `verify_release_assets.py`
 
@@ -137,6 +137,7 @@ PR-equivalent local gate mirrored by the required `pr-gate` job in [`.github/wor
 ```bash
 ./scripts/ci_local.sh
 ./scripts/ci_local.sh --spellbook-smoke
+./scripts/ci_local.sh --data-infra-smoke
 ./scripts/ci_local.sh --precision
 ```
 
@@ -169,11 +170,15 @@ python3 scripts/benchmark_external_repo.py --fixture real_world/jaffle_snippets
 python3 scripts/benchmark_external_repo.py --repo jaffle-shop
 python3 scripts/benchmark_external_repo.py --repo spellbook
 python3 scripts/benchmark_external_repo.py --repo spellbook --smoke
+python3 scripts/benchmark_external_repo.py --repo data-infra
+python3 scripts/benchmark_external_repo.py --repo data-infra --smoke
 
 # Refresh baselines after intentional rule tuning
 python3 scripts/benchmark_external_repo.py --fixture real_world/jaffle_snippets --update-baseline
 python3 scripts/benchmark_external_repo.py --repo spellbook --update-baseline
 python3 scripts/benchmark_external_repo.py --repo spellbook --smoke --update-baseline
+python3 scripts/benchmark_external_repo.py --repo data-infra --update-baseline
+python3 scripts/benchmark_external_repo.py --repo data-infra --smoke --update-baseline
 ```
 
 Common flags:

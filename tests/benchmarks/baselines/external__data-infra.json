@@ -1,0 +1,71 @@
+{
+  "commit": "5d9dd8849fa0a4830d33e6783a4d152f35fdc71f",
+  "kind": "external",
+  "max_rss_bytes": 170819584,
+  "metrics": {
+    "counts": {
+      "manifest": 0,
+      "other": 0,
+      "python": 9,
+      "sql": 680,
+      "yaml": 74
+    },
+    "dbt_project_parse_failures": 0,
+    "diagnostics_by_rule": {
+      "SQLCOST001": 922,
+      "SQLCOST002": 20,
+      "SQLCOST003": 6,
+      "SQLCOST004": 59,
+      "SQLCOST005": 1,
+      "SQLCOST006": 148,
+      "SQLCOST007": 140,
+      "SQLCOST008": 34,
+      "SQLCOST012": 15,
+      "SQLCOST013": 90,
+      "SQLCOST014": 135,
+      "SQLCOST015": 90,
+      "SQLCOST018": 24,
+      "SQLCOST020": 50,
+      "SQLCOST023": 1,
+      "SQLCOST027": 363,
+      "SQLCOST028": 171,
+      "SQLCOST029": 1,
+      "SQLCOST033": 2
+    },
+    "diagnostics_by_severity": {
+      "high": 297,
+      "info": 364,
+      "low": 275,
+      "med": 1336
+    },
+    "metadata_only_scan": true,
+    "metadata_warnings": 1,
+    "new_findings": 2272,
+    "sql_parse_compiled_failures": 0,
+    "sql_parse_compiled_total": 0,
+    "sql_parse_failures": 363,
+    "sql_parse_other_failures": 42,
+    "sql_parse_other_total": 45,
+    "sql_parse_total": 635,
+    "yaml_parse_failures": 0
+  },
+  "runtime_max_ms": 261,
+  "runtime_median_ms": 250,
+  "runtime_samples_ms": [
+    261,
+    241,
+    250
+  ],
+  "target": "external/data-infra",
+  "thresholds": {
+    "max_diagnostics_by_rule": {},
+    "max_parse_failure_delta": 50,
+    "max_parse_failure_rate": 0.5716535433070866,
+    "max_rss_bytes": 1073741824,
+    "max_runtime_max_ms": 2261,
+    "max_runtime_median_ms": 1250,
+    "max_sql_parse_compiled_failures": 0
+  },
+  "version": 2,
+  "warehouse": "bigquery"
+}

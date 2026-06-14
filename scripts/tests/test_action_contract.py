@@ -26,8 +26,10 @@ class ActionContractTest(unittest.TestCase):
         self.assertIn("cancel-in-progress: true", ci)
         scale = ci.split("  scale:", 1)[1].split("  spellbook-smoke:", 1)[0]
         self.assertNotIn("github.event_name == 'push'", scale)
-        spellbook = ci.split("  spellbook-smoke:", 1)[1]
+        spellbook = ci.split("  spellbook-smoke:", 1)[1].split("  data-infra-smoke:", 1)[0]
+        data_infra = ci.split("  data-infra-smoke:", 1)[1]
         self.assertIn("github.event_name != 'pull_request'", spellbook)
+        self.assertIn("github.event_name != 'pull_request'", data_infra)
 
         benchmark = (ROOT / ".github/workflows/benchmark.yml").read_text(
             encoding="utf-8"
@@ -54,7 +56,8 @@ class ActionContractTest(unittest.TestCase):
         ci_local = (ROOT / "scripts/ci_local.sh").read_text(encoding="utf-8")
         pr_gate = ci.split("  pr-gate:", 1)[1].split("  scale:", 1)[0]
         scale = ci.split("  scale:", 1)[1].split("  spellbook-smoke:", 1)[0]
-        spellbook = ci.split("  spellbook-smoke:", 1)[1]
+        spellbook = ci.split("  spellbook-smoke:", 1)[1].split("  data-infra-smoke:", 1)[0]
+        data_infra = ci.split("  data-infra-smoke:", 1)[1]
 
         self.assertIn("Swatinem/rust-cache@", pr_gate)
         self.assertIn("taiki-e/install-action@", pr_gate)
@@ -66,7 +69,7 @@ class ActionContractTest(unittest.TestCase):
             ci_local.count("cargo build --release --locked -p costguard-cli"), 1
         )
         self.assertNotIn("cargo build --locked -p costguard-cli", ci_local)
-        for job in [scale, spellbook]:
+        for job in [scale, spellbook, data_infra]:
             self.assertIn("actions/download-artifact@", job)
             self.assertIn("name: ci-release-binary", job)
             self.assertIn("chmod +x target/release/costguard", job)
