@@ -25,13 +25,27 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
         with:
           python-version: "3.11"
+      - name: Restore qualification tools
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            ~/.cargo/bin/mdbook
+            ~/.cargo/bin/cargo-deny
+          key: qualification-tools-${{ runner.os }}-mdbook-0.4.40-cargo-deny-0.19.7
       - name: Install qualification tools
         run: |
           python -m pip install ruff==0.11.13
-          cargo install mdbook --version 0.4.40 --locked
-          cargo install cargo-deny --version 0.19.7 --locked
+          command -v mdbook >/dev/null || cargo install mdbook --version 0.4.40 --locked
+          command -v cargo-deny >/dev/null || cargo install cargo-deny --version 0.19.7 --locked
       - name: Run required PR gate
         run: ./scripts/ci_local.sh
+      - name: Upload release binary
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ci-release-binary
+          path: target/release/costguard
+          if-no-files-found: error
+          retention-days: 1
       - name: Upload qualification reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -46,11 +60,14 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
         with:
           python-version: "3.11"
-      - run: cargo build --release --locked -p costguard-cli
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: ci-release-binary
+          path: target/release
+      - run: chmod +x target/release/costguard
       - run: python scripts/scale_check.py
       - name: Upload scale report
         if: always()
@@ -67,11 +84,14 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
         with:
           python-version: "3.11"
-      - run: cargo build --release --locked -p costguard-cli
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: ci-release-binary
+          path: target/release
+      - run: chmod +x target/release/costguard
       - env:
           COSTGUARD_BUILD_PROFILE: release
         run: python scripts/benchmark_external_repo.py --repo spellbook --smoke

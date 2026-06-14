@@ -49,6 +49,21 @@ class ActionContractTest(unittest.TestCase):
         self.assertIn("verify_ci_history.py", release)
         self.assertIn("release_consumer_smoke.py", release)
 
+    def test_ci_reuses_cached_tools_and_single_release_build(self) -> None:
+        ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        pr_gate = ci.split("  pr-gate:", 1)[1].split("  scale:", 1)[0]
+        scale = ci.split("  scale:", 1)[1].split("  spellbook-smoke:", 1)[0]
+        spellbook = ci.split("  spellbook-smoke:", 1)[1]
+
+        self.assertIn("actions/cache@", pr_gate)
+        self.assertIn("qualification-tools-${{ runner.os }}", pr_gate)
+        self.assertIn("name: ci-release-binary", pr_gate)
+        self.assertEqual(ci.count("cargo build --release --locked -p costguard-cli"), 0)
+        for job in [scale, spellbook]:
+            self.assertIn("actions/download-artifact@", job)
+            self.assertIn("name: ci-release-binary", job)
+            self.assertIn("chmod +x target/release/costguard", job)
+
     def test_local_release_tool_cannot_publish(self) -> None:
         publisher = (ROOT / "scripts/publish_release_local.py").read_text(encoding="utf-8")
         self.assertNotIn('add_argument("--publish"', publisher)
