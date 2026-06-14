@@ -44,6 +44,15 @@ python3 scripts/generate_rule_docs.py
 | high | `SQLCOST033` | Pattern-matching join predicate | [SQLCOST033](../../rules/SQLCOST033.md) |
 | medium | `SQLCOST034` | Scalar subquery in SELECT list | [SQLCOST034](../../rules/SQLCOST034.md) |
 | medium | `SQLCOST035` | Cross-catalog join | [SQLCOST035](../../rules/SQLCOST035.md) |
+| high | `SQLCOST036` | Row-exploding UNNEST or LATERAL FLATTEN | [SQLCOST036](../../rules/SQLCOST036.md) |
+| high | `SQLCOST037` | NOT IN (subquery) | [SQLCOST037](../../rules/SQLCOST037.md) |
+| high | `SQLCOST038` | Fan-out join on non-unique key | [SQLCOST038](../../rules/SQLCOST038.md) |
+| medium | `SQLCOST039` | Heavily referenced view or ephemeral model | [SQLCOST039](../../rules/SQLCOST039.md) |
+| medium | `SQLCOST040` | Table model with date column should be incremental | [SQLCOST040](../../rules/SQLCOST040.md) |
+| medium | `SQLCOST041` | Unbounded window frame | [SQLCOST041](../../rules/SQLCOST041.md) |
+| medium | `SQLCOST042` | BigQuery model without partition or date filter | [SQLCOST042](../../rules/SQLCOST042.md) |
+| medium | `SQLCOST043` | Incremental merge without target pruning | [SQLCOST043](../../rules/SQLCOST043.md) |
+| medium | `SQLCOST044` | Recursive CTE | [SQLCOST044](../../rules/SQLCOST044.md) |
 
 ## Descriptions
 
@@ -326,4 +335,76 @@ Fix guidance: [SQLCOST034.md](../../rules/SQLCOST034.md)
 Detects joins between fully qualified tables with different catalog parts.
 
 Fix guidance: [SQLCOST035.md](../../rules/SQLCOST035.md)
+
+### `SQLCOST036` — Row-exploding UNNEST or LATERAL FLATTEN
+
+**Severity:** high
+
+Detects UNNEST, LATERAL FLATTEN, or CROSS JOIN UNNEST followed by deduplication or aggregation.
+
+Fix guidance: [SQLCOST036.md](../../rules/SQLCOST036.md)
+
+### `SQLCOST037` — NOT IN (subquery)
+
+**Severity:** high
+
+Detects NOT IN (subquery) anti-join patterns in filters or join predicates.
+
+Fix guidance: [SQLCOST037.md](../../rules/SQLCOST037.md)
+
+### `SQLCOST038` — Fan-out join on non-unique key
+
+**Severity:** high
+
+Detects equality joins where keys do not cover the joined model's known grain.
+
+Fix guidance: [SQLCOST038.md](../../rules/SQLCOST038.md)
+
+### `SQLCOST039` — Heavily referenced view or ephemeral model
+
+**Severity:** medium
+
+Detects view or ephemeral models referenced by many downstream models.
+
+Fix guidance: [SQLCOST039.md](../../rules/SQLCOST039.md)
+
+### `SQLCOST040` — Table model with date column should be incremental
+
+**Severity:** medium
+
+Detects full-rebuild table models with recognized date or partition columns that look append-only.
+
+Fix guidance: [SQLCOST040.md](../../rules/SQLCOST040.md)
+
+### `SQLCOST041` — Unbounded window frame
+
+**Severity:** medium
+
+Detects window functions with ROWS/RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING.
+
+Fix guidance: [SQLCOST041.md](../../rules/SQLCOST041.md)
+
+### `SQLCOST042` — BigQuery model without partition or date filter
+
+**Severity:** medium
+
+Detects BigQuery models that read source() or ref() without an obvious partition or date filter.
+
+Fix guidance: [SQLCOST042.md](../../rules/SQLCOST042.md)
+
+### `SQLCOST043` — Incremental merge without target pruning
+
+**Severity:** medium
+
+Detects incremental merge models without incremental_predicates for target-side pruning.
+
+Fix guidance: [SQLCOST043.md](../../rules/SQLCOST043.md)
+
+### `SQLCOST044` — Recursive CTE
+
+**Severity:** medium
+
+Detects WITH RECURSIVE common table expressions.
+
+Fix guidance: [SQLCOST044.md](../../rules/SQLCOST044.md)
 <!-- generated:rules:end -->

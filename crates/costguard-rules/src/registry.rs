@@ -21,13 +21,24 @@ pub type RuleOverrides = HashMap<String, RuleOverride>;
 
 /// Cross-file indexes built once per scan for rules that need project-wide context.
 #[derive(Debug, Clone, Default)]
+pub struct ModelMeta {
+    pub materialized: Option<String>,
+    pub unique_key: Option<Vec<String>>,
+}
+
+/// Cross-file indexes built once per scan for rules that need project-wide context.
+#[derive(Debug, Clone, Default)]
 pub struct ProjectIndexes {
     pub expensive_expression_file_counts: HashMap<String, usize>,
+    pub model_ref_counts: HashMap<String, usize>,
+    pub model_meta: HashMap<String, ModelMeta>,
 }
 
 impl ProjectIndexes {
     pub fn from_sql_documents(sql_documents: &[SqlDocument]) -> Self {
         let mut file_counts = HashMap::new();
+        let mut model_ref_counts = HashMap::new();
+        let mut model_meta = HashMap::new();
         for doc in sql_documents {
             let mut seen = std::collections::HashSet::new();
             for feature in doc
@@ -42,11 +53,41 @@ impl ProjectIndexes {
             for key in seen {
                 *file_counts.entry(key).or_default() += 1;
             }
+            for dbt_ref in &doc.dbt.refs {
+                *model_ref_counts.entry(dbt_ref.name.clone()).or_default() += 1;
+            }
+            if let Some(model_name) = doc
+                .path
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .map(str::to_string)
+            {
+                let unique_key = doc
+                    .dbt
+                    .config
+                    .unique_key
+                    .as_deref()
+                    .map(parse_unique_key_columns);
+                model_meta.entry(model_name).or_insert_with(|| ModelMeta {
+                    materialized: doc.dbt.config.materialized.clone(),
+                    unique_key,
+                });
+            }
         }
         Self {
             expensive_expression_file_counts: file_counts,
+            model_ref_counts,
+            model_meta,
         }
     }
+}
+
+fn parse_unique_key_columns(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(|part| part.trim().trim_matches(['\'', '"']).to_ascii_lowercase())
+        .filter(|part| !part.is_empty())
+        .collect()
 }
 
 /// Input context passed to each rule during evaluation.
@@ -127,6 +168,15 @@ impl RuleRegistry {
                 Box::new(crate::cost_patterns::PatternMatchingJoinRule),
                 Box::new(crate::cost_patterns::ScalarSubqueryInSelectRule),
                 Box::new(crate::cost_patterns::CrossCatalogJoinRule),
+                Box::new(crate::cost_patterns::RowExplosionRule),
+                Box::new(crate::cost_patterns::NotInSubqueryRule),
+                Box::new(crate::cross_file::FanOutJoinRule),
+                Box::new(crate::cross_file::UnmaterializedHeavyViewRule),
+                Box::new(crate::dbt::TableShouldBeIncrementalRule),
+                Box::new(crate::cost_patterns::UnboundedWindowFrameRule),
+                Box::new(crate::cost_patterns::BigQueryMissingPartitionFilterRule),
+                Box::new(crate::dbt::MergeWithoutTargetPruningRule),
+                Box::new(crate::sql_shape::RecursiveCteRule),
             ],
         }
     }

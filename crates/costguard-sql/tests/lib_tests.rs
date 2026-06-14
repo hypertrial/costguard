@@ -589,3 +589,56 @@ fn trino_parses_join_alias_without_as() {
     let sql = "SELECT b.epoch FROM base b LEFT JOIN base start ON start.epoch = b.epoch";
     assert!(try_parse_compiled_sql(sql, Platform::Trino));
 }
+
+#[test]
+fn extracts_not_in_subquery_and_recursive_cte() {
+    let text = "with recursive graph as (select 1 as n) select id from t where id not in (select id from excluded)";
+    let index = LineIndex::new(text);
+    let doc = analyze_test_sql(
+        PathBuf::from("x.sql"),
+        text,
+        Platform::Generic,
+        &index,
+        None,
+        true,
+    );
+    assert!(!doc.features.not_in_subqueries.is_empty());
+    assert!(!doc.features.recursive_ctes.is_empty());
+}
+
+#[test]
+fn extracts_row_explosion_and_unbounded_window_frame() {
+    let text = "select distinct user_id, sum(amount) over (partition by user_id order by ts rows between unbounded preceding and unbounded following) from orders cross join unnest(tag_list) as tag";
+    let index = LineIndex::new(text);
+    let doc = analyze_test_sql(
+        PathBuf::from("x.sql"),
+        text,
+        Platform::Generic,
+        &index,
+        None,
+        true,
+    );
+    assert!(!doc.features.row_explosions.is_empty());
+    assert!(doc
+        .features
+        .window_functions
+        .iter()
+        .any(|window| window.unbounded_frame));
+}
+
+#[test]
+fn extracts_join_right_relation_and_equality_keys() {
+    let text = "select * from orders join dim_users on orders.user_id = dim_users.user_id";
+    let index = LineIndex::new(text);
+    let doc = analyze_test_sql(
+        PathBuf::from("x.sql"),
+        text,
+        Platform::Generic,
+        &index,
+        None,
+        true,
+    );
+    let join = doc.features.joins.first().expect("join");
+    assert_eq!(join.right_relation.as_deref(), Some("dim_users"));
+    assert!(join.equality_keys.iter().any(|key| key == "user_id"));
+}

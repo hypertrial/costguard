@@ -178,6 +178,31 @@ select * from filtered",
             "models/marts/fct.sql",
             "select * from hive.default.orders o join iceberg.analytics.users u on o.id = u.id",
         ),
+        (
+            "SQLCOST036",
+            "models/marts/fct.sql",
+            "select distinct user_id from orders cross join unnest(tag_list) as tag",
+        ),
+        (
+            "SQLCOST037",
+            "models/marts/fct.sql",
+            "select id from orders where id not in (select order_id from returns)",
+        ),
+        (
+            "SQLCOST040",
+            "models/marts/fct.sql",
+            "{{ config(materialized='table') }} select id, event_date from events",
+        ),
+        (
+            "SQLCOST041",
+            "models/marts/fct.sql",
+            "select sum(amount) over (partition by user_id order by ts rows between unbounded preceding and unbounded following) from t",
+        ),
+        (
+            "SQLCOST044",
+            "models/marts/fct.sql",
+            "with recursive graph as (select 1 as n union all select n + 1 from graph where n < 5) select * from graph",
+        ),
     ];
 
     for (rule_id, path, text) in cases {
@@ -202,8 +227,9 @@ select * from filtered",
 
 fn analyze_for_rule(rule_id: &str, file: &ProjectFile) -> SqlDocument {
     let platform = match rule_id {
-        "SQLCOST021" | "SQLCOST028" => Platform::BigQuery,
+        "SQLCOST021" | "SQLCOST028" | "SQLCOST042" => Platform::BigQuery,
         "SQLCOST035" => Platform::Trino,
+        "SQLCOST043" => Platform::Snowflake,
         _ => Platform::Generic,
     };
     let dbt = extract_sql_features(&file.text);
@@ -223,8 +249,9 @@ fn run_for_rule(rule_id: &str, file: &ProjectFile, docs: &[SqlDocument]) -> Vec<
     let indexes = ProjectIndexes::from_sql_documents(docs);
     let sql = docs.iter().find(|doc| doc.path == file.path);
     let warehouse = match rule_id {
-        "SQLCOST021" | "SQLCOST028" => Platform::BigQuery,
+        "SQLCOST021" | "SQLCOST028" | "SQLCOST042" => Platform::BigQuery,
         "SQLCOST035" => Platform::Trino,
+        "SQLCOST043" => Platform::Snowflake,
         _ => Platform::Generic,
     };
     let diagnostics = registry.run(&RuleContext {
@@ -392,4 +419,109 @@ where block_time >= date_sub(current_date(), interval 3 day)
     let doc = analyze(&file);
     let ids = run_for_file(&file, &[doc]);
     assert!(!ids.contains(&"SQLCOST019".to_string()));
+}
+
+#[test]
+fn fan_out_join_rule_uses_project_indexes() {
+    let dim_users = sql_file(
+        "models/marts/dim_users.sql",
+        "{{ config(unique_key='user_id') }} select user_id, email from users",
+    );
+    let fct = sql_file(
+        "models/marts/fct_orders.sql",
+        "select * from orders join dim_users on orders.email = dim_users.email",
+    );
+    let docs = vec![analyze(&dim_users), analyze(&fct)];
+    let ids = run_for_rule("SQLCOST038", &fct, &docs);
+    assert!(ids.contains(&"SQLCOST038".to_string()));
+}
+
+#[test]
+fn heavily_referenced_view_rule_uses_project_indexes() {
+    let shared = sql_file(
+        "models/intermediate/int_shared.sql",
+        "{{ config(materialized='view') }} select id, event_date from base",
+    );
+    let downstream: Vec<ProjectFile> = (1..=4)
+        .map(|idx| {
+            sql_file(
+                &format!("models/marts/fct_{idx}.sql"),
+                "select id from {{ ref('int_shared') }}",
+            )
+        })
+        .collect();
+    let docs = std::iter::once(analyze(&shared))
+        .chain(downstream.iter().map(analyze))
+        .collect::<Vec<_>>();
+    let ids = run_for_rule("SQLCOST039", &shared, &docs);
+    assert!(ids.contains(&"SQLCOST039".to_string()));
+}
+
+#[test]
+fn bigquery_missing_partition_filter_has_positive_coverage() {
+    let file = sql_file(
+        "models/marts/events.sql",
+        "select * from {{ ref('stg_events') }}",
+    );
+    let doc = analyze_bigquery(&file);
+    let registry = RuleRegistry::default_rules();
+    let indexes = ProjectIndexes::from_sql_documents(std::slice::from_ref(&doc));
+    let diagnostics = registry.run(&RuleContext {
+        warehouse: Platform::BigQuery,
+        file: &file,
+        sql: Some(&doc),
+        dbt_model: None,
+        all_sql: std::slice::from_ref(&doc),
+        project_indexes: &indexes,
+        overrides: &RuleOverrides::default(),
+    });
+    assert!(diagnostics.iter().any(|d| d.rule_id == "SQLCOST042"));
+}
+
+#[test]
+fn snowflake_merge_without_target_pruning_has_positive_coverage() {
+    let file = sql_file(
+        "models/marts/fct.sql",
+        "{{ config(materialized='incremental', incremental_strategy='merge', unique_key='id') }}
+select id, updated_at from events
+{% if is_incremental() %}
+where updated_at >= current_date - 3
+{% endif %}",
+    );
+    let doc = analyze_for_rule("SQLCOST043", &file);
+    let ids = run_for_rule("SQLCOST043", &file, &[doc]);
+    assert!(ids.contains(&"SQLCOST043".to_string()));
+}
+
+#[test]
+fn row_explosion_without_dedup_does_not_fire_sqlcost036() {
+    let file = sql_file(
+        "models/marts/fct.sql",
+        "select user_id, tag from orders cross join unnest(tag_list) as tag",
+    );
+    let doc = analyze(&file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(!ids.contains(&"SQLCOST036".to_string()));
+}
+
+#[test]
+fn plain_in_subquery_does_not_fire_sqlcost037() {
+    let file = sql_file(
+        "models/marts/fct.sql",
+        "select id from orders where id in (select order_id from returns)",
+    );
+    let doc = analyze(&file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(!ids.contains(&"SQLCOST037".to_string()));
+}
+
+#[test]
+fn non_recursive_cte_does_not_fire_sqlcost044() {
+    let file = sql_file(
+        "models/marts/fct.sql",
+        "with graph as (select 1 as n) select * from graph",
+    );
+    let doc = analyze(&file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(!ids.contains(&"SQLCOST044".to_string()));
 }

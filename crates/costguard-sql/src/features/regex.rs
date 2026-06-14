@@ -26,6 +26,24 @@ fn scalar_subquery_select_regex() -> &'static Regex {
     cached_regex(&RE, "(?i)\\bselect\\b[^;\\n]*?,\\s*\\(\\s*select\\b")
 }
 
+fn not_in_subquery_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    cached_regex(&RE, "(?i)\\bnot\\s+in\\s*\\(\\s*select\\b")
+}
+
+fn row_explosion_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    cached_regex(
+        &RE,
+        "(?i)\\b(?:lateral\\s+)?(?:flatten|unnest)\\s*\\(|\\bcross\\s+join\\s+unnest\\b",
+    )
+}
+
+fn recursive_cte_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    cached_regex(&RE, "(?i)\\bwith\\s+recursive\\b")
+}
+
 fn extract_or_partition_predicates(text: &str, line_index: &LineIndex) -> Vec<ExpressionFeature> {
     static RE: OnceLock<Regex> = OnceLock::new();
     let regex = RE.get_or_init(|| {
@@ -85,6 +103,16 @@ pub(crate) fn extract_features(
         matches_as_features(text, line_index, scalar_subquery_select_regex(), |_| {
             "scalar subquery".into()
         });
+    features.not_in_subqueries =
+        matches_as_features(text, line_index, not_in_subquery_regex(), |_| {
+            "not in subquery".into()
+        });
+    features.row_explosions = matches_as_features(text, line_index, row_explosion_regex(), |_| {
+        "row explosion".into()
+    });
+    features.recursive_ctes = matches_as_features(text, line_index, recursive_cte_regex(), |_| {
+        "with recursive".into()
+    });
     features
 }
 
@@ -127,6 +155,8 @@ fn extract_windows(text: &str, line_index: &LineIndex) -> Vec<WindowFeature> {
                 span: line_index.span(matched.start(), matched.end()),
                 text: matched.as_str().to_string(),
                 has_partition_by: body.to_ascii_lowercase().contains("partition by"),
+                unbounded_frame: body.to_ascii_lowercase().contains("unbounded preceding")
+                    && body.to_ascii_lowercase().contains("unbounded following"),
             })
         })
         .collect()
@@ -183,6 +213,8 @@ fn extract_joins(
             predicate,
             pattern_matching: predicate_matches_pattern(&predicate_lower),
             cross_catalog: cross_catalog_in_predicate(&predicate_lower),
+            right_relation: None,
+            equality_keys: Vec::new(),
         });
     }
 

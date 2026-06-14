@@ -5,7 +5,7 @@ use costguard_diagnostics::{LineIndex, Span};
 use sqlparser::ast::{
     BinaryOperator, DuplicateTreatment, Expr, Function, FunctionArguments, Join, JoinConstraint,
     JoinOperator, ObjectName, Query, Select, SelectItem, SetExpr, SetOperator, SetQuantifier,
-    Statement, TableFactor, TableWithJoins, Value, WindowSpec, WindowType, With,
+    Statement, TableFactor, TableWithJoins, Value, WindowFrameBound, WindowSpec, WindowType, With,
 };
 use std::collections::HashMap;
 
@@ -44,6 +44,15 @@ fn extract_query(query: &Query, finder: &mut SpanFinder<'_>, features: &mut SqlF
 }
 
 fn extract_with(with: &With, finder: &mut SpanFinder<'_>, features: &mut SqlFeatures) {
+    if with.recursive {
+        if let Some(span) = finder.find_next("recursive") {
+            features.recursive_ctes.push(ExpressionFeature {
+                span,
+                key: "with recursive".into(),
+                text: "with recursive".into(),
+            });
+        }
+    }
     for cte in &with.cte_tables {
         let name = cte.alias.name.value.to_ascii_lowercase();
         if let Some(span) = finder.find_word_next(&name) {
@@ -98,6 +107,7 @@ fn extract_select(select: &Select, finder: &mut SpanFinder<'_>, features: &mut S
         extract_non_sargable_predicates(where_expr, finder, features);
         extract_leading_wildcard_likes(where_expr, finder, features);
         extract_or_partition_predicates(where_expr, finder, features);
+        extract_not_in_subqueries_in_expr(where_expr, finder, features);
         extract_correlated_subqueries_in_expr(
             where_expr,
             &collect_table_aliases(select),
@@ -164,7 +174,8 @@ fn extract_join(
         JoinKind::Full => "full join",
         JoinKind::Inner | JoinKind::Comma => " join",
     };
-    let (predicate, has_equality, function_on_join_key, pattern_matching) =
+    let right_relation = table_factor_relation_name(&join.relation);
+    let (predicate, has_equality, function_on_join_key, pattern_matching, equality_keys) =
         match &join.join_operator {
             JoinOperator::Inner(inner)
             | JoinOperator::LeftOuter(inner)
@@ -174,6 +185,7 @@ fn extract_join(
                     let predicate = expr.to_string();
                     let predicate_lower = predicate.to_ascii_lowercase();
                     extract_leading_wildcard_likes(expr, finder, features);
+                    extract_not_in_subqueries_in_expr(expr, finder, features);
                     extract_correlated_subqueries_in_expr(
                         expr,
                         &outer_aliases_for_join(&join.relation),
@@ -185,15 +197,17 @@ fn extract_join(
                         has_equality_predicate(&predicate_lower),
                         join_predicate_has_function_on_key(expr),
                         predicate_is_pattern_matching(expr),
+                        join_equality_keys(expr),
                     )
                 }
                 JoinConstraint::Using(ids) => {
                     let predicate = format!("USING({ids:?})");
-                    (Some(predicate), true, false, false)
+                    let keys = ids.iter().map(|id| id.value.to_ascii_lowercase()).collect();
+                    (Some(predicate), true, false, false, keys)
                 }
-                _ => (None, false, false, false),
+                _ => (None, false, false, false, Vec::new()),
             },
-            _ => (None, false, false, false),
+            _ => (None, false, false, false, Vec::new()),
         };
     if matches!(kind, JoinKind::Cross) && is_exempt_cross_join_target(&join.relation) {
         extract_table_factor(&join.relation, finder, features);
@@ -213,6 +227,8 @@ fn extract_join(
             function_on_join_key,
             pattern_matching,
             cross_catalog,
+            right_relation,
+            equality_keys,
         });
     }
     extract_table_factor(&join.relation, finder, features);
@@ -223,6 +239,16 @@ fn extract_table_factor(
     finder: &mut SpanFinder<'_>,
     features: &mut SqlFeatures,
 ) {
+    if is_row_explosion_factor(factor) {
+        let text = row_explosion_text(factor);
+        if let Some(span) = finder.find_next(&text) {
+            features.row_explosions.push(ExpressionFeature {
+                span,
+                key: text.clone(),
+                text,
+            });
+        }
+    }
     match factor {
         TableFactor::Table { name, .. } => {
             if table_name_has_wildcard(name) && !finder.text_has_table_suffix_bound() {
@@ -276,6 +302,7 @@ fn extract_function(function: &Function, finder: &mut SpanFinder<'_>, features: 
                         span,
                         text: "over (...)".into(),
                         has_partition_by: false,
+                        unbounded_frame: false,
                     });
                 }
             }
@@ -332,17 +359,23 @@ fn extract_window(
     features: &mut SqlFeatures,
 ) {
     let snippet = function.name.to_string().to_ascii_lowercase();
+    let unbounded_frame = window
+        .window_frame
+        .as_ref()
+        .is_some_and(is_unbounded_window_frame);
     if let Some(span) = finder.find_next(&snippet) {
         features.window_functions.push(WindowFeature {
             span,
             text: snippet,
             has_partition_by: !window.partition_by.is_empty(),
+            unbounded_frame,
         });
     } else if let Some(span) = finder.find_next("over (") {
         features.window_functions.push(WindowFeature {
             span,
             text: "over (...)".into(),
             has_partition_by: !window.partition_by.is_empty(),
+            unbounded_frame,
         });
     }
 }
@@ -365,6 +398,17 @@ fn extract_cte_references_from_names(
 }
 
 fn is_exempt_cross_join_target(factor: &TableFactor) -> bool {
+    is_row_explosion_factor(factor)
+        || match factor {
+            TableFactor::Table { name, .. } => {
+                let table = object_name_last(name);
+                is_date_spine_table(&table)
+            }
+            _ => false,
+        }
+}
+
+fn is_row_explosion_factor(factor: &TableFactor) -> bool {
     match factor {
         TableFactor::UNNEST { .. } | TableFactor::TableFunction { .. } => true,
         TableFactor::Function { name, .. } => {
@@ -373,11 +417,104 @@ fn is_exempt_cross_join_target(factor: &TableFactor) -> bool {
                 "unnest" | "flatten" | "table"
             )
         }
-        TableFactor::Table { name, .. } => {
-            let table = object_name_last(name);
-            table == "unnest" || is_date_spine_table(&table)
-        }
+        TableFactor::Table { name, .. } => object_name_last(name) == "unnest",
         _ => false,
+    }
+}
+
+fn row_explosion_text(factor: &TableFactor) -> String {
+    match factor {
+        TableFactor::UNNEST { .. } => "unnest".into(),
+        TableFactor::TableFunction { .. } => "table function".into(),
+        TableFactor::Function { name, .. } => object_name_last(name),
+        TableFactor::Table { name, .. } => object_name_last(name),
+        _ => "row explosion".into(),
+    }
+}
+
+fn table_factor_relation_name(factor: &TableFactor) -> Option<String> {
+    match factor {
+        TableFactor::Table { name, alias, .. } => alias
+            .as_ref()
+            .map(|alias| alias.name.value.to_ascii_lowercase())
+            .or_else(|| name.0.last().map(|ident| ident.value.to_ascii_lowercase())),
+        TableFactor::Derived {
+            alias: Some(alias), ..
+        } => Some(alias.name.value.to_ascii_lowercase()),
+        _ => None,
+    }
+}
+
+fn join_equality_keys(expr: &Expr) -> Vec<String> {
+    match expr {
+        Expr::BinaryOp {
+            left,
+            op: BinaryOperator::Eq,
+            right,
+        } => {
+            let mut keys = Vec::new();
+            if let Some(key) = expr_column_name(left) {
+                keys.push(key);
+            }
+            if let Some(key) = expr_column_name(right) {
+                keys.push(key);
+            }
+            keys
+        }
+        Expr::BinaryOp {
+            left,
+            op: BinaryOperator::And,
+            right,
+        } => {
+            let mut keys = join_equality_keys(left);
+            keys.extend(join_equality_keys(right));
+            keys
+        }
+        Expr::Nested(inner) => join_equality_keys(inner),
+        _ => Vec::new(),
+    }
+}
+
+fn is_unbounded_window_frame(frame: &sqlparser::ast::WindowFrame) -> bool {
+    matches!(
+        frame.start_bound,
+        WindowFrameBound::Preceding(None) | WindowFrameBound::Following(None)
+    ) && matches!(
+        frame.end_bound,
+        Some(WindowFrameBound::Preceding(None) | WindowFrameBound::Following(None))
+    )
+}
+
+fn extract_not_in_subqueries_in_expr(
+    expr: &Expr,
+    finder: &mut SpanFinder<'_>,
+    features: &mut SqlFeatures,
+) {
+    match expr {
+        Expr::InSubquery {
+            negated: true,
+            subquery,
+            ..
+        } => {
+            let snippet = subquery.to_string();
+            if let Some(span) = finder.find_next(&snippet) {
+                features.not_in_subqueries.push(ExpressionFeature {
+                    span,
+                    key: "not in subquery".into(),
+                    text: snippet,
+                });
+            }
+        }
+        Expr::BinaryOp {
+            left,
+            op: BinaryOperator::And | BinaryOperator::Or,
+            right,
+        } => {
+            extract_not_in_subqueries_in_expr(left, finder, features);
+            extract_not_in_subqueries_in_expr(right, finder, features);
+        }
+        Expr::Nested(inner) => extract_not_in_subqueries_in_expr(inner, finder, features),
+        _ => {}
     }
 }
 
@@ -1215,6 +1352,15 @@ pub fn merge_shape_features(mut base: SqlFeatures, ast: SqlFeatures, parsed: boo
     }
     if !ast.scalar_subqueries_in_select.is_empty() {
         base.scalar_subqueries_in_select = ast.scalar_subqueries_in_select;
+    }
+    if !ast.row_explosions.is_empty() {
+        base.row_explosions = ast.row_explosions;
+    }
+    if !ast.not_in_subqueries.is_empty() {
+        base.not_in_subqueries = ast.not_in_subqueries;
+    }
+    if !ast.recursive_ctes.is_empty() {
+        base.recursive_ctes = ast.recursive_ctes;
     }
     base.joins = merge_join_features(&base.joins, &ast.joins);
     base

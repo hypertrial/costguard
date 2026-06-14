@@ -126,6 +126,8 @@ pub(crate) fn extract_comma_joins(text: &str, line_index: &LineIndex) -> Vec<Joi
             function_on_join_key: false,
             pattern_matching: false,
             cross_catalog: false,
+            right_relation: None,
+            equality_keys: Vec::new(),
         }];
     }
     Vec::new()

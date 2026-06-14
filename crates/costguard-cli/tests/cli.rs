@@ -336,6 +336,7 @@ fn rules_command_lists_rules() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("SQLCOST001"));
     assert!(stdout.contains("SQLCOST015"));
+    assert!(stdout.contains("SQLCOST044"));
 }
 
 #[test]

@@ -63,6 +63,9 @@ pub struct SqlFeatures {
     pub leading_wildcard_likes: Vec<ExpressionFeature>,
     pub or_partition_predicates: Vec<ExpressionFeature>,
     pub scalar_subqueries_in_select: Vec<ExpressionFeature>,
+    pub row_explosions: Vec<ExpressionFeature>,
+    pub not_in_subqueries: Vec<ExpressionFeature>,
+    pub recursive_ctes: Vec<ExpressionFeature>,
 }
 
 #[derive(Debug, Clone)]
@@ -82,6 +85,8 @@ pub struct JoinFeature {
     pub function_on_join_key: bool,
     pub pattern_matching: bool,
     pub cross_catalog: bool,
+    pub right_relation: Option<String>,
+    pub equality_keys: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -99,6 +104,7 @@ pub struct WindowFeature {
     pub span: Span,
     pub text: String,
     pub has_partition_by: bool,
+    pub unbounded_frame: bool,
 }
 
 /// A common table expression (CTE) definition.

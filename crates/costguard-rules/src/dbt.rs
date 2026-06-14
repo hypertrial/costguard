@@ -1,6 +1,6 @@
 use crate::helpers::{
     diagnostic, has_bounded_incremental_predicate, incremental_predicate_suggestion,
-    incremental_source_filter_deferred, normalized_path,
+    incremental_source_filter_deferred, is_downstream_model, normalized_path,
 };
 use crate::registry::{Platform, Rule, RuleContext};
 use costguard_dbt::DbtConfig;
@@ -12,6 +12,8 @@ pub(crate) struct IncrementalSourceBoundRule;
 pub(crate) struct SourceInMartRule;
 pub(crate) struct MissingPartitionClusterRule;
 pub(crate) struct FullRefreshHeavyIncrementalRule;
+pub(crate) struct TableShouldBeIncrementalRule;
+pub(crate) struct MergeWithoutTargetPruningRule;
 
 fn materialized_config<'a>(
     model: Option<&'a costguard_dbt::DbtModel>,
@@ -323,5 +325,105 @@ impl Rule for FullRefreshHeavyIncrementalRule {
             .with_suggestion(
                 "prefer bounded incremental merges; use append_new_columns or fail schema changes in production marts.",
             )]
+    }
+}
+
+fn has_recognized_date_partition_column(text: &str) -> bool {
+    has_bounded_incremental_predicate(text)
+}
+
+impl Rule for TableShouldBeIncrementalRule {
+    fn id(&self) -> &'static str {
+        "SQLCOST040"
+    }
+    fn name(&self) -> &'static str {
+        "Table model with date column should be incremental"
+    }
+    fn description(&self) -> &'static str {
+        "Detects full-rebuild table models with recognized date or partition columns that look append-only."
+    }
+    fn default_severity(&self) -> Severity {
+        Severity::Medium
+    }
+    fn check(&self, ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
+        let Some(sql) = ctx.sql else {
+            return Vec::new();
+        };
+        if !is_downstream_model(&ctx.file.root_relative_path) {
+            return Vec::new();
+        }
+        let materialized = materialized_config(ctx.dbt_model, &sql.dbt.config);
+        if materialized != Some("table") || sql.dbt.uses_is_incremental {
+            return Vec::new();
+        }
+        if !has_recognized_date_partition_column(&ctx.file.text) {
+            return Vec::new();
+        }
+        vec![diagnostic(
+            ctx,
+            self.id(),
+            self.default_severity(),
+            None,
+            "Table model has a recognized date or partition column but is not incremental.",
+        )
+        .with_risk(
+            "full table rebuilds on append-only event data can rescan and rewrite far more data than necessary.",
+        )
+        .with_suggestion(
+            "switch to incremental materialization with a bounded date or partition predicate.",
+        )
+        .with_confidence(costguard_diagnostics::Confidence::Medium)]
+    }
+}
+
+impl Rule for MergeWithoutTargetPruningRule {
+    fn id(&self) -> &'static str {
+        "SQLCOST043"
+    }
+    fn name(&self) -> &'static str {
+        "Incremental merge without target pruning"
+    }
+    fn description(&self) -> &'static str {
+        "Detects incremental merge models without incremental_predicates for target-side pruning."
+    }
+    fn default_severity(&self) -> Severity {
+        Severity::Medium
+    }
+    fn applies_to(&self, platform: Platform) -> bool {
+        platform == Platform::Snowflake
+    }
+    fn check(&self, ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
+        let Some(sql) = ctx.sql else {
+            return Vec::new();
+        };
+        let materialized = materialized_config(ctx.dbt_model, &sql.dbt.config);
+        if materialized != Some("incremental") {
+            return Vec::new();
+        }
+        let incremental_strategy = ctx
+            .dbt_model
+            .and_then(|model| model.incremental_strategy.as_deref())
+            .or(sql.dbt.config.incremental_strategy.as_deref());
+        if !incremental_strategy.is_some_and(|strategy| strategy.eq_ignore_ascii_case("merge")) {
+            return Vec::new();
+        }
+        let lower = ctx.file.text.to_ascii_lowercase();
+        if lower.contains("incremental_predicates") || lower.contains("incremental_predicate(") {
+            return Vec::new();
+        }
+        vec![diagnostic(
+            ctx,
+            self.id(),
+            self.default_severity(),
+            None,
+            "Incremental merge model has no incremental_predicates configuration.",
+        )
+        .with_risk(
+            "merge without target-side pruning can scan the full destination table on every incremental run.",
+        )
+        .with_suggestion(
+            "add incremental_predicates in model config to prune DBT_INTERNAL_DEST on merge.",
+        )
+        .with_confidence(costguard_diagnostics::Confidence::High)]
     }
 }

@@ -14,6 +14,10 @@ pub(crate) struct OrPartitionPredicateRule;
 pub(crate) struct PatternMatchingJoinRule;
 pub(crate) struct ScalarSubqueryInSelectRule;
 pub(crate) struct CrossCatalogJoinRule;
+pub(crate) struct RowExplosionRule;
+pub(crate) struct NotInSubqueryRule;
+pub(crate) struct UnboundedWindowFrameRule;
+pub(crate) struct BigQueryMissingPartitionFilterRule;
 
 impl Rule for NonSargablePredicateRule {
     fn id(&self) -> &'static str {
@@ -545,5 +549,192 @@ impl Rule for CrossCatalogJoinRule {
                 .with_confidence(confidence)
             })
             .collect()
+    }
+}
+
+impl Rule for RowExplosionRule {
+    fn id(&self) -> &'static str {
+        "SQLCOST036"
+    }
+    fn name(&self) -> &'static str {
+        "Row-exploding UNNEST or LATERAL FLATTEN"
+    }
+    fn description(&self) -> &'static str {
+        "Detects UNNEST, LATERAL FLATTEN, or CROSS JOIN UNNEST followed by deduplication or aggregation."
+    }
+    fn default_severity(&self) -> Severity {
+        Severity::High
+    }
+    fn check(&self, ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
+        let Some(sql) = ctx.sql else {
+            return Vec::new();
+        };
+        if sql.features.row_explosions.is_empty() {
+            return Vec::new();
+        }
+        let has_dedup =
+            !sql.features.distincts.is_empty() || !sql.features.count_distincts.is_empty();
+        if !has_dedup {
+            return Vec::new();
+        }
+        sql.features
+            .row_explosions
+            .iter()
+            .map(|feature| {
+                let confidence = if sql.feature_extraction_used_ast {
+                    Confidence::High
+                } else {
+                    Confidence::Low
+                };
+                diagnostic(
+                    ctx,
+                    self.id(),
+                    self.default_severity(),
+                    Some(feature.span),
+                    "Row-exploding UNNEST or LATERAL FLATTEN followed by deduplication.",
+                )
+                .with_risk(
+                    "semi-structured row explosion can multiply intermediate data and force expensive deduplication.",
+                )
+                .with_suggestion(
+                    "pre-filter arrays before UNNEST/FLATTEN, or materialize exploded rows once upstream.",
+                )
+                .with_confidence(confidence)
+            })
+            .collect()
+    }
+}
+
+impl Rule for NotInSubqueryRule {
+    fn id(&self) -> &'static str {
+        "SQLCOST037"
+    }
+    fn name(&self) -> &'static str {
+        "NOT IN (subquery)"
+    }
+    fn description(&self) -> &'static str {
+        "Detects NOT IN (subquery) anti-join patterns in filters or join predicates."
+    }
+    fn default_severity(&self) -> Severity {
+        Severity::High
+    }
+    fn check(&self, ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
+        let Some(sql) = ctx.sql else {
+            return Vec::new();
+        };
+        sql.features
+            .not_in_subqueries
+            .iter()
+            .map(|feature| {
+                let confidence = if sql.feature_extraction_used_ast {
+                    Confidence::High
+                } else {
+                    Confidence::Low
+                };
+                diagnostic(
+                    ctx,
+                    self.id(),
+                    self.default_severity(),
+                    Some(feature.span),
+                    "NOT IN (subquery) detected.",
+                )
+                .with_risk(
+                    "NOT IN subqueries can force full scans, anti-joins, and NULL-related correctness issues.",
+                )
+                .with_suggestion(
+                    "rewrite as NOT EXISTS, LEFT JOIN ... IS NULL, or pre-filter the subquery driving set.",
+                )
+                .with_confidence(confidence)
+            })
+            .collect()
+    }
+}
+
+impl Rule for UnboundedWindowFrameRule {
+    fn id(&self) -> &'static str {
+        "SQLCOST041"
+    }
+    fn name(&self) -> &'static str {
+        "Unbounded window frame"
+    }
+    fn description(&self) -> &'static str {
+        "Detects window functions with ROWS/RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING."
+    }
+    fn default_severity(&self) -> Severity {
+        Severity::Medium
+    }
+    fn check(&self, ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
+        let Some(sql) = ctx.sql else {
+            return Vec::new();
+        };
+        sql.features
+            .window_functions
+            .iter()
+            .filter(|window| window.unbounded_frame)
+            .map(|window| {
+                let confidence = if sql.feature_extraction_used_ast {
+                    Confidence::High
+                } else {
+                    Confidence::Low
+                };
+                diagnostic(
+                    ctx,
+                    self.id(),
+                    self.default_severity(),
+                    Some(window.span),
+                    "Window function uses an unbounded frame.",
+                )
+                .with_risk(
+                    "unbounded window frames can force full-partition sorts and scans even when PARTITION BY is present.",
+                )
+                .with_suggestion(
+                    "bound the frame with a finite ROWS/RANGE window when cumulative logic allows it.",
+                )
+                .with_confidence(confidence)
+            })
+            .collect()
+    }
+}
+
+impl Rule for BigQueryMissingPartitionFilterRule {
+    fn id(&self) -> &'static str {
+        "SQLCOST042"
+    }
+    fn name(&self) -> &'static str {
+        "BigQuery model without partition or date filter"
+    }
+    fn description(&self) -> &'static str {
+        "Detects BigQuery models that read source() or ref() without an obvious partition or date filter."
+    }
+    fn default_severity(&self) -> Severity {
+        Severity::Medium
+    }
+    fn applies_to(&self, platform: Platform) -> bool {
+        platform == Platform::BigQuery
+    }
+    fn check(&self, ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
+        let Some(sql) = ctx.sql else {
+            return Vec::new();
+        };
+        if (!sql.dbt.sources.is_empty() || !sql.dbt.refs.is_empty())
+            && !crate::helpers::has_bounded_incremental_predicate(&ctx.file.text)
+        {
+            vec![diagnostic(
+                ctx,
+                self.id(),
+                self.default_severity(),
+                None,
+                "BigQuery model reads source() or ref() without an obvious partition or date filter.",
+            )
+            .with_risk(
+                "unbounded reads against partitioned BigQuery tables can scan far more data than intended.",
+            )
+            .with_suggestion(
+                "add _PARTITIONDATE, _PARTITIONTIME, or event_date filters before downstream joins.",
+            )
+            .with_confidence(Confidence::Medium)]
+        } else {
+            Vec::new()
+        }
     }
 }

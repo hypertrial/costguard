@@ -11,6 +11,7 @@ pub(crate) struct BlindDistinctRule;
 pub(crate) struct CrossJoinRule;
 pub(crate) struct UnpartitionedWindowRule;
 pub(crate) struct RepeatedCteRule;
+pub(crate) struct RecursiveCteRule;
 
 fn join_has_clear_equality(join: &costguard_sql::JoinFeature) -> bool {
     join.has_equality
@@ -310,5 +311,50 @@ impl Rule for RepeatedCteRule {
                     "materialize the CTE if it is expensive or reused across branches.",
                 )]
             })
+    }
+}
+
+impl Rule for RecursiveCteRule {
+    fn id(&self) -> &'static str {
+        "SQLCOST044"
+    }
+    fn name(&self) -> &'static str {
+        "Recursive CTE"
+    }
+    fn description(&self) -> &'static str {
+        "Detects WITH RECURSIVE common table expressions."
+    }
+    fn default_severity(&self) -> Severity {
+        Severity::Medium
+    }
+    fn check(&self, ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
+        let Some(sql) = ctx.sql else {
+            return Vec::new();
+        };
+        sql.features
+            .recursive_ctes
+            .iter()
+            .map(|feature| {
+                let confidence = if sql.feature_extraction_used_ast {
+                    Confidence::High
+                } else {
+                    Confidence::Low
+                };
+                diagnostic(
+                    ctx,
+                    self.id(),
+                    self.default_severity(),
+                    Some(feature.span),
+                    "Recursive CTE detected.",
+                )
+                .with_risk(
+                    "recursive CTEs can iterate unpredictably and dominate warehouse cost on large graphs.",
+                )
+                .with_suggestion(
+                    "cap recursion depth, pre-materialize graph edges, or use iterative batching when possible.",
+                )
+                .with_confidence(confidence)
+            })
+            .collect()
     }
 }

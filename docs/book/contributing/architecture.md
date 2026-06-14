@@ -58,7 +58,7 @@ A typical `costguard pr` run:
 1. **Git** — `costguard-git` resolves changed files against the base branch.
 2. **Scanner** — `costguard-scanner` classifies files (SQL, dbt YAML, Python, manifest).
 3. **dbt + SQL** — `costguard-dbt` loads manifest/YAML; `costguard-sql` parses SQL and extracts shape features.
-4. **Rules** — `costguard-rules` evaluates 35 SQLCOST rules against each file's `RuleContext`.
+4. **Rules** — `costguard-rules` evaluates 44 SQLCOST rules against each file's `RuleContext`.
 5. **Policy + baseline** — `costguard-core` applies signed policy and finding baselines.
 6. **Cost** — `costguard-cost` attaches advisory cost estimates when configured.
 7. **Output** — `costguard-output` renders text, JSON, GitHub annotations, markdown, or SARIF.
@@ -70,7 +70,7 @@ A typical `costguard pr` run:
 - **costguard-scanner** — File discovery, classification, and size/ignore filtering.
 - **costguard-sql** — Jinja stripping, sqlparser dialect parsing, feature extraction.
 - **costguard-dbt** — Manifest JSON, YAML schema, `dbt_project.yml` folder configs, model graph.
-- **costguard-rules** — 35 SQLCOST rules, `RuleRegistry`, per-rule overrides.
+- **costguard-rules** — 44 SQLCOST rules, `RuleRegistry`, per-rule overrides.
 - **costguard-diagnostics** — `Diagnostic`, severity, confidence, spans, inline suppressions.
 - **costguard-cost** — Lognormal cost model, catalog/query-history import, savings attribution.
 - **costguard-output** — Result rendering in five output formats (JSON schema v3).
