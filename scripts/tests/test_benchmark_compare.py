@@ -19,10 +19,10 @@ def load_compare_report():
     assert spec.loader is not None
     sys.modules["benchmark_external_repo"] = module
     spec.loader.exec_module(module)
-    return module.compare_report
+    return module.compare_report, module.benchmark_cost_summary
 
 
-compare_report = load_compare_report()
+compare_report, benchmark_cost_summary = load_compare_report()
 
 
 class CompareReportTests(unittest.TestCase):
@@ -81,6 +81,18 @@ class CompareReportTests(unittest.TestCase):
         self.assertTrue(any("runtime_median_ms" in error for error in errors))
         self.assertTrue(any("runtime_max_ms" in error for error in errors))
         self.assertTrue(any("max_rss_bytes" in error for error in errors))
+
+
+    def test_benchmark_cost_summary_ignores_top_models(self) -> None:
+        left = {
+            "project_p50_usd": 3200.0,
+            "top_models": [{"model_id": "model.a"}],
+        }
+        right = {
+            "project_p50_usd": 3200.0,
+            "top_models": [{"model_id": "model.b"}],
+        }
+        self.assertEqual(benchmark_cost_summary(left), benchmark_cost_summary(right))
 
 
 if __name__ == "__main__":

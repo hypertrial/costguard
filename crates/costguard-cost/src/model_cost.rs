@@ -26,7 +26,7 @@ pub struct ModelCostIndex {
     pub by_path: HashMap<PathBuf, String>,
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub struct TopModelCost {
     pub model_id: String,
     pub path: Option<PathBuf>,
@@ -88,7 +88,9 @@ pub fn build_model_cost_index(
     let mut by_path = HashMap::new();
 
     let model_list: Vec<&DbtModel> = if let Some(project) = dbt {
-        project.models.values().collect()
+        let mut models: Vec<&DbtModel> = project.models.values().collect();
+        models.sort_by_key(|model| model_identity(model));
+        models
     } else {
         Vec::new()
     };
@@ -131,9 +133,12 @@ pub fn summarize_project_costs(index: &ModelCostIndex, config: &CostConfig) -> P
     let mut grade_c = 0usize;
     let mut cost_estimates = Vec::new();
     let mut gb_total = 0.0_f64;
-    let mut top_models: Vec<TopModelCost> = Vec::new();
+    let mut model_ids: Vec<&String> = index.models.keys().collect();
+    model_ids.sort();
 
-    for entry in index.models.values() {
+    let mut ranked: Vec<(f64, TopModelCost)> = Vec::new();
+    for model_id in model_ids {
+        let entry = &index.models[model_id];
         match entry.grade {
             CostGrade::A => grade_a += 1,
             CostGrade::B => grade_b += 1,
@@ -141,23 +146,33 @@ pub fn summarize_project_costs(index: &ModelCostIndex, config: &CostConfig) -> P
         }
         gb_total += entry.gb_months;
         cost_estimates.push(entry.monthly_cost);
-        top_models.push(TopModelCost {
-            model_id: entry.model_id.clone(),
-            path: entry.path.clone(),
-            p50_usd_per_month: has_pricing.then(|| round_sig2(entry.monthly_cost.median())),
-            gb_months: round_sig2(entry.gb_months),
-            grade: entry.grade,
-        });
+        let score = if has_pricing {
+            entry.monthly_cost.median()
+        } else {
+            entry.gb_months
+        };
+        ranked.push((
+            score,
+            TopModelCost {
+                model_id: entry.model_id.clone(),
+                path: entry.path.clone(),
+                p50_usd_per_month: has_pricing.then(|| round_sig2(entry.monthly_cost.median())),
+                gb_months: round_sig2(entry.gb_months),
+                grade: entry.grade,
+            },
+        ));
     }
 
-    top_models.sort_by(|left, right| {
-        right
-            .p50_usd_per_month
-            .unwrap_or(right.gb_months)
-            .partial_cmp(&left.p50_usd_per_month.unwrap_or(left.gb_months))
-            .unwrap_or(std::cmp::Ordering::Equal)
+    ranked.sort_unstable_by(|(left_score, left), (right_score, right)| {
+        right_score
+            .total_cmp(left_score)
+            .then_with(|| left.model_id.cmp(&right.model_id))
     });
-    top_models.truncate(5);
+    let top_models = ranked
+        .into_iter()
+        .take(5)
+        .map(|(_, model)| model)
+        .collect();
 
     let total = sum_lognormals(&cost_estimates);
     let (project_p10, project_p50, project_p90) = if has_pricing {
@@ -249,5 +264,43 @@ mod tests {
         let summary = summarize_project_costs(&index, &config);
         assert_eq!(summary.model_count, 2);
         assert!(summary.project_p50_usd.unwrap_or(0.0) > 0.0);
+    }
+
+    #[test]
+    fn top_models_order_is_stable_when_costs_tie() {
+        let mut config = CostConfig {
+            enabled: true,
+            ..CostConfig::default()
+        };
+        config.pricing = CostPricingSection {
+            model: Some("scan".into()),
+            usd_per_tb: Some(5.0),
+            usd_per_credit: None,
+            tb_per_credit_hour: None,
+        };
+        let mut dbt = DbtProject::default();
+        for name in ["alpha", "beta", "gamma", "delta", "epsilon", "zeta"] {
+            dbt.models.insert(
+                name.into(),
+                DbtModel {
+                    name: name.into(),
+                    path: Some(PathBuf::from(format!("models/{name}.sql"))),
+                    ..DbtModel::default()
+                },
+            );
+        }
+        let index = build_model_cost_index(&config, Some(&dbt), &CostInputs::default());
+        let first = summarize_project_costs(&index, &config);
+        let second = summarize_project_costs(&index, &config);
+        assert_eq!(first.top_models, second.top_models);
+        assert_eq!(first.top_models.len(), 5);
+        let model_ids: Vec<String> = first
+            .top_models
+            .iter()
+            .map(|entry| entry.model_id.clone())
+            .collect();
+        let mut sorted_ids = model_ids.clone();
+        sorted_ids.sort();
+        assert_eq!(model_ids, sorted_ids);
     }
 }

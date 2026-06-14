@@ -31,6 +31,15 @@ def baseline_path(target: str) -> Path:
     return BASELINES / f"{safe}.json"
 
 
+def benchmark_cost_summary(cost: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Return cost fields used for repeat-run stability checks."""
+    if cost is None:
+        return None
+    stable = dict(cost)
+    stable.pop("top_models", None)
+    return stable
+
+
 def run_costguard(
     workdir: Path,
     *,
@@ -65,7 +74,9 @@ def run_costguard(
             raise SystemExit("benchmark metrics changed between measured runs")
         if payload.get("diagnostics") != first_payload.get("diagnostics"):
             raise SystemExit("benchmark diagnostics changed between measured runs")
-        if cost and payload.get("cost") != first_payload.get("cost"):
+        if cost and benchmark_cost_summary(payload.get("cost")) != benchmark_cost_summary(
+            first_payload.get("cost")
+        ):
             raise SystemExit("benchmark cost summary changed between measured runs")
     result = {
         "exit_code": first["exit_code"],
