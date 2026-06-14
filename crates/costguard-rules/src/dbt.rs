@@ -1,3 +1,4 @@
+use crate::evidence;
 use crate::helpers::{
     diagnostic, has_bounded_incremental_predicate, incremental_predicate_suggestion,
     incremental_source_filter_deferred, is_downstream_model, normalized_path,
@@ -100,6 +101,10 @@ impl Rule for IncrementalUniqueKeyRule {
                 self.default_severity(),
                 None,
                 "Incremental model appears to have no unique_key.",
+                evidence::dbt_config(
+                    "incremental_unique_key",
+                    &[("materialized", "incremental")],
+                ),
             )
             .with_risk("merge/update logic may be unsafe or require full scans.")
             .with_suggestion(
@@ -144,6 +149,10 @@ impl Rule for IncrementalPredicateRule {
             self.default_severity(),
             None,
             "Incremental model has no obvious date or partition predicate.",
+            evidence::dbt_config(
+                "incremental_no_predicate",
+                &[("materialized", "incremental")],
+            ),
         )
         .with_risk("incremental runs may scan much more source data than intended.")
         .with_suggestion(incremental_predicate_suggestion(ctx.warehouse))]
@@ -186,6 +195,10 @@ impl Rule for IncrementalSourceBoundRule {
             self.default_severity(),
             None,
             "Incremental model reads source() before applying a partition or date predicate.",
+            evidence::dbt_config(
+                "incremental_source_unbounded",
+                &[("materialized", "incremental")],
+            ),
         )
         .with_risk(
             "incremental runs may scan far more raw source data than intended even when a downstream filter exists.",
@@ -224,6 +237,7 @@ impl Rule for SourceInMartRule {
             self.default_severity(),
             None,
             "dbt source() is used directly in a mart model.",
+            evidence::dbt_sources(&sql.dbt.sources),
         )
         .with_risk("mart models can inherit raw-source cost and data quality problems.")
         .with_suggestion("route raw sources through staging models first.")]
@@ -275,6 +289,7 @@ impl Rule for MissingPartitionClusterRule {
             self.default_severity(),
             None,
             "Mart model has no partition_by or cluster_by configuration.",
+            evidence::dbt_config("missing_partition_cluster", &[("materialized", materialized)]),
         )
         .with_risk(
             "large mart tables without partition or cluster hints can scan and shuffle far more data than intended.",
@@ -318,7 +333,21 @@ impl Rule for FullRefreshHeavyIncrementalRule {
         } else {
             "Incremental model uses on_schema_change=sync_all_columns."
         };
-        vec![diagnostic(ctx, self.id(), self.default_severity(), None, message)
+        let evidence_key = if full_refresh {
+            evidence::dbt_config(
+                "full_refresh_heavy",
+                &[("materialized", "incremental"), ("full_refresh", "true")],
+            )
+        } else {
+            evidence::dbt_config(
+                "full_refresh_heavy",
+                &[
+                    ("materialized", "incremental"),
+                    ("on_schema_change", "sync_all_columns"),
+                ],
+            )
+        };
+        vec![diagnostic(ctx, self.id(), self.default_severity(), None, message, evidence_key)
             .with_risk(
                 "these settings can force expensive full rebuilds or wide schema rewrites on incremental models.",
             )
@@ -365,6 +394,7 @@ impl Rule for TableShouldBeIncrementalRule {
             self.default_severity(),
             None,
             "Table model has a recognized date or partition column but is not incremental.",
+            evidence::dbt_config("table_with_date", &[("materialized", "table")]),
         )
         .with_risk(
             "full table rebuilds on append-only event data can rescan and rewrite far more data than necessary.",
@@ -417,6 +447,7 @@ impl Rule for MergeWithoutTargetPruningRule {
             self.default_severity(),
             None,
             "Incremental merge model has no incremental_predicates configuration.",
+            evidence::dbt_config("merge_no_predicates", &[("materialized", "incremental")]),
         )
         .with_risk(
             "merge without target-side pruning can scan the full destination table on every incremental run.",

@@ -52,9 +52,9 @@ checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
 name = "bitflags"
-version = "2.11.1"
+version = "2.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4512299f36f043ab09a583e57bceb5a5aab7a73db1805848e8fef3c9e8c78b3"
+checksum = "b4388bee8683e3d04af747c73422af53102d2bd24d9eadb6cbc100baef4b43f8"
 
 [[package]]
 name = "block-buffer"
@@ -176,7 +176,7 @@ checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 
 [[package]]
 name = "costguard-cli"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -195,7 +195,7 @@ dependencies = [
 
 [[package]]
 name = "costguard-core"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -212,13 +212,14 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
+ "sha2 0.11.0",
  "tempfile",
  "toml",
 ]
 
 [[package]]
 name = "costguard-cost"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -232,7 +233,7 @@ dependencies = [
 
 [[package]]
 name = "costguard-dbt"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "anyhow",
  "regex",
@@ -243,7 +244,7 @@ dependencies = [
 
 [[package]]
 name = "costguard-diagnostics"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "costguard-protocol",
  "schemars",
@@ -253,7 +254,7 @@ dependencies = [
 
 [[package]]
 name = "costguard-git"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "anyhow",
  "tempfile",
@@ -261,7 +262,7 @@ dependencies = [
 
 [[package]]
 name = "costguard-output"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "anyhow",
  "costguard-core",
@@ -274,7 +275,7 @@ dependencies = [
 
 [[package]]
 name = "costguard-platform"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "serde",
  "sqlparser",
@@ -282,7 +283,7 @@ dependencies = [
 
 [[package]]
 name = "costguard-policy"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "anyhow",
  "base64",
@@ -302,7 +303,7 @@ dependencies = [
 
 [[package]]
 name = "costguard-protocol"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "schemars",
  "serde",
@@ -311,13 +312,14 @@ dependencies = [
 
 [[package]]
 name = "costguard-rules"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "anyhow",
  "costguard-dbt",
  "costguard-diagnostics",
  "costguard-platform",
  "costguard-policy",
+ "costguard-protocol",
  "costguard-scanner",
  "costguard-sql",
  "regex",
@@ -326,7 +328,7 @@ dependencies = [
 
 [[package]]
 name = "costguard-scanner"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "anyhow",
  "costguard-diagnostics",
@@ -339,7 +341,7 @@ dependencies = [
 
 [[package]]
 name = "costguard-sql"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "costguard-dbt",
  "costguard-diagnostics",
@@ -743,15 +745,15 @@ checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
 
 [[package]]
 name = "log"
-version = "0.4.29"
+version = "0.4.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
+checksum = "953f07c43838f8e6f9758cab68bf5bed85465e7587ebe0b823f1bcd81978ad3a"
 
 [[package]]
 name = "memchr"
-version = "2.8.0"
+version = "2.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
+checksum = "88904434abc2901f197fe8cc55f0445e7ded921dba5911dad2e2b39b48e663c4"
 
 [[package]]
 name = "num-traits"
@@ -849,9 +851,9 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.12.3"
+version = "1.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e10754a14b9137dd7b1e3e5b0493cc9171fdd105e0ab477f51b72e7f3ac0e276"
+checksum = "f1292b7759ae1cb9ec195452d1390a074f0cd8541ab7a5a8c31cd6db45d4a6ba"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -872,9 +874,9 @@ dependencies = [
 
 [[package]]
 name = "regex-syntax"
-version = "0.8.10"
+version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
+checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "rustc_version"
@@ -1205,9 +1207,9 @@ checksum = "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b"
 
 [[package]]
 name = "wasip2"
-version = "1.0.3+wasi-0.2.9"
+version = "1.0.4+wasi-0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20064672db26d7cdc89c7798c48a0fdfac8213434a1186e5ef29fd560ae223d6"
+checksum = "b67efb37e106e55ce722a510d6b5f9c17f083e5fc79afc2badeb12cc313d9487"
 dependencies = [
  "wit-bindgen 0.57.1",
 ]

@@ -12,6 +12,7 @@ use chrono::{DateTime, Utc};
 use costguard_diagnostics::{Confidence, Diagnostic, Severity};
 use costguard_protocol::{
     AppliedExceptionV1, EnforcementMode, EnforcementOutcome, PolicyProvenanceV1, SignedDocumentV1,
+    IDENTITY_SCHEME_SEMANTIC_V1,
 };
 use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
 use globset::Glob;
@@ -28,7 +29,7 @@ const MAX_PREDICATE_DEPTH: usize = 12;
 const MAX_REGEX_BYTES: usize = 512;
 const MAX_MESSAGE_BYTES: usize = 4096;
 
-/// Versioned signed policy document with scopes, rules, and exceptions.
+/// Legacy signed policy document (schema version 1).
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PolicyDocumentV1 {
@@ -42,6 +43,49 @@ pub struct PolicyDocumentV1 {
     pub permissions: PolicyPermissions,
     #[serde(default)]
     pub scopes: Vec<PolicyScope>,
+}
+
+/// Versioned signed policy document with scopes, rules, and exceptions.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PolicyDocumentV2 {
+    pub schema_version: u8,
+    pub id: String,
+    pub version: String,
+    pub organization: String,
+    pub issued_at: String,
+    pub expires_at: String,
+    pub identity_scheme: String,
+    #[serde(default)]
+    pub permissions: PolicyPermissions,
+    #[serde(default)]
+    pub scopes: Vec<PolicyScope>,
+}
+
+/// Identity remapping entry for v1 → v2 policy migration.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct IdentityMapEntry {
+    pub rule_id: String,
+    pub path: String,
+    pub old_evidence_key: String,
+    pub new_evidence_key: String,
+    pub old_finding_id: String,
+    pub new_finding_id: String,
+}
+
+/// Identity remapping table produced during v1 → v2 policy migration.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct IdentityMap {
+    pub schema_version: u8,
+    pub tool_version: String,
+    pub platform: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_policy_digest: Option<String>,
+    pub source_identity_scheme: String,
+    pub target_identity_scheme: String,
+    pub entries: Vec<IdentityMapEntry>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -242,7 +286,7 @@ pub struct ResolutionContext<'a> {
 /// Policy resolved for a specific organization, team, repository, and path.
 #[derive(Debug, Clone, Serialize)]
 pub struct ResolvedPolicy {
-    pub document: PolicyDocumentV1,
+    pub document: PolicyDocumentV2,
     pub digest: String,
     pub scope_ids: Vec<String>,
     pub enforcement: EnforcementMode,
@@ -257,17 +301,28 @@ pub struct PolicyViolation {
     pub message: String,
 }
 
-pub fn compile_toml(text: &str) -> Result<PolicyDocumentV1> {
-    let policy: PolicyDocumentV1 = toml::from_str(text).context("invalid policy TOML")?;
+pub fn compile_toml(text: &str) -> Result<PolicyDocumentV2> {
+    let policy: PolicyDocumentV2 = toml::from_str(text).context("invalid policy TOML")?;
     validate_policy(&policy)?;
     Ok(policy)
 }
 
-pub fn validate_policy(policy: &PolicyDocumentV1) -> Result<()> {
+pub fn validate_policy(policy: &PolicyDocumentV2) -> Result<()> {
+    if policy.schema_version == 1 {
+        anyhow::bail!(
+            "policy schema version 1 is no longer supported; run: costguard policy migrate-v1 INPUT MAP OUTPUT --version VERSION --issued-at RFC3339"
+        );
+    }
     if policy.schema_version != costguard_protocol::POLICY_SCHEMA_VERSION {
         anyhow::bail!(
             "unsupported policy schema version {}",
             policy.schema_version
+        );
+    }
+    if policy.identity_scheme != IDENTITY_SCHEME_SEMANTIC_V1 {
+        anyhow::bail!(
+            "unsupported identity scheme '{}'; expected '{IDENTITY_SCHEME_SEMANTIC_V1}'",
+            policy.identity_scheme
         );
     }
     require_non_empty("policy.id", &policy.id)?;
@@ -280,7 +335,8 @@ pub fn validate_policy(policy: &PolicyDocumentV1) -> Result<()> {
     }
 
     let mut scope_ids = BTreeSet::new();
-    let mut custom_rule_ids = BTreeSet::new();
+    let custom_rule_ids = collect_custom_rule_ids(policy);
+    let mut seen_custom_rule_ids = BTreeSet::new();
     let custom_rule_count = policy
         .scopes
         .iter()
@@ -307,12 +363,12 @@ pub fn validate_policy(policy: &PolicyDocumentV1) -> Result<()> {
         }
         for rule in &scope.custom_rules {
             validate_custom_rule(rule)?;
-            if !custom_rule_ids.insert(rule.id.clone()) {
+            if !seen_custom_rule_ids.insert(rule.id.clone()) {
                 anyhow::bail!("duplicate custom rule id '{}'", rule.id);
             }
         }
         for exception in &scope.exceptions {
-            validate_exception(exception)?;
+            validate_exception(exception, &custom_rule_ids)?;
         }
     }
     Ok(())
@@ -331,7 +387,7 @@ pub fn generate_key(key_id: &str, now: DateTime<Utc>) -> Result<PrivateKeyFileV1
     })
 }
 
-pub fn sign_policy(policy: &PolicyDocumentV1, key: &PrivateKeyFileV1) -> Result<SignedDocumentV1> {
+pub fn sign_policy(policy: &PolicyDocumentV2, key: &PrivateKeyFileV1) -> Result<SignedDocumentV1> {
     validate_policy(policy)?;
     if key.algorithm != "ed25519" {
         anyhow::bail!("unsupported key algorithm '{}'", key.algorithm);
@@ -353,7 +409,7 @@ pub fn verify_policy(
     signed: &SignedDocumentV1,
     trust: &TrustStoreV1,
     now: DateTime<Utc>,
-) -> Result<PolicyDocumentV1> {
+) -> Result<PolicyDocumentV2> {
     if trust.version != 1 {
         anyhow::bail!("unsupported trust store version {}", trust.version);
     }
@@ -389,8 +445,13 @@ pub fn verify_policy(
     verifying
         .verify_strict(&payload, &ed25519_dalek::Signature::from_bytes(&signature))
         .context("policy signature verification failed")?;
-    let policy: PolicyDocumentV1 =
-        serde_json::from_slice(&payload).context("invalid signed policy JSON")?;
+    let value: Value = serde_json::from_slice(&payload).context("invalid signed policy JSON")?;
+    if value.get("schema_version").and_then(Value::as_u64) == Some(1) {
+        anyhow::bail!(
+            "policy schema version 1 is no longer supported; run: costguard policy migrate-v1 INPUT MAP OUTPUT --version VERSION --issued-at RFC3339"
+        );
+    }
+    let policy: PolicyDocumentV2 = serde_json::from_value(value)?;
     validate_policy(&policy)?;
     let expires = parse_time("policy.expires_at", &policy.expires_at)?;
     if now > expires {
@@ -403,7 +464,7 @@ pub fn verify_policy(
 }
 
 pub fn resolve_policy(
-    policy: &PolicyDocumentV1,
+    policy: &PolicyDocumentV2,
     context: &ResolutionContext<'_>,
 ) -> Result<ResolvedPolicy> {
     validate_policy(policy)?;
@@ -517,7 +578,7 @@ pub fn canonical_json<T: Serialize>(value: &T) -> Result<String> {
     serde_json::to_string(&sort_json(value)).context("failed to serialize canonical JSON")
 }
 
-pub fn policy_digest(policy: &PolicyDocumentV1) -> Result<String> {
+pub fn policy_digest(policy: &PolicyDocumentV2) -> Result<String> {
     let canonical = canonical_json(policy)?;
     Ok(format!("sha256:{}", hex_digest(canonical.as_bytes())))
 }
@@ -532,6 +593,70 @@ pub fn read_trust_store(path: &Path) -> Result<TrustStoreV1> {
     let text = std::fs::read_to_string(path)
         .with_context(|| format!("failed to read trust store {}", path.display()))?;
     serde_json::from_str(&text).with_context(|| format!("invalid trust store {}", path.display()))
+}
+
+pub fn collect_custom_rule_ids(policy: &PolicyDocumentV2) -> BTreeSet<String> {
+    policy
+        .scopes
+        .iter()
+        .flat_map(|scope| scope.custom_rules.iter().map(|rule| rule.id.clone()))
+        .collect()
+}
+
+pub fn load_policy_v1_json(path: &Path) -> Result<PolicyDocumentV1> {
+    let text = std::fs::read_to_string(path)
+        .with_context(|| format!("failed to read policy v1 JSON {}", path.display()))?;
+    serde_json::from_str(&text)
+        .with_context(|| format!("invalid policy v1 JSON {}", path.display()))
+}
+
+pub fn migrate_policy_v1(
+    policy_v1: PolicyDocumentV1,
+    map: &IdentityMap,
+    version: String,
+    issued_at: String,
+    expires_at: String,
+) -> Result<PolicyDocumentV2> {
+    let finding_map: BTreeMap<String, String> = map
+        .entries
+        .iter()
+        .map(|entry| (entry.old_finding_id.clone(), entry.new_finding_id.clone()))
+        .collect();
+    let scopes = policy_v1
+        .scopes
+        .into_iter()
+        .map(|mut scope| {
+            scope.exceptions = scope
+                .exceptions
+                .into_iter()
+                .map(|mut exception| {
+                    if let Some(old_id) = &exception.finding_id {
+                        exception.finding_id = Some(
+                            finding_map
+                                .get(old_id)
+                                .with_context(|| {
+                                    format!("no identity map entry for finding_id '{old_id}'")
+                                })?
+                                .clone(),
+                        );
+                    }
+                    Ok(exception)
+                })
+                .collect::<Result<_>>()?;
+            Ok(scope)
+        })
+        .collect::<Result<_>>()?;
+    Ok(PolicyDocumentV2 {
+        schema_version: costguard_protocol::POLICY_SCHEMA_VERSION,
+        id: policy_v1.id,
+        version,
+        organization: policy_v1.organization,
+        issued_at,
+        expires_at,
+        identity_scheme: IDENTITY_SCHEME_SEMANTIC_V1.into(),
+        permissions: policy_v1.permissions,
+        scopes,
+    })
 }
 
 fn validate_custom_rule(rule: &DeclarativeRule) -> Result<()> {
@@ -670,7 +795,10 @@ fn field_kind(field: &str) -> Option<FieldKind> {
     }
 }
 
-fn validate_exception(exception: &PolicyException) -> Result<()> {
+fn validate_exception(
+    exception: &PolicyException,
+    custom_rule_ids: &BTreeSet<String>,
+) -> Result<()> {
     for (name, value) in [
         ("exception.id", exception.id.as_str()),
         ("exception.repository", exception.repository.as_str()),
@@ -688,6 +816,14 @@ fn validate_exception(exception: &PolicyException) -> Result<()> {
             exception.id
         );
     }
+    if let Some(rule_id) = &exception.rule_id {
+        if !costguard_protocol::is_builtin_rule_id(rule_id) && !custom_rule_ids.contains(rule_id) {
+            anyhow::bail!(
+                "exception '{}' references unknown rule id '{rule_id}'",
+                exception.id
+            );
+        }
+    }
     Glob::new(&exception.repository).context("invalid exception repository glob")?;
     Glob::new(&exception.path).context("invalid exception path glob")?;
     let created = parse_time("exception.created_at", &exception.created_at)?;
@@ -702,11 +838,8 @@ fn validate_exception(exception: &PolicyException) -> Result<()> {
 }
 
 fn validate_builtin_rule_id(rule_id: &str) -> Result<()> {
-    let valid = rule_id.len() == 10
-        && rule_id.starts_with("SQLCOST")
-        && rule_id[7..].chars().all(|ch| ch.is_ascii_digit());
-    if !valid {
-        anyhow::bail!("invalid built-in rule id '{rule_id}'");
+    if !costguard_protocol::is_builtin_rule_id(rule_id) {
+        anyhow::bail!("unknown built-in rule id '{rule_id}'");
     }
     Ok(())
 }
@@ -862,14 +995,15 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
-    fn policy(now: DateTime<Utc>) -> PolicyDocumentV1 {
-        PolicyDocumentV1 {
-            schema_version: 1,
+    fn policy(now: DateTime<Utc>) -> PolicyDocumentV2 {
+        PolicyDocumentV2 {
+            schema_version: costguard_protocol::POLICY_SCHEMA_VERSION,
             id: "org-default".into(),
             version: "2026.06".into(),
             organization: "acme".into(),
             issued_at: now.to_rfc3339(),
             expires_at: (now + chrono::Duration::days(30)).to_rfc3339(),
+            identity_scheme: IDENTITY_SCHEME_SEMANTIC_V1.into(),
             permissions: PolicyPermissions::default(),
             scopes: vec![PolicyScope {
                 id: "org".into(),

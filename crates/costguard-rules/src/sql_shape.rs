@@ -1,3 +1,4 @@
+use crate::evidence;
 use crate::helpers::{diagnostic, is_downstream_model, is_staging_model};
 use crate::registry::{Rule, RuleContext};
 use costguard_diagnostics::{Confidence, Diagnostic, Severity};
@@ -53,6 +54,7 @@ impl Rule for SelectStarRule {
                     self.default_severity(),
                     Some(feature.span),
                     "SELECT * in a non-staging model.",
+                    evidence::literal("select_star"),
                 )
                 .with_risk(
                     "schema drift and unnecessary column scans can increase downstream cost.",
@@ -98,6 +100,7 @@ impl Rule for UnboundedJoinRule {
                     self.default_severity(),
                     Some(join.span),
                     "Join has no clear equality predicate.",
+                    evidence::join_unbounded(join),
                 )
                 .with_risk(
                     "non-equality joins can cause large intermediate scans and unexpected row multiplication.",
@@ -141,6 +144,7 @@ impl Rule for OrderByIntermediateRule {
                     self.default_severity(),
                     Some(feature.span),
                     "ORDER BY in a model without LIMIT.",
+                    evidence::literal("order_by"),
                 )
                 .with_risk("sorting intermediate results can add avoidable warehouse work.")
                 .with_suggestion("remove unless it is required for deterministic downstream logic.")
@@ -179,6 +183,7 @@ impl Rule for BlindDistinctRule {
                     self.default_severity(),
                     Some(feature.span),
                     "SELECT DISTINCT detected.",
+                    evidence::literal("select_distinct"),
                 )
                 .with_risk(
                     "blind deduplication can hide upstream data quality issues and force large sorts.",
@@ -224,6 +229,7 @@ impl Rule for CrossJoinRule {
                     self.default_severity(),
                     Some(join.span),
                     "Cross join detected without an explicit allow comment.",
+                    evidence::join_cross(join),
                 )
                 .with_risk(
                     "cross joins can multiply row counts and create unexpectedly expensive queries.",
@@ -265,6 +271,7 @@ impl Rule for UnpartitionedWindowRule {
                     self.default_severity(),
                     Some(window.span),
                     "Window function has no PARTITION BY.",
+                    evidence::window_text(&window.text),
                 )
                 .with_risk("unpartitioned windows can force broad sorts or scans.")
                 .with_suggestion("partition by the natural entity key when possible.")
@@ -305,6 +312,7 @@ impl Rule for RepeatedCteRule {
                     self.default_severity(),
                     Some(reference.span),
                     "CTE is referenced multiple times.",
+                    evidence::cte_name(&reference.key),
                 )
                 .with_risk("some warehouses may recompute expensive CTEs or produce larger plans.")
                 .with_suggestion(
@@ -346,6 +354,7 @@ impl Rule for RecursiveCteRule {
                     self.default_severity(),
                     Some(feature.span),
                     "Recursive CTE detected.",
+                    evidence::literal("with_recursive"),
                 )
                 .with_risk(
                     "recursive CTEs can iterate unpredictably and dominate warehouse cost on large graphs.",

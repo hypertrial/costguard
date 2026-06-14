@@ -14,6 +14,7 @@ Costguard analyzes untrusted repository content locally or in CI without warehou
 | Release download | Archives, checksums, attestations | HTTPS timeout/retry, exact checksum filename, SHA-256, producer-bound attestation |
 | Signed policy | Bundle, trust store, scopes, exceptions | Canonical Ed25519 verification, validity/revocation checks, conflict rejection, fail closed |
 | Offline cost imports | Catalog and query-history files | Local parsing only, advisory output, no warehouse connection |
+| Identity migration | Baseline v2, policy v1, identity maps | Fail-closed validation; missing map entries block migration; semantic-v1 IDs required at scan time |
 
 ## Threats and mitigations
 
@@ -36,6 +37,12 @@ The Action downloads bounded-size release assets with a 30-second timeout and th
 ### Policy bypass
 
 Unknown, tampered, expired, or revoked signing keys fail closed. Scope resolution proceeds organization, team, repository, then path; equal-specificity conflicts at equal priority are errors. Policy controls local overrides, inline suppression, and repository baselines. Expired exceptions no longer suppress findings and produce an analysis violation.
+
+Policy v1 and baseline v2 are rejected at scan time in 2.1. Migration commands validate identity-map coverage and platform alignment before emitting v2/v3 artifacts; partial or hand-edited maps cannot silently remap exceptions or baselined findings.
+
+### Semantic identity tampering
+
+Finding IDs under `semantic-v1` are derived from rule, path, and canonical evidence fields—not line numbers. Baseline and exception entries must match computed semantic IDs; operators cannot grandfather findings by editing line offsets alone. Duplicate semantic findings collapse to one diagnostic, reducing ID-splitting evasion.
 
 ### Sensitive offline cost data
 

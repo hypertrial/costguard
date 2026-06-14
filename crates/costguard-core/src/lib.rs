@@ -7,22 +7,26 @@
 
 mod baseline;
 mod config;
+mod context;
 mod dbt_graph;
 mod dbt_load;
+mod pipeline;
 mod scan;
+mod scan_plan;
 mod sql_analysis;
 
 pub use baseline::{
-    apply_finding_baseline, load_finding_baseline, load_legacy_baseline_v1,
-    merge_baseline_findings, migrate_legacy_baseline_v1, validate_finding_baseline,
-    write_finding_baseline, BaselinedFinding, FindingBaseline, LegacyFindingBaselineV1,
+    apply_finding_baseline, generate_identity_map, load_baseline_v2, load_finding_baseline,
+    load_identity_map, load_legacy_baseline_v1, merge_baseline_findings, migrate_baseline_v2,
+    migrate_legacy_baseline_v1, validate_finding_baseline, write_finding_baseline,
+    BaselinedFinding, FindingBaseline, FindingBaselineV2, LegacyFindingBaselineV1,
 };
 pub use config::{
     apply_file_config, load_config, validate_scan_config, AnalysisConfig, AnalysisPolicy,
     AnalysisSection, DbtSection, FileConfig, OutputFormat, OutputSection, ScanConfig,
     ScanRuntimeOverrides, ScanSection, SignedPolicyConfig, SignedPolicySection,
 };
-pub use costguard_cost::CostConfig;
+pub use context::{ContextIssue, ContextReport};
 pub use costguard_cost::ProjectCostSummary;
 pub use costguard_dbt::{
     DbtColumn, DbtConfig, DbtExposure, DbtGraph, DbtProject as DbtProjectModel, DbtRef, DbtSource,
@@ -30,12 +34,13 @@ pub use costguard_dbt::{
 };
 pub use costguard_diagnostics::{Confidence, LineIndex, Span};
 pub use costguard_platform::Platform;
+pub use costguard_policy::{IdentityMap, IdentityMapEntry};
 pub use costguard_rules::{Rule, RuleContext, RuleMetadata, RuleOverrides};
 pub use costguard_scanner::{FileKind as ProjectFileKind, ProjectFile as ScannedProjectFile};
 pub use costguard_sql::{
     CteFeature, ExpressionFeature, JoinFeature, ParseInput, SqlFeatures, WindowFeature,
 };
-pub use scan::{explain, rules, scan};
+pub use scan::{explain, rules, scan, scan_for_identity_map};
 
 use costguard_dbt::DbtProject;
 use costguard_diagnostics::Diagnostic;
@@ -99,8 +104,10 @@ pub struct ScanResult {
     pub metrics: ScanMetrics,
     pub file_parse_status: Vec<FileParseStatus>,
     pub pr_summary: Option<PrSummary>,
+    pub context: Option<ContextReport>,
     pub cost_summary: Option<ProjectCostSummary>,
     pub analysis: AnalysisReport,
+    pub identity_scheme: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -260,8 +267,10 @@ mod tests {
             },
             file_parse_status: Vec::new(),
             pr_summary: None,
+            context: None,
             cost_summary: None,
             analysis: AnalysisReport::default(),
+            identity_scheme: None,
         }
     }
 

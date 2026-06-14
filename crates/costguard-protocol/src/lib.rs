@@ -10,8 +10,65 @@ use schemars::{schema::RootSchema, JsonSchema};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub const POLICY_SCHEMA_VERSION: u8 = 1;
-pub const BASELINE_SCHEMA_VERSION: u8 = 2;
+pub const POLICY_SCHEMA_VERSION: u8 = 2;
+pub const BASELINE_SCHEMA_VERSION: u8 = 3;
+pub const IDENTITY_SCHEME_SEMANTIC_V1: &str = "semantic-v1";
+pub const IDENTITY_SCHEME_ORDINAL_V1: &str = "ordinal-v1";
+pub const IDENTITY_MAP_SCHEMA_VERSION: u8 = 1;
+
+/// Canonical built-in rule IDs (SQLCOST001..SQLCOST044).
+pub const BUILTIN_RULE_IDS: [&str; 44] = [
+    "SQLCOST001",
+    "SQLCOST002",
+    "SQLCOST003",
+    "SQLCOST004",
+    "SQLCOST005",
+    "SQLCOST006",
+    "SQLCOST007",
+    "SQLCOST008",
+    "SQLCOST009",
+    "SQLCOST010",
+    "SQLCOST011",
+    "SQLCOST012",
+    "SQLCOST013",
+    "SQLCOST014",
+    "SQLCOST015",
+    "SQLCOST016",
+    "SQLCOST017",
+    "SQLCOST018",
+    "SQLCOST019",
+    "SQLCOST020",
+    "SQLCOST021",
+    "SQLCOST022",
+    "SQLCOST023",
+    "SQLCOST024",
+    "SQLCOST025",
+    "SQLCOST026",
+    "SQLCOST027",
+    "SQLCOST028",
+    "SQLCOST029",
+    "SQLCOST030",
+    "SQLCOST031",
+    "SQLCOST032",
+    "SQLCOST033",
+    "SQLCOST034",
+    "SQLCOST035",
+    "SQLCOST036",
+    "SQLCOST037",
+    "SQLCOST038",
+    "SQLCOST039",
+    "SQLCOST040",
+    "SQLCOST041",
+    "SQLCOST042",
+    "SQLCOST043",
+    "SQLCOST044",
+];
+
+/// Returns true when `rule_id` is a known built-in SQLCOST rule.
+pub fn is_builtin_rule_id(rule_id: &str) -> bool {
+    let upper = rule_id.to_ascii_uppercase();
+    BUILTIN_RULE_IDS.contains(&upper.as_str())
+}
 
 /// Policy enforcement mode: observe, warn, or block findings.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

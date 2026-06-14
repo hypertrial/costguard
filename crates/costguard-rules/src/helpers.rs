@@ -8,15 +8,18 @@ pub(crate) fn diagnostic(
     severity: Severity,
     span: Option<Span>,
     message: &str,
+    evidence_key: impl Into<String>,
 ) -> Diagnostic {
-    Diagnostic::new(
+    let mut diagnostic = Diagnostic::new(
         rule_id,
         severity,
         ctx.file.root_relative_path.clone(),
         span,
         message,
     )
-    .with_warehouse(ctx.warehouse.to_string())
+    .with_warehouse(ctx.warehouse.to_string());
+    diagnostic.governance.evidence_key = evidence_key.into();
+    diagnostic
 }
 
 pub(crate) fn threshold(ctx: &RuleContext<'_>, rule_id: &str, default: usize) -> usize {

@@ -1,3 +1,4 @@
+use crate::evidence;
 use crate::helpers::{diagnostic, is_downstream_model, is_staging_model};
 use crate::registry::{Platform, Rule, RuleContext};
 use costguard_diagnostics::{Confidence, Diagnostic, Severity};
@@ -54,6 +55,7 @@ impl Rule for NonSargablePredicateRule {
                     self.default_severity(),
                     Some(feature.span),
                     "Partition or date column is wrapped in a function inside a filter.",
+                    evidence::expr_key(&feature.key),
                 )
                 .with_risk(
                     "warehouses often cannot prune partitions efficiently when the column is wrapped.",
@@ -109,6 +111,7 @@ impl Rule for FunctionWrappedJoinKeyRule {
                     self.default_severity(),
                     Some(join.span),
                     "Join equality uses a function-wrapped key.",
+                    evidence::join_fn_wrapped(join),
                 )
                 .with_risk(
                     "function-wrapped joins often block optimizations, increase shuffle cost, and hide upstream modeling problems.",
@@ -166,6 +169,7 @@ impl Rule for UnionWithoutAllRule {
                     severity,
                     Some(feature.span),
                     "Plain UNION detected; UNION ALL is usually cheaper for dbt model stacking.",
+                    evidence::literal("union"),
                 )
                 .with_risk(
                     "UNION deduplicates and can force expensive global sorts or hash aggregation.",
@@ -217,6 +221,7 @@ impl Rule for CountDistinctRule {
                     severity,
                     Some(feature.span),
                     "Exact COUNT(DISTINCT ...) detected.",
+                    evidence::expr_key(&feature.text),
                 )
                 .with_risk(
                     "exact distinct aggregation can be one of the most expensive operations at warehouse scale.",
@@ -265,6 +270,7 @@ impl Rule for WildcardTableScanRule {
                     self.default_severity(),
                     Some(feature.span),
                     "Wildcard table reference without an obvious _TABLE_SUFFIX bound.",
+                    evidence::expr_key(&feature.key),
                 )
                 .with_risk(
                     "BigQuery wildcard scans can silently read far more tables than intended.",
@@ -310,6 +316,7 @@ impl Rule for CorrelatedSubqueryRule {
                     self.default_severity(),
                     Some(feature.span),
                     "Correlated subquery detected.",
+                    evidence::expr_key(&feature.key),
                 )
                 .with_risk(
                     "correlated subqueries often execute once per outer row and can dominate warehouse cost.",
@@ -355,6 +362,7 @@ impl Rule for LeadingWildcardLikeRule {
                     self.default_severity(),
                     Some(feature.span),
                     "LIKE predicate starts with a wildcard.",
+                    evidence::expr_key(&feature.key),
                 )
                 .with_risk("leading wildcards usually prevent index or partition pruning on the filtered column.")
                 .with_suggestion(
@@ -398,6 +406,7 @@ impl Rule for OrPartitionPredicateRule {
                     self.default_severity(),
                     Some(feature.span),
                     "Filter ORs together partition or date predicates.",
+                    evidence::expr_key(&feature.key),
                 )
                 .with_risk(
                     "OR across partition keys often forces multiple partition scans or full-table reads.",
@@ -444,6 +453,7 @@ impl Rule for PatternMatchingJoinRule {
                     self.default_severity(),
                     Some(join.span),
                     "Join predicate uses pattern matching.",
+                    evidence::join_pattern(join),
                 )
                 .with_risk(
                     "pattern joins often devolve into nested loops or cartesian explosions at scale.",
@@ -492,6 +502,7 @@ impl Rule for ScalarSubqueryInSelectRule {
                     self.default_severity(),
                     Some(feature.span),
                     "Scalar subquery appears in the SELECT list.",
+                    evidence::expr_key(&feature.key),
                 )
                 .with_risk(
                     "per-row scalar subqueries can execute once for every output row in downstream models.",
@@ -539,6 +550,7 @@ impl Rule for CrossCatalogJoinRule {
                     self.default_severity(),
                     Some(join.span),
                     "Join crosses catalogs in fully qualified table names.",
+                    evidence::join_cross_catalog(join),
                 )
                 .with_risk(
                     "cross-catalog joins can force remote reads, extra coordinator work, and brittle query plans.",
@@ -592,6 +604,7 @@ impl Rule for RowExplosionRule {
                     self.default_severity(),
                     Some(feature.span),
                     "Row-exploding UNNEST or LATERAL FLATTEN followed by deduplication.",
+                    evidence::expr_key(&feature.key),
                 )
                 .with_risk(
                     "semi-structured row explosion can multiply intermediate data and force expensive deduplication.",
@@ -637,6 +650,7 @@ impl Rule for NotInSubqueryRule {
                     self.default_severity(),
                     Some(feature.span),
                     "NOT IN (subquery) detected.",
+                    evidence::expr_key(&feature.key),
                 )
                 .with_risk(
                     "NOT IN subqueries can force full scans, anti-joins, and NULL-related correctness issues.",
@@ -683,6 +697,7 @@ impl Rule for UnboundedWindowFrameRule {
                     self.default_severity(),
                     Some(window.span),
                     "Window function uses an unbounded frame.",
+                    evidence::window_text(&window.text),
                 )
                 .with_risk(
                     "unbounded window frames can force full-partition sorts and scans even when PARTITION BY is present.",
@@ -719,12 +734,33 @@ impl Rule for BigQueryMissingPartitionFilterRule {
         if (!sql.dbt.sources.is_empty() || !sql.dbt.refs.is_empty())
             && !crate::helpers::has_bounded_incremental_predicate(&ctx.file.text)
         {
+            let mut refs = sql
+                .dbt
+                .refs
+                .iter()
+                .map(|dbt_ref| dbt_ref.name.as_str())
+                .collect::<Vec<_>>();
+            refs.sort();
+            let mut source_names = sql
+                .dbt
+                .sources
+                .iter()
+                .map(|source| format!("{}.{}", source.source_name, source.table_name))
+                .collect::<Vec<_>>();
+            source_names.sort();
             vec![diagnostic(
                 ctx,
                 self.id(),
                 self.default_severity(),
                 None,
                 "BigQuery model reads source() or ref() without an obvious partition or date filter.",
+                evidence::dbt_config(
+                    "missing_partition_filter",
+                    &[
+                        ("refs", &refs.join(",")),
+                        ("sources", &source_names.join(",")),
+                    ],
+                ),
             )
             .with_risk(
                 "unbounded reads against partitioned BigQuery tables can scan far more data than intended.",

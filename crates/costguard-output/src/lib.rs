@@ -14,6 +14,8 @@ const OUTPUT_SCHEMA_VERSION: u8 = 3;
 #[derive(Debug, Serialize)]
 struct JsonOutput<'a> {
     schema_version: u8,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    identity_scheme: Option<&'a str>,
     run: &'a costguard_core::RunMetadata,
     policy: &'a costguard_core::PolicyMetadata,
     analysis: &'a costguard_core::AnalysisReport,
@@ -24,6 +26,8 @@ struct JsonOutput<'a> {
     files: &'a [costguard_core::FileParseStatus],
     #[serde(skip_serializing_if = "Option::is_none")]
     pr_summary: Option<&'a PrSummary>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    context: Option<&'a costguard_core::ContextReport>,
 }
 
 /// Render a scan result in the requested [`OutputFormat`].
@@ -32,6 +36,7 @@ pub fn render(result: &ScanResult, format: OutputFormat) -> Result<String> {
         OutputFormat::Text => Ok(render_text(result)),
         OutputFormat::Json => Ok(serde_json::to_string_pretty(&JsonOutput {
             schema_version: OUTPUT_SCHEMA_VERSION,
+            identity_scheme: result.identity_scheme.as_deref(),
             run: &result.run,
             policy: &result.policy,
             analysis: &result.analysis,
@@ -40,6 +45,7 @@ pub fn render(result: &ScanResult, format: OutputFormat) -> Result<String> {
             diagnostics: &result.diagnostics,
             files: &result.file_parse_status,
             pr_summary: result.pr_summary.as_ref(),
+            context: result.context.as_ref(),
         })?),
         OutputFormat::Github => Ok(render_github(result)),
         OutputFormat::Markdown => Ok(render_markdown(result)),
@@ -149,6 +155,7 @@ fn render_text(result: &ScanResult) -> String {
         }
         output.push('\n');
     }
+    append_context_text(&mut output, result.context.as_ref());
 
     if result.diagnostics.is_empty() {
         output.push_str(&format!(
@@ -314,6 +321,25 @@ fn render_markdown(result: &ScanResult) -> String {
                 escape_fenced_code(command)
             ));
         }
+    }
+
+    if let Some(context) = &result.context {
+        output.push_str("## Context (informational)\n\n");
+        output.push_str(&format!(
+            "- {} SQL files in project context\n",
+            context.counts.sql
+        ));
+        output.push_str(&format!(
+            "- {} parse failures, {} skipped files (unchanged)\n",
+            context.sql_parse_failures, context.skipped_count
+        ));
+        if !context.issues.is_empty() {
+            output.push_str(&format!(
+                "- {} unchanged context issues (nonblocking)\n",
+                context.issues.len()
+            ));
+        }
+        output.push('\n');
     }
 
     if !result.diagnostics.is_empty() {
@@ -593,6 +619,33 @@ fn escape_github(value: &str, property: bool) -> String {
     escaped
 }
 
+fn append_context_text(output: &mut String, context: Option<&costguard_core::ContextReport>) {
+    let Some(context) = context else {
+        return;
+    };
+    output.push_str("Context (informational):\n");
+    output.push_str(&format!(
+        "  {} SQL files, {} parse failures, {} skipped\n",
+        context.counts.sql, context.sql_parse_failures, context.skipped_count
+    ));
+    if !context.issues.is_empty() {
+        output.push_str(&format!(
+            "  {} unchanged context issues\n",
+            context.issues.len()
+        ));
+        for issue in context.issues.iter().take(5) {
+            output.push_str(&format!(
+                "    - {} {}: {}\n",
+                issue.rule_id, issue.path, issue.message
+            ));
+        }
+        if context.issues.len() > 5 {
+            output.push_str(&format!("    ... and {} more\n", context.issues.len() - 5));
+        }
+    }
+    output.push('\n');
+}
+
 fn append_analysis_text(output: &mut String, result: &ScanResult) {
     if result.analysis.passed {
         return;
@@ -635,7 +688,10 @@ fn render_sarif(result: &ScanResult) -> Result<String> {
                 "costguard": {
                     "run": result.run,
                     "policy": result.policy,
-                    "analysis": result.analysis
+                    "analysis": result.analysis,
+                    "metrics": result.metrics,
+                    "context": result.context,
+                    "identity_scheme": result.identity_scheme
                 }
             }
         }]
@@ -773,6 +829,8 @@ mod tests {
             }),
             cost_summary: None,
             analysis: costguard_core::AnalysisReport::default(),
+            context: None,
+            identity_scheme: None,
         }
     }
 

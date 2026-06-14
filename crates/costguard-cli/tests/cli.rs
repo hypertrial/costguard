@@ -30,12 +30,13 @@ fn policy_cli_compiles_signs_and_verifies() {
     fs::write(
         &source,
         format!(
-            r#"schema_version = 1
+            r#"schema_version = 2
 id = "org-default"
 version = "2026.06"
 organization = "acme"
 issued_at = "{}"
 expires_at = "{}"
+identity_scheme = "semantic-v1"
 
 [[scopes]]
 id = "org"
@@ -310,7 +311,7 @@ fn baseline_warehouse_mismatch_is_configuration_error() {
     let baseline = tempdir.path().join("baseline.json");
     fs::write(
         &baseline,
-        r#"{"version":2,"platform":"snowflake","generated_at":"2026-01-01T00:00:00Z","findings":[]}"#,
+        r#"{"version":3,"identity_scheme":"semantic-v1","platform":"snowflake","generated_at":"2026-01-01T00:00:00Z","findings":[]}"#,
     )
     .expect("baseline");
     let output = costguard_command()
@@ -348,7 +349,7 @@ fn version_reports_workspace_version() {
     assert!(output.status.success());
     assert_eq!(
         String::from_utf8_lossy(&output.stdout).trim(),
-        "costguard 2.0.0"
+        "costguard 2.1.0"
     );
 }
 
@@ -362,7 +363,7 @@ fn version_propagates_to_every_subcommand() {
         assert!(output.status.success(), "{subcommand}");
         assert_eq!(
             String::from_utf8_lossy(&output.stdout).trim(),
-            format!("costguard-{subcommand} 2.0.0"),
+            format!("costguard-{subcommand} 2.1.0"),
             "{subcommand}"
         );
     }

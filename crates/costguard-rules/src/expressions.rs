@@ -1,3 +1,4 @@
+use crate::evidence;
 use crate::helpers::{diagnostic, is_staging_model, threshold};
 use crate::registry::{Rule, RuleContext};
 use costguard_diagnostics::{Diagnostic, Severity};
@@ -49,6 +50,7 @@ impl Rule for RepeatedJsonRule {
                     severity,
                     Some(feature.span),
                     "Repeated JSON extraction detected.",
+                    evidence::expr_key(&feature.key),
                 )
                 .with_risk("repeated semi-structured parsing can increase warehouse compute.")
                 .with_suggestion("materialize extracted fields once in staging.")
@@ -88,6 +90,7 @@ impl Rule for RepeatedRegexRule {
                     self.default_severity(),
                     Some(feature.span),
                     "Repeated regex operations detected.",
+                    evidence::expr_key(&feature.key),
                 )
                 .with_risk(
                     "regex extraction and replacement are often expensive at warehouse scale.",
@@ -131,6 +134,7 @@ impl Rule for RepeatedNormalizationRule {
                     self.default_severity(),
                     Some(feature.span),
                     "Repeated normalization expression detected.",
+                    evidence::expr_key(&feature.key),
                 )
                 .with_risk(
                     "repeated canonicalization adds compute and makes logic harder to audit.",
@@ -177,6 +181,7 @@ impl Rule for RepeatedExpensiveAcrossFilesRule {
                     self.default_severity(),
                     Some(feature.span),
                     "Expensive expression appears in multiple files.",
+                    evidence::expr_key(&feature.key),
                 )
                 .with_risk(
                     "recomputing expensive expressions downstream can compound warehouse cost.",

@@ -1,3 +1,4 @@
+use crate::evidence;
 use costguard_dbt::DbtModel;
 use costguard_diagnostics::{Diagnostic, Severity};
 use costguard_scanner::ProjectFile;
@@ -197,23 +198,7 @@ impl RuleRegistry {
         self.rules
             .iter()
             .filter(|rule| rule.applies_to(ctx.warehouse))
-            .filter(|rule| {
-                ctx.overrides
-                    .get(rule.id())
-                    .and_then(|settings| settings.enabled)
-                    .unwrap_or(true)
-            })
-            .flat_map(|rule| {
-                let mut diagnostics = rule.check(ctx);
-                if let Some(settings) = ctx.overrides.get(rule.id()) {
-                    if let Some(severity) = settings.severity {
-                        for diagnostic in &mut diagnostics {
-                            diagnostic.severity = severity;
-                        }
-                    }
-                }
-                diagnostics
-            })
+            .flat_map(|rule| rule.check(ctx))
             .collect()
     }
 
@@ -241,7 +226,9 @@ impl RuleRegistry {
                 if let Some(suggestion) = &rule.suggestion {
                     diagnostic = diagnostic.with_suggestion(suggestion.clone());
                 }
-                diagnostic.governance.evidence_key = "declarative:primary".into();
+                let predicate_hash = costguard_policy::canonical_json(&rule.predicate)?;
+                diagnostic.governance.evidence_key =
+                    evidence::declarative(&rule.id, &predicate_hash);
                 diagnostics.push(diagnostic);
             }
         }

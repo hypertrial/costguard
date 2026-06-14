@@ -540,3 +540,19 @@ fn non_recursive_cte_does_not_fire_sqlcost044() {
     let ids = run_for_file(&file, &[doc]);
     assert!(!ids.contains(&"SQLCOST044".to_string()));
 }
+
+#[test]
+fn registry_matches_builtin_catalog() {
+    let registry = RuleRegistry::default_rules();
+    let metadata = registry.metadata();
+    assert_eq!(metadata.len(), costguard_protocol::BUILTIN_RULE_IDS.len());
+    for entry in &metadata {
+        assert!(costguard_protocol::is_builtin_rule_id(entry.id));
+    }
+    for rule_id in costguard_protocol::BUILTIN_RULE_IDS {
+        assert!(
+            metadata.iter().any(|entry| entry.id == rule_id),
+            "missing registry rule {rule_id}"
+        );
+    }
+}

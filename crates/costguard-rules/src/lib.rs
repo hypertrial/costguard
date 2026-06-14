@@ -7,6 +7,7 @@
 mod cost_patterns;
 mod cross_file;
 mod dbt;
+mod evidence;
 mod expressions;
 mod helpers;
 mod metadata;

@@ -7,15 +7,16 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use costguard_core::{
-    apply_file_config, explain, load_config, rules, scan, validate_scan_config, OutputFormat,
-    ScanConfig, ScanRuntimeOverrides,
+    apply_file_config, explain, generate_identity_map, load_baseline_v2, load_config,
+    load_identity_map, migrate_baseline_v2, rules, scan, scan_for_identity_map,
+    validate_scan_config, OutputFormat, ScanConfig, ScanRuntimeOverrides,
 };
 use costguard_cost::{normalize_cost_export, CostExportFormat, NormalizeCostOptions};
 use costguard_output::{render, render_rules};
 use costguard_policy::{
-    canonical_json, compile_toml, generate_key, policy_digest, read_signed_policy,
-    read_trust_store, resolve_policy, sign_policy, verify_policy, PolicyDocumentV1,
-    ResolutionContext, TrustStoreV1, TrustedKeyV1,
+    canonical_json, compile_toml, generate_key, load_policy_v1_json, migrate_policy_v1,
+    policy_digest, read_signed_policy, read_trust_store, resolve_policy, sign_policy,
+    verify_policy, PolicyDocumentV2, ResolutionContext, TrustStoreV1, TrustedKeyV1,
 };
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -87,6 +88,19 @@ enum PolicyCommand {
         bundle: PathBuf,
         trust_store: PathBuf,
     },
+    MigrateV1 {
+        input: PathBuf,
+        map: PathBuf,
+        output: PathBuf,
+        #[arg(long)]
+        version: String,
+        #[arg(long = "issued-at")]
+        issued_at: String,
+        #[arg(long = "expires-at")]
+        expires_at: Option<String>,
+        #[arg(long = "trust-store")]
+        trust_store: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Parser)]
@@ -105,6 +119,25 @@ enum BaselineCommand {
         #[arg(long)]
         manifest: Option<PathBuf>,
         paths: Vec<PathBuf>,
+    },
+    IdentityMapV2 {
+        output: PathBuf,
+        #[arg(long)]
+        warehouse: Option<String>,
+        #[arg(long)]
+        manifest: Option<PathBuf>,
+        paths: Vec<PathBuf>,
+        #[command(flatten)]
+        policy: PolicyArgs,
+    },
+    MigrateV2 {
+        input: PathBuf,
+        map: PathBuf,
+        output: PathBuf,
+        #[arg(long = "policy")]
+        policy: Option<PathBuf>,
+        #[arg(long = "trust-store")]
+        trust_store: Option<PathBuf>,
     },
 }
 
@@ -332,18 +365,7 @@ fn run() -> Result<u8> {
             };
             let result = explain(&config, &args.path)?;
             print!("{}", render(&result, config.format)?);
-            Ok(
-                if result.should_fail(
-                    config.fail_on,
-                    config.min_confidence,
-                    fail_on_monthly_delta(&config),
-                    fail_on_monthly_delta_gb(&config),
-                ) {
-                    1
-                } else {
-                    0
-                },
-            )
+            Ok(if result.analysis.passed { 0 } else { 1 })
         }
         Command::Pr(args) => {
             let config = match config_from_pr_args(args).context("configuration error") {
@@ -409,6 +431,63 @@ fn run() -> Result<u8> {
                     "migrated {} of {} legacy findings to {}",
                     migrated.findings.len(),
                     legacy.findings.len(),
+                    output.display()
+                );
+                Ok(0)
+            }
+            BaselineCommand::IdentityMapV2 {
+                output,
+                warehouse,
+                manifest,
+                paths,
+                policy,
+            } => {
+                let config = match config_from_identity_map_args(IdentityMapArgs {
+                    paths,
+                    warehouse,
+                    manifest,
+                    policy,
+                })
+                .context("configuration error")
+                {
+                    Ok(config) => config,
+                    Err(err) => return configuration_error(err),
+                };
+                let (result, legacy_aliases) = scan_for_identity_map(&config)?;
+                let identity_map = generate_identity_map(
+                    &config,
+                    legacy_aliases,
+                    Some(result.policy.digest.clone()),
+                )?;
+                write_json(&output, &identity_map)?;
+                println!(
+                    "wrote {} identity map entries to {}",
+                    identity_map.entries.len(),
+                    output.display()
+                );
+                Ok(0)
+            }
+            BaselineCommand::MigrateV2 {
+                input,
+                map,
+                output,
+                policy,
+                trust_store,
+            } => {
+                let baseline = load_baseline_v2(&input).context("baseline migration failed")?;
+                let identity_map = load_identity_map(&map).context("baseline migration failed")?;
+                let policy_digest = match resolve_optional_policy_digest(policy, trust_store) {
+                    Ok(digest) => digest,
+                    Err(err) => return migration_error(err),
+                };
+                let migrated = match migrate_baseline_v2(&baseline, &identity_map, policy_digest) {
+                    Ok(migrated) => migrated,
+                    Err(err) => return migration_error(err.context("baseline migration failed")),
+                };
+                costguard_core::write_finding_baseline(&output, &migrated)?;
+                println!(
+                    "migrated {} baseline findings to {}",
+                    migrated.findings.len(),
                     output.display()
                 );
                 Ok(0)
@@ -528,7 +607,7 @@ fn run_policy_command(command: PolicyCommand) -> Result<u8> {
             key,
             output,
         } => {
-            let policy: PolicyDocumentV1 = read_json(&policy, "compiled policy")?;
+            let policy: PolicyDocumentV2 = read_json(&policy, "compiled policy")?;
             let key = read_json(&key, "private key")?;
             let signed = sign_policy(&policy, &key)?;
             write_json(&output, &signed)?;
@@ -605,6 +684,35 @@ fn run_policy_command(command: PolicyCommand) -> Result<u8> {
             );
             Ok(0)
         }
+        PolicyCommand::MigrateV1 {
+            input,
+            map,
+            output,
+            version,
+            issued_at,
+            expires_at,
+            trust_store: _,
+        } => {
+            let policy_v1 = load_policy_v1_json(&input).context("policy migration failed")?;
+            let identity_map = load_identity_map(&map).context("policy migration failed")?;
+            let expires_at = match expires_at {
+                Some(value) => value,
+                None => policy_v1.expires_at.clone(),
+            };
+            let migrated =
+                match migrate_policy_v1(policy_v1, &identity_map, version, issued_at, expires_at) {
+                    Ok(migrated) => migrated,
+                    Err(err) => return migration_error(err.context("policy migration failed")),
+                };
+            write_json(&output, &migrated)?;
+            println!(
+                "migrated policy {} to {} ({})",
+                migrated.id,
+                output.display(),
+                policy_digest(&migrated)?
+            );
+            Ok(0)
+        }
     }
 }
 
@@ -640,6 +748,65 @@ fn write_private_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<()>
 fn configuration_error(err: anyhow::Error) -> Result<u8> {
     eprintln!("error: {err:#}");
     Ok(2)
+}
+
+fn migration_error(err: anyhow::Error) -> Result<u8> {
+    eprintln!("error: {err:#}");
+    Ok(2)
+}
+
+fn resolve_optional_policy_digest(
+    bundle: Option<PathBuf>,
+    trust_store: Option<PathBuf>,
+) -> Result<Option<String>> {
+    match (bundle, trust_store) {
+        (None, None) => Ok(None),
+        (Some(bundle), Some(trust_store)) => {
+            let root = std::env::current_dir().context("failed to resolve current directory")?;
+            let resolve_path = |path: PathBuf| {
+                if path.is_absolute() {
+                    path
+                } else {
+                    root.join(path)
+                }
+            };
+            let signed = read_signed_policy(&resolve_path(bundle))?;
+            let trust = read_trust_store(&resolve_path(trust_store))?;
+            let policy = verify_policy(&signed, &trust, chrono::Utc::now())?;
+            Ok(Some(policy_digest(&policy)?))
+        }
+        _ => anyhow::bail!("both --policy and --trust-store are required together"),
+    }
+}
+
+struct IdentityMapArgs {
+    paths: Vec<PathBuf>,
+    warehouse: Option<String>,
+    manifest: Option<PathBuf>,
+    policy: PolicyArgs,
+}
+
+fn config_from_identity_map_args(args: IdentityMapArgs) -> Result<ScanConfig> {
+    let mut config = base_config()?;
+    if !args.paths.is_empty() {
+        config.paths = args.paths;
+    }
+    ScanRuntimeOverrides {
+        warehouse: args.warehouse,
+        manifest_path: args.manifest,
+        policy_bundle_path: args.policy.bundle,
+        trust_store_path: args.policy.trust_store,
+        policy_organization: args.policy.organization,
+        policy_team: args.policy.team,
+        policy_repository: args.policy.repository,
+        ..ScanRuntimeOverrides::default()
+    }
+    .apply_to(&mut config)?;
+    config.baseline_path = None;
+    config.write_baseline_path = None;
+    config.fail_on = None;
+    validate_scan_config(&config)?;
+    Ok(config)
 }
 
 fn base_config() -> Result<ScanConfig> {

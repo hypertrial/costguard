@@ -2,6 +2,29 @@
 
 All notable changes to Costguard are documented here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [2.1.0] - 2026-06-14
+
+### Added
+
+- Semantic finding identity (`semantic-v1`) replaces ordinal `occurrence:N` evidence keys; finding IDs survive formatting and line movement.
+- Unified diagnostic pipeline with ordered governance stages (overrides, suppressions, identity, policy, baseline).
+- Baseline schema v3 and policy schema v2, both requiring `identity_scheme = "semantic-v1"`.
+- Migration commands: `costguard baseline identity-map-v2`, `costguard baseline migrate-v2`, `costguard policy migrate-v1`.
+- PR target/context separation: changed files are gated; unchanged parse failures appear in optional `context` reporting only.
+- Optional top-level `identity_scheme` field in JSON output schema v3.
+- Canonical 44-rule built-in catalog in `costguard-protocol`.
+
+### Changed
+
+- **Breaking:** baseline v2 and policy v1 are rejected at scan time with exact migration-command guidance.
+- `costguard explain` ignores configured severity and cost gates; exits 0 when analysis completes.
+- `baseline migrate-v1` now emits baseline v3 with semantic identities.
+- Duplicate semantic findings collapse to one diagnostic; legacy ordinal aliases captured in identity maps.
+
+### Migration
+
+Deploy the 2.1 binary, policy v2, and baseline v3 atomically. Retain policy v1 and baseline v2 artifacts for rollback to 2.0.
+
 ## [2.0.0] - 2026-06-14
 
 ### Added

@@ -7,7 +7,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -276,6 +276,45 @@ impl Diagnostic {
 fn hex_sha256(bytes: &[u8]) -> String {
     let digest = Sha256::digest(bytes);
     digest.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+/// Builds a semantic-v1 evidence key from a kind and canonical sorted fields.
+#[derive(Debug, Clone)]
+pub struct EvidenceBuilder {
+    kind: String,
+    fields: BTreeMap<String, String>,
+}
+
+impl EvidenceBuilder {
+    pub fn new(kind: impl Into<String>) -> Self {
+        Self {
+            kind: kind.into(),
+            fields: BTreeMap::new(),
+        }
+    }
+
+    pub fn field(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.fields.insert(key.into(), value.into());
+        self
+    }
+
+    pub fn build(self) -> String {
+        let canonical = self
+            .fields
+            .iter()
+            .map(|(key, value)| format!("{key}={value}"))
+            .collect::<Vec<_>>()
+            .join("|");
+        format!("sem-v1:{}:{}", self.kind, hex_sha256(canonical.as_bytes()))
+    }
+}
+
+/// Normalize whitespace for stable evidence hashing.
+pub fn normalize_evidence_text(text: &str) -> String {
+    text.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_ascii_lowercase()
 }
 
 /// Precomputed newline offsets for mapping byte positions to line/column.

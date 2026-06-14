@@ -1,6 +1,6 @@
 use crate::{FileParseStatus, Project, ScanMetrics};
 use costguard_dbt::{extract_sql_features, DbtModel};
-use costguard_diagnostics::{Confidence, Diagnostic, Severity};
+use costguard_diagnostics::{Confidence, Diagnostic, EvidenceBuilder, Severity};
 use costguard_platform::Platform;
 use costguard_scanner::{FileKind, ProjectFile, ScanCounts};
 use costguard_sql::{analyze_sql, SqlDocument};
@@ -64,20 +64,30 @@ pub(crate) fn parse_failure_diagnostics(
                 .strip_prefix(root)
                 .map(Path::to_path_buf)
                 .unwrap_or_else(|_| doc.path.clone());
-            Diagnostic::new(
+            let filename = doc
+                .path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("model");
+            let evidence_key = EvidenceBuilder::new("parse_failure")
+                .field("file", filename)
+                .build();
+            let mut diagnostic = Diagnostic::new(
                 "SQLCOST027",
                 Severity::Info,
                 path,
                 None,
                 format!(
                     "SQL parse failed for {}; rules may use regex fallback with lower confidence",
-                    doc.path.file_name().and_then(|name| name.to_str()).unwrap_or("model")
+                    filename
                 ),
             )
             .with_suggestion(
                 "run dbt compile and pass --manifest target/manifest.json for compiled SQL fallback",
             )
-            .with_confidence(Confidence::High)
+            .with_confidence(Confidence::High);
+            diagnostic.governance.evidence_key = evidence_key;
+            diagnostic
         })
         .collect()
 }

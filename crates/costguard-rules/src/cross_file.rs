@@ -1,6 +1,7 @@
+use crate::evidence;
 use crate::helpers::{diagnostic, threshold};
 use crate::registry::{Rule, RuleContext};
-use costguard_diagnostics::{Confidence, Diagnostic, Severity, Span};
+use costguard_diagnostics::{Confidence, Diagnostic, Severity};
 use costguard_sql::JoinKind;
 
 pub(crate) struct FanOutJoinRule;
@@ -19,14 +20,17 @@ fn fan_out_join_diagnostic(
     ctx: &RuleContext<'_>,
     rule_id: &'static str,
     severity: Severity,
-    span: Span,
+    join: &costguard_sql::JoinFeature,
+    model_name: &str,
+    unique_key: &[String],
 ) -> Diagnostic {
     diagnostic(
         ctx,
         rule_id,
         severity,
-        Some(span),
+        Some(join.span),
         "Join equality keys do not cover the joined model's known unique_key grain.",
+        evidence::join_fan_out(model_name, &join.equality_keys, unique_key),
     )
     .with_risk(
         "many-to-many joins can multiply row counts and create expensive downstream deduplication.",
@@ -49,7 +53,9 @@ fn fan_out_join_for_model(
     if unique_key.is_empty() || join_keys_cover_unique_key(&join.equality_keys, unique_key) {
         return None;
     }
-    Some(fan_out_join_diagnostic(ctx, rule_id, severity, join.span))
+    Some(fan_out_join_diagnostic(
+        ctx, rule_id, severity, join, model_name, unique_key,
+    ))
 }
 
 impl Rule for FanOutJoinRule {
@@ -156,6 +162,7 @@ impl Rule for UnmaterializedHeavyViewRule {
             self.default_severity(),
             None,
             "View or ephemeral model is referenced by many downstream models.",
+            evidence::heavy_view(model_name, materialized),
         )
         .with_risk(
             "heavily referenced views re-execute their full query for every downstream model.",

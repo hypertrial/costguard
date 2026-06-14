@@ -15,6 +15,27 @@ costguard policy resolve policy.signed.json .costguard/trust.json \
 
 Commit only the public trust store (`.costguard/trust.json`). Protect policy, exception, and trust-store changes with CODEOWNERS and branch protection rules. Rotate keys by overlapping validity windows, publish the new public key before signing with it, and mark compromised keys revoked. Unknown, revoked, expired, malformed, non-canonical, or invalid signatures fail closed.
 
+## Policy schema v2
+
+Compiled policy documents require:
+
+| Field | Value |
+| --- | --- |
+| `schema_version` | `2` |
+| `identity_scheme` | `"semantic-v1"` |
+
+Policy v1 and any document without `identity_scheme: "semantic-v1"` are rejected at scan time. Migrate with:
+
+```bash
+costguard baseline identity-map-v2 identity-map.json --warehouse snowflake --manifest target/manifest.json
+costguard policy migrate-v1 policy.v1.json identity-map.json policy.v2.json \
+  --version 2026.06.14 \
+  --issued-at 2026-06-14T00:00:00Z
+costguard policy sign policy.v2.json root-2026.private.json policy.signed.json
+```
+
+Exception entries reference findings by semantic `finding_id`. The identity map remaps v1 ordinal IDs to v2 semantic IDs; missing entries fail migration closed.
+
 Resolution order is organization, team, repository, then path. Equal-specificity conflicts at the same priority are configuration errors. Central policy decides whether local severity changes, CLI overrides, inline suppressions, and repository baselines are permitted.
 
 Every exception requires an immutable ID, finding or rule scope, repository and path globs, owner, reason, ticket URL, approver, creation time, and expiry. Expired exceptions stop suppressing findings and make analysis incomplete.
@@ -23,4 +44,4 @@ Use signed policy bundles via `[policy]` in `costguard.toml` or with `--policy` 
 
 See [Configuration](../reference/configuration.md#policy) for the committed config schema.
 
-See [Enterprise operations](../getting-started/enterprise-operations.md) for rotation, exception, retention, baseline, and rollback procedures, and the [threat model](../security/threat-model.md) for trust boundaries and residual risks.
+See [Enterprise operations](../getting-started/enterprise-operations.md) for rotation, exception, retention, baseline, migration, and rollback procedures, and the [threat model](../security/threat-model.md) for trust boundaries and residual risks.

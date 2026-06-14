@@ -1,3 +1,4 @@
+use crate::evidence;
 use crate::helpers::diagnostic;
 use crate::registry::{Rule, RuleContext};
 use costguard_diagnostics::{Diagnostic, Severity};
@@ -33,6 +34,7 @@ impl Rule for PythonRowWiseRule {
                     self.default_severity(),
                     Some(ctx.file.line_index.span(matched.start(), matched.end())),
                     "Python model uses row-wise dataframe logic.",
+                    evidence::python_pattern("row_wise"),
                 )
                 .with_risk(
                     "row-wise Python logic is often much slower and more memory-intensive than vectorized logic.",
@@ -69,6 +71,7 @@ impl Rule for PythonLocalCollectionRule {
                     self.default_severity(),
                     Some(ctx.file.line_index.span(matched.start(), matched.end())),
                     "Python model collects warehouse data into local memory.",
+                    evidence::python_pattern("local_collection"),
                 )
                 .with_risk(
                     "local collection can move large warehouse datasets into driver memory and make Python models slow or unstable.",

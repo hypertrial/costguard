@@ -2,10 +2,12 @@ use chrono::Utc;
 use costguard_core::{scan, FindingBaseline, ScanConfig, SignedPolicyConfig};
 use costguard_diagnostics::Severity;
 use costguard_policy::{
-    generate_key, sign_policy, DeclarativeRule, PolicyDocumentV1, PolicyException,
+    generate_key, sign_policy, DeclarativeRule, PolicyDocumentV2, PolicyException,
     PolicyPermissions, PolicyScope, Predicate, ScopeKind, TrustStoreV1, TrustedKeyV1,
 };
-use costguard_protocol::{EnforcementMode, EnforcementOutcome, SignedDocumentV1};
+use costguard_protocol::{
+    EnforcementMode, EnforcementOutcome, SignedDocumentV1, IDENTITY_SCHEME_SEMANTIC_V1,
+};
 use std::collections::BTreeMap;
 use std::fs;
 use tempfile::TempDir;
@@ -13,7 +15,7 @@ use tempfile::TempDir;
 fn managed_scan_custom(
     enforcement: EnforcementMode,
     permissions: PolicyPermissions,
-    mutate_policy: impl FnOnce(&mut PolicyDocumentV1),
+    mutate_policy: impl FnOnce(&mut PolicyDocumentV2),
     mutate_signed: impl FnOnce(&mut SignedDocumentV1, &mut TrustStoreV1),
     configure: impl FnOnce(&TempDir, &mut ScanConfig),
 ) -> anyhow::Result<costguard_core::ScanResult> {
@@ -27,13 +29,14 @@ fn managed_scan_custom(
     .unwrap();
 
     let now = Utc::now();
-    let mut policy = PolicyDocumentV1 {
-        schema_version: 1,
+    let mut policy = PolicyDocumentV2 {
+        schema_version: costguard_protocol::POLICY_SCHEMA_VERSION,
         id: "org-default".into(),
         version: "2026.06".into(),
         organization: "acme".into(),
         issued_at: (now - chrono::Duration::minutes(1)).to_rfc3339(),
         expires_at: (now + chrono::Duration::days(30)).to_rfc3339(),
+        identity_scheme: IDENTITY_SCHEME_SEMANTIC_V1.into(),
         permissions,
         scopes: vec![PolicyScope {
             id: "org-default".into(),
@@ -182,6 +185,7 @@ fn managed_policy_rejects_baseline_digest_mismatch() {
             let path = temp.path().join("baseline.json");
             let baseline = FindingBaseline {
                 version: costguard_protocol::BASELINE_SCHEMA_VERSION,
+                identity_scheme: IDENTITY_SCHEME_SEMANTIC_V1.into(),
                 platform: "generic".into(),
                 generated_at: Utc::now().to_rfc3339(),
                 policy_digest: Some("sha256:not-the-active-policy".into()),
