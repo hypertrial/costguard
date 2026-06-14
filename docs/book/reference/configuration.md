@@ -1,6 +1,8 @@
 # Configuration
 
-Costguard reads optional `costguard.toml` from the project root. CLI flags override file settings.
+Costguard runs with zero configuration. A bare `costguard scan` from a dbt project root uses sensible defaults: scan the whole project, auto-detect `target/manifest.json` when present, and fail on `high`-severity findings.
+
+Optional `costguard.toml` in the project root overrides those defaults. CLI flags override file settings.
 
 Configuration is strict in 1.0. Unknown sections, fields, rule settings, and rule IDs are configuration errors and exit with code `2`.
 

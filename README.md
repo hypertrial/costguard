@@ -8,6 +8,19 @@ Generic SQL, Snowflake, BigQuery, and Trino scanning are production-ready; Datab
 
 ## Quick start
 
+### Try it locally
+
+No config file or flags required. From your dbt project root:
+
+```bash
+cd your-dbt-project
+costguard scan   # scans the whole project, auto-detects target/manifest.json
+```
+
+Add `--warehouse snowflake` (or `bigquery`, `trino`, etc.) for sharper dialect-specific parsing. Run `dbt compile` first when you want manifest-backed analysis on Jinja-heavy models.
+
+### CI (GitHub Action)
+
 Pin the exact Action tag `@v2.0.0` or use the moving compatible major tag `@v2`. Release binaries are checksum-protected and include provenance attestations. Until the `v2.0.0` GitHub release finishes publishing, pin `@main` and set `install-mode: source` (see [GitHub Action](#github-action)).
 
 Run Costguard after your existing dbt compile step so `target/manifest.json` is available when you want manifest-backed analysis.
@@ -53,6 +66,7 @@ mdbook serve
 
 | Topic | Link |
 | --- | --- |
+| Local scan | [Local scan and explain](docs/book/getting-started/local-scan.md) |
 | PR check setup | [Quick start](docs/book/getting-started/quick-start.md) |
 | CLI and config | [Reference](docs/book/reference/cli.md) |
 | Rule catalog | [Rules](docs/book/rules/index.md) |
@@ -114,6 +128,8 @@ Layer definitions: [Benchmark tiers](docs/book/contributing/benchmark-tiers.md).
 Run the PR-equivalent local gate with `./scripts/ci_local.sh`. Authoritative release qualification uses `python3 scripts/release_check.py --version <version>` and additionally requires a successful exact-SHA push CI run, a signed tag, and external evidence.
 
 ## Configuration sketch
+
+`costguard.toml` is optional. Costguard runs with sensible defaults when the file is absent; the example below shows tunable knobs only.
 
 ```toml
 warehouse = "snowflake"

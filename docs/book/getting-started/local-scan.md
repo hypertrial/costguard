@@ -1,22 +1,33 @@
 # Local scan and explain
 
-Use local commands for debugging rules, reproducing CI findings, and exploring a full project.
+The fastest way to run Costguard on a dbt project is a bare `costguard scan` from the project root. No `costguard.toml`, no flags, and no warehouse credentials required. Costguard scans the entire working directory and auto-detects `target/manifest.json` when present.
+
+Use `explain` to debug a single file, or add flags to refine dialect, output format, and fail thresholds. See also [Quick start (PR check)](quick-start.md) for the CI workflow.
 
 ## Scan
 
 ```bash
-costguard scan models/ --warehouse snowflake
-costguard scan models/ --warehouse bigquery --format json
-costguard scan models/ --format github
-costguard scan models/ --manifest target/manifest.json --warehouse trino
+costguard scan
 ```
 
-| Behavior | Detail |
+With no path arguments, Costguard scans the whole project root. With no `--manifest`, it auto-loads `target/manifest.json` when that file exists. The default dialect is `generic`; findings at or above `high` severity fail the run.
+
+### Refine with flags
+
+```bash
+costguard scan --warehouse snowflake
+costguard scan models/ --warehouse bigquery --format json
+costguard scan models/ --format github
+costguard scan --warehouse trino --manifest target/manifest.json
+```
+
+| Flag | Notes |
 | --- | --- |
-| Empty `paths` | Scans the entire current working directory |
+| `--warehouse` / `--dialect` | Sharper parsing for your warehouse. Recommended when you know the dialect. |
 | `--manifest` | Optional; auto-discovers `target/manifest.json` when present |
-| `--dialect` | Alias for `--warehouse` |
-| `--fail-on` | Exit code `1` when diagnostics meet or exceed this severity |
+| `--fail-on` | Exit code `1` when diagnostics meet or exceed this severity (default: `high`) |
+
+Run `dbt compile` before scanning when you want manifest-backed analysis on Jinja-heavy models.
 
 ## Explain
 

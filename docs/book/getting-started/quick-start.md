@@ -2,6 +2,8 @@
 
 Automated PR review is Costguard's primary workflow. The local CLI powers GitHub Actions, local debugging, and CI.
 
+For a zero-config local scan with no flags or config file, see [Local scan and explain](local-scan.md).
+
 ## MVP command
 
 ```bash

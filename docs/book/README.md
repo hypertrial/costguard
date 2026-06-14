@@ -24,13 +24,22 @@ cargo install --path crates/costguard-cli
 
 ## Quick start
 
+Try it locally with no config file or flags:
+
+```bash
+cd your-dbt-project
+costguard scan   # scans the whole project, auto-detects target/manifest.json
+```
+
+For CI, scan changed files against a git base:
+
 ```bash
 costguard pr --base origin/main --warehouse snowflake --fail-on high --min-confidence high
 ```
 
 The CLI default for `--base` is `main`. In CI, prefer `origin/main` after `actions/checkout` with `fetch-depth: 0`.
 
-See [Quick start (PR check)](getting-started/quick-start.md) for GitHub Action setup and [CLI reference](reference/cli.md) for all commands.
+See [Local scan and explain](getting-started/local-scan.md) for the zero-config local workflow, [Quick start (PR check)](getting-started/quick-start.md) for GitHub Action setup, and [CLI reference](reference/cli.md) for all commands.
 
 ## Documentation map
 
