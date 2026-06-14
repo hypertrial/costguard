@@ -30,40 +30,17 @@ Pin an exact stable release in production:
 
 Protect `.costguard/`, workflow files, and baseline changes with CODEOWNERS and required review. Retain the exact Action tag in audit evidence.
 
-## 2.1 migration workflow
+## 2.1 deployment requirements
 
-Costguard 2.1 requires **atomic deployment** of the binary, policy v2, and baseline v3. Partial rollout (new binary with old baseline or policy) fails closed with migration guidance.
+Costguard 2.1 requires **baseline v3** and **policy v2**, both with `identity_scheme: "semantic-v1"`. Partial rollout (new binary with old baseline or policy) fails closed.
 
-1. On a branch from default, run `dbt compile` with production settings.
-2. Generate an identity map with the same warehouse, manifest, and signed-policy inputs used in CI:
-
-```bash
-costguard baseline identity-map-v2 .costguard/identity-map.json \
-  --warehouse snowflake \
-  --manifest target/manifest.json \
-  --policy .costguard/policy.signed.json \
-  --trust-store .costguard/trust.json \
-  --policy-organization acme \
-  --policy-repository acme/warehouse
-```
-
-3. Migrate artifacts:
-
-```bash
-costguard baseline migrate-v2 .costguard/baseline.json .costguard/identity-map.json .costguard/baseline.json \
-  --policy .costguard/policy.signed.json \
-  --trust-store .costguard/trust.json
-
-costguard policy migrate-v1 .costguard/policy.json .costguard/identity-map.json .costguard/policy.v2.json \
-  --version 2026.06.14 \
-  --issued-at 2026-06-14T00:00:00Z
-costguard policy sign .costguard/policy.v2.json root-2026.private.json .costguard/policy.signed.json
-```
-
+1. Run a full strict scan on the default branch and resolve parse or metadata failures.
+2. Generate a finding baseline with `costguard scan --write-baseline` bound to the active signed-policy digest.
+3. Ensure the signed policy bundle uses schema version 2 and `identity_scheme: "semantic-v1"`.
 4. Bump the Action pin to `@v2.1.0`, commit baseline v3 and signed policy v2 together, and merge in one release window.
 5. Re-run a full strict scan on default branch and confirm PR checks pass.
 
-Retain pre-migration baseline v2 and policy v1 artifacts until rollback is no longer required. See [Compatibility policy](../reference/compatibility.md) for rollback to `@v2.0.0`.
+See [Compatibility policy](../reference/compatibility.md) for rollback to `@v2.0.0`.
 
 ## Baseline rollout
 

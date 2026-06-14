@@ -6,7 +6,7 @@ use crate::dbt_load::load_dbt_project;
 use crate::pipeline::{
     apply_baseline_filter, apply_enabled_and_severity, apply_inline_suppressions,
     apply_policy_governance, assign_semantic_identities, effective_rule_overrides,
-    suppression_scope, validate_rule_registration, IdentityResult, LegacyAlias, SuppressionScope,
+    suppression_scope, validate_rule_registration, IdentityResult, SuppressionScope,
 };
 use crate::scan_plan::{build_scan_plan, ScanPlan};
 use crate::sql_analysis::{
@@ -32,15 +32,10 @@ use std::path::{Path, PathBuf};
 
 /// Run a full project scan and return diagnostics, metrics, and optional cost summary.
 pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
-    run_scan(config).map(|(result, _)| result)
-}
-
-/// Like [`scan`], but also returns legacy ordinal-to-semantic identity aliases.
-pub fn scan_for_identity_map(config: &ScanConfig) -> Result<(ScanResult, Vec<LegacyAlias>)> {
     run_scan(config)
 }
 
-fn run_scan(config: &ScanConfig) -> Result<(ScanResult, Vec<LegacyAlias>)> {
+fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
     let started = std::time::Instant::now();
     let started_at = chrono::Utc::now();
     let root = config
@@ -145,10 +140,7 @@ fn run_scan(config: &ScanConfig) -> Result<(ScanResult, Vec<LegacyAlias>)> {
     );
     diagnostics = apply_inline_suppressions(diagnostics, &file_texts, &file_scopes, allow_inline);
 
-    let IdentityResult {
-        mut diagnostics,
-        legacy_aliases,
-    } = assign_semantic_identities(diagnostics)?;
+    let IdentityResult { mut diagnostics } = assign_semantic_identities(diagnostics)?;
 
     let policy_violations =
         apply_managed_governance(&mut diagnostics, managed_policy.as_ref(), started_at)?;
@@ -241,39 +233,36 @@ fn run_scan(config: &ScanConfig) -> Result<(ScanResult, Vec<LegacyAlias>)> {
     }
     analysis.passed = analysis.violations.is_empty();
     let completed_at = chrono::Utc::now();
-    Ok((
-        ScanResult {
-            run: RunMetadata {
-                id: format!(
-                    "scan-{}-{}",
-                    started_at.timestamp_millis(),
-                    std::process::id()
-                ),
-                started_at: started_at.to_rfc3339(),
-                completed_at: completed_at.to_rfc3339(),
-                duration_ms: started.elapsed().as_millis().try_into().unwrap_or(u64::MAX),
-                tool_version: env!("CARGO_PKG_VERSION").to_string(),
-            },
-            policy: managed_policy
-                .as_ref()
-                .map(ManagedPolicy::metadata)
-                .unwrap_or_else(|| PolicyMetadata {
-                    digest: "local-unmanaged".into(),
-                    version: env!("CARGO_PKG_VERSION").into(),
-                    scope: "local".into(),
-                }),
-            diagnostics,
-            counts: metrics.counts.clone(),
-            metrics,
-            file_parse_status: target_parse_status,
-            pr_summary,
-            context: context_report,
-            cost_summary,
-            analysis,
-            identity_scheme: Some(costguard_protocol::IDENTITY_SCHEME_SEMANTIC_V1.into()),
+    Ok(ScanResult {
+        run: RunMetadata {
+            id: format!(
+                "scan-{}-{}",
+                started_at.timestamp_millis(),
+                std::process::id()
+            ),
+            started_at: started_at.to_rfc3339(),
+            completed_at: completed_at.to_rfc3339(),
+            duration_ms: started.elapsed().as_millis().try_into().unwrap_or(u64::MAX),
+            tool_version: env!("CARGO_PKG_VERSION").to_string(),
         },
-        legacy_aliases,
-    ))
+        policy: managed_policy
+            .as_ref()
+            .map(ManagedPolicy::metadata)
+            .unwrap_or_else(|| PolicyMetadata {
+                digest: "local-unmanaged".into(),
+                version: env!("CARGO_PKG_VERSION").into(),
+                scope: "local".into(),
+            }),
+        diagnostics,
+        counts: metrics.counts.clone(),
+        metrics,
+        file_parse_status: target_parse_status,
+        pr_summary,
+        context: context_report,
+        cost_summary,
+        analysis,
+        identity_scheme: Some(costguard_protocol::IDENTITY_SCHEME_SEMANTIC_V1.into()),
+    })
 }
 
 struct ManagedPolicy {

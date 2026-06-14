@@ -29,22 +29,6 @@ const MAX_PREDICATE_DEPTH: usize = 12;
 const MAX_REGEX_BYTES: usize = 512;
 const MAX_MESSAGE_BYTES: usize = 4096;
 
-/// Legacy signed policy document (schema version 1).
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct PolicyDocumentV1 {
-    pub schema_version: u8,
-    pub id: String,
-    pub version: String,
-    pub organization: String,
-    pub issued_at: String,
-    pub expires_at: String,
-    #[serde(default)]
-    pub permissions: PolicyPermissions,
-    #[serde(default)]
-    pub scopes: Vec<PolicyScope>,
-}
-
 /// Versioned signed policy document with scopes, rules, and exceptions.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -60,32 +44,6 @@ pub struct PolicyDocumentV2 {
     pub permissions: PolicyPermissions,
     #[serde(default)]
     pub scopes: Vec<PolicyScope>,
-}
-
-/// Identity remapping entry for v1 → v2 policy migration.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct IdentityMapEntry {
-    pub rule_id: String,
-    pub path: String,
-    pub old_evidence_key: String,
-    pub new_evidence_key: String,
-    pub old_finding_id: String,
-    pub new_finding_id: String,
-}
-
-/// Identity remapping table produced during v1 → v2 policy migration.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct IdentityMap {
-    pub schema_version: u8,
-    pub tool_version: String,
-    pub platform: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source_policy_digest: Option<String>,
-    pub source_identity_scheme: String,
-    pub target_identity_scheme: String,
-    pub entries: Vec<IdentityMapEntry>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -308,15 +266,11 @@ pub fn compile_toml(text: &str) -> Result<PolicyDocumentV2> {
 }
 
 pub fn validate_policy(policy: &PolicyDocumentV2) -> Result<()> {
-    if policy.schema_version == 1 {
-        anyhow::bail!(
-            "policy schema version 1 is no longer supported; run: costguard policy migrate-v1 INPUT MAP OUTPUT --version VERSION --issued-at RFC3339"
-        );
-    }
     if policy.schema_version != costguard_protocol::POLICY_SCHEMA_VERSION {
         anyhow::bail!(
-            "unsupported policy schema version {}",
-            policy.schema_version
+            "unsupported policy schema version {}; expected {}",
+            policy.schema_version,
+            costguard_protocol::POLICY_SCHEMA_VERSION
         );
     }
     if policy.identity_scheme != IDENTITY_SCHEME_SEMANTIC_V1 {
@@ -448,7 +402,8 @@ pub fn verify_policy(
     let value: Value = serde_json::from_slice(&payload).context("invalid signed policy JSON")?;
     if value.get("schema_version").and_then(Value::as_u64) == Some(1) {
         anyhow::bail!(
-            "policy schema version 1 is no longer supported; run: costguard policy migrate-v1 INPUT MAP OUTPUT --version VERSION --issued-at RFC3339"
+            "policy schema version 1 is no longer supported; expected schema version {}",
+            costguard_protocol::POLICY_SCHEMA_VERSION
         );
     }
     let policy: PolicyDocumentV2 = serde_json::from_value(value)?;
@@ -601,62 +556,6 @@ pub fn collect_custom_rule_ids(policy: &PolicyDocumentV2) -> BTreeSet<String> {
         .iter()
         .flat_map(|scope| scope.custom_rules.iter().map(|rule| rule.id.clone()))
         .collect()
-}
-
-pub fn load_policy_v1_json(path: &Path) -> Result<PolicyDocumentV1> {
-    let text = std::fs::read_to_string(path)
-        .with_context(|| format!("failed to read policy v1 JSON {}", path.display()))?;
-    serde_json::from_str(&text)
-        .with_context(|| format!("invalid policy v1 JSON {}", path.display()))
-}
-
-pub fn migrate_policy_v1(
-    policy_v1: PolicyDocumentV1,
-    map: &IdentityMap,
-    version: String,
-    issued_at: String,
-    expires_at: String,
-) -> Result<PolicyDocumentV2> {
-    let finding_map: BTreeMap<String, String> = map
-        .entries
-        .iter()
-        .map(|entry| (entry.old_finding_id.clone(), entry.new_finding_id.clone()))
-        .collect();
-    let scopes = policy_v1
-        .scopes
-        .into_iter()
-        .map(|mut scope| {
-            scope.exceptions = scope
-                .exceptions
-                .into_iter()
-                .map(|mut exception| {
-                    if let Some(old_id) = &exception.finding_id {
-                        exception.finding_id = Some(
-                            finding_map
-                                .get(old_id)
-                                .with_context(|| {
-                                    format!("no identity map entry for finding_id '{old_id}'")
-                                })?
-                                .clone(),
-                        );
-                    }
-                    Ok(exception)
-                })
-                .collect::<Result<_>>()?;
-            Ok(scope)
-        })
-        .collect::<Result<_>>()?;
-    Ok(PolicyDocumentV2 {
-        schema_version: costguard_protocol::POLICY_SCHEMA_VERSION,
-        id: policy_v1.id,
-        version,
-        organization: policy_v1.organization,
-        issued_at,
-        expires_at,
-        identity_scheme: IDENTITY_SCHEME_SEMANTIC_V1.into(),
-        permissions: policy_v1.permissions,
-        scopes,
-    })
 }
 
 fn validate_custom_rule(rule: &DeclarativeRule) -> Result<()> {

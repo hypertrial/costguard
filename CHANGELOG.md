@@ -2,6 +2,12 @@
 
 All notable changes to Costguard are documented here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Removed
+
+- Migration CLI (`baseline identity-map-v2`, `baseline migrate-v2`, `baseline migrate-v1`, `policy migrate-v1`) and ordinal identity-map machinery after 2.1 rollout completion.
+
 ## [2.1.0] - 2026-06-14
 
 ### Added

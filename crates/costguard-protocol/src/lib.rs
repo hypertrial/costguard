@@ -13,8 +13,6 @@ use serde_json::Value;
 pub const POLICY_SCHEMA_VERSION: u8 = 2;
 pub const BASELINE_SCHEMA_VERSION: u8 = 3;
 pub const IDENTITY_SCHEME_SEMANTIC_V1: &str = "semantic-v1";
-pub const IDENTITY_SCHEME_ORDINAL_V1: &str = "ordinal-v1";
-pub const IDENTITY_MAP_SCHEMA_VERSION: u8 = 1;
 
 /// Canonical built-in rule IDs (SQLCOST001..SQLCOST044).
 pub const BUILTIN_RULE_IDS: [&str; 44] = [

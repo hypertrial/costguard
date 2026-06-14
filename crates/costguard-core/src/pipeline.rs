@@ -11,18 +11,6 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Default)]
 pub struct IdentityResult {
     pub diagnostics: Vec<Diagnostic>,
-    /// Maps legacy ordinal evidence keys to final semantic evidence keys.
-    pub legacy_aliases: Vec<LegacyAlias>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LegacyAlias {
-    pub rule_id: String,
-    pub path: String,
-    pub old_evidence_key: String,
-    pub new_evidence_key: String,
-    pub old_finding_id: String,
-    pub new_finding_id: String,
 }
 
 /// Whether a diagnostic is eligible for inline suppression.
@@ -157,9 +145,6 @@ pub fn assign_semantic_identities(diagnostics: Vec<Diagnostic>) -> anyhow::Resul
             .then(left.column.cmp(&right.column))
     });
 
-    let mut legacy_aliases = Vec::new();
-    let mut occurrences = HashMap::<(PathBuf, String), usize>::new();
-
     for diagnostic in &mut sorted {
         if diagnostic.governance.evidence_key.is_empty() {
             anyhow::bail!(
@@ -168,38 +153,12 @@ pub fn assign_semantic_identities(diagnostics: Vec<Diagnostic>) -> anyhow::Resul
                 diagnostic.path.display()
             );
         }
-        let key = (
-            diagnostic.path.clone(),
-            diagnostic.rule_id.to_ascii_uppercase(),
-        );
-        let ordinal = *occurrences.entry(key.clone()).or_insert(0);
-        let legacy_evidence = format!("occurrence:{ordinal}");
-        let legacy_path = diagnostic.path.to_string_lossy().replace('\\', "/");
-        let legacy_material = format!(
-            "{}|{}|{}",
-            diagnostic.rule_id.to_ascii_uppercase(),
-            legacy_path,
-            legacy_evidence
-        );
-        let legacy_finding_id = format!("cgf_{}", hex_sha256(legacy_material.as_bytes()));
-        *occurrences.get_mut(&key).unwrap() += 1;
-
         let semantic_evidence = diagnostic.governance.evidence_key.clone();
-        diagnostic.assign_identity(semantic_evidence.clone());
-        legacy_aliases.push(LegacyAlias {
-            rule_id: diagnostic.rule_id.clone(),
-            path: legacy_path,
-            old_evidence_key: legacy_evidence,
-            new_evidence_key: semantic_evidence,
-            old_finding_id: legacy_finding_id,
-            new_finding_id: diagnostic.governance.finding_id.clone(),
-        });
+        diagnostic.assign_identity(semantic_evidence);
     }
 
-    let collapsed = collapse_duplicates(sorted);
     Ok(IdentityResult {
-        diagnostics: collapsed,
-        legacy_aliases,
+        diagnostics: collapse_duplicates(sorted),
     })
 }
 
@@ -247,11 +206,6 @@ fn span_precision(span: Option<costguard_diagnostics::Span>) -> (u8, usize) {
     (provenance, width)
 }
 
-fn hex_sha256(bytes: &[u8]) -> String {
-    use sha2::{Digest, Sha256};
-    let digest = Sha256::digest(bytes);
-    digest.iter().map(|byte| format!("{byte:02x}")).collect()
-}
 /// Stage 6: apply signed-policy governance and exceptions.
 pub fn apply_policy_governance(
     diagnostics: &mut [Diagnostic],
@@ -329,7 +283,6 @@ mod tests {
         let right = sample("SQLCOST001", "sem-v1:literal:abc", 5, Confidence::Medium);
         let result = assign_semantic_identities(vec![left, right]).expect("identity");
         assert_eq!(result.diagnostics.len(), 1);
-        assert_eq!(result.legacy_aliases.len(), 2);
     }
 
     #[test]

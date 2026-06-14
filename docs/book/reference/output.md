@@ -93,7 +93,7 @@ Suppress only intentional exceptions with `-- costguard: disable-next-line=RULE`
 | --- | --- |
 | `0` | Analysis completeness checks passed; no diagnostics at or above `--fail-on` / `fail_on` (and `--min-confidence` / `min_confidence` when set); cost delta gate not exceeded; `explain` completed with `analysis.passed = true` |
 | `1` | Analysis completeness checks failed, one or more diagnostics at or above severity threshold with confidence at or above the optional floor, or deduplicated savings cost gate exceeded; `explain` with `analysis.passed = false` |
-| `2` | Configuration error (invalid config, missing manifest path, unsupported baseline v2 or policy v1, migration failure) |
+| `2` | Configuration error (invalid config, missing manifest path, unsupported baseline or policy schema) |
 | `3` | Runtime error |
 
 ## Related

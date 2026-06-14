@@ -44,7 +44,7 @@ For Costguard contributor workflows that need to run the checked-out source inst
 
 Core inputs: `base`, `warehouse`, `manifest`, `fail-on`, and `baseline`. The Action also supports `min-confidence`, `format`, `analysis-policy`, optional cost flags, and signed-policy inputs. Pin `@v2.1.0` for immutable behavior or use `@v2` for compatible stable updates.
 
-Upgrading from 2.0 requires atomic deployment of the 2.1 binary, policy v2, and baseline v3. See [Compatibility policy](../reference/compatibility.md).
+Costguard 2.1 requires baseline v3 and policy v2 with `identity_scheme: "semantic-v1"`. See [Compatibility policy](../reference/compatibility.md).
 
 Enterprise strict mode passes only configured governance values:
 
