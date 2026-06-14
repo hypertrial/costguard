@@ -17,26 +17,23 @@ jobs:
   pr-gate:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_NET_RETRY: "3"
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
+      - uses: Swatinem/rust-cache@c106961feec855ef5a58494c5a2a31c9d80429a9
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
         with:
           python-version: "3.11"
-      - name: Restore qualification tools
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      - uses: taiki-e/install-action@7a79fe8c3a13344501c80d99cae481c1c9085912
         with:
-          path: |
-            ~/.cargo/bin/mdbook
-            ~/.cargo/bin/cargo-deny
-          key: qualification-tools-${{ runner.os }}-mdbook-0.4.40-cargo-deny-0.19.7
-      - name: Install qualification tools
-        run: |
-          python -m pip install ruff==0.11.13
-          command -v mdbook >/dev/null || cargo install mdbook --version 0.4.40 --locked
-          command -v cargo-deny >/dev/null || cargo install cargo-deny --version 0.19.7 --locked
+          tool: mdbook@0.4.40,cargo-deny@0.19.7
+      - name: Install Python gate tools
+        run: python -m pip install ruff==0.11.13
       - name: Run required PR gate
         run: ./scripts/ci_local.sh
       - name: Upload release binary

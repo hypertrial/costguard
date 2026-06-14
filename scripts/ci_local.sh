@@ -33,7 +33,6 @@ run python3 scripts/validate_workspace_deps.py
 run ruff check scripts .github/actions/costguard/scripts
 run cargo fmt --check
 run cargo clippy --locked --all-targets --all-features -- -D warnings
-run cargo build --locked -p costguard-cli
 run cargo build --release --locked -p costguard-cli
 run python3 scripts/verify_release_assets.py
 run python3 -m unittest discover -s scripts/tests -p 'test_*.py'
