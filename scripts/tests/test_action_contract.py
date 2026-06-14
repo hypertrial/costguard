@@ -51,14 +51,21 @@ class ActionContractTest(unittest.TestCase):
 
     def test_ci_reuses_cached_tools_and_single_release_build(self) -> None:
         ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        ci_local = (ROOT / "scripts/ci_local.sh").read_text(encoding="utf-8")
         pr_gate = ci.split("  pr-gate:", 1)[1].split("  scale:", 1)[0]
         scale = ci.split("  scale:", 1)[1].split("  spellbook-smoke:", 1)[0]
         spellbook = ci.split("  spellbook-smoke:", 1)[1]
 
-        self.assertIn("actions/cache@", pr_gate)
-        self.assertIn("qualification-tools-${{ runner.os }}", pr_gate)
+        self.assertIn("Swatinem/rust-cache@", pr_gate)
+        self.assertIn("taiki-e/install-action@", pr_gate)
+        self.assertIn("tool: mdbook@0.4.40,cargo-deny@0.19.7", pr_gate)
+        self.assertIn('CARGO_INCREMENTAL: "0"', pr_gate)
         self.assertIn("name: ci-release-binary", pr_gate)
         self.assertEqual(ci.count("cargo build --release --locked -p costguard-cli"), 0)
+        self.assertEqual(
+            ci_local.count("cargo build --release --locked -p costguard-cli"), 1
+        )
+        self.assertNotIn("cargo build --locked -p costguard-cli", ci_local)
         for job in [scale, spellbook]:
             self.assertIn("actions/download-artifact@", job)
             self.assertIn("name: ci-release-binary", job)
