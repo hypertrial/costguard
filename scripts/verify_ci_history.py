@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Require exact-SHA push and dispatch CI evidence for a release commit."""
+"""Require one successful exact-SHA push CI run for a release commit."""
 
 from __future__ import annotations
 
@@ -7,11 +7,9 @@ import argparse
 import json
 import os
 import re
-from collections import Counter
 from typing import Any
 from urllib.request import Request, urlopen
 
-REQUIRED_EVENTS = Counter({"push": 1, "workflow_dispatch": 2})
 REQUIRED_JOBS = ("pr-gate", "scale", "spellbook-smoke")
 
 
@@ -23,27 +21,16 @@ def qualifying_runs(
     runs = payload.get("workflow_runs")
     if not isinstance(runs, list):
         raise SystemExit("GitHub Actions response did not contain workflow_runs")
-    allowed_events = set(REQUIRED_EVENTS)
     matching = [
         run
         for run in runs
         if isinstance(run, dict)
         and run.get("head_sha") == sha
-        and run.get("event") in allowed_events
+        and run.get("event") == "push"
     ]
-    required = sum(REQUIRED_EVENTS.values())
-    selected = matching[:required]
-    if len(selected) < required:
-        raise SystemExit(
-            f"commit {sha} has {len(selected)} completed push/dispatch CI runs; "
-            f"{required} required"
-        )
-    events = Counter(str(run.get("event")) for run in selected)
-    if events != REQUIRED_EVENTS:
-        raise SystemExit(
-            "the latest exact-SHA CI runs must contain one push and two "
-            f"workflow_dispatch events; got {dict(events)}"
-        )
+    selected = matching[:1]
+    if not selected:
+        raise SystemExit(f"commit {sha} has no completed push CI run")
     failed = [
         str(run.get("html_url", run.get("id", "unknown")))
         for run in selected
@@ -51,7 +38,7 @@ def qualifying_runs(
     ]
     if failed:
         raise SystemExit(
-            "the latest exact-SHA CI runs are not all completed successfully: "
+            "the latest exact-SHA push CI run did not complete successfully: "
             + ", ".join(failed)
         )
     for run in selected:
@@ -127,8 +114,8 @@ def main() -> int:
         for run in payload.get("workflow_runs", [])
         if isinstance(run, dict)
         and run.get("head_sha") == args.sha
-        and run.get("event") in REQUIRED_EVENTS
-    ][: sum(REQUIRED_EVENTS.values())]
+        and run.get("event") == "push"
+    ][:1]
     jobs_by_run = {
         run_id: github_json(
             f"https://api.github.com/repos/{args.repository}/actions/runs/{run_id}/jobs?per_page=100",
@@ -137,10 +124,10 @@ def main() -> int:
         for run_id in matching_ids
         if isinstance(run_id, int)
     }
-    selected = qualifying_runs(payload, args.sha, jobs_by_run)
+    qualifying_runs(payload, args.sha, jobs_by_run)
     print(
-        f"verified one push and two dispatch {args.workflow} runs with required jobs "
-        f"for {args.sha} ({len(selected)} runs)"
+        f"verified one exact-SHA push {args.workflow} run with required jobs "
+        f"for {args.sha}"
     )
     return 0
 

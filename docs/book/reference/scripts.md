@@ -51,7 +51,7 @@ Shared helper for locating/building the CLI. Benchmark and doc scripts default t
 Authoritative pre-release qualification gate. It requires the verified signed version tag at `HEAD`, validates the requested workspace version, runs local CI and consumer Action tests, executes pinned external benchmarks, enforces the 10,000-model performance budget, checks external documentation links, and writes `dist/release/release-check.json` bound to the commit.
 
 ```bash
-python3 scripts/release_check.py --version 2.0.0-rc.2
+python3 scripts/release_check.py --version 2.0.0
 ```
 
 `--development`, `--skip-external`, and `--skip-external-links` are development aids. Development mode does not write a release qualification receipt. Strict qualification also requires `mdbook` and `cargo-deny` so documentation and dependency policy checks cannot be silently skipped.
@@ -91,7 +91,7 @@ python3 scripts/verify_release_assets.py
 Local package-recovery tool. It requires a clean checkout at a verified signed annotated tag, builds all four release targets, creates deterministic archives, and validates available native smoke receipts. It cannot publish; GitHub Actions is the sole publication authority.
 
 ```bash
-./scripts/publish_release_local.sh --package-only --version 2.0.0-rc.2
+./scripts/publish_release_local.sh --package-only --version 2.0.0
 ```
 
 | Flag | Description |
@@ -119,14 +119,14 @@ Runs `--version` and `rules --format json` from an extracted native release bina
 python3 scripts/smoke_release_asset.py \
   --asset costguard-x86_64-pc-windows-msvc.tar.gz \
   --target x86_64-pc-windows-msvc \
-  --version 2.0.0-rc.2 \
+  --version 2.0.0 \
   --receipt smoke-x86_64-pc-windows-msvc.json
 ```
 
 ### Packaging recovery checklist
 
 1. Install the cross toolchains from the matrix above.
-2. Qualify the exact signed tag locally with `python3 scripts/release_check.py --version 2.0.0-rc.2`.
+2. Qualify the exact signed tag locally with `python3 scripts/release_check.py --version 2.0.0`.
 3. Package with `--package-only`, inspect `SHA256SUMS`, and run native smoke tests as needed.
 4. Restore GitHub Actions publication and rerun the immutable tag workflow. Do not upload recovery artifacts manually or replace an exact release.
 

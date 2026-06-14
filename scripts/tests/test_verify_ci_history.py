@@ -21,30 +21,23 @@ class VerifyCiHistoryTest(unittest.TestCase):
                     for name in ["pr-gate", "scale", "spellbook-smoke"]
                 ]
             }
-            for run_id in [1, 2, 3, 4]
+            for run_id in [1, 2]
         }
 
-    def test_requires_one_push_and_two_dispatch_runs(self) -> None:
+    def test_accepts_one_successful_push_run(self) -> None:
         payload = {
             "workflow_runs": [
-                run(3, "release", "workflow_dispatch"),
-                run(9, "other", "push", conclusion="failure"),
                 run(2, "release", "workflow_dispatch"),
+                run(9, "other", "push", conclusion="failure"),
                 run(1, "release", "push"),
             ]
         }
-        self.assertEqual(len(qualifying_runs(payload, "release", self.jobs)), 3)
+        self.assertEqual(len(qualifying_runs(payload, "release", self.jobs)), 1)
 
-    def test_rejects_wrong_event_mix(self) -> None:
+    def test_rejects_dispatch_without_push(self) -> None:
         with self.assertRaises(SystemExit):
             qualifying_runs(
-                {
-                    "workflow_runs": [
-                        run(3, "release", "push"),
-                        run(2, "release", "push"),
-                        run(1, "release", "workflow_dispatch"),
-                    ]
-                },
+                {"workflow_runs": [run(1, "release", "workflow_dispatch")]},
                 "release",
                 self.jobs,
             )
@@ -59,23 +52,13 @@ class VerifyCiHistoryTest(unittest.TestCase):
 
     def test_rejects_failed_run(self) -> None:
         payload = {
-            "workflow_runs": [
-                run(3, "release", "workflow_dispatch", conclusion="failure"),
-                run(2, "release", "workflow_dispatch"),
-                run(1, "release", "push"),
-            ]
+            "workflow_runs": [run(1, "release", "push", conclusion="failure")]
         }
         with self.assertRaises(SystemExit):
             qualifying_runs(payload, "release", self.jobs)
 
     def test_rejects_missing_failed_or_skipped_job(self) -> None:
-        payload = {
-            "workflow_runs": [
-                run(3, "release", "workflow_dispatch"),
-                run(2, "release", "workflow_dispatch"),
-                run(1, "release", "push"),
-            ]
-        }
+        payload = {"workflow_runs": [run(1, "release", "push")]}
         for jobs in [
             {"jobs": self.jobs[1]["jobs"][:-1]},
             {

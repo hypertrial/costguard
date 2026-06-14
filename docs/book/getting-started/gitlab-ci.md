@@ -9,7 +9,7 @@ costguard:
   stage: test
   image: ubuntu:24.04
   variables:
-    COSTGUARD_VERSION: "v2.0.0-rc.2"
+    COSTGUARD_VERSION: "v2.0.0"
   before_script:
     - apt-get update && apt-get install -y curl ca-certificates
     - curl -fsSL "https://github.com/hypertrial/costguard/releases/download/${COSTGUARD_VERSION}/costguard-x86_64-unknown-linux-gnu.tar.gz" -o /tmp/costguard.tgz

@@ -14,6 +14,6 @@ Costguard follows semantic versioning for the `2.x` line. `v0.1.0` was the only 
 
 Minor releases may add optional JSON fields, configuration keys, commands, flags, rules, or diagnostics. Consumers must ignore unknown additive JSON fields. Removing or renaming stable fields, changing an existing rule to detect a materially different condition, or reusing a rule ID requires a major release.
 
-The moving `v2` Action tag may advance only to compatible stable `2.x` releases. Use exact `v2.0.0-rc.2` during RC validation and exact `v2.0.0` after GA when immutable behavior is required. RC tags never move `v2`. Version 2 intentionally does not retain internal v1 runtime aliases or output fields; use `costguard baseline migrate-v1` only for baselines produced by internal pre-v2 builds.
+The moving `v2` Action tag may advance only to compatible stable `2.x` releases. Use exact `v2.0.0` when immutable behavior is required. Version 2 intentionally does not retain internal v1 runtime aliases or output fields; use `costguard baseline migrate-v1` only for baselines produced by internal pre-v2 builds.
 
 Preview warehouse dialects may receive parser and rule refinements in minor releases. Production-supported dialects retain the stable contracts above.

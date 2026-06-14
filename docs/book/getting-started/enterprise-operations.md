@@ -11,7 +11,7 @@ Pin an exact stable release in production. During RC validation, use the exact R
   with:
     fetch-depth: 0
 - run: dbt compile --target ci
-- uses: hypertrial/costguard/.github/actions/costguard@v2.0.0-rc.2
+- uses: hypertrial/costguard/.github/actions/costguard@v2.0.0
   with:
     base: origin/main
     warehouse: snowflake

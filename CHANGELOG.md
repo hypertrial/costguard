@@ -2,6 +2,25 @@
 
 All notable changes to Costguard are documented here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [2.0.0] - 2026-06-14
+
+### Added
+
+- Stable local CLI and GitHub Action for dbt-aware SQL cost regression checks across Generic SQL, Snowflake, BigQuery, and Trino.
+- Signed policy enforcement, JSON schema v3, SARIF output, baselines, and advisory local cost estimates.
+- Reproducible four-platform release packages with checksums, SBOMs, and provenance attestations.
+
+### Changed
+
+- Promoted the tested RC2 runtime to the MVP production release without runtime or schema changes.
+- Simplified release qualification to one successful exact-SHA push CI run while retaining local CI, scale, signed-tag, packaging, and consumer smoke gates.
+
+### Known limitations
+
+- Databricks, Redshift, Postgres, and DuckDB analysis remains preview.
+- Cost estimates are advisory and require locally supplied statistics or offline exports; Costguard does not connect to warehouses.
+- The GitHub Action expects callers to compile dbt when manifest-backed analysis is desired.
+
 ## [2.0.0-rc.2] - 2026-06-13
 
 ### Changed

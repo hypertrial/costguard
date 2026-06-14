@@ -8,7 +8,7 @@ Run Costguard from a Jenkins pipeline using a pinned release binary.
 pipeline {
   agent any
   environment {
-    COSTGUARD_VERSION = 'v2.0.0-rc.2'
+    COSTGUARD_VERSION = 'v2.0.0'
   }
   stages {
     stage('Install Costguard') {

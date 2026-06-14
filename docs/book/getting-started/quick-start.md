@@ -24,7 +24,7 @@ Use the published composite action after your existing dbt compile step:
   with:
     fetch-depth: 0
 - run: dbt compile --target dev
-- uses: hypertrial/costguard/.github/actions/costguard@v2.0.0-rc.2
+- uses: hypertrial/costguard/.github/actions/costguard@v2.0.0
   with:
     base: origin/main
     warehouse: snowflake
@@ -40,7 +40,7 @@ For Costguard contributor workflows that need to run the checked-out source inst
     install-mode: source
 ```
 
-Core inputs: `base`, `warehouse`, `manifest`, `fail-on`, and `baseline`. The Action also supports `min-confidence`, `format`, `analysis-policy`, optional cost flags, and signed-policy inputs. Pin `@v2.0.0-rc.2` during the RC soak; use `@v2` only after GA.
+Core inputs: `base`, `warehouse`, `manifest`, `fail-on`, and `baseline`. The Action also supports `min-confidence`, `format`, `analysis-policy`, optional cost flags, and signed-policy inputs. Pin `@v2.0.0` for immutable behavior or use `@v2` for compatible stable updates.
 
 Enterprise strict mode passes only configured governance values:
 
