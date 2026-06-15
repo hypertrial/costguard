@@ -4,6 +4,8 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-06-15
+
 ### Added
 
 - `[cost.inputs].observations`, `observations_before`, and `observations_after` for normalized warehouse observation bundles (Grade-A input).
@@ -15,7 +17,7 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ### Changed
 
-- Savings counterfactual uses `1 - 1/multiplier` (not `multiplier - 1`); per-model caps are multiplicative.
+- Savings counterfactual uses `1 - 1/multiplier` (not `multiplier - 1`); per-model caps are multiplicative. Recalibrate `fail_on_monthly_delta` thresholds if tuned under the old formula.
 - Measured observations and query-history bytes skip partition/view/incremental priors.
 - `fail_on_monthly_delta` prefers `pr_impact.net` when PR mode produces a base/head comparison.
 

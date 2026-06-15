@@ -21,7 +21,7 @@ Add `--warehouse snowflake` (or `bigquery`, `trino`, etc.) for sharper dialect-s
 
 ### CI (GitHub Action)
 
-Pin the exact Action tag `@v2.1.0` or use the moving compatible major tag `@v2`. Release binaries are checksum-protected and include provenance attestations.
+Pin the exact Action tag `@v2.2.0` or use the moving compatible major tag `@v2`. Release binaries are checksum-protected and include provenance attestations.
 
 **2.1 requirements:** Use baseline v3 and policy v2 with `identity_scheme: "semantic-v1"`. Older baseline and policy schemas are rejected at scan time. See [Compatibility policy](docs/book/reference/compatibility.md).
 
@@ -32,7 +32,7 @@ Run Costguard after your existing dbt compile step so `target/manifest.json` is 
   with:
     fetch-depth: 0
 - run: dbt compile --target dev
-- uses: hypertrial/costguard/.github/actions/costguard@v2.1.0
+- uses: hypertrial/costguard/.github/actions/costguard@v2.2.0
   with:
     base: origin/main
     warehouse: snowflake
@@ -43,7 +43,7 @@ Run Costguard after your existing dbt compile step so `target/manifest.json` is 
 Install an exact release binary by selecting one of `aarch64-apple-darwin`, `x86_64-apple-darwin`, or `x86_64-unknown-linux-gnu`:
 
 ```bash
-VERSION=v2.1.0
+VERSION=v2.2.0
 TARGET=aarch64-apple-darwin
 curl -LO "https://github.com/hypertrial/costguard/releases/download/${VERSION}/costguard-${TARGET}.tar.gz"
 curl -LO "https://github.com/hypertrial/costguard/releases/download/${VERSION}/costguard-${TARGET}.tar.gz.sha256"
@@ -82,7 +82,7 @@ mdbook serve
   with:
     fetch-depth: 0
 - run: dbt compile --target dev
-- uses: hypertrial/costguard/.github/actions/costguard@v2.1.0
+- uses: hypertrial/costguard/.github/actions/costguard@v2.2.0
   with:
     base: origin/main
     warehouse: snowflake
@@ -160,4 +160,4 @@ Full schema: [Configuration](docs/book/reference/configuration.md).
 
 ## Status
 
-`v2.1.0` adds semantic finding identity (`semantic-v1`), baseline v3, policy v2, and PR context reporting. Generic SQL, Snowflake, BigQuery, and Trino are supported; Databricks, Redshift, Postgres, and DuckDB remain preview. Cost estimates are advisory, warehouse connectivity is out of scope, and manifest-backed analysis requires the caller's dbt compile step. See the [support policy](SUPPORT.md), [compatibility policy](docs/book/reference/compatibility.md), and [security policy](SECURITY.md).
+`v2.2.0` adds observation-based cost inputs, corrected savings counterfactual, and JSON schema v4 cost reporting. `v2.1.0` added semantic finding identity (`semantic-v1`), baseline v3, policy v2, and PR context reporting. Generic SQL, Snowflake, BigQuery, and Trino are supported; Databricks, Redshift, Postgres, and DuckDB remain preview. Cost estimates are advisory, warehouse connectivity is out of scope, and manifest-backed analysis requires the caller's dbt compile step. See the [support policy](SUPPORT.md), [compatibility policy](docs/book/reference/compatibility.md), and [security policy](SECURITY.md).
