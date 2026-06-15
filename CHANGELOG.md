@@ -4,6 +4,11 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ## [Unreleased]
 
+### Fixed
+
+- `Estimate::Sub` now computes a dollar difference instead of a log-ratio, so `potential_savings` reports real savings instead of a mis-scaled value.
+- Project `post_fix_cost` and `potential_savings` are deduplicated per model (not per finding), so post-fix cost cannot exceed current cost on repos with many findings per model.
+
 ## [2.2.0] - 2026-06-15
 
 ### Added

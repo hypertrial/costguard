@@ -124,10 +124,12 @@ impl std::ops::Sub for Estimate {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self {
-        Self {
-            mu: self.mu - rhs.mu,
-            sigma: (self.sigma * self.sigma + rhs.sigma * rhs.sigma).sqrt(),
+        let diff = self.mean() - rhs.mean();
+        if diff <= 0.0 {
+            return Estimate::from_point(0.001, Some(0.5));
         }
+        let cv = ((self.variance() + rhs.variance()).sqrt() / diff).clamp(0.01, 2.0);
+        Estimate::from_point(diff, Some(cv))
     }
 }
 
@@ -270,6 +272,15 @@ mod tests {
         let fraction = super::savings_fraction(multiplier);
         assert!((fraction.median() - 0.75).abs() < 0.05);
         assert!(fraction.median() < (multiplier.median() - 1.0));
+    }
+
+    #[test]
+    fn sub_is_linear_difference_not_ratio() {
+        let a = Estimate::from_point(300.0, Some(0.2));
+        let b = Estimate::from_point(100.0, Some(0.2));
+        let diff = a - b;
+        assert!((diff.median() - 200.0).abs() < 30.0);
+        assert!(diff.median() > 50.0);
     }
 
     #[test]

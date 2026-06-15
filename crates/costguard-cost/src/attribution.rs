@@ -251,9 +251,31 @@ pub fn attribute_findings(
         });
     }
 
-    apply_per_model_caps(&mut pending);
-    let (savings_p10, savings_p50, savings_p90, post_fix_total, potential_total) =
+    let per_model = apply_per_model_caps(&mut pending);
+    let (savings_p10, savings_p50, savings_p90) =
         apply_attributions(diagnostics, &pending, ctx.config, &pricing, has_pricing);
+
+    // ponytail: project_current matches summarize_project_costs (all indexed models);
+    // per_model caps cover only models with findings — savings outside the index are minor.
+    let project_current = sum_lognormals(
+        &ctx.model_index
+            .models
+            .values()
+            .map(|entry| entry.monthly_cost)
+            .collect::<Vec<_>>(),
+    );
+    let (potential_total, post_fix_total) = if per_model.is_empty() {
+        (Estimate::from_point(0.001, Some(0.5)), project_current)
+    } else {
+        let model_savings: Vec<Estimate> = per_model
+            .iter()
+            .map(|(c, p)| Estimate::from_point((c.median() - p.median()).max(0.001), Some(0.15)))
+            .collect();
+        let potential_total = sum_lognormals(&model_savings);
+        let post_fix_median = (project_current.median() - potential_total.median()).max(0.001);
+        let post_fix_total = Estimate::from_point(post_fix_median, Some(0.15));
+        (potential_total, post_fix_total)
+    };
 
     summary.savings_p10_usd = savings_p10;
     summary.savings_p50_usd = savings_p50;
@@ -281,12 +303,13 @@ pub fn attribute_findings(
     summary.coverage.rules_unestimated = rules_unestimated;
 }
 
-fn apply_per_model_caps(pending: &mut [PendingAttribution]) {
+fn apply_per_model_caps(pending: &mut [PendingAttribution]) -> Vec<(Estimate, Estimate)> {
     let mut by_model: HashMap<String, Vec<usize>> = HashMap::new();
     for (idx, item) in pending.iter().enumerate() {
         by_model.entry(item.model_id.clone()).or_default().push(idx);
     }
 
+    let mut per_model = Vec::new();
     for indices in by_model.values() {
         if indices.is_empty() {
             continue;
@@ -300,7 +323,9 @@ fn apply_per_model_caps(pending: &mut [PendingAttribution]) {
         let max_combined = combined.median().max(1.001);
         let capped_combined = max_combined.min(20.0);
         let post_fix = current / Estimate::from_point(capped_combined, Some(0.15));
-        let total_savings = current - post_fix;
+        let savings_median = (current.median() - post_fix.median()).max(0.001);
+        let total_savings = Estimate::from_point(savings_median, Some(0.2));
+        per_model.push((current, post_fix));
 
         let weights: Vec<f64> = indices
             .iter()
@@ -319,6 +344,7 @@ fn apply_per_model_caps(pending: &mut [PendingAttribution]) {
             pending[*idx].gb_months_savings = gb_before * (share / fraction_median);
         }
     }
+    per_model
 }
 
 fn apply_attributions(
@@ -327,17 +353,13 @@ fn apply_attributions(
     config: &CostConfig,
     pricing: &str,
     has_pricing: bool,
-) -> (f64, f64, f64, Estimate, Estimate) {
+) -> (f64, f64, f64) {
     let mut savings_estimates = Vec::new();
-    let mut post_fix_estimates = Vec::new();
-    let mut current_estimates = Vec::new();
 
     for item in pending {
         let savings = item.raw_savings;
         let combined = combined_multiplier(&[item.rule_multiplier]);
         let post_fix = item.model_monthly_cost / combined;
-        current_estimates.push(item.model_monthly_cost);
-        post_fix_estimates.push(post_fix);
 
         let (usd_p10, usd_p50, usd_p90) = if has_pricing {
             let (lo, hi) = savings.interval(config.interval);
@@ -403,20 +425,11 @@ fn apply_attributions(
     }
 
     if savings_estimates.is_empty() {
-        let zero = Estimate::from_point(0.001, Some(0.5));
-        return (0.0, 0.0, 0.0, zero, zero);
+        return (0.0, 0.0, 0.0);
     }
     let total = sum_lognormals(&savings_estimates);
-    let post_fix_total = sum_lognormals(&post_fix_estimates);
-    let current_total = sum_lognormals(&current_estimates);
     let (lo, hi) = total.interval(config.interval);
-    (
-        round_sig2(lo),
-        round_sig2(total.median()),
-        round_sig2(hi),
-        post_fix_total,
-        current_total - post_fix_total,
-    )
+    (round_sig2(lo), round_sig2(total.median()), round_sig2(hi))
 }
 
 fn structure_factor_for_rule(rule_id: &str, features: Option<&ModelFeatureSummary>) -> f64 {
@@ -478,7 +491,7 @@ fn format_bytes(bytes: f64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model_cost::build_model_cost_index;
+    use crate::model_cost::{build_model_cost_index, summarize_project_costs};
     use crate::CostInputs;
     use costguard_dbt::DbtModel;
     use costguard_diagnostics::{Confidence, Severity};
@@ -543,7 +556,7 @@ mod tests {
                 cost_estimate: None,
             },
         ];
-        let mut summary = ProjectCostSummary::default();
+        let mut summary = summarize_project_costs(&index, &config);
         let ctx = CostAttributionContext {
             config: &config,
             model_index: &index,
@@ -558,12 +571,82 @@ mod tests {
             .filter_map(|d| d.cost_estimate.as_ref())
             .filter_map(|c| c.savings_p50_usd_per_month)
             .sum();
-        let current = diagnostics[0]
-            .cost_estimate
-            .as_ref()
-            .and_then(|c| c.model_monthly_p50_usd)
-            .unwrap_or(0.0);
+        let current = summary.current_cost.monthly_p50.unwrap_or(0.0);
+        let potential = summary.potential_savings.monthly_p50.unwrap_or(0.0);
+        let post_fix = summary.post_fix_cost.monthly_p50.unwrap_or(0.0);
         assert!(total > 0.0);
-        assert!(total < current * 0.96);
+        assert!(potential <= current);
+        assert!(potential > 0.0);
+        assert!(post_fix <= current);
+    }
+
+    fn sample_diagnostic(rule_id: &str, line: usize) -> Diagnostic {
+        Diagnostic {
+            governance: Default::default(),
+            rule_id: rule_id.into(),
+            severity: Severity::Medium,
+            path: PathBuf::from("models/m.sql"),
+            line,
+            column: 1,
+            span: None,
+            message: rule_id.into(),
+            risk: None,
+            suggestion: None,
+            confidence: Confidence::High,
+            warehouse: None,
+            source_provenance: None,
+            compiled_line: None,
+            compiled_column: None,
+            cost_estimate: None,
+        }
+    }
+
+    #[test]
+    fn post_fix_never_exceeds_current_with_many_findings_per_model() {
+        let mut config = CostConfig {
+            enabled: true,
+            ..CostConfig::default()
+        };
+        config.pricing = crate::config::CostPricingSection {
+            model: Some("scan".into()),
+            usd_per_tb: Some(6.25),
+            usd_per_credit: None,
+            tb_per_credit_hour: None,
+        };
+        let mut dbt = DbtProject::default();
+        dbt.models.insert(
+            "m".into(),
+            DbtModel {
+                name: "m".into(),
+                path: Some(PathBuf::from("models/m.sql")),
+                ..DbtModel::default()
+            },
+        );
+        let index = build_model_cost_index(&config, Some(&dbt), &CostInputs::default());
+        let mut diagnostics = vec![
+            sample_diagnostic("SQLCOST014", 1),
+            sample_diagnostic("SQLCOST018", 2),
+            sample_diagnostic("SQLCOST012", 3),
+        ];
+        let mut summary = summarize_project_costs(&index, &config);
+        let ctx = CostAttributionContext {
+            config: &config,
+            model_index: &index,
+            dbt: Some(&dbt),
+            features_by_path: &HashMap::new(),
+            downstream_counts: &HashMap::new(),
+            exposure_counts: &HashMap::new(),
+        };
+        attribute_findings(&mut diagnostics, &ctx, &mut summary);
+        let current = summary.current_cost.monthly_p50.unwrap_or(0.0);
+        let post_fix = summary.post_fix_cost.monthly_p50.unwrap_or(0.0);
+        let potential = summary.potential_savings.monthly_p50.unwrap_or(0.0);
+        assert!(current > 0.0);
+        assert!(post_fix <= current);
+        assert!(potential >= 0.0);
+        assert!(
+            potential > 0.0,
+            "potential {potential} current {current} post_fix {post_fix}"
+        );
     }
 }
