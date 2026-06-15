@@ -10,6 +10,7 @@ mod config;
 mod context;
 mod dbt_graph;
 mod dbt_load;
+mod governance;
 mod pipeline;
 mod scan;
 mod scan_plan;

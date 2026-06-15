@@ -3,10 +3,14 @@ use crate::config::ScanConfig;
 use crate::context::{ContextIssue, ContextReport};
 use crate::dbt_graph::enrich_pr_summary;
 use crate::dbt_load::load_dbt_project;
+use crate::governance::{
+    apply_managed_governance, load_managed_policy, normalized_path, validate_local_policy_controls,
+    ManagedPolicy,
+};
 use crate::pipeline::{
     apply_baseline_filter, apply_enabled_and_severity, apply_inline_suppressions,
-    apply_policy_governance, assign_semantic_identities, effective_rule_overrides,
-    suppression_scope, validate_rule_registration, IdentityResult, SuppressionScope,
+    assign_semantic_identities, effective_rule_overrides, suppression_scope,
+    validate_rule_registration, IdentityResult, SuppressionScope,
 };
 use crate::scan_plan::{build_scan_plan, ScanPlan};
 use crate::sql_analysis::{
@@ -20,10 +24,6 @@ use anyhow::{Context, Result};
 use costguard_cost::{run_cost_analysis, summarize_features, CostInputs, ModelFeatureSummary};
 use costguard_dbt::{compiled_code_by_model_path, MetadataWarning, MetadataWarningKind};
 use costguard_diagnostics::{EvidenceBuilder, Severity};
-use costguard_policy::{
-    read_signed_policy, read_trust_store, resolve_policy, verify_policy, PolicyDocumentV2,
-    PolicyViolation, ResolutionContext, ResolvedPolicy,
-};
 use costguard_rules::{ProjectIndexes, RuleRegistry};
 use costguard_scanner::{DiscoveryOptions, ProjectFile, ScanCounts, SkippedFile};
 use costguard_sql::{JoinKind, SqlDocument};
@@ -121,6 +121,7 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
         if let Some(policy) = &resolved {
             file_diagnostics.extend(registry.run_declarative(&ctx, &policy.custom_rules)?);
         }
+        file_diagnostics = apply_enabled_and_severity(file_diagnostics, &overrides);
         raw_diagnostics.extend(file_diagnostics);
     }
 
@@ -134,11 +135,8 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
     let allow_inline = managed_policy
         .as_ref()
         .is_none_or(|policy| policy.document.permissions.allow_inline_suppressions);
-    let mut diagnostics = apply_enabled_and_severity(
-        raw_diagnostics,
-        &collect_overrides(config, &plan, &managed_policy)?,
-    );
-    diagnostics = apply_inline_suppressions(diagnostics, &file_texts, &file_scopes, allow_inline);
+    let diagnostics =
+        apply_inline_suppressions(raw_diagnostics, &file_texts, &file_scopes, allow_inline);
 
     let IdentityResult { mut diagnostics } = assign_semantic_identities(diagnostics)?;
 
@@ -263,161 +261,6 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
         analysis,
         identity_scheme: Some(costguard_protocol::IDENTITY_SCHEME_SEMANTIC_V1.into()),
     })
-}
-
-struct ManagedPolicy {
-    document: PolicyDocumentV2,
-    digest: String,
-    organization: String,
-    team: Option<String>,
-    repository: String,
-}
-
-impl ManagedPolicy {
-    fn resolve(&self, path: Option<&str>) -> Result<ResolvedPolicy> {
-        resolve_policy(
-            &self.document,
-            &ResolutionContext {
-                organization: &self.organization,
-                team: self.team.as_deref(),
-                repository: &self.repository,
-                path,
-            },
-        )
-    }
-
-    fn metadata(&self) -> PolicyMetadata {
-        PolicyMetadata {
-            digest: self.digest.clone(),
-            version: self.document.version.clone(),
-            scope: "resolved-per-path".into(),
-        }
-    }
-}
-
-fn load_managed_policy(
-    config: &ScanConfig,
-    root: &Path,
-    now: chrono::DateTime<chrono::Utc>,
-) -> Result<Option<ManagedPolicy>> {
-    let Some(bundle_path) = &config.signed_policy.bundle_path else {
-        return Ok(None);
-    };
-    let trust_path = config
-        .signed_policy
-        .trust_store_path
-        .as_ref()
-        .context("policy trust store is required")?;
-    let resolve_path = |path: &Path| {
-        if path.is_absolute() {
-            path.to_path_buf()
-        } else {
-            root.join(path)
-        }
-    };
-    let signed = read_signed_policy(&resolve_path(bundle_path))?;
-    let trust = read_trust_store(&resolve_path(trust_path))?;
-    let document = verify_policy(&signed, &trust, now)?;
-    let organization = config
-        .signed_policy
-        .organization
-        .clone()
-        .unwrap_or_else(|| document.organization.clone());
-    let repository = config
-        .signed_policy
-        .repository
-        .clone()
-        .or_else(|| std::env::var("GITHUB_REPOSITORY").ok())
-        .or_else(|| {
-            root.file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-        })
-        .context("unable to determine policy repository")?;
-    let resolved = resolve_policy(
-        &document,
-        &ResolutionContext {
-            organization: &organization,
-            team: config.signed_policy.team.as_deref(),
-            repository: &repository,
-            path: None,
-        },
-    )?;
-    Ok(Some(ManagedPolicy {
-        document,
-        digest: resolved.digest,
-        organization,
-        team: config.signed_policy.team.clone(),
-        repository,
-    }))
-}
-
-fn validate_local_policy_controls(
-    config: &ScanConfig,
-    policy: Option<&ManagedPolicy>,
-) -> Result<()> {
-    let Some(policy) = policy else {
-        return Ok(());
-    };
-    let permissions = &policy.document.permissions;
-    if (config.baseline_path.is_some() || config.write_baseline_path.is_some())
-        && !permissions.allow_repository_baselines
-    {
-        anyhow::bail!("organization policy forbids repository baselines");
-    }
-    if !config.rule_overrides.is_empty()
-        && !permissions.allow_local_severity_overrides
-        && !permissions.allow_cli_overrides
-    {
-        anyhow::bail!("organization policy forbids local rule overrides");
-    }
-    Ok(())
-}
-
-fn collect_overrides(
-    config: &ScanConfig,
-    plan: &ScanPlan,
-    managed: &Option<ManagedPolicy>,
-) -> Result<costguard_rules::RuleOverrides> {
-    let mut merged = config.rule_overrides.clone();
-    if let Some(managed) = managed {
-        for file in &plan.targets {
-            let path = normalized_path(&file.root_relative_path);
-            let resolved = managed.resolve(Some(&path))?;
-            for (rule_id, settings) in &resolved.rules {
-                let entry = merged.entry(rule_id.clone()).or_default();
-                if let Some(enabled) = settings.enabled {
-                    entry.enabled = Some(enabled);
-                }
-                if let Some(severity) = settings.severity {
-                    entry.severity = Some(severity);
-                }
-                if let Some(threshold) = settings.threshold {
-                    entry.threshold = Some(threshold);
-                }
-            }
-        }
-    }
-    Ok(merged)
-}
-
-fn apply_managed_governance(
-    diagnostics: &mut [costguard_diagnostics::Diagnostic],
-    managed: Option<&ManagedPolicy>,
-    now: chrono::DateTime<chrono::Utc>,
-) -> Result<Vec<PolicyViolation>> {
-    let Some(managed) = managed else {
-        return Ok(Vec::new());
-    };
-    apply_policy_governance(
-        diagnostics,
-        &|path| managed.resolve(Some(path)),
-        &managed.repository,
-        now,
-    )
-}
-
-fn normalized_path(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/")
 }
 
 fn validate_baseline_policy(baseline: &crate::FindingBaseline, digest: &str) -> Result<()> {

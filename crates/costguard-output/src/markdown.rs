@@ -1,0 +1,171 @@
+use costguard_core::{PrSummary, ScanResult};
+use costguard_cost::format_cost_line;
+use costguard_diagnostics::{Diagnostic, Severity};
+
+use crate::{append_cost_summary_markdown, escape_fenced_code, escape_markdown};
+
+pub(crate) fn render_markdown(result: &ScanResult) -> String {
+    let mut output = String::new();
+    let high_count = result
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.severity >= Severity::High)
+        .count();
+    if !result.analysis.passed {
+        output.push_str("# Costguard analysis incomplete\n\n");
+        for violation in &result.analysis.violations {
+            output.push_str(&format!(
+                "- `{}` {}\n",
+                escape_markdown(&violation.code),
+                escape_markdown(&violation.message)
+            ));
+        }
+        output.push('\n');
+    } else if high_count > 0 {
+        output.push_str(&format!(
+            "# Costguard failed this PR\n\n{high_count} high-risk cost finding"
+        ));
+        if high_count != 1 {
+            output.push('s');
+        }
+        output.push_str(".\n\n");
+    } else {
+        output.push_str("# Costguard passed\n\nNo high-risk cost findings.\n\n");
+    }
+
+    if let Some(summary) = &result.pr_summary {
+        output.push_str("## PR Impact\n\n");
+        markdown_list(&mut output, "Changed dbt models", &summary.changed_models);
+        markdown_list(
+            &mut output,
+            "Affected downstream",
+            &summary.affected_downstream,
+        );
+        markdown_list(
+            &mut output,
+            "Affected exposures",
+            &summary.affected_exposures,
+        );
+        if let Some(command) = &summary.recommended_dbt_command {
+            output.push_str(&format!(
+                "Recommended dbt command:\n\n```bash\n{}\n```\n\n",
+                escape_fenced_code(command)
+            ));
+        }
+    }
+
+    if let Some(context) = &result.context {
+        output.push_str("## Context (informational)\n\n");
+        output.push_str(&format!(
+            "- {} SQL files in project context\n",
+            context.counts.sql
+        ));
+        output.push_str(&format!(
+            "- {} parse failures, {} skipped files (unchanged)\n",
+            context.sql_parse_failures, context.skipped_count
+        ));
+        if !context.issues.is_empty() {
+            output.push_str(&format!(
+                "- {} unchanged context issues (nonblocking)\n",
+                context.issues.len()
+            ));
+        }
+        output.push('\n');
+    }
+
+    if !result.diagnostics.is_empty() {
+        output.push_str("## Diagnostics\n\n");
+        for diagnostic in &result.diagnostics {
+            output.push_str(&format!(
+                "1. `{}` {}:{}:{}\n   {}\n",
+                diagnostic.rule_id,
+                escape_markdown(&diagnostic.path.display().to_string()),
+                diagnostic.line,
+                diagnostic.column,
+                escape_markdown(&diagnostic.message)
+            ));
+            if let Some(risk) = &diagnostic.risk {
+                output.push_str(&format!("   Risk: {}\n", escape_markdown(risk)));
+            }
+            if let Some(suggestion) = &diagnostic.suggestion {
+                output.push_str(&format!("   Suggestion: {}\n", escape_markdown(suggestion)));
+            }
+            if let Some(cost) = &diagnostic.cost_estimate {
+                output.push_str(&format!(
+                    "   {}\n",
+                    escape_markdown(&format_cost_line(cost))
+                ));
+            }
+            output.push('\n');
+        }
+        append_top_cost_findings_markdown(&mut output, &result.diagnostics);
+        append_cost_summary_markdown(&mut output, result.cost_summary.as_ref());
+        output.push_str(
+            "Suppress only intentional exceptions with `-- costguard: disable-next-line=RULE`.\n",
+        );
+    }
+
+    output
+}
+
+pub(crate) fn append_top_cost_findings_markdown(output: &mut String, diagnostics: &[Diagnostic]) {
+    let mut ranked: Vec<_> = diagnostics
+        .iter()
+        .filter_map(|d| d.cost_estimate.as_ref().map(|c| (d, c)))
+        .collect();
+    if ranked.is_empty() {
+        return;
+    }
+    ranked.sort_by(|(_left, left_cost), (_right, right_cost)| {
+        right_cost
+            .savings_p50_usd_per_month
+            .unwrap_or(right_cost.relative_index)
+            .partial_cmp(
+                &left_cost
+                    .savings_p50_usd_per_month
+                    .unwrap_or(left_cost.relative_index),
+            )
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    output.push_str("\n## Top findings by estimated monthly savings\n\n");
+    for (diagnostic, cost) in ranked.into_iter().take(10) {
+        output.push_str(&format!(
+            "- `{}` {}:{} — {}\n",
+            diagnostic.rule_id,
+            escape_markdown(&diagnostic.path.display().to_string()),
+            diagnostic.line,
+            escape_markdown(&format_cost_line(cost))
+        ));
+    }
+    output.push('\n');
+}
+
+pub(crate) fn render_cost_markdown(result: &ScanResult) -> String {
+    let mut output = String::from("# Costguard cost prioritization summary\n\n");
+    append_cost_summary_markdown(&mut output, result.cost_summary.as_ref());
+    if !result.diagnostics.is_empty() {
+        append_top_cost_findings_markdown(&mut output, &result.diagnostics);
+    }
+    output
+}
+
+pub(crate) fn markdown_list(output: &mut String, title: &str, items: &[String]) {
+    if items.is_empty() {
+        return;
+    }
+    output.push_str(&format!("{title}:\n"));
+    for item in items {
+        output.push_str(&format!("- {}\n", escape_markdown(item)));
+    }
+    output.push('\n');
+}
+
+pub(crate) fn summary_sentence(summary: &PrSummary) -> String {
+    format!(
+        "{} changed file(s), {} changed model(s), {} downstream node(s), {} exposure(s)",
+        summary.changed_files.len(),
+        summary.changed_models.len(),
+        summary.affected_downstream.len(),
+        summary.affected_exposures.len()
+    )
+}

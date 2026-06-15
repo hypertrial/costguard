@@ -1,4 +1,11 @@
 use super::join_heuristics::{has_equality_predicate, is_date_spine_table};
+use super::join_predicates::{
+    expr_column_name, function_name, join_predicate_has_function_on_key, FunctionArgListExt,
+};
+use super::subquery::{
+    extract_correlated_subqueries_in_expr, extract_not_in_subqueries_in_expr,
+    extract_scalar_subquery_in_select,
+};
 use crate::strip::JinjaStripMap;
 use crate::{CteFeature, ExpressionFeature, JoinFeature, JoinKind, SqlFeatures, WindowFeature};
 use costguard_diagnostics::{LineIndex, Span};
@@ -485,39 +492,6 @@ fn is_unbounded_window_frame(frame: &sqlparser::ast::WindowFrame) -> bool {
     )
 }
 
-fn extract_not_in_subqueries_in_expr(
-    expr: &Expr,
-    finder: &mut SpanFinder<'_>,
-    features: &mut SqlFeatures,
-) {
-    match expr {
-        Expr::InSubquery {
-            negated: true,
-            subquery,
-            ..
-        } => {
-            let snippet = subquery.to_string();
-            if let Some(span) = finder.find_next(&snippet) {
-                features.not_in_subqueries.push(ExpressionFeature {
-                    span,
-                    key: "not in subquery".into(),
-                    text: snippet,
-                });
-            }
-        }
-        Expr::BinaryOp {
-            left,
-            op: BinaryOperator::And | BinaryOperator::Or,
-            right,
-        } => {
-            extract_not_in_subqueries_in_expr(left, finder, features);
-            extract_not_in_subqueries_in_expr(right, finder, features);
-        }
-        Expr::Nested(inner) => extract_not_in_subqueries_in_expr(inner, finder, features),
-        _ => {}
-    }
-}
-
 fn object_name_last(name: &ObjectName) -> String {
     name.0
         .last()
@@ -543,7 +517,7 @@ fn dedupe_join_features(joins: Vec<JoinFeature>) -> Vec<JoinFeature> {
         .collect()
 }
 
-struct SpanFinder<'a> {
+pub(crate) struct SpanFinder<'a> {
     lower_sanitized: String,
     raw: &'a str,
     strip_map: &'a JinjaStripMap,
@@ -567,7 +541,7 @@ impl<'a> SpanFinder<'a> {
         }
     }
 
-    fn find_next(&mut self, needle: &str) -> Option<Span> {
+    pub(crate) fn find_next(&mut self, needle: &str) -> Option<Span> {
         let lower_needle = needle.to_ascii_lowercase();
         let start_from = self.cursors.get(&lower_needle).copied().unwrap_or(0);
         let (start, span) = self.find_sanitized_from(&lower_needle, start_from, |_, _| true)?;
@@ -663,229 +637,6 @@ fn is_word_char(ch: char) -> bool {
     ch.is_ascii_alphanumeric() || ch == '_'
 }
 
-fn join_predicate_has_function_on_key(expr: &Expr) -> bool {
-    match expr {
-        Expr::BinaryOp {
-            left,
-            op: BinaryOperator::Eq,
-            right,
-        } => {
-            if is_symmetric_normalization_eq(left, right)
-                || is_time_bucket_join_eq(left, right)
-                || is_coalesce_null_safe_join_eq(left, right)
-                || is_normalization_of_same_column(left, right)
-                || is_normalization_of_same_column(right, left)
-                || is_symmetric_hash_eq(left, right)
-            {
-                return false;
-            }
-            is_function_wrapped_join_key(left) || is_function_wrapped_join_key(right)
-        }
-        Expr::BinaryOp {
-            left,
-            op: BinaryOperator::And,
-            right,
-        } => join_predicate_has_function_on_key(left) || join_predicate_has_function_on_key(right),
-        Expr::Nested(inner) => join_predicate_has_function_on_key(inner),
-        _ => false,
-    }
-}
-
-fn is_symmetric_normalization_eq(left: &Expr, right: &Expr) -> bool {
-    match (left, right) {
-        (Expr::Function(left_fn), Expr::Function(right_fn)) => {
-            let left_name = function_name(left_fn);
-            let right_name = function_name(right_fn);
-            if left_name != right_name {
-                return false;
-            }
-            matches!(
-                left_name.as_str(),
-                "lower" | "upper" | "trim" | "ltrim" | "rtrim" | "date_trunc" | "coalesce" | "cast"
-            )
-        }
-        (Expr::Cast { .. }, Expr::Cast { .. }) => true,
-        _ => false,
-    }
-}
-
-fn is_coalesce_null_safe_join_eq(left: &Expr, right: &Expr) -> bool {
-    coalesce_null_safe_side(left, right) || coalesce_null_safe_side(right, left)
-}
-
-fn is_normalization_of_same_column(normalized: &Expr, bare: &Expr) -> bool {
-    let Expr::Function(function) = normalized else {
-        return false;
-    };
-    if !is_join_key_normalization_function(function) {
-        return false;
-    }
-    let Some(inner) = function_first_arg_expr(function) else {
-        return false;
-    };
-    column_names_equivalent(inner, bare)
-}
-
-fn function_first_arg_expr(function: &Function) -> Option<&Expr> {
-    use sqlparser::ast::{FunctionArg, FunctionArgExpr};
-    function.args.args().iter().find_map(|arg| match arg {
-        FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => Some(expr),
-        FunctionArg::Named {
-            arg: FunctionArgExpr::Expr(expr),
-            ..
-        } => Some(expr),
-        _ => None,
-    })
-}
-
-fn is_symmetric_hash_eq(left: &Expr, right: &Expr) -> bool {
-    match (left, right) {
-        (Expr::Function(left_fn), Expr::Function(right_fn)) => {
-            let left_name = function_name(left_fn);
-            let right_name = function_name(right_fn);
-            left_name == right_name
-                && matches!(
-                    left_name.as_str(),
-                    "keccak256" | "keccak" | "sha256" | "sha2" | "md5" | "hash"
-                )
-        }
-        _ => false,
-    }
-}
-
-fn column_names_equivalent(left: &Expr, right: &Expr) -> bool {
-    match (expr_column_name(left), expr_column_name(right)) {
-        (Some(left_name), Some(right_name)) => left_name == right_name,
-        _ => false,
-    }
-}
-
-fn coalesce_null_safe_side(coalesce_side: &Expr, other: &Expr) -> bool {
-    let Expr::Function(function) = coalesce_side else {
-        return false;
-    };
-    if function_name(function) != "coalesce" {
-        return false;
-    }
-    let Some(key) = expr_column_name(other) else {
-        return false;
-    };
-    let args = function_arg_exprs(function);
-    args.len() >= 2
-        && args
-            .iter()
-            .all(|arg| expr_column_name(arg).as_deref() == Some(key.as_str()))
-}
-
-fn function_arg_exprs(function: &Function) -> Vec<&Expr> {
-    use sqlparser::ast::{FunctionArg, FunctionArgExpr, FunctionArguments};
-    let FunctionArguments::List(list) = &function.args else {
-        return Vec::new();
-    };
-    list.args
-        .iter()
-        .filter_map(|arg| match arg {
-            FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => Some(expr),
-            FunctionArg::Named {
-                arg: FunctionArgExpr::Expr(expr),
-                ..
-            } => Some(expr),
-            _ => None,
-        })
-        .collect()
-}
-
-fn is_time_bucket_join_eq(left: &Expr, right: &Expr) -> bool {
-    is_time_bucket_column_expr(left) && is_time_truncation_expr(right)
-        || is_time_bucket_column_expr(right) && is_time_truncation_expr(left)
-}
-
-fn is_time_bucket_column_expr(expr: &Expr) -> bool {
-    expr_column_name(expr).is_some_and(|name| is_time_bucket_column_name(&name))
-}
-
-fn is_time_truncation_expr(expr: &Expr) -> bool {
-    match expr {
-        Expr::Function(function) => matches!(
-            function_name(function).as_str(),
-            "date_trunc" | "timestamp_trunc" | "date" | "datetime"
-        ),
-        Expr::Cast { expr: inner, .. } => !matches!(inner.as_ref(), Expr::Value(_)),
-        Expr::Nested(inner) => is_time_truncation_expr(inner),
-        _ => false,
-    }
-}
-
-fn expr_column_name(expr: &Expr) -> Option<String> {
-    match expr {
-        Expr::Identifier(ident) => Some(ident.value.to_ascii_lowercase()),
-        Expr::CompoundIdentifier(parts) => {
-            parts.last().map(|ident| ident.value.to_ascii_lowercase())
-        }
-        _ => None,
-    }
-}
-
-fn is_time_bucket_column_name(name: &str) -> bool {
-    matches!(
-        name,
-        "minute"
-            | "hour"
-            | "day"
-            | "date"
-            | "week"
-            | "month"
-            | "block_date"
-            | "block_day"
-            | "evt_block_date"
-    )
-}
-
-fn is_function_wrapped_join_key(expr: &Expr) -> bool {
-    match expr {
-        Expr::Function(function) => {
-            is_join_key_normalization_function(function) && !function_wraps_literal(function)
-        }
-        Expr::Cast { expr: inner, .. } => {
-            !matches!(inner.as_ref(), Expr::Value(_)) && is_function_wrapped_join_key(inner)
-        }
-        Expr::Nested(inner) => is_function_wrapped_join_key(inner),
-        _ => false,
-    }
-}
-
-fn function_wraps_literal(function: &Function) -> bool {
-    function.args.args().iter().all(|arg| {
-        matches!(
-            arg,
-            sqlparser::ast::FunctionArg::Unnamed(sqlparser::ast::FunctionArgExpr::Expr(
-                Expr::Value(_)
-            )) | sqlparser::ast::FunctionArg::Named {
-                arg: sqlparser::ast::FunctionArgExpr::Expr(Expr::Value(_)),
-                ..
-            }
-        )
-    })
-}
-
-fn is_join_key_normalization_function(function: &Function) -> bool {
-    let name = function_name(function);
-    matches!(
-        name.as_str(),
-        "lower"
-            | "upper"
-            | "trim"
-            | "ltrim"
-            | "rtrim"
-            | "cast"
-            | "date"
-            | "date_trunc"
-            | "to_char"
-            | "to_varchar"
-            | "coalesce"
-    )
-}
-
 fn is_non_sargable_filter(expr: &Expr) -> bool {
     match expr {
         Expr::Function(function) => {
@@ -923,15 +674,6 @@ fn is_sargability_breaking_function(function: &Function) -> bool {
 fn is_count_distinct(function: &Function) -> bool {
     function_name(function) == "count"
         && matches!(function.args, FunctionArguments::List(ref list) if matches!(list.duplicate_treatment, Some(DuplicateTreatment::Distinct)))
-}
-
-fn function_name(function: &Function) -> String {
-    function
-        .name
-        .0
-        .last()
-        .map(|ident| ident.value.to_ascii_lowercase())
-        .unwrap_or_default()
 }
 
 fn expr_contains_partition_column(expr: &Expr) -> bool {
@@ -1057,152 +799,6 @@ fn outer_aliases_for_join(factor: &TableFactor) -> Vec<String> {
     let mut aliases = Vec::new();
     push_table_factor_alias(factor, &mut aliases);
     aliases
-}
-
-fn extract_scalar_subquery_in_select(
-    expr: &Expr,
-    finder: &mut SpanFinder<'_>,
-    features: &mut SqlFeatures,
-) {
-    if matches!(expr, Expr::Subquery(_)) {
-        let snippet = expr.to_string();
-        if let Some(span) = finder.find_next(&snippet) {
-            features
-                .scalar_subqueries_in_select
-                .push(ExpressionFeature {
-                    span,
-                    key: "scalar subquery".into(),
-                    text: snippet,
-                });
-        }
-    }
-}
-
-fn extract_correlated_subqueries_in_expr(
-    expr: &Expr,
-    outer_aliases: &[String],
-    finder: &mut SpanFinder<'_>,
-    features: &mut SqlFeatures,
-) {
-    match expr {
-        Expr::Exists { subquery, .. } => {
-            if subquery_references_outer(subquery, outer_aliases) {
-                push_correlated_subquery(subquery, finder, features);
-            }
-        }
-        Expr::InSubquery { subquery, .. } => {
-            if subquery_references_outer(subquery, outer_aliases) {
-                push_correlated_subquery(subquery, finder, features);
-            }
-        }
-        Expr::Subquery(subquery) => {
-            if subquery_references_outer(subquery, outer_aliases) {
-                push_correlated_subquery(subquery, finder, features);
-            }
-        }
-        Expr::BinaryOp { left, right, .. } => {
-            for side in [left.as_ref(), right.as_ref()] {
-                if let Expr::Subquery(subquery) = side {
-                    if subquery_references_outer(subquery, outer_aliases) {
-                        push_correlated_subquery(subquery, finder, features);
-                    }
-                }
-            }
-            extract_correlated_subqueries_in_expr(left, outer_aliases, finder, features);
-            extract_correlated_subqueries_in_expr(right, outer_aliases, finder, features);
-        }
-        Expr::Nested(inner) => {
-            extract_correlated_subqueries_in_expr(inner, outer_aliases, finder, features);
-        }
-        _ => {}
-    }
-}
-
-fn push_correlated_subquery(
-    subquery: &Query,
-    finder: &mut SpanFinder<'_>,
-    features: &mut SqlFeatures,
-) {
-    let snippet = subquery.to_string();
-    if let Some(span) = finder.find_next(&snippet) {
-        features.correlated_subqueries.push(ExpressionFeature {
-            span,
-            key: "correlated subquery".into(),
-            text: snippet,
-        });
-    }
-}
-
-fn subquery_references_outer(subquery: &Query, outer_aliases: &[String]) -> bool {
-    if outer_aliases.is_empty() {
-        return false;
-    }
-    set_expr_references_outer_aliases(subquery.body.as_ref(), outer_aliases)
-}
-
-fn set_expr_references_outer_aliases(body: &SetExpr, outer_aliases: &[String]) -> bool {
-    match body {
-        SetExpr::Select(select) => select_references_outer_aliases(select, outer_aliases),
-        SetExpr::Query(query) => {
-            set_expr_references_outer_aliases(query.body.as_ref(), outer_aliases)
-        }
-        SetExpr::SetOperation { left, right, .. } => {
-            set_expr_references_outer_aliases(left, outer_aliases)
-                || set_expr_references_outer_aliases(right, outer_aliases)
-        }
-        _ => false,
-    }
-}
-
-fn select_references_outer_aliases(select: &Select, outer_aliases: &[String]) -> bool {
-    select
-        .selection
-        .as_ref()
-        .is_some_and(|expr| expr_references_outer_aliases(expr, outer_aliases))
-        || select.projection.iter().any(|item| match item {
-            SelectItem::ExprWithAlias { expr, .. } | SelectItem::UnnamedExpr(expr) => {
-                expr_references_outer_aliases(expr, outer_aliases)
-            }
-            _ => false,
-        })
-}
-
-fn expr_references_outer_aliases(expr: &Expr, outer_aliases: &[String]) -> bool {
-    match expr {
-        Expr::CompoundIdentifier(parts) if parts.len() >= 2 => outer_aliases
-            .iter()
-            .any(|alias| alias == &parts[0].value.to_ascii_lowercase()),
-        Expr::BinaryOp { left, right, .. } => {
-            expr_references_outer_aliases(left, outer_aliases)
-                || expr_references_outer_aliases(right, outer_aliases)
-        }
-        Expr::Nested(inner) => expr_references_outer_aliases(inner, outer_aliases),
-        Expr::Exists { subquery, .. } | Expr::InSubquery { subquery, .. } => {
-            subquery_references_outer(subquery, outer_aliases)
-        }
-        Expr::Subquery(subquery) => subquery_references_outer(subquery, outer_aliases),
-        Expr::Function(function) => function
-            .args
-            .args()
-            .iter()
-            .any(|arg| function_arg_references_outer_aliases(arg, outer_aliases)),
-        _ => false,
-    }
-}
-
-fn function_arg_references_outer_aliases(
-    arg: &sqlparser::ast::FunctionArg,
-    outer_aliases: &[String],
-) -> bool {
-    use sqlparser::ast::{FunctionArg, FunctionArgExpr};
-    match arg {
-        FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))
-        | FunctionArg::Named {
-            arg: FunctionArgExpr::Expr(expr),
-            ..
-        } => expr_references_outer_aliases(expr, outer_aliases),
-        _ => false,
-    }
 }
 
 fn extract_leading_wildcard_likes(
@@ -1364,17 +960,4 @@ pub fn merge_shape_features(mut base: SqlFeatures, ast: SqlFeatures, parsed: boo
     }
     base.joins = merge_join_features(&base.joins, &ast.joins);
     base
-}
-
-trait FunctionArgListExt {
-    fn args(&self) -> &[sqlparser::ast::FunctionArg];
-}
-
-impl FunctionArgListExt for FunctionArguments {
-    fn args(&self) -> &[sqlparser::ast::FunctionArg] {
-        match self {
-            FunctionArguments::List(list) => &list.args,
-            _ => &[],
-        }
-    }
 }

@@ -13,7 +13,6 @@ sys.path.insert(0, str(SCRIPTS))
 
 from check_docs import check_internal, markdown_files, slug  # noqa: E402
 from costguard_tooling import max_rss_bytes, summarize_measurements  # noqa: E402
-from generate_recall_corpus import FIXTURES, write_fixtures  # noqa: E402
 from generate_rule_docs import validate_rule_guides  # noqa: E402
 from scale_check import threshold_violations, write_report  # noqa: E402
 
@@ -181,22 +180,6 @@ class GateScriptTests(unittest.TestCase):
             [{"id": "SQLCOST001", "name": "Select star", "severity": "high"}]
         )
         self.assertTrue(any("orphan per-rule guide" in error for error in errors))
-
-    def test_generate_recall_corpus_check_passes(self) -> None:
-        proc = subprocess.run(
-            [sys.executable, str(SCRIPTS / "generate_recall_corpus.py"), "--check"],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        self.assertEqual(proc.returncode, 0, proc.stderr or proc.stdout)
-
-    def test_write_fixtures_round_trip(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            corpus = Path(tmp)
-            write_fixtures(corpus)
-            self.assertTrue((corpus / next(iter(FIXTURES))).exists())
 
     def test_validate_fp_registry_passes(self) -> None:
         proc = subprocess.run(

@@ -4,7 +4,7 @@ Costguard is a local, dbt-aware cost regression guardrail for git workflows.
 
 One binary and one simple CI Action. `costguard pr` scans changed models against the git base. Runs locally as a fast Rust CLI with no warehouse credentials required.
 
-Version `2.0.0` is the MVP production release for Generic SQL, Snowflake, BigQuery, and Trino. Databricks, Redshift, Postgres, and DuckDB remain preview. See [Platforms and warehouses](reference/platforms.md) and the [compatibility policy](reference/compatibility.md).
+Costguard supports Generic SQL, Snowflake, BigQuery, and Trino in production. Databricks, Redshift, Postgres, and DuckDB remain preview. See [Platforms and warehouses](reference/platforms.md) and the [compatibility policy](reference/compatibility.md).
 
 ## Why
 
@@ -54,4 +54,4 @@ See [Local scan and explain](getting-started/local-scan.md) for the zero-config 
 
 ## Status
 
-`v2.0.0` is the MVP production release. Startup standard mode and Git-native enterprise strict mode are technically complete; hosted control plane, SSO, commercial SLA, and procurement services are outside the product scope.
+Startup standard mode and Git-native enterprise strict mode are technically complete; hosted control plane, SSO, commercial SLA, and procurement services are outside the product scope.

@@ -13,6 +13,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 LINK_RE = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
 HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*$", re.MULTILINE)
+VERSION_CLAIM_RE = re.compile(r"Version `(\d+\.\d+\.\d+)`")
+WORKSPACE_VERSION_RE = re.compile(
+    r'^\[workspace\.package\]\s*\n(?:.*\n)*?version\s*=\s*"([^"]+)"',
+    re.MULTILINE,
+)
 
 
 def slug(value: str) -> str:
@@ -63,12 +68,36 @@ def check_external(url: str, retries: int) -> str | None:
     return f"external link failed: {url}"
 
 
+def workspace_version() -> str:
+    cargo = (ROOT / "Cargo.toml").read_text(encoding="utf-8")
+    match = WORKSPACE_VERSION_RE.search(cargo)
+    if not match:
+        raise RuntimeError("unable to read [workspace.package].version from Cargo.toml")
+    return match.group(1)
+
+
+def check_version_claims() -> list[str]:
+    current = workspace_version()
+    errors: list[str] = []
+    for source in markdown_files():
+        text = source.read_text(encoding="utf-8")
+        for match in VERSION_CLAIM_RE.finditer(text):
+            claimed = match.group(1)
+            if claimed != current:
+                rel = source.relative_to(ROOT)
+                errors.append(
+                    f"{rel}: Version `{claimed}` does not match workspace version {current}"
+                )
+    return errors
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--external", action="store_true")
     parser.add_argument("--retries", type=int, default=3)
     args = parser.parse_args()
     errors: list[str] = []
+    errors.extend(check_version_claims())
     external_urls: set[str] = set()
     for source in markdown_files():
         text = source.read_text(encoding="utf-8")

@@ -3,7 +3,7 @@ use costguard_core::{scan, FindingBaseline, ScanConfig, SignedPolicyConfig};
 use costguard_diagnostics::Severity;
 use costguard_policy::{
     generate_key, sign_policy, DeclarativeRule, PolicyDocumentV2, PolicyException,
-    PolicyPermissions, PolicyScope, Predicate, ScopeKind, TrustStoreV1, TrustedKeyV1,
+    PolicyPermissions, PolicyScope, Predicate, RulePolicy, ScopeKind, TrustStoreV1, TrustedKeyV1,
 };
 use costguard_protocol::{
     EnforcementMode, EnforcementOutcome, SignedDocumentV1, IDENTITY_SCHEME_SEMANTIC_V1,
@@ -279,4 +279,155 @@ fn managed_scan_keeps_findings_when_exception_is_expired() {
         .iter()
         .any(|violation| violation.code == "expired_exception"));
     assert!(!result.analysis.passed);
+}
+
+#[test]
+fn path_scoped_rule_overrides_apply_per_file_not_globally() {
+    let temp = TempDir::new().unwrap();
+    let marts_dir = temp.path().join("models/marts");
+    let intermediate_dir = temp.path().join("models/intermediate");
+    fs::create_dir_all(&marts_dir).unwrap();
+    fs::create_dir_all(&intermediate_dir).unwrap();
+    fs::write(marts_dir.join("orders.sql"), "select * from raw.orders\n").unwrap();
+    fs::write(
+        intermediate_dir.join("customers.sql"),
+        "select * from raw.customers\n",
+    )
+    .unwrap();
+
+    let now = Utc::now();
+    let mut policy = PolicyDocumentV2 {
+        schema_version: costguard_protocol::POLICY_SCHEMA_VERSION,
+        id: "org-default".into(),
+        version: "2026.06".into(),
+        organization: "acme".into(),
+        issued_at: (now - chrono::Duration::minutes(1)).to_rfc3339(),
+        expires_at: (now + chrono::Duration::days(30)).to_rfc3339(),
+        identity_scheme: IDENTITY_SCHEME_SEMANTIC_V1.into(),
+        permissions: PolicyPermissions::default(),
+        scopes: vec![
+            PolicyScope {
+                id: "org-default".into(),
+                kind: ScopeKind::Organization,
+                selector: "acme".into(),
+                priority: 0,
+                enforcement: EnforcementMode::Block,
+                rules: BTreeMap::new(),
+                custom_rules: vec![],
+                exceptions: vec![],
+            },
+            PolicyScope {
+                id: "marts-select-star".into(),
+                kind: ScopeKind::Path,
+                selector: "models/marts/**".into(),
+                priority: 10,
+                enforcement: EnforcementMode::Block,
+                rules: BTreeMap::from([(
+                    "SQLCOST001".into(),
+                    RulePolicy {
+                        enabled: Some(false),
+                        ..RulePolicy::default()
+                    },
+                )]),
+                custom_rules: vec![],
+                exceptions: vec![],
+            },
+        ],
+    };
+    let key = generate_key("root-2026", now).unwrap();
+    let signed = sign_policy(&policy, &key).unwrap();
+    let trust = TrustStoreV1 {
+        version: 1,
+        keys: vec![TrustedKeyV1 {
+            key_id: key.key_id.clone(),
+            algorithm: key.algorithm.clone(),
+            public_key: key.public_key.clone(),
+            valid_from: (now - chrono::Duration::days(1)).to_rfc3339(),
+            valid_until: (now + chrono::Duration::days(365)).to_rfc3339(),
+            revoked: false,
+        }],
+    };
+    let bundle_path = temp.path().join("policy.json");
+    let trust_store = temp.path().join("trust.json");
+    fs::write(&bundle_path, serde_json::to_vec_pretty(&signed).unwrap()).unwrap();
+    fs::write(&trust_store, serde_json::to_vec_pretty(&trust).unwrap()).unwrap();
+
+    let config = ScanConfig {
+        root: temp.path().to_path_buf(),
+        paths: vec![temp.path().join("models")],
+        fail_on: Some(Severity::Medium),
+        signed_policy: SignedPolicyConfig {
+            bundle_path: Some(bundle_path.clone()),
+            trust_store_path: Some(trust_store),
+            organization: Some("acme".into()),
+            repository: Some("acme/warehouse".into()),
+            required: true,
+            ..SignedPolicyConfig::default()
+        },
+        ..ScanConfig::default()
+    };
+    let result = scan(&config).unwrap();
+
+    let marts_select_star = result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.rule_id == "SQLCOST001"
+            && diagnostic
+                .path
+                .to_string_lossy()
+                .replace('\\', "/")
+                .contains("models/marts/orders.sql")
+    });
+    let intermediate_select_star = result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.rule_id == "SQLCOST001"
+            && diagnostic
+                .path
+                .to_string_lossy()
+                .replace('\\', "/")
+                .contains("models/intermediate/customers.sql")
+    });
+    assert!(
+        !marts_select_star,
+        "path-scoped disable should suppress SQLCOST001 in models/marts"
+    );
+    assert!(
+        intermediate_select_star,
+        "SQLCOST001 should still fire for models/intermediate when only marts path is disabled"
+    );
+
+    // ponytail: severity override uses the same per-file path; marts High, intermediate keeps default Medium.
+    policy.scopes[1].rules = BTreeMap::from([(
+        "SQLCOST001".into(),
+        RulePolicy {
+            severity: Some(Severity::High),
+            ..RulePolicy::default()
+        },
+    )]);
+    let signed = sign_policy(&policy, &key).unwrap();
+    fs::write(&bundle_path, serde_json::to_vec_pretty(&signed).unwrap()).unwrap();
+    let result = scan(&config).unwrap();
+    let marts_severity = result
+        .diagnostics
+        .iter()
+        .find(|diagnostic| {
+            diagnostic.rule_id == "SQLCOST001"
+                && diagnostic
+                    .path
+                    .to_string_lossy()
+                    .replace('\\', "/")
+                    .contains("models/marts/orders.sql")
+        })
+        .map(|diagnostic| diagnostic.severity);
+    let intermediate_severity = result
+        .diagnostics
+        .iter()
+        .find(|diagnostic| {
+            diagnostic.rule_id == "SQLCOST001"
+                && diagnostic
+                    .path
+                    .to_string_lossy()
+                    .replace('\\', "/")
+                    .contains("models/intermediate/customers.sql")
+        })
+        .map(|diagnostic| diagnostic.severity);
+    assert_eq!(marts_severity, Some(Severity::High));
+    assert_eq!(intermediate_severity, Some(Severity::Medium));
 }

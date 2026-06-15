@@ -5,8 +5,8 @@
 
 use anyhow::Result;
 use costguard_core::{OutputFormat, PrSummary, ScanResult};
-use costguard_cost::{format_cost_line, format_usd_interval, ProjectCostSummary};
-use costguard_diagnostics::{Diagnostic, Severity};
+use costguard_cost::{format_usd_interval, ProjectCostSummary};
+use costguard_diagnostics::Diagnostic;
 use serde::Serialize;
 
 const OUTPUT_SCHEMA_VERSION: u8 = 3;
@@ -114,302 +114,17 @@ pub fn render_rules(
     }
 }
 
-fn render_text(result: &ScanResult) -> String {
-    let mut output = String::new();
-    append_analysis_text(&mut output, result);
-    if let Some(summary) = &result.pr_summary {
-        output.push_str("Changed files:\n");
-        if summary.changed_files.is_empty() {
-            output.push_str("  none\n");
-        } else {
-            for path in &summary.changed_files {
-                output.push_str(&format!(
-                    "  - {}\n",
-                    escape_text(&path.display().to_string())
-                ));
-            }
-        }
-        if !summary.changed_models.is_empty() {
-            output.push_str("\nChanged dbt models:\n");
-            for model in &summary.changed_models {
-                output.push_str(&format!("  - {}\n", escape_text(model)));
-            }
-        }
-        if !summary.affected_downstream.is_empty() {
-            output.push_str("\nAffected downstream:\n");
-            for node in &summary.affected_downstream {
-                output.push_str(&format!("  - {}\n", escape_text(node)));
-            }
-        }
-        if !summary.affected_exposures.is_empty() {
-            output.push_str("\nAffected exposures:\n");
-            for exposure in &summary.affected_exposures {
-                output.push_str(&format!("  - exposure: {}\n", escape_text(exposure)));
-            }
-        }
-        if let Some(command) = &summary.recommended_dbt_command {
-            output.push_str(&format!(
-                "\nRecommended dbt command:\n  {}\n",
-                escape_text(command)
-            ));
-        }
-        output.push('\n');
-    }
-    append_context_text(&mut output, result.context.as_ref());
+mod github;
+mod markdown;
+mod sarif;
+mod text;
 
-    if result.diagnostics.is_empty() {
-        output.push_str(&format!(
-            "No diagnostics. Scanned {} SQL, {} YAML, {} Python, {} manifest files.\n",
-            result.counts.sql, result.counts.yaml, result.counts.python, result.counts.manifest
-        ));
-        return output;
-    }
+use github::render_github;
+use markdown::{render_cost_markdown, render_markdown};
+use sarif::{render_sarif, sarif_rule_definitions};
+use text::{render_cost_text, render_text};
 
-    for diagnostic in &result.diagnostics {
-        output.push_str(&format!(
-            "{}  {} {}:{}:{}\n",
-            diagnostic.severity.label(),
-            diagnostic.rule_id,
-            escape_text(&diagnostic.path.display().to_string()),
-            diagnostic.line,
-            diagnostic.column
-        ));
-        output.push_str(&format!("      {}\n", escape_text(&diagnostic.message)));
-        if let Some(risk) = &diagnostic.risk {
-            output.push_str(&format!("      Risk: {risk}\n"));
-        }
-        if let Some(suggestion) = &diagnostic.suggestion {
-            output.push_str(&format!("      Suggestion: {suggestion}\n"));
-        }
-        if let Some(cost) = &diagnostic.cost_estimate {
-            output.push_str(&format!("      {}\n", format_cost_line(cost)));
-        }
-        output.push('\n');
-    }
-    append_top_cost_findings(&mut output, &result.diagnostics);
-    append_cost_summary(&mut output, result.cost_summary.as_ref());
-    output
-}
-
-fn append_top_cost_findings(output: &mut String, diagnostics: &[Diagnostic]) {
-    let mut ranked: Vec<_> = diagnostics
-        .iter()
-        .filter_map(|d| d.cost_estimate.as_ref().map(|c| (d, c)))
-        .collect();
-    if ranked.is_empty() {
-        return;
-    }
-    ranked.sort_by(|(_left, left_cost), (_right, right_cost)| {
-        right_cost
-            .savings_p50_usd_per_month
-            .unwrap_or(right_cost.relative_index)
-            .partial_cmp(
-                &left_cost
-                    .savings_p50_usd_per_month
-                    .unwrap_or(left_cost.relative_index),
-            )
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-    output.push_str("\nTop findings by estimated monthly savings:\n");
-    for (diagnostic, cost) in ranked.into_iter().take(10) {
-        output.push_str(&format!(
-            "  - {} {}:{} — {}\n",
-            diagnostic.rule_id,
-            diagnostic.path.display(),
-            diagnostic.line,
-            format_cost_line(cost)
-        ));
-    }
-}
-
-fn render_github(result: &ScanResult) -> String {
-    let mut output = String::new();
-    for violation in &result.analysis.violations {
-        output.push_str(&format!(
-            "::error title=Costguard analysis {}::{}\n",
-            escape_github_property(&violation.code),
-            escape_github_message(&violation.message)
-        ));
-    }
-    for diagnostic in &result.diagnostics {
-        let level = match diagnostic.severity {
-            Severity::Critical | Severity::High => "error",
-            Severity::Medium => "warning",
-            Severity::Low | Severity::Info => "notice",
-        };
-        output.push_str(&format!(
-            "::{level} file={},line={},col={},title={} {}::{}\n",
-            escape_github_property(&diagnostic.path.display().to_string()),
-            diagnostic.line,
-            diagnostic.column,
-            escape_github_property(&diagnostic.rule_id),
-            escape_github_property(diagnostic.severity.label()),
-            escape_github_message(&github_message(diagnostic))
-        ));
-    }
-    if let Some(summary) = &result.pr_summary {
-        output.push_str(&format!(
-            "::notice title=Costguard PR Summary::{}\n",
-            escape_github_message(&summary_sentence(summary))
-        ));
-    }
-    output
-}
-
-fn github_message(diagnostic: &Diagnostic) -> String {
-    let mut message = if let (Some(line), Some(column)) =
-        (diagnostic.compiled_line, diagnostic.compiled_column)
-    {
-        format!(
-            "{} (compiled SQL location: line {line}, column {column})",
-            diagnostic.message
-        )
-    } else {
-        diagnostic.message.clone()
-    };
-    if let Some(cost) = &diagnostic.cost_estimate {
-        message.push_str(&format!(" | {}", format_cost_line(cost)));
-    }
-    message
-}
-
-fn render_markdown(result: &ScanResult) -> String {
-    let mut output = String::new();
-    let high_count = result
-        .diagnostics
-        .iter()
-        .filter(|diagnostic| diagnostic.severity >= Severity::High)
-        .count();
-    if !result.analysis.passed {
-        output.push_str("# Costguard analysis incomplete\n\n");
-        for violation in &result.analysis.violations {
-            output.push_str(&format!(
-                "- `{}` {}\n",
-                escape_markdown(&violation.code),
-                escape_markdown(&violation.message)
-            ));
-        }
-        output.push('\n');
-    } else if high_count > 0 {
-        output.push_str(&format!(
-            "# Costguard failed this PR\n\n{high_count} high-risk cost finding"
-        ));
-        if high_count != 1 {
-            output.push('s');
-        }
-        output.push_str(".\n\n");
-    } else {
-        output.push_str("# Costguard passed\n\nNo high-risk cost findings.\n\n");
-    }
-
-    if let Some(summary) = &result.pr_summary {
-        output.push_str("## PR Impact\n\n");
-        markdown_list(&mut output, "Changed dbt models", &summary.changed_models);
-        markdown_list(
-            &mut output,
-            "Affected downstream",
-            &summary.affected_downstream,
-        );
-        markdown_list(
-            &mut output,
-            "Affected exposures",
-            &summary.affected_exposures,
-        );
-        if let Some(command) = &summary.recommended_dbt_command {
-            output.push_str(&format!(
-                "Recommended dbt command:\n\n```bash\n{}\n```\n\n",
-                escape_fenced_code(command)
-            ));
-        }
-    }
-
-    if let Some(context) = &result.context {
-        output.push_str("## Context (informational)\n\n");
-        output.push_str(&format!(
-            "- {} SQL files in project context\n",
-            context.counts.sql
-        ));
-        output.push_str(&format!(
-            "- {} parse failures, {} skipped files (unchanged)\n",
-            context.sql_parse_failures, context.skipped_count
-        ));
-        if !context.issues.is_empty() {
-            output.push_str(&format!(
-                "- {} unchanged context issues (nonblocking)\n",
-                context.issues.len()
-            ));
-        }
-        output.push('\n');
-    }
-
-    if !result.diagnostics.is_empty() {
-        output.push_str("## Diagnostics\n\n");
-        for diagnostic in &result.diagnostics {
-            output.push_str(&format!(
-                "1. `{}` {}:{}:{}\n   {}\n",
-                diagnostic.rule_id,
-                escape_markdown(&diagnostic.path.display().to_string()),
-                diagnostic.line,
-                diagnostic.column,
-                escape_markdown(&diagnostic.message)
-            ));
-            if let Some(risk) = &diagnostic.risk {
-                output.push_str(&format!("   Risk: {}\n", escape_markdown(risk)));
-            }
-            if let Some(suggestion) = &diagnostic.suggestion {
-                output.push_str(&format!("   Suggestion: {}\n", escape_markdown(suggestion)));
-            }
-            if let Some(cost) = &diagnostic.cost_estimate {
-                output.push_str(&format!(
-                    "   {}\n",
-                    escape_markdown(&format_cost_line(cost))
-                ));
-            }
-            output.push('\n');
-        }
-        append_top_cost_findings_markdown(&mut output, &result.diagnostics);
-        append_cost_summary_markdown(&mut output, result.cost_summary.as_ref());
-        output.push_str(
-            "Suppress only intentional exceptions with `-- costguard: disable-next-line=RULE`.\n",
-        );
-    }
-
-    output
-}
-
-fn append_top_cost_findings_markdown(output: &mut String, diagnostics: &[Diagnostic]) {
-    let mut ranked: Vec<_> = diagnostics
-        .iter()
-        .filter_map(|d| d.cost_estimate.as_ref().map(|c| (d, c)))
-        .collect();
-    if ranked.is_empty() {
-        return;
-    }
-    ranked.sort_by(|(_left, left_cost), (_right, right_cost)| {
-        right_cost
-            .savings_p50_usd_per_month
-            .unwrap_or(right_cost.relative_index)
-            .partial_cmp(
-                &left_cost
-                    .savings_p50_usd_per_month
-                    .unwrap_or(left_cost.relative_index),
-            )
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-    output.push_str("\n## Top findings by estimated monthly savings\n\n");
-    for (diagnostic, cost) in ranked.into_iter().take(10) {
-        output.push_str(&format!(
-            "- `{}` {}:{} — {}\n",
-            diagnostic.rule_id,
-            escape_markdown(&diagnostic.path.display().to_string()),
-            diagnostic.line,
-            escape_markdown(&format_cost_line(cost))
-        ));
-    }
-    output.push('\n');
-}
-
-fn append_cost_summary(output: &mut String, summary: Option<&ProjectCostSummary>) {
+pub(crate) fn append_cost_summary(output: &mut String, summary: Option<&ProjectCostSummary>) {
     let Some(summary) = summary else {
         return;
     };
@@ -466,7 +181,10 @@ fn append_cost_summary(output: &mut String, summary: Option<&ProjectCostSummary>
     }
 }
 
-fn append_cost_summary_markdown(output: &mut String, summary: Option<&ProjectCostSummary>) {
+pub(crate) fn append_cost_summary_markdown(
+    output: &mut String,
+    summary: Option<&ProjectCostSummary>,
+) {
     let Some(summary) = summary else {
         return;
     };
@@ -521,54 +239,15 @@ fn append_cost_summary_markdown(output: &mut String, summary: Option<&ProjectCos
     }
 }
 
-fn render_cost_text(result: &ScanResult) -> String {
-    let mut output = String::from("Costguard cost prioritization summary\n\n");
-    append_cost_summary(&mut output, result.cost_summary.as_ref());
-    if !result.diagnostics.is_empty() {
-        append_top_cost_findings(&mut output, &result.diagnostics);
-    }
-    output
-}
-
-fn render_cost_markdown(result: &ScanResult) -> String {
-    let mut output = String::from("# Costguard cost prioritization summary\n\n");
-    append_cost_summary_markdown(&mut output, result.cost_summary.as_ref());
-    if !result.diagnostics.is_empty() {
-        append_top_cost_findings_markdown(&mut output, &result.diagnostics);
-    }
-    output
-}
-
-fn markdown_list(output: &mut String, title: &str, items: &[String]) {
-    if items.is_empty() {
-        return;
-    }
-    output.push_str(&format!("{title}:\n"));
-    for item in items {
-        output.push_str(&format!("- {}\n", escape_markdown(item)));
-    }
-    output.push('\n');
-}
-
-fn summary_sentence(summary: &PrSummary) -> String {
-    format!(
-        "{} changed file(s), {} changed model(s), {} downstream node(s), {} exposure(s)",
-        summary.changed_files.len(),
-        summary.changed_models.len(),
-        summary.affected_downstream.len(),
-        summary.affected_exposures.len()
-    )
-}
-
-fn escape_github_property(value: &str) -> String {
+pub(crate) fn escape_github_property(value: &str) -> String {
     escape_github(value, true)
 }
 
-fn escape_github_message(value: &str) -> String {
+pub(crate) fn escape_github_message(value: &str) -> String {
     escape_github(value, false)
 }
 
-fn escape_markdown(value: &str) -> String {
+pub(crate) fn escape_markdown(value: &str) -> String {
     let mut escaped = String::new();
     for ch in value.chars() {
         match ch {
@@ -585,11 +264,11 @@ fn escape_markdown(value: &str) -> String {
     escaped
 }
 
-fn escape_fenced_code(value: &str) -> String {
+pub(crate) fn escape_fenced_code(value: &str) -> String {
     escape_text(value).replace("```", "` ` `")
 }
 
-fn escape_text(value: &str) -> String {
+pub(crate) fn escape_text(value: &str) -> String {
     let mut escaped = String::new();
     for ch in value.chars() {
         match ch {
@@ -619,7 +298,10 @@ fn escape_github(value: &str, property: bool) -> String {
     escaped
 }
 
-fn append_context_text(output: &mut String, context: Option<&costguard_core::ContextReport>) {
+pub(crate) fn append_context_text(
+    output: &mut String,
+    context: Option<&costguard_core::ContextReport>,
+) {
     let Some(context) = context else {
         return;
     };
@@ -646,7 +328,7 @@ fn append_context_text(output: &mut String, context: Option<&costguard_core::Con
     output.push('\n');
 }
 
-fn append_analysis_text(output: &mut String, result: &ScanResult) {
+pub(crate) fn append_analysis_text(output: &mut String, result: &ScanResult) {
     if result.analysis.passed {
         return;
     }
@@ -659,101 +341,6 @@ fn append_analysis_text(output: &mut String, result: &ScanResult) {
         ));
     }
     output.push('\n');
-}
-
-fn sarif_level(severity: Severity) -> &'static str {
-    match severity {
-        Severity::Critical | Severity::High => "error",
-        Severity::Medium => "warning",
-        Severity::Low | Severity::Info => "note",
-    }
-}
-
-fn render_sarif(result: &ScanResult) -> Result<String> {
-    let rules = costguard_core::rules();
-    let payload = serde_json::json!({
-        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
-        "version": "2.1.0",
-        "runs": [{
-            "tool": {
-                "driver": {
-                    "name": "costguard",
-                    "version": env!("CARGO_PKG_VERSION"),
-                    "informationUri": "https://github.com/hypertrial/costguard",
-                    "rules": sarif_rule_definitions(&rules)
-                }
-            },
-            "results": sarif_results(result),
-            "properties": {
-                "costguard": {
-                    "run": result.run,
-                    "policy": result.policy,
-                    "analysis": result.analysis,
-                    "metrics": result.metrics,
-                    "context": result.context,
-                    "identity_scheme": result.identity_scheme
-                }
-            }
-        }]
-    });
-    Ok(serde_json::to_string_pretty(&payload)?)
-}
-
-fn sarif_results(result: &ScanResult) -> Vec<serde_json::Value> {
-    result
-        .diagnostics
-        .iter()
-        .map(|diagnostic| {
-            let mut result = serde_json::json!({
-                "ruleId": diagnostic.rule_id,
-                "level": sarif_level(diagnostic.severity),
-                "message": {
-                    "text": diagnostic.message
-                },
-                "locations": [{
-                    "physicalLocation": {
-                        "artifactLocation": {
-                            "uri": diagnostic.path.to_string_lossy().replace('\\', "/")
-                        },
-                        "region": {
-                            "startLine": diagnostic.line,
-                            "startColumn": diagnostic.column
-                        }
-                    }
-                }],
-                "properties": {
-                    "findingId": diagnostic.governance.finding_id,
-                    "evidenceKey": diagnostic.governance.evidence_key,
-                    "confidence": diagnostic.confidence,
-                    "enforcementOutcome": diagnostic.governance.enforcement,
-                    "policyProvenance": diagnostic.governance.policy,
-                    "appliedException": diagnostic.governance.exception
-                }
-            });
-            if let Some(cost) = &diagnostic.cost_estimate {
-                result["properties"]["costEstimate"] = serde_json::json!(cost);
-            }
-            result
-        })
-        .collect()
-}
-
-fn sarif_rule_definitions(rules: &[costguard_core::RuleMetadata]) -> Vec<serde_json::Value> {
-    rules
-        .iter()
-        .map(|rule| {
-            serde_json::json!({
-                "id": rule.id,
-                "name": rule.name,
-                "shortDescription": {
-                    "text": rule.description
-                },
-                "defaultConfiguration": {
-                    "level": sarif_level(rule.severity)
-                }
-            })
-        })
-        .collect()
 }
 
 #[cfg(test)]
