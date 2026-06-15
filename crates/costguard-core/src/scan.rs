@@ -186,12 +186,7 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
         }
     }
 
-    diagnostics.sort_by(|left, right| {
-        left.path
-            .cmp(&right.path)
-            .then(left.line.cmp(&right.line))
-            .then(left.rule_id.cmp(&right.rule_id))
-    });
+    diagnostics.sort_by(crate::pipeline::compare_diagnostics);
 
     let target_counts = ScanCounts::from_files(&plan.targets);
     let _context_counts = if plan.pr_mode {

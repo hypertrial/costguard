@@ -134,6 +134,21 @@ pub fn apply_inline_suppressions(
         .collect()
 }
 
+/// Stable ordering for diagnostics in output and repeat-run checks.
+pub(crate) fn compare_diagnostics(left: &Diagnostic, right: &Diagnostic) -> std::cmp::Ordering {
+    left.path
+        .cmp(&right.path)
+        .then(left.line.cmp(&right.line))
+        .then(left.rule_id.cmp(&right.rule_id))
+        .then(left.column.cmp(&right.column))
+        .then(
+            left.governance
+                .evidence_key
+                .cmp(&right.governance.evidence_key),
+        )
+        .then(left.governance.finding_id.cmp(&right.governance.finding_id))
+}
+
 /// Stage 5: assign semantic identities, fail on missing evidence, collapse duplicates.
 pub fn assign_semantic_identities(diagnostics: Vec<Diagnostic>) -> anyhow::Result<IdentityResult> {
     let mut sorted = diagnostics;
@@ -185,12 +200,7 @@ fn collapse_duplicates(diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
         });
         result.push(group.remove(0));
     }
-    result.sort_by(|left, right| {
-        left.path
-            .cmp(&right.path)
-            .then(left.line.cmp(&right.line))
-            .then(left.rule_id.cmp(&right.rule_id))
-    });
+    result.sort_by(compare_diagnostics);
     result
 }
 
