@@ -55,7 +55,7 @@ inputs:
     required: false
     default: "false"
   fail-on-cost-delta:
-    description: Fail when deduplicated savings p50 on new findings exceeds this USD threshold
+    description: Fail when addressable finding savings p50 on new findings exceeds this USD threshold
     required: false
     default: ""
   policy:

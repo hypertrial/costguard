@@ -2,7 +2,7 @@
 
 ## Text (default)
 
-Human-readable diagnostics with severity, rule id, file location, message, and confidence. When `[cost]` is enabled, each finding includes an estimated savings line and a **Cost summary** section with deduplicated project totals.
+Human-readable diagnostics with severity, rule id, file location, message, and confidence. When `[cost]` is enabled, each finding includes an estimated savings line and a **Cost summary** section with current/post-fix/potential savings, addressable finding savings (deduplicated), grade mix, top models, and an advisory disclaimer footer.
 
 In PR mode, a **Context** footer summarizes unchanged project files: SQL file counts, parse failures, skipped files, and up to five nonblocking context issues.
 
@@ -30,7 +30,7 @@ Structured scan result:
 | `identity_scheme` | When semantic identity is active | `"semantic-v1"` — finding IDs are stable across formatting and line movement |
 | `analysis` | Always | Completeness report: `policy`, `passed`, and optional `violations` with `code`, `message`, `observed`, and `allowed` |
 | `metrics` | Always | Scan counters including parse metrics (see [Parse metrics](parse-metrics.md)) |
-| `cost` | `[cost]` enabled | Project cost summary: deduplicated model totals, savings sum, top models, grade mix (see [Cost estimates](cost-estimates.md)) |
+| `cost` | `[cost]` enabled | Project cost summary: current/post-fix/potential savings, addressable finding savings (deduplicated), top models, grade mix, disclaimer (see [Cost estimates](cost-estimates.md)) |
 | `diagnostics` | Always | Gated findings on changed files in PR mode; full scan findings otherwise. Each entry includes `rule_id`, `severity`, `message`, `path`, `line`, `confidence`, and governance fields (`finding_id`, `evidence_key`); optional `cost_estimate` when `[cost]` is enabled (`p50_usd_per_month` is **savings**, not model total); compiled-only unmapped findings include `source_provenance`, `compiled_line`, and `compiled_column` |
 | `files` | Always | Per-model parse metadata (`parse_input`, `parsed_raw`, `parsed_compiled`, `feature_extraction_used_ast`) |
 | `pr_summary` | PR mode | Changed files, optional downstream blast radius |
@@ -62,7 +62,7 @@ Compiled-only unmapped diagnostics annotate the raw model path at line 1 and inc
 
 ## Markdown (`markdown`)
 
-PR-summary-oriented report with grouped findings, context footer, and suppression guidance.
+PR-summary-oriented report with grouped findings, context footer, suppression guidance, and (when `[cost]` is enabled) a cost summary with relabeled savings lines and an advisory disclaimer.
 
 ## SARIF (`sarif`)
 
@@ -79,7 +79,7 @@ Use `--write-baseline` / `--baseline` (or `[output].baseline` in config) to gran
 | `baselined_findings` | Findings suppressed by the baseline file |
 | `new_findings` | Findings reported after baseline filtering |
 
-Exit code `1` applies when analysis completeness checks fail (`analysis.passed = false`), to **new** findings at or above `--fail-on`, or when deduplicated **savings** p50 on new findings exceeds `--fail-on-cost-delta` (USD) or `fail_on_monthly_delta_gb` (GB-months) when set.
+Exit code `1` applies when analysis completeness checks fail (`analysis.passed = false`), to **new** findings at or above `--fail-on`, or when **addressable finding savings** p50 on new findings exceeds `--fail-on-cost-delta` (USD) or `fail_on_monthly_delta_gb` (GB-months) when set.
 
 PR markdown output includes a reminder:
 
@@ -92,7 +92,7 @@ Suppress only intentional exceptions with `-- costguard: disable-next-line=RULE`
 | Code | Meaning |
 | --- | --- |
 | `0` | Analysis completeness checks passed; no diagnostics at or above `--fail-on` / `fail_on` (and `--min-confidence` / `min_confidence` when set); cost delta gate not exceeded; `explain` completed with `analysis.passed = true` |
-| `1` | Analysis completeness checks failed, one or more diagnostics at or above severity threshold with confidence at or above the optional floor, or deduplicated savings cost gate exceeded; `explain` with `analysis.passed = false` |
+| `1` | Analysis completeness checks failed, one or more diagnostics at or above severity threshold with confidence at or above the optional floor, or addressable finding savings cost gate exceeded; `explain` with `analysis.passed = false` |
 | `2` | Configuration error (invalid config, missing manifest path, unsupported baseline or policy schema) |
 | `3` | Runtime error |
 

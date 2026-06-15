@@ -66,6 +66,29 @@ Use this four-layer model in all docs. Legacy tier names map in the footnote col
 
 Prefer SQL comment prefix `-- costguard: ...`; bare `costguard:` comments are also parsed.
 
+## Cost estimate terms
+
+Canonical definitions for cost and savings terminology. Prefer these in README, reference docs, CLI output, and benchmarks.
+
+| Term | JSON / output field | Definition |
+| --- | --- | --- |
+| **Current cost** | `current_cost`, `project_p50_usd` | Estimated total monthly spend across all dbt models; each model counted once (deduplicated, Fenton–Wilkinson aggregation). |
+| **Post-fix cost** | `post_fix_cost` | Counterfactual estimated monthly spend if every current finding were fixed. |
+| **Potential savings** | `potential_savings` | Project-level counterfactual reduction: `current_cost − post_fix_cost`, computed once per model (top-down). |
+| **Addressable finding savings (deduplicated)** | `savings_p50_usd` | Bottom-up sum of each finding's attributed savings, capped per model so overlapping findings never exceed ~95% of a model's cost. Gates `--fail-on-cost-delta` / `fail_on_monthly_delta`. |
+| **Per-finding Est. savings** | `savings_p*_usd_per_month` | Attributed share of savings for one finding. |
+| **Model monthly cost** | `model_monthly_p50_usd` | Baseline monthly cost of the model the finding sits on—not the saving. |
+| **Post-fix cost per finding** | `post_fix_cost_p50_usd_per_month` | That model's modeled monthly cost after fixing the finding. |
+| **Relative index** | `relative_index` | Savings in GB-months when pricing is disabled. |
+| **Grade A / B / C** | `grade`, `grade_a` / `grade_b` / `grade_c` | Input provenance: **A** measured (observations or query history), **B** catalog/config, **C** size prior only. |
+| **Coverage / mapped spend** | `coverage.mapped_spend_fraction` | Fraction of models backed by measured (grade A) spend. |
+| **PR impact** | `pr_impact` | Base-vs-head deltas in PR mode: `introduced`, `avoided`, `net`, `efficiency`, `volume`. |
+| **Realized savings** | `realized_savings` | Measured before/after delta from `observations_before` + `observations_after` bundles. |
+
+**Two savings numbers:** **Potential savings** is top-down (`current − post_fix`, per model). **Addressable finding savings** is bottom-up (sum of per-finding shares with structure/fan-out weights and per-model caps). They are close but not identical; PR/scan cost gating uses the finding sum.
+
+**Disclaimer:** Cost figures are advisory priors from local files only. They prioritize findings at order-of-magnitude fidelity—they are not a bill and not a guarantee of realized savings. Severity and confidence, not cost, are the enforcement contract. Full disclaimer: [Cost estimates](reference/cost-estimates.md).
+
 ## Documentation style
 
 - Use imperative headings in reference pages

@@ -124,6 +124,20 @@ use markdown::{render_cost_markdown, render_markdown};
 use sarif::{render_sarif, sarif_rule_definitions};
 use text::{render_cost_text, render_text};
 
+const COST_DISCLAIMER: &str = "Note: advisory priors from local data (grades A/B/C), not a bill. Severity/confidence enforce gates. See cost-estimates docs.";
+
+fn append_cost_grade_caveat(output: &mut String, summary: &ProjectCostSummary, prefix: &str) {
+    if summary.grade_a == 0 && summary.coverage.models_total > 0 {
+        output.push_str(&format!(
+            "{prefix}All estimates use size priors only (grade C); no measured spend mapped.\n"
+        ));
+    }
+}
+
+fn append_cost_disclaimer(output: &mut String, prefix: &str) {
+    output.push_str(&format!("{prefix}{COST_DISCLAIMER}\n"));
+}
+
 pub(crate) fn append_cost_summary(output: &mut String, summary: Option<&ProjectCostSummary>) {
     let Some(summary) = summary else {
         return;
@@ -131,7 +145,11 @@ pub(crate) fn append_cost_summary(output: &mut String, summary: Option<&ProjectC
     output.push_str("\nCost summary:\n");
     append_cost_figure_line(output, "  Current cost", &summary.current_cost);
     append_cost_figure_line(output, "  Post-fix cost", &summary.post_fix_cost);
-    append_cost_figure_line(output, "  Potential savings", &summary.potential_savings);
+    append_cost_figure_line(
+        output,
+        "  Potential savings (current - post-fix)",
+        &summary.potential_savings,
+    );
     if let Some(pr) = &summary.pr_impact {
         append_cost_figure_line(output, "  PR impact (net)", &pr.net);
         append_cost_figure_line(output, "    efficiency", &pr.efficiency);
@@ -152,12 +170,12 @@ pub(crate) fn append_cost_summary(output: &mut String, summary: Option<&ProjectC
     output.push('\n');
     if summary.savings_p50_usd > 0.0 {
         output.push_str(&format!(
-            "  New finding savings (deduplicated): ~${:.0}/mo (${:.0}–${:.0})\n",
+            "  Addressable savings on flagged findings (deduplicated): ~${:.0}/mo (${:.0}–${:.0})\n",
             summary.savings_p50_usd, summary.savings_p10_usd, summary.savings_p90_usd
         ));
     } else if summary.savings_gb_months > 0.0 {
         output.push_str(&format!(
-            "  New finding savings (deduplicated): ~{:.0} GB-mo\n",
+            "  Addressable savings on flagged findings (deduplicated): ~{:.0} GB-mo\n",
             summary.savings_gb_months
         ));
     }
@@ -186,6 +204,8 @@ pub(crate) fn append_cost_summary(output: &mut String, summary: Option<&ProjectC
             }
         }
     }
+    append_cost_grade_caveat(output, summary, "  ");
+    append_cost_disclaimer(output, "  ");
 }
 
 fn append_cost_figure_line(output: &mut String, label: &str, figure: &CostFigure) {
@@ -230,7 +250,11 @@ pub(crate) fn append_cost_summary_markdown(
     output.push_str("\n## Cost summary\n\n");
     append_cost_figure_markdown(output, "Current cost", &summary.current_cost);
     append_cost_figure_markdown(output, "Post-fix cost", &summary.post_fix_cost);
-    append_cost_figure_markdown(output, "Potential savings", &summary.potential_savings);
+    append_cost_figure_markdown(
+        output,
+        "Potential savings (current - post-fix)",
+        &summary.potential_savings,
+    );
     if let Some(pr) = &summary.pr_impact {
         append_cost_figure_markdown(output, "PR impact (net)", &pr.net);
     }
@@ -245,12 +269,12 @@ pub(crate) fn append_cost_summary_markdown(
     ));
     if summary.savings_p50_usd > 0.0 {
         output.push_str(&format!(
-            "New finding savings (deduplicated): ~${:.0}/mo.\n\n",
+            "Addressable savings on flagged findings (deduplicated): ~${:.0}/mo.\n\n",
             summary.savings_p50_usd
         ));
     } else if summary.savings_gb_months > 0.0 {
         output.push_str(&format!(
-            "New finding savings (deduplicated): ~{:.0} GB-mo.\n\n",
+            "Addressable savings on flagged findings (deduplicated): ~{:.0} GB-mo.\n\n",
             summary.savings_gb_months
         ));
     }
@@ -275,6 +299,8 @@ pub(crate) fn append_cost_summary_markdown(
         }
         output.push('\n');
     }
+    append_cost_grade_caveat(output, summary, "");
+    append_cost_disclaimer(output, "");
 }
 
 pub(crate) fn escape_github_property(value: &str) -> String {

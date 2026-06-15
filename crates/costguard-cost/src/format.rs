@@ -9,7 +9,7 @@ pub fn format_cost_line(estimate: &CostEstimate) -> String {
     ) {
         let model_note = estimate
             .model_monthly_p50_usd
-            .map(|model| format!(", model ~${model:.0}/mo"))
+            .map(|model| format!(", model cost ~${model:.0}/mo"))
             .unwrap_or_default();
         format!(
             "Est. savings: {} (grade {}{model_note})",

@@ -123,8 +123,8 @@ Optional cost-estimation settings. See [Cost estimates](cost-estimates.md) for t
 | `interval` | float | Interval coverage for p10/p90 (default `0.80`) |
 | `default_runs_per_month` | float | Default model run frequency (default `30`) |
 | `default_table_size` | string | Size prior when bytes unknown: `small`, `medium`, `large`, `xlarge` |
-| `fail_on_monthly_delta` | float | Fail when deduplicated savings p50 on new findings exceeds threshold (USD) |
-| `fail_on_monthly_delta_gb` | float | Fail when deduplicated savings GB-months on new findings exceeds threshold |
+| `fail_on_monthly_delta` | float | Fail when **addressable finding savings** p50 on new findings exceeds threshold (USD) |
+| `fail_on_monthly_delta_gb` | float | Fail when addressable finding savings in GB-months on new findings exceeds threshold |
 | `incremental_fraction` | float | Fraction of table bytes for incremental models (default `0.05`) |
 
 ### `[cost.pricing]`

@@ -4,6 +4,10 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ## [Unreleased]
 
+### Changed
+
+- Cost estimate docs and human-readable output use canonical terms for current/post-fix/potential savings and addressable finding savings; cost summaries include advisory disclaimers and a grade-C caveat when no measured spend is mapped.
+
 ### Fixed
 
 - `Estimate::Sub` now computes a dollar difference instead of a log-ratio, so `potential_savings` reports real savings instead of a mis-scaled value.
