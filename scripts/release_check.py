@@ -62,7 +62,9 @@ def require_release_tools() -> None:
         raise SystemExit(f"release qualification requires: {', '.join(missing)}")
 
 
-def write_receipt(path: Path, *, version: str, tag: str, commit: str) -> None:
+def write_receipt(
+    path: Path, *, version: str, tag: str, commit: str, gate: str = "full"
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(
@@ -72,6 +74,7 @@ def write_receipt(path: Path, *, version: str, tag: str, commit: str) -> None:
                 "version": version,
                 "tag": tag,
                 "commit": commit,
+                "gate": gate,
                 "commands": COMMANDS,
             },
             indent=2,
@@ -88,6 +91,11 @@ def main() -> int:
     parser.add_argument("--skip-external", action="store_true")
     parser.add_argument("--skip-external-links", action="store_true")
     parser.add_argument("--development", action="store_true")
+    parser.add_argument(
+        "--trust-push-ci",
+        action="store_true",
+        help="GitHub release path: require signed tag and defer heavy gates to push CI",
+    )
     parser.add_argument("--receipt", type=Path, default=Path("dist/release/release-check.json"))
     args = parser.parse_args()
     version = args.version.removeprefix("v")
@@ -95,6 +103,23 @@ def main() -> int:
         raise SystemExit(f"requested version {version} != workspace version {workspace_version()}")
     tag = f"v{version}"
     commit = git_output("rev-parse", "HEAD")
+    if args.trust_push_ci:
+        if args.skip_external or args.skip_external_links:
+            raise SystemExit("release evidence cannot be created with skip flags")
+        if args.development:
+            print("trust-push-ci release defers qualification to push CI")
+        else:
+            tag, commit = require_release_tag(version)
+            write_receipt(
+                args.receipt,
+                version=version,
+                tag=tag,
+                commit=commit,
+                gate="push-ci",
+            )
+            print(f"wrote qualification receipt {args.receipt}")
+        print(f"release qualification passed for {version} (trust-push-ci)")
+        return 0
     if args.development:
         print("development qualification does not produce release evidence")
     else:

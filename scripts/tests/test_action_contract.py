@@ -23,7 +23,7 @@ class ActionContractTest(unittest.TestCase):
         self.assertRegex(ci, r"(?m)^  pull_request:")
         self.assertRegex(ci, r"(?m)^  push:")
         self.assertIn("branches: [main]", ci)
-        self.assertIn("cancel-in-progress: true", ci)
+        self.assertIn("timeout-minutes: 5", ci)
         scale = ci.split("  scale:", 1)[1].split("  spellbook-smoke:", 1)[0]
         self.assertNotIn("github.event_name == 'push'", scale)
         spellbook = ci.split("  spellbook-smoke:", 1)[1].split("  data-infra-smoke:", 1)[0]
@@ -47,9 +47,12 @@ class ActionContractTest(unittest.TestCase):
         self.assertIn("actions/attest-sbom@", release)
         self.assertIn("--prerelease", release)
         self.assertIn("needs.qualify.outputs.prerelease == 'false'", release)
-        self.assertIn("ubuntu-24.04, macos-15, macos-15-intel, windows-2025", release)
+        self.assertIn("macos-15-intel", release)
+        self.assertIn("x86_64-pc-windows-msvc", release)
         self.assertIn("verify_ci_history.py", release)
+        self.assertIn("--trust-push-ci", release)
         self.assertIn("release_consumer_smoke.py", release)
+        self.assertIn("timeout-minutes: 5", release)
 
     def test_ci_reuses_cached_tools_and_single_release_build(self) -> None:
         ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
