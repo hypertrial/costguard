@@ -128,7 +128,8 @@ def main() -> int:
         (policy_dir / "policy.toml").write_text(
             "\n".join(
                 [
-                    "schema_version = 1",
+                    "schema_version = 2",
+                    'identity_scheme = "semantic-v1"',
                     'id = "consumer-enterprise"',
                     'version = "rc-smoke"',
                     'organization = "smoke"',
