@@ -77,21 +77,6 @@ mdbook serve
 
 ## GitHub Action
 
-```yaml
-- uses: actions/checkout@v6
-  with:
-    fetch-depth: 0
-- run: dbt compile --target dev
-- uses: hypertrial/costguard/.github/actions/costguard@v2.2.0
-  with:
-    base: origin/main
-    warehouse: snowflake
-    manifest: target/manifest.json
-    fail-on: high
-    min-confidence: high
-    format: github
-```
-
 Use `install-mode: source` to build the checked-out Action code instead of downloading a release binary:
 
 ```yaml

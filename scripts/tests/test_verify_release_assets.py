@@ -16,12 +16,11 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from costguard_tooling import costguard_binary  # noqa: E402
 from release_packaging import (  # noqa: E402
     asset_name,
-    extract_and_smoke_test,
     host_target,
     package_built_binary,
-    target_bin_name,
     verify_checksum,
 )
+from smoke_release_asset import smoke_asset  # noqa: E402
 from verify_release_assets import verify_release_assets  # noqa: E402
 
 
@@ -45,7 +44,7 @@ class VerifyReleaseAssetsTest(unittest.TestCase):
             self.assertTrue(asset.exists())
             self.assertTrue(checksum.exists())
             verify_checksum(workdir, asset, checksum)
-            extract_and_smoke_test(asset, bin_name=target_bin_name(target), target=target)
+            smoke_asset(asset, target)
 
     def test_verify_release_assets_entrypoint(self) -> None:
         if shutil.which("shasum") is None:

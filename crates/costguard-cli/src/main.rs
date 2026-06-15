@@ -91,14 +91,8 @@ enum PolicyCommand {
 #[derive(Debug, Parser)]
 struct ScanArgs {
     paths: Vec<PathBuf>,
-    #[arg(long)]
-    warehouse: Option<String>,
-    #[arg(long)]
-    dialect: Option<String>,
-    #[arg(long, value_enum)]
-    format: Option<FormatArg>,
-    #[arg(long)]
-    manifest: Option<PathBuf>,
+    #[command(flatten)]
+    common: CommonScanArgs,
     #[arg(long)]
     fail_on: Option<String>,
     #[arg(long)]
@@ -111,10 +105,6 @@ struct ScanArgs {
     cost: bool,
     #[arg(long)]
     fail_on_cost_delta: Option<f64>,
-    #[arg(long)]
-    analysis_policy: Option<String>,
-    #[command(flatten)]
-    policy: PolicyArgs,
 }
 
 #[derive(Debug, Parser)]
@@ -147,18 +137,8 @@ enum CostCommand {
 #[derive(Debug, Parser)]
 struct CostReportArgs {
     paths: Vec<PathBuf>,
-    #[arg(long)]
-    warehouse: Option<String>,
-    #[arg(long)]
-    dialect: Option<String>,
-    #[arg(long, value_enum)]
-    format: Option<FormatArg>,
-    #[arg(long)]
-    manifest: Option<PathBuf>,
-    #[arg(long)]
-    analysis_policy: Option<String>,
     #[command(flatten)]
-    policy: PolicyArgs,
+    common: CommonScanArgs,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -187,34 +167,18 @@ impl From<CostSourceArg> for CostExportFormat {
 #[derive(Debug, Parser)]
 struct ExplainArgs {
     path: PathBuf,
-    #[arg(long)]
-    warehouse: Option<String>,
-    #[arg(long)]
-    dialect: Option<String>,
-    #[arg(long, value_enum)]
-    format: Option<FormatArg>,
-    #[arg(long)]
-    manifest: Option<PathBuf>,
+    #[command(flatten)]
+    common: CommonScanArgs,
     #[arg(long)]
     cost: bool,
-    #[arg(long)]
-    analysis_policy: Option<String>,
-    #[command(flatten)]
-    policy: PolicyArgs,
 }
 
 #[derive(Debug, Parser)]
 struct PrArgs {
     #[arg(long, default_value = "main")]
     base: String,
-    #[arg(long)]
-    warehouse: Option<String>,
-    #[arg(long)]
-    dialect: Option<String>,
-    #[arg(long, value_enum)]
-    format: Option<FormatArg>,
-    #[arg(long)]
-    manifest: Option<PathBuf>,
+    #[command(flatten)]
+    common: CommonScanArgs,
     #[arg(long)]
     fail_on: Option<String>,
     #[arg(long)]
@@ -225,10 +189,6 @@ struct PrArgs {
     cost: bool,
     #[arg(long)]
     fail_on_cost_delta: Option<f64>,
-    #[arg(long)]
-    analysis_policy: Option<String>,
-    #[command(flatten)]
-    policy: PolicyArgs,
 }
 
 #[derive(Debug, Parser, Default)]
@@ -243,6 +203,37 @@ struct PolicyArgs {
     team: Option<String>,
     #[arg(long = "policy-repository")]
     repository: Option<String>,
+}
+
+#[derive(Debug, Parser, Default)]
+struct CommonScanArgs {
+    #[arg(long)]
+    warehouse: Option<String>,
+    #[arg(long)]
+    dialect: Option<String>,
+    #[arg(long, value_enum)]
+    format: Option<FormatArg>,
+    #[arg(long)]
+    manifest: Option<PathBuf>,
+    #[arg(long)]
+    analysis_policy: Option<String>,
+    #[command(flatten)]
+    policy: PolicyArgs,
+}
+
+impl CommonScanArgs {
+    fn apply_common(&self, overrides: &mut ScanRuntimeOverrides) {
+        overrides.warehouse = self.warehouse.clone();
+        overrides.dialect = self.dialect.clone();
+        overrides.format = self.format.map(Into::into);
+        overrides.manifest_path = self.manifest.clone();
+        overrides.analysis_policy = self.analysis_policy.clone();
+        overrides.policy_bundle_path = self.policy.bundle.clone();
+        overrides.trust_store_path = self.policy.trust_store.clone();
+        overrides.policy_organization = self.policy.organization.clone();
+        overrides.policy_team = self.policy.team.clone();
+        overrides.policy_repository = self.policy.repository.clone();
+    }
 }
 
 #[derive(Debug, Parser)]
@@ -290,20 +281,7 @@ fn run() -> Result<u8> {
                 Ok(config) => config,
                 Err(err) => return configuration_error(err),
             };
-            let result = scan(&config)?;
-            print!("{}", render(&result, config.format)?);
-            Ok(
-                if result.should_fail(
-                    config.fail_on,
-                    config.min_confidence,
-                    fail_on_monthly_delta(&config),
-                    fail_on_monthly_delta_gb(&config),
-                ) {
-                    1
-                } else {
-                    0
-                },
-            )
+            scan_render_exit(&config)
         }
         Command::Explain(args) => {
             let config = match config_from_explain_args(&args).context("configuration error") {
@@ -319,20 +297,7 @@ fn run() -> Result<u8> {
                 Ok(config) => config,
                 Err(err) => return configuration_error(err),
             };
-            let result = scan(&config)?;
-            print!("{}", render(&result, config.format)?);
-            Ok(
-                if result.should_fail(
-                    config.fail_on,
-                    config.min_confidence,
-                    fail_on_monthly_delta(&config),
-                    fail_on_monthly_delta_gb(&config),
-                ) {
-                    1
-                } else {
-                    0
-                },
-            )
+            scan_render_exit(&config)
         }
         Command::Cost(args) => run_cost_command(args.command),
         Command::Rules(args) => {
@@ -581,51 +546,47 @@ fn base_config() -> Result<ScanConfig> {
     apply_file_config(config, file_config)
 }
 
+fn scan_render_exit(config: &ScanConfig) -> Result<u8> {
+    let result = scan(config)?;
+    print!("{}", render(&result, config.format)?);
+    Ok(
+        if result.should_fail(
+            config.fail_on,
+            config.min_confidence,
+            fail_on_monthly_delta(config),
+            fail_on_monthly_delta_gb(config),
+        ) {
+            1
+        } else {
+            0
+        },
+    )
+}
+
 fn config_from_scan_args(args: ScanArgs) -> Result<ScanConfig> {
     let mut config = base_config()?;
     if !args.paths.is_empty() {
         config.paths = args.paths;
     }
-    ScanRuntimeOverrides {
-        warehouse: args.warehouse,
-        dialect: args.dialect,
-        format: args.format.map(Into::into),
-        manifest_path: args.manifest,
-        fail_on: args.fail_on,
-        min_confidence: args.min_confidence,
-        baseline_path: args.baseline,
-        write_baseline_path: args.write_baseline,
-        cost: args.cost,
-        fail_on_cost_delta: args.fail_on_cost_delta,
-        analysis_policy: args.analysis_policy,
-        policy_bundle_path: args.policy.bundle,
-        trust_store_path: args.policy.trust_store,
-        policy_organization: args.policy.organization,
-        policy_team: args.policy.team,
-        policy_repository: args.policy.repository,
-    }
-    .apply_to(&mut config)?;
+    let mut overrides = ScanRuntimeOverrides::default();
+    args.common.apply_common(&mut overrides);
+    overrides.fail_on = args.fail_on;
+    overrides.min_confidence = args.min_confidence;
+    overrides.baseline_path = args.baseline;
+    overrides.write_baseline_path = args.write_baseline;
+    overrides.cost = args.cost;
+    overrides.fail_on_cost_delta = args.fail_on_cost_delta;
+    overrides.apply_to(&mut config)?;
     validate_scan_config(&config)?;
     Ok(config)
 }
 
 fn config_from_explain_args(args: &ExplainArgs) -> Result<ScanConfig> {
     let mut config = base_config()?;
-    ScanRuntimeOverrides {
-        warehouse: args.warehouse.clone(),
-        dialect: args.dialect.clone(),
-        format: args.format.map(Into::into),
-        manifest_path: args.manifest.clone(),
-        cost: args.cost,
-        analysis_policy: args.analysis_policy.clone(),
-        policy_bundle_path: args.policy.bundle.clone(),
-        trust_store_path: args.policy.trust_store.clone(),
-        policy_organization: args.policy.organization.clone(),
-        policy_team: args.policy.team.clone(),
-        policy_repository: args.policy.repository.clone(),
-        ..ScanRuntimeOverrides::default()
-    }
-    .apply_to(&mut config)?;
+    let mut overrides = ScanRuntimeOverrides::default();
+    args.common.apply_common(&mut overrides);
+    overrides.cost = args.cost;
+    overrides.apply_to(&mut config)?;
     validate_scan_config(&config)?;
     Ok(config)
 }
@@ -635,21 +596,10 @@ fn config_from_cost_args(args: CostReportArgs) -> Result<ScanConfig> {
     if !args.paths.is_empty() {
         config.paths = args.paths;
     }
-    ScanRuntimeOverrides {
-        warehouse: args.warehouse,
-        dialect: args.dialect,
-        format: args.format.map(Into::into),
-        manifest_path: args.manifest,
-        cost: true,
-        analysis_policy: args.analysis_policy,
-        policy_bundle_path: args.policy.bundle,
-        trust_store_path: args.policy.trust_store,
-        policy_organization: args.policy.organization,
-        policy_team: args.policy.team,
-        policy_repository: args.policy.repository,
-        ..ScanRuntimeOverrides::default()
-    }
-    .apply_to(&mut config)?;
+    let mut overrides = ScanRuntimeOverrides::default();
+    args.common.apply_common(&mut overrides);
+    overrides.cost = true;
+    overrides.apply_to(&mut config)?;
     validate_scan_config(&config)?;
     Ok(config)
 }
@@ -658,25 +608,14 @@ fn config_from_pr_args(args: PrArgs) -> Result<ScanConfig> {
     let mut config = base_config()?;
     config.changed_only = true;
     config.base_branch = Some(args.base);
-    ScanRuntimeOverrides {
-        warehouse: args.warehouse,
-        dialect: args.dialect,
-        format: args.format.map(Into::into),
-        manifest_path: args.manifest,
-        fail_on: args.fail_on,
-        min_confidence: args.min_confidence,
-        baseline_path: args.baseline,
-        cost: args.cost,
-        fail_on_cost_delta: args.fail_on_cost_delta,
-        analysis_policy: args.analysis_policy,
-        policy_bundle_path: args.policy.bundle,
-        trust_store_path: args.policy.trust_store,
-        policy_organization: args.policy.organization,
-        policy_team: args.policy.team,
-        policy_repository: args.policy.repository,
-        ..ScanRuntimeOverrides::default()
-    }
-    .apply_to(&mut config)?;
+    let mut overrides = ScanRuntimeOverrides::default();
+    args.common.apply_common(&mut overrides);
+    overrides.fail_on = args.fail_on;
+    overrides.min_confidence = args.min_confidence;
+    overrides.baseline_path = args.baseline;
+    overrides.cost = args.cost;
+    overrides.fail_on_cost_delta = args.fail_on_cost_delta;
+    overrides.apply_to(&mut config)?;
     validate_scan_config(&config)?;
     Ok(config)
 }

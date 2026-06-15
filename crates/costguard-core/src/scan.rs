@@ -189,11 +189,6 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
     diagnostics.sort_by(crate::pipeline::compare_diagnostics);
 
     let target_counts = ScanCounts::from_files(&plan.targets);
-    let _context_counts = if plan.pr_mode {
-        ScanCounts::from_files(&plan.context)
-    } else {
-        target_counts.clone()
-    };
     let target_parse_status = build_file_parse_status(&target_docs);
     let mut metrics = build_scan_metrics(
         &target_docs,

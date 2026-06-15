@@ -91,7 +91,7 @@ python3 scripts/verify_release_assets.py
 Local package-recovery tool. It requires a clean checkout at a verified signed annotated tag, builds all four release targets, creates deterministic archives, and validates available native smoke receipts. It cannot publish; GitHub Actions is the sole publication authority.
 
 ```bash
-./scripts/publish_release_local.sh --package-only --version 2.0.0
+python3 scripts/publish_release_local.py --package-only --version 2.0.0
 ```
 
 | Flag | Description |

@@ -12,7 +12,7 @@ Matt (`mattfaltyn`) is the sole release owner. The `release-owners` team contain
 6. Perform a clean-machine installation and one credential-free scan from the published package.
 7. Never replace an exact release. Publish post-GA fixes as `2.0.1` and move `v2` only after verification.
 
-Strict qualification requires a clean worktree, the exact signed tag at `HEAD`, `mdbook`, and `cargo-deny`. Development skip flags cannot create release evidence. Local recovery packaging uses `./scripts/publish_release_local.sh --package-only`; publication remains disabled outside GitHub Actions.
+Strict qualification requires a clean worktree, the exact signed tag at `HEAD`, `mdbook`, and `cargo-deny`. Development skip flags cannot create release evidence. Local recovery packaging uses `python3 scripts/publish_release_local.py --package-only`; publication remains disabled outside GitHub Actions.
 
 ## Public repository controls
 

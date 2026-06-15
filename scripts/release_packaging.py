@@ -9,7 +9,6 @@ import shutil
 import subprocess
 import sys
 import tarfile
-import tempfile
 from pathlib import Path
 
 _SCRIPTS = Path(__file__).resolve().parent
@@ -147,42 +146,6 @@ def verify_archive_layout(asset: Path, *, bin_name: str) -> None:
         member = archive.getmember(bin_name)
         if member.uid != 0 or member.gid != 0 or member.mode & 0o777 != 0o755:
             raise SystemExit(f"non-deterministic archive metadata for {asset.name}")
-
-
-def can_smoke_test_target(target: str) -> bool:
-    import platform
-
-    system = platform.system()
-    if target == "x86_64-pc-windows-msvc":
-        return system == "Windows"
-    if target == "x86_64-unknown-linux-gnu":
-        return system == "Linux"
-    return target.endswith("-apple-darwin") and system == "Darwin"
-
-
-def extract_and_smoke_test(asset: Path, *, bin_name: str, target: str) -> None:
-    import platform
-
-    verify_archive_layout(asset, bin_name=bin_name)
-    if not can_smoke_test_target(target):
-        return
-    with tempfile.TemporaryDirectory(prefix="costguard-release-") as tmp:
-        extract_dir = Path(tmp)
-        with tarfile.open(asset, "r:gz") as archive:
-            archive.extractall(extract_dir, filter="data")
-        binary = extract_dir / bin_name
-        if platform.system() == "Darwin" and target == "x86_64-apple-darwin":
-            command = ["arch", "-x86_64", str(binary)]
-        else:
-            command = [str(binary)]
-        proc = subprocess.run(
-            [*command, "rules", "--format", "json"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if proc.returncode != 0 or not json.loads(proc.stdout):
-            raise SystemExit(f"extracted binary smoke test failed:\n{proc.stderr or proc.stdout}")
 
 
 def package_and_verify_target(

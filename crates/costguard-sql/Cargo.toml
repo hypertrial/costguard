@@ -22,6 +22,3 @@ audit-bin = ["serde_json"]
 name = "audit-compiled-parse"
 path = "src/bin/audit_compiled_parse.rs"
 required-features = ["audit-bin"]
-
-[dev-dependencies]
-costguard-dbt = { path = "../costguard-dbt" }

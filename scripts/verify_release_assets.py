@@ -14,11 +14,11 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from costguard_tooling import costguard_binary  # noqa: E402
 from release_packaging import (  # noqa: E402
-    extract_and_smoke_test,
     host_target,
     package_built_binary,
     verify_checksum,
 )
+from smoke_release_asset import smoke_asset  # noqa: E402
 
 
 def package_host_release_binary(workdir: Path, *, target: str) -> tuple[Path, Path]:
@@ -27,14 +27,14 @@ def package_host_release_binary(workdir: Path, *, target: str) -> tuple[Path, Pa
 
 
 def verify_release_assets(*, workdir: Path | None = None) -> None:
-    target, bin_name = host_target()
+    target, _ = host_target()
     cleanup = workdir is None
     if workdir is None:
         workdir = Path(tempfile.mkdtemp(prefix="costguard-release-verify-"))
     try:
         asset, checksum_file = package_host_release_binary(workdir, target=target)
         verify_checksum(workdir, asset, checksum_file)
-        extract_and_smoke_test(asset, bin_name=bin_name, target=target)
+        smoke_asset(asset, target)
         print(f"verified release asset {asset.name} for target {target}")
     finally:
         if cleanup:
