@@ -12,12 +12,8 @@
       "sql": 2,
       "yaml": 1
     },
-    "diagnostics_by_rule": {
-      "SQLCOST001": 1
-    },
-    "diagnostics_by_severity": {
-      "med": 1
-    },
+    "diagnostics_by_rule": {},
+    "diagnostics_by_severity": {},
     "sql_parse_compiled_failures": 0,
     "sql_parse_compiled_total": 0,
     "sql_parse_failures": 0,
@@ -28,7 +24,7 @@
   "target": "real_world/jaffle_snippets",
   "thresholds": {
     "exact_diagnostics_by_rule": {
-      "SQLCOST001": 1
+      "SQLCOST001": 0
     },
     "max_sql_parse_failures": 0
   },

@@ -147,7 +147,7 @@ pub fn analyze_sql(
         let ast_features =
             features::extract_shape_features_ast(stmts, &sanitized, text, &strip_map, line_index);
         (
-            features::merge_shape_features(regex_features, ast_features, parsed_raw),
+            features::merge_shape_features(regex_features, ast_features, parsed_raw, true),
             parsed_raw,
         )
     } else if parsed_compiled {

@@ -237,7 +237,7 @@ fn parse_rows(input: &str) -> Result<Vec<Value>> {
 }
 
 fn parse_csv(input: &str) -> Result<Vec<Value>> {
-    let records = csv_records(input)?;
+    let records = crate::csv::csv_records(input)?;
     let (header, body) = records.split_first().context("CSV export is empty")?;
     if header.iter().any(|field| field.trim().is_empty()) {
         anyhow::bail!("CSV headers cannot be empty");
@@ -262,38 +262,6 @@ fn parse_csv(input: &str) -> Result<Vec<Value>> {
             ))
         })
         .collect()
-}
-
-fn csv_records(input: &str) -> Result<Vec<Vec<String>>> {
-    let mut records = Vec::new();
-    let mut record = Vec::new();
-    let mut field = String::new();
-    let mut chars = input.chars().peekable();
-    let mut quoted = false;
-    while let Some(ch) = chars.next() {
-        match ch {
-            '"' if quoted && chars.peek() == Some(&'"') => {
-                field.push('"');
-                chars.next();
-            }
-            '"' => quoted = !quoted,
-            ',' if !quoted => record.push(std::mem::take(&mut field)),
-            '\n' if !quoted => {
-                record.push(std::mem::take(&mut field));
-                records.push(std::mem::take(&mut record));
-            }
-            '\r' if !quoted && chars.peek() == Some(&'\n') => {}
-            other => field.push(other),
-        }
-    }
-    if quoted {
-        anyhow::bail!("unterminated quoted CSV field");
-    }
-    if !field.is_empty() || !record.is_empty() {
-        record.push(field);
-        records.push(record);
-    }
-    Ok(records)
 }
 
 fn string_value(row: &Value, aliases: &[&str]) -> Option<String> {

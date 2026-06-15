@@ -25,7 +25,8 @@ use costguard_cost::{
     compute_pr_impact, run_cost_analysis, summarize_features, CostInputs, ModelFeatureSummary,
 };
 use costguard_dbt::{
-    compiled_code_by_model_path, extract_sql_features, MetadataWarning, MetadataWarningKind,
+    compiled_code_by_model_path, extract_sql_features, parse_manifest_text, DbtProject,
+    MetadataWarning, MetadataWarningKind,
 };
 use costguard_diagnostics::{EvidenceBuilder, Severity};
 use costguard_rules::{ProjectIndexes, RuleRegistry};
@@ -171,14 +172,9 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
     if plan.pr_mode {
         if let (Some(summary), Some(cost_config)) = (cost_summary.as_mut(), config.cost.as_ref()) {
             if cost_config.enabled {
-                if let Some(base_summary) = run_base_branch_cost(
-                    config,
-                    &root,
-                    &plan,
-                    &project,
-                    &union_sql_documents,
-                    &project_indexes,
-                )? {
+                if let Some(base_summary) =
+                    run_base_branch_cost(config, &root, &plan, project.dbt.as_ref())?
+                {
                     summary.pr_impact =
                         Some(compute_pr_impact(summary, &base_summary, cost_config));
                 }
@@ -372,9 +368,7 @@ fn run_base_branch_cost(
     config: &ScanConfig,
     root: &Path,
     plan: &ScanPlan,
-    project: &Project,
-    union_sql_documents: &[SqlDocument],
-    project_indexes: &ProjectIndexes,
+    head_dbt: Option<&DbtProject>,
 ) -> Result<Option<costguard_cost::ProjectCostSummary>> {
     let cost_config = match &config.cost {
         Some(cost) if cost.enabled => cost,
@@ -382,55 +376,49 @@ fn run_base_branch_cost(
     };
     let base = config.base_branch.as_deref().unwrap_or("main");
     let inputs = CostInputs::load(root, cost_config)?;
-    let registry = RuleRegistry::default_rules();
-    let dbt_by_path = dbt_models_by_path(project);
-    let compiled_by_path = project
-        .dbt
-        .as_ref()
-        .map(compiled_code_by_model_path)
-        .unwrap_or_default();
-
-    let mut base_docs = Vec::new();
-    let mut base_files = Vec::new();
-    for file in &plan.targets {
-        if !matches!(
-            file.kind,
-            costguard_scanner::FileKind::Sql | costguard_scanner::FileKind::DbtSqlModel
-        ) {
-            continue;
-        }
-        let Some(text) = costguard_git::file_at_ref(root, base, &file.root_relative_path)? else {
-            continue;
-        };
-        let line_index = costguard_diagnostics::LineIndex::new(&text);
-        let doc = costguard_sql::analyze_sql(
-            file.path.clone(),
-            &text,
-            config.platform,
-            &line_index,
-            compiled_by_path.get(&file.path).map(String::as_str),
-            file.kind == costguard_scanner::FileKind::DbtSqlModel,
-            extract_sql_features(&text),
-        );
-        base_docs.push(doc);
-        base_files.push(file.clone());
-    }
-
-    if base_docs.is_empty() {
+    let base_dbt = load_base_dbt_project(root, base, config)?.or_else(|| head_dbt.cloned());
+    let base_files = base_sql_files_at_ref(root, base, &plan.changed_paths, base_dbt.as_ref())?;
+    if base_files.is_empty() {
         return Ok(Some(costguard_cost::ProjectCostSummary::default()));
     }
 
+    let compiled_by_path = base_dbt
+        .as_ref()
+        .map(compiled_code_by_model_path)
+        .unwrap_or_default();
+    let mut base_docs = Vec::new();
+    for file in &base_files {
+        let line_index = costguard_diagnostics::LineIndex::new(&file.text);
+        base_docs.push(costguard_sql::analyze_sql(
+            file.path.clone(),
+            &file.text,
+            config.platform,
+            &line_index,
+            compiled_by_path
+                .get(&file.root_relative_path)
+                .map(String::as_str),
+            file.kind == costguard_scanner::FileKind::DbtSqlModel,
+            extract_sql_features(&file.text),
+        ));
+    }
+
+    let base_indexes = ProjectIndexes::from_sql_documents(&base_docs);
+    let base_dbt_by_path = base_dbt
+        .as_ref()
+        .map(dbt_models_by_path_from_dbt)
+        .unwrap_or_default();
+    let registry = RuleRegistry::default_rules();
     let mut base_diagnostics = Vec::new();
     for file in &base_files {
         let sql = base_docs.iter().find(|doc| doc.path == file.path);
-        let dbt_model = dbt_by_path.get(&file.root_relative_path).copied();
+        let dbt_model = base_dbt_by_path.get(&file.root_relative_path).copied();
         let ctx = costguard_rules::RuleContext {
             warehouse: config.platform,
             file,
             sql,
             dbt_model,
-            all_sql: union_sql_documents,
-            project_indexes,
+            all_sql: &base_docs,
+            project_indexes: &base_indexes,
             overrides: &costguard_rules::RuleOverrides::default(),
         };
         base_diagnostics.extend(registry.run(&ctx));
@@ -440,13 +428,99 @@ fn run_base_branch_cost(
     Ok(Some(
         run_cost_analysis(
             cost_config,
-            project.dbt.as_ref(),
+            base_dbt.as_ref(),
             &inputs,
             &mut base_diagnostics,
             &base_features,
         )
         .summary,
     ))
+}
+
+fn load_base_dbt_project(
+    root: &Path,
+    base: &str,
+    config: &ScanConfig,
+) -> Result<Option<DbtProject>> {
+    let manifest_rel = base_manifest_rel_path(root, config);
+    let Some(text) = costguard_git::file_at_ref(root, base, &manifest_rel)? else {
+        return Ok(None);
+    };
+    Ok(Some(parse_manifest_text(&text)?))
+}
+
+fn base_manifest_rel_path(root: &Path, config: &ScanConfig) -> PathBuf {
+    let resolved = config
+        .manifest_path
+        .as_ref()
+        .map(|path| {
+            if path.is_absolute() {
+                path.clone()
+            } else {
+                root.join(path)
+            }
+        })
+        .unwrap_or_else(|| root.join("target/manifest.json"));
+    resolved
+        .strip_prefix(root)
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|_| PathBuf::from("target/manifest.json"))
+}
+
+fn base_sql_files_at_ref(
+    root: &Path,
+    base: &str,
+    changed_paths: &std::collections::HashSet<PathBuf>,
+    base_dbt: Option<&DbtProject>,
+) -> Result<Vec<ProjectFile>> {
+    let mut rel_paths = changed_paths
+        .iter()
+        .filter(|path| {
+            matches!(
+                costguard_scanner::classify(path, root),
+                costguard_scanner::FileKind::Sql | costguard_scanner::FileKind::DbtSqlModel
+            )
+        })
+        .cloned()
+        .collect::<std::collections::HashSet<_>>();
+    if let Some(dbt) = base_dbt {
+        for model in dbt.models.values() {
+            if let Some(path) = &model.path {
+                rel_paths.insert(path.clone());
+            }
+        }
+    }
+
+    let mut files = Vec::new();
+    for rel_path in rel_paths {
+        let kind = costguard_scanner::classify(&rel_path, root);
+        if !matches!(
+            kind,
+            costguard_scanner::FileKind::Sql | costguard_scanner::FileKind::DbtSqlModel
+        ) {
+            continue;
+        }
+        let Some(text) = costguard_git::file_at_ref(root, base, &rel_path)? else {
+            continue;
+        };
+        files.push(ProjectFile {
+            path: root.join(&rel_path),
+            root_relative_path: rel_path,
+            kind,
+            line_index: costguard_diagnostics::LineIndex::new(&text),
+            text,
+        });
+    }
+    files.sort_by(|left, right| left.path.cmp(&right.path));
+    Ok(files)
+}
+
+fn dbt_models_by_path_from_dbt(project: &DbtProject) -> HashMap<PathBuf, &costguard_dbt::DbtModel> {
+    project
+        .models
+        .values()
+        .filter_map(|model| model.path.as_ref().map(|path| (path.clone(), model)))
+        .collect()
 }
 
 fn evaluate_analysis(

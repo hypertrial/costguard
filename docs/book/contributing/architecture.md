@@ -73,7 +73,7 @@ A typical `costguard pr` run:
 - **costguard-rules** — 44 SQLCOST rules, `RuleRegistry`, per-rule overrides.
 - **costguard-diagnostics** — `Diagnostic`, severity, confidence, spans, inline suppressions.
 - **costguard-cost** — Lognormal cost model, catalog/query-history import, savings attribution.
-- **costguard-output** — Result rendering in five output formats (JSON schema v3).
+- **costguard-output** — Result rendering in five output formats (JSON schema v4).
 - **costguard-git** — Changed-file detection for PR-scoped scans.
 - **costguard-platform** — Warehouse enum and sqlparser dialect mapping.
 - **costguard-policy** — Ed25519 signed policy compile/sign/verify/resolve/enforce.

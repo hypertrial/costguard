@@ -8,6 +8,7 @@ mod annotate;
 mod attribution;
 mod catalog;
 mod config;
+mod csv;
 mod estimate;
 mod format;
 mod import;

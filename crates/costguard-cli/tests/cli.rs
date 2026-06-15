@@ -782,3 +782,141 @@ fn scan_cost_delta_gate_fails_when_threshold_exceeded() {
         String::from_utf8_lossy(&output.stdout)
     );
 }
+
+#[test]
+fn pr_cost_delta_gate_passes_for_clean_model_addition() {
+    let tempdir = tempfile::tempdir().expect("tempdir");
+    let root = tempdir.path();
+    fs::create_dir_all(root.join("models/marts")).expect("create models");
+    fs::create_dir_all(root.join("target")).expect("target");
+    fs::copy(
+        fixture("cost_estimate").join("target/catalog.json"),
+        root.join("target/catalog.json"),
+    )
+    .expect("copy catalog");
+    fs::write(root.join("models/marts/a.sql"), "select 1 as id\n").expect("write a");
+    fs::write(
+        root.join("dbt_project.yml"),
+        "name: test\nversion: 1.0.0\nconfig-version: 2\nmodel-paths: [\"models\"]\n",
+    )
+    .expect("write dbt project");
+    fs::write(
+        root.join("costguard.toml"),
+        r#"warehouse = "bigquery"
+
+[cost]
+enabled = true
+default_runs_per_month = 30
+
+[cost.pricing]
+model = "scan"
+usd_per_tb = 6.25
+
+[cost.inputs]
+catalog = "target/catalog.json"
+
+[cost.sources."raw.events"]
+bytes = "100GB"
+"#,
+    )
+    .expect("write cost config");
+    fs::write(
+        root.join("target/manifest.json"),
+        r#"{
+  "metadata": {
+    "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v12.json",
+    "project_name": "test"
+  },
+  "nodes": {
+    "model.test.a": {
+      "resource_type": "model",
+      "name": "a",
+      "package_name": "test",
+      "original_file_path": "models/marts/a.sql",
+      "path": "marts/a.sql",
+      "config": { "materialized": "table" },
+      "depends_on": { "nodes": ["source.test.raw.events"] }
+    }
+  },
+  "sources": {
+    "source.test.raw.events": {
+      "resource_type": "source",
+      "source_name": "raw",
+      "name": "events",
+      "identifier": "events"
+    }
+  }
+}"#,
+    )
+    .expect("write manifest");
+
+    git(root, &["init"]);
+    git(root, &["config", "user.email", "costguard@example.com"]);
+    git(root, &["config", "user.name", "Costguard Test"]);
+    git(root, &["add", "."]);
+    git(root, &["commit", "-m", "initial"]);
+
+    fs::write(
+        root.join("models/marts/b.sql"),
+        "{{ config(materialized='table', partition_by='id') }}\nselect 1 as id\n",
+    )
+    .expect("write b");
+    fs::write(
+        root.join("target/manifest.json"),
+        r#"{
+  "metadata": {
+    "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v12.json",
+    "project_name": "test"
+  },
+  "nodes": {
+    "model.test.a": {
+      "resource_type": "model",
+      "name": "a",
+      "package_name": "test",
+      "original_file_path": "models/marts/a.sql",
+      "path": "marts/a.sql",
+      "config": { "materialized": "table" },
+      "depends_on": { "nodes": ["source.test.raw.events"] }
+    },
+    "model.test.b": {
+      "resource_type": "model",
+      "name": "b",
+      "package_name": "test",
+      "original_file_path": "models/marts/b.sql",
+      "path": "marts/b.sql",
+      "config": { "materialized": "table", "partition_by": "id" },
+      "depends_on": { "nodes": [] }
+    }
+  },
+  "sources": {
+    "source.test.raw.events": {
+      "resource_type": "source",
+      "source_name": "raw",
+      "name": "events",
+      "identifier": "events"
+    }
+  }
+}"#,
+    )
+    .expect("update manifest");
+
+    let output = costguard_command()
+        .arg("pr")
+        .arg("--base")
+        .arg("HEAD")
+        .arg("--format")
+        .arg("json")
+        .arg("--fail-on")
+        .arg("critical")
+        .arg("--fail-on-cost-delta")
+        .arg("1")
+        .current_dir(root)
+        .output()
+        .expect("run costguard");
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "clean model addition should not trip cost gate:\n{}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}

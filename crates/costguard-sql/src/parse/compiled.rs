@@ -31,7 +31,12 @@ pub(crate) fn compiled_ast_features(
         &compiled_index,
     );
     (
-        features::merge_shape_features(regex_features, mark_compiled_unmapped(ast_features), true),
+        features::merge_shape_features(
+            regex_features,
+            mark_compiled_unmapped(ast_features),
+            true,
+            false,
+        ),
         true,
     )
 }

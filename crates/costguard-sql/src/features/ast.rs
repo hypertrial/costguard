@@ -903,61 +903,53 @@ fn predicate_is_pattern_matching(expr: &Expr) -> bool {
     }
 }
 
-pub fn merge_shape_features(mut base: SqlFeatures, ast: SqlFeatures, parsed: bool) -> SqlFeatures {
+pub fn merge_shape_features(
+    mut base: SqlFeatures,
+    ast: SqlFeatures,
+    parsed: bool,
+    trust_empty_ast: bool,
+) -> SqlFeatures {
     if !parsed {
         return base;
     }
-    if !ast.select_stars.is_empty() {
+    macro_rules! merge_field {
+        ($field:ident) => {
+            if !ast.$field.is_empty() {
+                base.$field = ast.$field;
+            }
+        };
+    }
+    if trust_empty_ast {
         base.select_stars = ast.select_stars;
+    } else {
+        merge_field!(select_stars);
     }
-    if !ast.order_by_clauses.is_empty() {
-        base.order_by_clauses = ast.order_by_clauses;
-    }
-    if !ast.distincts.is_empty() {
-        base.distincts = ast.distincts;
-    }
-    if !ast.window_functions.is_empty() {
-        base.window_functions = ast.window_functions;
-    }
-    if !ast.ctes.is_empty() {
-        base.ctes = ast.ctes;
-    }
-    if !ast.cte_references.is_empty() {
-        base.cte_references = ast.cte_references;
-    }
-    if !ast.non_sargable_predicates.is_empty() {
-        base.non_sargable_predicates = ast.non_sargable_predicates;
-    }
-    if !ast.unions_without_all.is_empty() {
-        base.unions_without_all = ast.unions_without_all;
-    }
-    if !ast.count_distincts.is_empty() {
-        base.count_distincts = ast.count_distincts;
-    }
-    if !ast.wildcard_table_scans.is_empty() {
-        base.wildcard_table_scans = ast.wildcard_table_scans;
-    }
-    if !ast.correlated_subqueries.is_empty() {
-        base.correlated_subqueries = ast.correlated_subqueries;
-    }
-    if !ast.leading_wildcard_likes.is_empty() {
-        base.leading_wildcard_likes = ast.leading_wildcard_likes;
-    }
-    if !ast.or_partition_predicates.is_empty() {
-        base.or_partition_predicates = ast.or_partition_predicates;
-    }
-    if !ast.scalar_subqueries_in_select.is_empty() {
-        base.scalar_subqueries_in_select = ast.scalar_subqueries_in_select;
-    }
-    if !ast.row_explosions.is_empty() {
-        base.row_explosions = ast.row_explosions;
-    }
-    if !ast.not_in_subqueries.is_empty() {
-        base.not_in_subqueries = ast.not_in_subqueries;
-    }
-    if !ast.recursive_ctes.is_empty() {
-        base.recursive_ctes = ast.recursive_ctes;
-    }
-    base.joins = merge_join_features(&base.joins, &ast.joins);
+    merge_field!(order_by_clauses);
+    merge_field!(distincts);
+    merge_field!(window_functions);
+    merge_field!(ctes);
+    merge_field!(cte_references);
+    merge_field!(non_sargable_predicates);
+    merge_field!(unions_without_all);
+    merge_field!(count_distincts);
+    merge_field!(wildcard_table_scans);
+    merge_field!(correlated_subqueries);
+    merge_field!(leading_wildcard_likes);
+    merge_field!(or_partition_predicates);
+    merge_field!(scalar_subqueries_in_select);
+    merge_field!(row_explosions);
+    merge_field!(not_in_subqueries);
+    merge_field!(recursive_ctes);
+    base.joins = if trust_empty_ast {
+        if ast.joins.is_empty() {
+            base.joins
+        } else {
+            ast.joins
+        }
+    } else if !ast.joins.is_empty() {
+        merge_join_features(&base.joins, &ast.joins)
+    } else {
+        base.joins
+    };
     base
 }

@@ -627,6 +627,55 @@ fn extracts_row_explosion_and_unbounded_window_frame() {
 }
 
 #[test]
+fn comment_select_star_is_not_flagged_when_sql_parses() {
+    let text = "select 1 -- select * from hidden";
+    let index = LineIndex::new(text);
+    let doc = analyze_test_sql(
+        PathBuf::from("models/marts/fct.sql"),
+        text,
+        Platform::Generic,
+        &index,
+        None,
+        true,
+    );
+    assert!(doc.parsed_raw);
+    assert!(doc.feature_extraction_used_ast);
+    assert!(doc.features.select_stars.is_empty());
+}
+
+#[test]
+fn string_literal_select_star_is_not_flagged_when_sql_parses() {
+    let text = "select 'select *' as note from t";
+    let index = LineIndex::new(text);
+    let doc = analyze_test_sql(
+        PathBuf::from("x.sql"),
+        text,
+        Platform::Generic,
+        &index,
+        None,
+        true,
+    );
+    assert!(doc.parsed_raw);
+    assert!(doc.feature_extraction_used_ast);
+    assert!(doc.features.select_stars.is_empty());
+}
+
+#[test]
+fn ast_and_regex_agree_on_real_select_star() {
+    let text = "select * from t";
+    let index = LineIndex::new(text);
+    let doc = analyze_test_sql(
+        PathBuf::from("x.sql"),
+        text,
+        Platform::Generic,
+        &index,
+        None,
+        true,
+    );
+    assert_eq!(doc.features.select_stars.len(), 1);
+}
+
+#[test]
 fn extracts_join_right_relation_and_equality_keys() {
     let text = "select * from orders join dim_users on orders.user_id = dim_users.user_id";
     let index = LineIndex::new(text);

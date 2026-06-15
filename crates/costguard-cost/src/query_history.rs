@@ -21,17 +21,17 @@ pub fn load_query_history(path: &Path) -> Result<QueryHistoryStats> {
 }
 
 pub fn parse_query_history_text(text: &str) -> Result<QueryHistoryStats> {
-    let mut stats = QueryHistoryStats::default();
-    let mut lines = text.lines();
-    let header = lines
-        .next()
-        .context("query history CSV is empty")?
-        .trim()
-        .to_ascii_lowercase();
-    let columns: Vec<String> = parse_csv_line(&header)
-        .into_iter()
+    let records = crate::csv::csv_records(text)?;
+    let (header, body) = records
+        .split_first()
+        .context("query history CSV is empty")?;
+    let columns: Vec<String> = header
+        .iter()
         .map(|field| field.trim().to_ascii_lowercase())
         .collect();
+    if columns.iter().any(|column| column.is_empty()) {
+        anyhow::bail!("query history CSV headers cannot be empty");
+    }
     let model_idx = columns
         .iter()
         .position(|c| c == "model_or_table" || c == "model" || c == "table")
@@ -44,35 +44,46 @@ pub fn parse_query_history_text(text: &str) -> Result<QueryHistoryStats> {
         .iter()
         .position(|c| c == "runs_per_month" || c == "run_count");
 
-    for line in lines {
-        if line.trim().is_empty() {
-            continue;
+    let mut stats = QueryHistoryStats::default();
+    for (index, row) in body.iter().enumerate() {
+        if row.len() != header.len() {
+            anyhow::bail!(
+                "query history CSV row {} has {} fields; expected {}",
+                index + 2,
+                row.len(),
+                header.len()
+            );
         }
-        let fields = parse_csv_line(line);
-        if fields.len() <= model_idx.max(bytes_idx) {
-            continue;
+        let key = row[model_idx].trim();
+        if key.is_empty() {
+            anyhow::bail!(
+                "query history CSV row {} has empty model_or_table",
+                index + 2
+            );
         }
-        let key = fields[model_idx].trim().to_string();
-        let bytes: f64 = fields[bytes_idx]
+        if stats.by_key.contains_key(key) {
+            anyhow::bail!(
+                "query history CSV row {} duplicates model_or_table '{key}'",
+                index + 2
+            );
+        }
+        let bytes: f64 = row[bytes_idx]
             .trim()
             .parse()
-            .with_context(|| format!("invalid bytes in line: {line}"))?;
-        validate_positive("bytes_per_run", bytes, line)?;
+            .with_context(|| format!("invalid bytes in row {}", index + 2))?;
+        validate_positive("bytes_per_run", bytes, index + 2)?;
         let runs = if let Some(idx) = runs_idx {
-            let value = fields
-                .get(idx)
-                .context("query history row is missing runs_per_month")?;
-            let parsed = value
+            let parsed = row[idx]
                 .trim()
                 .parse::<f64>()
-                .with_context(|| format!("invalid runs_per_month in line: {line}"))?;
-            validate_positive("runs_per_month", parsed, line)?;
+                .with_context(|| format!("invalid runs_per_month in row {}", index + 2))?;
+            validate_positive("runs_per_month", parsed, index + 2)?;
             parsed
         } else {
             30.0
         };
         stats.by_key.insert(
-            key,
+            key.to_string(),
             QueryHistoryEntry {
                 bytes_per_run: bytes,
                 runs_per_month: runs,
@@ -82,38 +93,11 @@ pub fn parse_query_history_text(text: &str) -> Result<QueryHistoryStats> {
     Ok(stats)
 }
 
-fn validate_positive(name: &str, value: f64, line: &str) -> Result<()> {
+fn validate_positive(name: &str, value: f64, row: usize) -> Result<()> {
     if !value.is_finite() || value <= 0.0 {
-        anyhow::bail!("{name} must be finite and greater than zero in line: {line}");
+        anyhow::bail!("{name} must be finite and greater than zero in row {row}");
     }
     Ok(())
-}
-
-/// Minimal RFC4180-style CSV line parser (handles quoted fields with commas).
-pub fn parse_csv_line(line: &str) -> Vec<String> {
-    let mut fields = Vec::new();
-    let mut current = String::new();
-    let mut in_quotes = false;
-    let mut chars = line.chars().peekable();
-    while let Some(ch) = chars.next() {
-        match ch {
-            '"' if in_quotes => {
-                if chars.peek() == Some(&'"') {
-                    chars.next();
-                    current.push('"');
-                } else {
-                    in_quotes = false;
-                }
-            }
-            '"' => in_quotes = true,
-            ',' if !in_quotes => {
-                fields.push(std::mem::take(&mut current));
-            }
-            _ => current.push(ch),
-        }
-    }
-    fields.push(current);
-    fields
 }
 
 #[cfg(test)]
@@ -129,14 +113,6 @@ mod tests {
     }
 
     #[test]
-    fn parses_quoted_csv_fields() {
-        let line = r#""model,with,comma",1000,30"#;
-        let fields = parse_csv_line(line);
-        assert_eq!(fields[0], "model,with,comma");
-        assert_eq!(fields[1], "1000");
-    }
-
-    #[test]
     fn parses_quoted_history_row() {
         let text = "model_or_table,bytes_per_run,runs_per_month\n\"fct,orders\",500,60\n";
         let stats = parse_query_history_text(text).unwrap();
@@ -144,8 +120,34 @@ mod tests {
     }
 
     #[test]
+    fn parses_multiline_quoted_history_row() {
+        let text = "model_or_table,bytes_per_run,runs_per_month\n\"fct\norders\",500,60\n";
+        let stats = parse_query_history_text(text).unwrap();
+        assert_eq!(stats.by_key["fct\norders"].bytes_per_run, 500.0);
+    }
+
+    #[test]
     fn rejects_non_positive_history_values() {
         let text = "model_or_table,bytes_per_run,runs_per_month\nfct_orders,1000,0\n";
+        assert!(parse_query_history_text(text).is_err());
+    }
+
+    #[test]
+    fn rejects_truncated_history_rows() {
+        let text = "model_or_table,bytes_per_run,runs_per_month\nfct_orders,1000\n";
+        assert!(parse_query_history_text(text).is_err());
+    }
+
+    #[test]
+    fn rejects_empty_model_names() {
+        let text = "model_or_table,bytes_per_run,runs_per_month\n,1000,30\n";
+        assert!(parse_query_history_text(text).is_err());
+    }
+
+    #[test]
+    fn rejects_duplicate_model_names() {
+        let text =
+            "model_or_table,bytes_per_run,runs_per_month\nfct_orders,1000,30\nfct_orders,500,60\n";
         assert!(parse_query_history_text(text).is_err());
     }
 }

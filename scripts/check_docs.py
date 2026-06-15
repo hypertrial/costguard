@@ -18,6 +18,14 @@ WORKSPACE_VERSION_RE = re.compile(
     r'^\[workspace\.package\]\s*\n(?:.*\n)*?version\s*=\s*"([^"]+)"',
     re.MULTILINE,
 )
+OUTPUT_SCHEMA_VERSION_RE = re.compile(
+    r"const\s+OUTPUT_SCHEMA_VERSION:\s*u8\s*=\s*(\d+);"
+)
+JSON_OUTPUT_SCHEMA_CLAIM_RE = re.compile(
+    r"(?i)(?:json\s+)?(?:output\s+)?schema(?:\s+version|\s+v|:\s*)(\d+)"
+)
+BASELINE_SCHEMA_CLAIM_RE = re.compile(r"(?i)baseline schema v(\d+)")
+POLICY_SCHEMA_CLAIM_RE = re.compile(r"(?i)policy schema v(\d+)")
 
 
 def slug(value: str) -> str:
@@ -76,6 +84,14 @@ def workspace_version() -> str:
     return match.group(1)
 
 
+def output_schema_version() -> int:
+    source = (ROOT / "crates/costguard-output/src/lib.rs").read_text(encoding="utf-8")
+    match = OUTPUT_SCHEMA_VERSION_RE.search(source)
+    if not match:
+        raise RuntimeError("unable to read OUTPUT_SCHEMA_VERSION from costguard-output")
+    return int(match.group(1))
+
+
 def check_version_claims() -> list[str]:
     current = workspace_version()
     errors: list[str] = []
@@ -91,6 +107,32 @@ def check_version_claims() -> list[str]:
     return errors
 
 
+def check_output_schema_claims() -> list[str]:
+    current = output_schema_version()
+    errors: list[str] = []
+    for source in markdown_files():
+        if source.name == "CHANGELOG.md":
+            continue
+        text = source.read_text(encoding="utf-8")
+        for match in JSON_OUTPUT_SCHEMA_CLAIM_RE.finditer(text):
+            line_start = text.rfind("\n", 0, match.start()) + 1
+            line_end = text.find("\n", match.end())
+            if line_end == -1:
+                line_end = len(text)
+            line = text[line_start:line_end]
+            if BASELINE_SCHEMA_CLAIM_RE.search(line) or POLICY_SCHEMA_CLAIM_RE.search(line):
+                continue
+            if "baseline" in line.lower() and "schema" in line.lower():
+                continue
+            claimed = int(match.group(1))
+            if claimed != current:
+                rel = source.relative_to(ROOT)
+                errors.append(
+                    f"{rel}: JSON output schema v{claimed} does not match OUTPUT_SCHEMA_VERSION {current}"
+                )
+    return errors
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--external", action="store_true")
@@ -98,6 +140,7 @@ def main() -> int:
     args = parser.parse_args()
     errors: list[str] = []
     errors.extend(check_version_claims())
+    errors.extend(check_output_schema_claims())
     external_urls: set[str] = set()
     for source in markdown_files():
         text = source.read_text(encoding="utf-8")

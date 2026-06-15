@@ -68,7 +68,7 @@ PR-summary-oriented report with grouped findings, context footer, suppression gu
 
 [SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html) for GitHub Code Scanning, GitLab SAST (`reports: sast`), and Jenkins SARIF plugins.
 
-Includes `tool.driver.rules`, physical locations, and additive governance properties. Each result records the finding ID, evidence key, confidence, enforcement outcome, policy provenance, applied exception, and optional cost estimate. Run properties retain scan, policy, analysis, metrics, `context`, and `identity_scheme` metadata. Severity maps to SARIF levels: `error` (High/Critical), `warning` (Medium), `note` (Low/Info). The JSON output schema remains version 3.
+Includes `tool.driver.rules`, physical locations, and additive governance properties. Each result records the finding ID, evidence key, confidence, enforcement outcome, policy provenance, applied exception, and optional cost estimate. Run properties retain scan, policy, analysis, metrics, `context`, and `identity_scheme` metadata. Severity maps to SARIF levels: `error` (High/Critical), `warning` (Medium), `note` (Low/Info). The JSON output schema remains version 4.
 
 ## Finding baselines
 

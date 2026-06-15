@@ -151,9 +151,7 @@ impl ScanResult {
             let savings = self
                 .cost_summary
                 .as_ref()
-                .and_then(|summary| summary.pr_impact.as_ref())
-                .and_then(|impact| impact.net.monthly_p50)
-                .map(f64::abs)
+                .map(|summary| summary.savings_p50_usd)
                 .unwrap_or_else(|| costguard_cost::total_p50_usd_per_month(&self.diagnostics));
             if savings >= delta {
                 eprintln!(
@@ -163,7 +161,11 @@ impl ScanResult {
             }
         }
         if let Some(delta_gb) = fail_on_monthly_delta_gb {
-            let savings_gb = costguard_cost::total_savings_gb_months(&self.diagnostics);
+            let savings_gb = self
+                .cost_summary
+                .as_ref()
+                .map(|summary| summary.savings_gb_months)
+                .unwrap_or_else(|| costguard_cost::total_savings_gb_months(&self.diagnostics));
             if savings_gb >= delta_gb {
                 eprintln!(
                     "cost gate failed: estimated new savings {savings_gb:.0} GB-mo >= threshold {delta_gb:.0} GB-mo"
@@ -305,5 +307,25 @@ mod tests {
         let result = result_with(vec![diag]);
         assert!(!result.should_fail(None, None, Some(600.0), None));
         assert!(result.should_fail(None, None, Some(500.0), None));
+    }
+
+    #[test]
+    fn should_fail_on_finding_savings_not_pr_impact_net() {
+        let mut result = result_with(Vec::new());
+        result.cost_summary = Some(costguard_cost::ProjectCostSummary {
+            savings_p50_usd: 0.0,
+            savings_gb_months: 0.0,
+            pr_impact: Some(costguard_cost::PrCostImpact {
+                net: costguard_cost::CostFigure {
+                    monthly_p50: Some(2_000_000_000_000.0),
+                    basis: "pr-net".into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+            ..Default::default()
+        });
+        assert!(!result.should_fail(None, None, Some(1.0), None));
+        assert!(!result.should_fail(None, None, None, Some(1.0)));
     }
 }

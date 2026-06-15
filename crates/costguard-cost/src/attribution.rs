@@ -45,6 +45,8 @@ pub struct CostAttributionContext<'a> {
 }
 
 pub fn build_downstream_counts(dbt: &DbtProject) -> HashMap<String, usize> {
+    // ponytail: stop at 15 descendants — fan_out_factor() saturates there; recompute if formula changes
+    const MAX_DOWNSTREAM: usize = 15;
     let mut reverse: HashMap<String, Vec<String>> = HashMap::new();
     for model in dbt.models.values() {
         let dependent = model_identity(model);
@@ -73,6 +75,9 @@ pub fn build_downstream_counts(dbt: &DbtProject) -> HashMap<String, usize> {
         while let Some(node) = stack.pop() {
             if !seen.insert(node.clone()) {
                 continue;
+            }
+            if seen.len() >= MAX_DOWNSTREAM {
+                break;
             }
             if let Some(next) = reverse.get(&node) {
                 stack.extend(next.iter().cloned());
@@ -648,5 +653,38 @@ mod tests {
             potential > 0.0,
             "potential {potential} current {current} post_fix {post_fix}"
         );
+    }
+
+    fn linear_chain_dbt(len: usize) -> DbtProject {
+        let mut dbt = DbtProject::default();
+        for index in 0..len {
+            let id = format!("model.chain.m{index}");
+            let depends_on = if index == 0 {
+                Vec::new()
+            } else {
+                vec![format!("model.chain.m{}", index - 1)]
+            };
+            dbt.graph.depends_on.insert(id.clone(), depends_on);
+            dbt.models.insert(
+                id.clone(),
+                DbtModel {
+                    unique_id: Some(id),
+                    name: format!("m{index}"),
+                    ..DbtModel::default()
+                },
+            );
+        }
+        dbt
+    }
+
+    #[test]
+    fn downstream_counts_cap_at_fan_out_saturation() {
+        let dbt = linear_chain_dbt(2_000);
+        let counts = build_downstream_counts(&dbt);
+        assert!(counts.values().all(|count| *count <= 15));
+        let root = counts.get("model.chain.m0").copied().unwrap_or(0);
+        assert_eq!(root, 15);
+        let saturated: f64 = 1.0 + (1.0 + 15.0_f64).log2() * 0.25;
+        assert!((saturated - 2.0).abs() < f64::EPSILON);
     }
 }
