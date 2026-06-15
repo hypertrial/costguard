@@ -320,7 +320,7 @@ class ActionConsumerTest(unittest.TestCase):
             )
             self.assertEqual(completed.returncode, 0, completed.stderr)
             payload = json.loads(completed.stdout)
-            self.assertEqual(payload["schema_version"], 3)
+            self.assertEqual(payload["schema_version"], 4)
             self.assertEqual(payload["analysis"]["policy"], "standard")
             self.assertTrue(payload["analysis"]["passed"])
 
@@ -334,7 +334,7 @@ class ActionConsumerTest(unittest.TestCase):
             fake.write_text(
                 "#!/bin/sh\n"
                 f"printf '%s\\n' \"$@\" > '{args_path}'\n"
-                "printf '%s\\n' '{\"schema_version\":3,\"analysis\":{\"passed\":true}}'\n",
+                "printf '%s\\n' '{\"schema_version\":4,\"analysis\":{\"passed\":true}}'\n",
                 encoding="utf-8",
             )
             fake.chmod(0o755)

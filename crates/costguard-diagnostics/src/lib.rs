@@ -188,6 +188,12 @@ pub struct CostEstimate {
     pub savings_p50_usd_per_month: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub savings_p90_usd_per_month: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_cost_p50_usd_per_month: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub post_fix_cost_p50_usd_per_month: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unestimated_reason: Option<String>,
 }
 
 impl Diagnostic {

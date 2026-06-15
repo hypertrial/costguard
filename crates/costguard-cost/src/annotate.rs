@@ -5,9 +5,12 @@ use crate::attribution::{
 use crate::catalog::{load_catalog, CatalogStats};
 use crate::config::CostConfig;
 use crate::model_cost::{
-    build_model_cost_index, summarize_project_costs, ModelCostIndex, ProjectCostSummary,
+    build_model_cost_index, compute_realized_savings, summarize_project_costs, ModelCostIndex,
+    ProjectCostSummary,
 };
+use crate::observations::ObservationStats;
 use crate::query_history::{load_query_history, QueryHistoryStats};
+use anyhow::Context;
 use costguard_dbt::DbtProject;
 use costguard_diagnostics::Diagnostic;
 use std::collections::HashMap;
@@ -17,40 +20,76 @@ use std::path::{Path, PathBuf};
 pub struct CostInputs {
     pub catalog: Option<CatalogStats>,
     pub query_history: Option<QueryHistoryStats>,
+    pub observations: Option<ObservationStats>,
+    pub observations_before: Option<ObservationStats>,
+    pub observations_after: Option<ObservationStats>,
 }
 
 impl CostInputs {
     pub fn load(root: &Path, config: &CostConfig) -> anyhow::Result<Self> {
-        let catalog = if let Some(path) = &config.inputs.catalog {
-            let resolved = resolve_path(root, path);
-            if resolved.exists() {
-                Some(load_catalog(&resolved)?)
-            } else {
-                anyhow::bail!(
-                    "configured catalog file does not exist: {}",
-                    resolved.display()
-                )
-            }
-        } else {
-            None
-        };
-        let query_history = if let Some(path) = &config.inputs.query_history {
-            let resolved = resolve_path(root, path);
-            if resolved.exists() {
-                Some(load_query_history(&resolved)?)
-            } else {
-                anyhow::bail!(
-                    "configured query history file does not exist: {}",
-                    resolved.display()
-                )
-            }
-        } else {
-            None
-        };
+        let catalog = load_optional_input(root, &config.inputs.catalog, load_catalog)?;
+        let query_history =
+            load_optional_input(root, &config.inputs.query_history, load_query_history)?;
+        let observations = load_optional_observations(root, &config.inputs.observations, config)?;
+        let observations_before =
+            load_optional_observations(root, &config.inputs.observations_before, config)?;
+        let observations_after =
+            load_optional_observations(root, &config.inputs.observations_after, config)?;
         Ok(Self {
             catalog,
             query_history,
+            observations,
+            observations_before,
+            observations_after,
         })
+    }
+}
+
+fn load_optional_input<T, F>(
+    root: &Path,
+    path: &Option<PathBuf>,
+    load: F,
+) -> anyhow::Result<Option<T>>
+where
+    F: FnOnce(&Path) -> anyhow::Result<T>,
+{
+    if let Some(path) = path {
+        let resolved = resolve_path(root, path);
+        if resolved.exists() {
+            Ok(Some(load(&resolved)?))
+        } else {
+            anyhow::bail!(
+                "configured cost input file does not exist: {}",
+                resolved.display()
+            )
+        }
+    } else {
+        Ok(None)
+    }
+}
+
+fn load_optional_observations(
+    root: &Path,
+    path: &Option<PathBuf>,
+    config: &CostConfig,
+) -> anyhow::Result<Option<ObservationStats>> {
+    if let Some(path) = path {
+        let resolved = resolve_path(root, path);
+        if resolved.exists() {
+            let text = std::fs::read_to_string(&resolved)
+                .with_context(|| format!("failed to read observations {}", resolved.display()))?;
+            let bundle: costguard_protocol::CostObservationBundleV1 =
+                serde_json::from_str(&text).context("invalid observations bundle JSON")?;
+            crate::import::validate_cost_bundle(&bundle)?;
+            Ok(Some(crate::observations::aggregate_bundle(&bundle, config)))
+        } else {
+            anyhow::bail!(
+                "configured observations file does not exist: {}",
+                resolved.display()
+            )
+        }
+    } else {
+        Ok(None)
     }
 }
 
@@ -98,6 +137,14 @@ pub fn run_cost_analysis(
         exposure_counts: &exposure_counts,
     };
     attribute_findings(diagnostics, &ctx, &mut summary);
+
+    if let (Some(before), Some(after)) = (
+        inputs.observations_before.as_ref(),
+        inputs.observations_after.as_ref(),
+    ) {
+        summary.realized_savings = Some(compute_realized_savings(before, after, config));
+    }
+
     CostAnalysisResult {
         model_index,
         summary,

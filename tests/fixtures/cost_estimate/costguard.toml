@@ -11,6 +11,7 @@ usd_per_tb = 6.25
 
 [cost.inputs]
 catalog = "target/catalog.json"
+observations = "observations.json"
 
 [cost.sources."raw.events"]
 bytes = "100GB"

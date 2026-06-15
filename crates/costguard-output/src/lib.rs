@@ -1,15 +1,15 @@
 //! Scan result rendering.
 //!
-//! Formats [`ScanResult`] as text, JSON (schema v3),
+//! Formats [`ScanResult`] as text, JSON (schema v4),
 //! GitHub workflow annotations, markdown, or SARIF.
 
 use anyhow::Result;
 use costguard_core::{OutputFormat, PrSummary, ScanResult};
-use costguard_cost::{format_usd_interval, ProjectCostSummary};
+use costguard_cost::{format_usd_interval, CostFigure, ProjectCostSummary};
 use costguard_diagnostics::Diagnostic;
 use serde::Serialize;
 
-const OUTPUT_SCHEMA_VERSION: u8 = 3;
+const OUTPUT_SCHEMA_VERSION: u8 = 4;
 
 #[derive(Debug, Serialize)]
 struct JsonOutput<'a> {
@@ -129,22 +129,27 @@ pub(crate) fn append_cost_summary(output: &mut String, summary: Option<&ProjectC
         return;
     };
     output.push_str("\nCost summary:\n");
-    if let (Some(p10), Some(p50), Some(p90)) = (
-        summary.project_p10_usd,
-        summary.project_p50_usd,
-        summary.project_p90_usd,
-    ) {
-        output.push_str(&format!(
-            "  Project total: {} across {} models\n",
-            format_usd_interval(p10, p50, p90),
-            summary.model_count
-        ));
-    } else {
-        output.push_str(&format!(
-            "  Project scan volume: {:.0} GB-mo across {} models\n",
-            summary.project_gb_months, summary.model_count
-        ));
+    append_cost_figure_line(output, "  Current cost", &summary.current_cost);
+    append_cost_figure_line(output, "  Post-fix cost", &summary.post_fix_cost);
+    append_cost_figure_line(output, "  Potential savings", &summary.potential_savings);
+    if let Some(pr) = &summary.pr_impact {
+        append_cost_figure_line(output, "  PR impact (net)", &pr.net);
+        append_cost_figure_line(output, "    efficiency", &pr.efficiency);
+        append_cost_figure_line(output, "    volume", &pr.volume);
     }
+    if let Some(realized) = &summary.realized_savings {
+        append_cost_figure_line(output, "  Realized savings", &realized.realized);
+    }
+    output.push_str(&format!(
+        "  Coverage: {:.0}% mapped spend ({}/{} models)",
+        summary.coverage.mapped_spend_fraction * 100.0,
+        summary.coverage.models_with_mapped_spend,
+        summary.coverage.models_total
+    ));
+    if let Some(age) = summary.coverage.observation_age_days {
+        output.push_str(&format!(", observation age {:.0}d", age));
+    }
+    output.push('\n');
     if summary.savings_p50_usd > 0.0 {
         output.push_str(&format!(
             "  New finding savings (deduplicated): ~${:.0}/mo (${:.0}–${:.0})\n",
@@ -165,19 +170,53 @@ pub(crate) fn append_cost_summary(output: &mut String, summary: Option<&ProjectC
         for model in &summary.top_models {
             if let Some(p50) = model.p50_usd_per_month {
                 output.push_str(&format!(
-                    "    - {} — ~${p50:.0}/mo (grade {})\n",
+                    "    - {} — ~${p50:.0}/mo (grade {}, {})\n",
                     escape_markdown(&model.model_id),
-                    model.grade
+                    model.grade,
+                    model.estimation_basis
                 ));
             } else {
                 output.push_str(&format!(
-                    "    - {} — {:.0} GB-mo (grade {})\n",
+                    "    - {} — {:.0} GB-mo (grade {}, {})\n",
                     escape_markdown(&model.model_id),
                     model.gb_months,
-                    model.grade
+                    model.grade,
+                    model.estimation_basis
                 ));
             }
         }
+    }
+}
+
+fn append_cost_figure_line(output: &mut String, label: &str, figure: &CostFigure) {
+    if let (Some(p10), Some(p50), Some(p90)) =
+        (figure.monthly_p10, figure.monthly_p50, figure.monthly_p90)
+    {
+        let annual = figure
+            .annual_p50
+            .map(|value| format!(" / ~${value:.0}/yr"))
+            .unwrap_or_default();
+        output.push_str(&format!(
+            "{label}: {}{} ({})\n",
+            format_usd_interval(p10, p50, p90),
+            annual,
+            figure.basis
+        ));
+    } else if let Some(p50) = figure.monthly_p50 {
+        output.push_str(&format!("{label}: ~${p50:.0}/mo ({})\n", figure.basis));
+    }
+}
+
+fn append_cost_figure_markdown(output: &mut String, label: &str, figure: &CostFigure) {
+    if let Some(p50) = figure.monthly_p50 {
+        let annual = figure
+            .annual_p50
+            .map(|value| format!(", ~${value:.0}/yr"))
+            .unwrap_or_default();
+        output.push_str(&format!(
+            "- **{label}:** ~${p50:.0}/mo{annual} ({})\n",
+            figure.basis
+        ));
     }
 }
 
@@ -189,22 +228,21 @@ pub(crate) fn append_cost_summary_markdown(
         return;
     };
     output.push_str("\n## Cost summary\n\n");
-    if let (Some(p10), Some(p50), Some(p90)) = (
-        summary.project_p10_usd,
-        summary.project_p50_usd,
-        summary.project_p90_usd,
-    ) {
-        output.push_str(&format!(
-            "Project total: {} across {} models.\n\n",
-            format_usd_interval(p10, p50, p90),
-            summary.model_count
-        ));
-    } else {
-        output.push_str(&format!(
-            "Project scan volume: {:.0} GB-mo across {} models.\n\n",
-            summary.project_gb_months, summary.model_count
-        ));
+    append_cost_figure_markdown(output, "Current cost", &summary.current_cost);
+    append_cost_figure_markdown(output, "Post-fix cost", &summary.post_fix_cost);
+    append_cost_figure_markdown(output, "Potential savings", &summary.potential_savings);
+    if let Some(pr) = &summary.pr_impact {
+        append_cost_figure_markdown(output, "PR impact (net)", &pr.net);
     }
+    if let Some(realized) = &summary.realized_savings {
+        append_cost_figure_markdown(output, "Realized savings", &realized.realized);
+    }
+    output.push_str(&format!(
+        "Coverage: {:.0}% mapped spend ({}/{} models).\n\n",
+        summary.coverage.mapped_spend_fraction * 100.0,
+        summary.coverage.models_with_mapped_spend,
+        summary.coverage.models_total
+    ));
     if summary.savings_p50_usd > 0.0 {
         output.push_str(&format!(
             "New finding savings (deduplicated): ~${:.0}/mo.\n\n",
@@ -479,7 +517,7 @@ mod tests {
 
         let rendered = render(&result, OutputFormat::Json).expect("json render");
         let value: serde_json::Value = serde_json::from_str(&rendered).expect("parse json");
-        assert_eq!(value["schema_version"], 3);
+        assert_eq!(value["schema_version"], 4);
         assert_eq!(value["analysis"]["policy"], "standard");
         assert_eq!(value["analysis"]["passed"], true);
         assert!(value["cost"].is_null());

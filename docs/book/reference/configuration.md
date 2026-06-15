@@ -142,6 +142,9 @@ Optional cost-estimation settings. See [Cost estimates](cost-estimates.md) for t
 | --- | --- | --- |
 | `catalog` | string | Path to dbt `catalog.json` (`stats.num_bytes`) |
 | `query_history` | string | Offline CSV export (`model_or_table`, `bytes_per_run`) |
+| `observations` | string | Normalized `CostObservationBundleV1` JSON (preferred Grade-A input; USD > credits > bytes) |
+| `observations_before` | string | Pre-change observation bundle for realized-savings verification |
+| `observations_after` | string | Post-change observation bundle for realized-savings verification |
 
 ### `[cost.sources."name"]` / `[cost.models."name"]` / `[cost.rules.RULE_ID]`
 

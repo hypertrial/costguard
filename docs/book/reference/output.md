@@ -12,7 +12,7 @@ Structured scan result:
 
 ```json
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "identity_scheme": "semantic-v1",
   "analysis": { "...": "..." },
   "metrics": { "...": "..." },
@@ -26,7 +26,7 @@ Structured scan result:
 
 | Field | Present when | Description |
 | --- | --- | --- |
-| `schema_version` | Always | JSON schema version (`3` is the Costguard 2.x contract) |
+| `schema_version` | Always | JSON schema version (`4` adds structured cost figures; `3` remains valid for consumers that ignore new `cost` fields) |
 | `identity_scheme` | When semantic identity is active | `"semantic-v1"` — finding IDs are stable across formatting and line movement |
 | `analysis` | Always | Completeness report: `policy`, `passed`, and optional `violations` with `code`, `message`, `observed`, and `allowed` |
 | `metrics` | Always | Scan counters including parse metrics (see [Parse metrics](parse-metrics.md)) |

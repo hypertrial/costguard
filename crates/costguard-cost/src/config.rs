@@ -36,6 +36,9 @@ pub struct CostPricingSection {
 pub struct CostInputsSection {
     pub catalog: Option<PathBuf>,
     pub query_history: Option<PathBuf>,
+    pub observations: Option<PathBuf>,
+    pub observations_before: Option<PathBuf>,
+    pub observations_after: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -136,6 +139,9 @@ impl Default for CostConfig {
             inputs: CostInputsSection {
                 catalog: None,
                 query_history: None,
+                observations: None,
+                observations_before: None,
+                observations_after: None,
             },
             sources: HashMap::new(),
             models: HashMap::new(),
@@ -169,6 +175,9 @@ impl CostConfig {
             inputs: section.inputs.unwrap_or(CostInputsSection {
                 catalog: None,
                 query_history: None,
+                observations: None,
+                observations_before: None,
+                observations_after: None,
             }),
             sources: section.sources,
             models: section.models,

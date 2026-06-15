@@ -13,13 +13,14 @@ model_monthly_cost = model_monthly_scan × price_per_byte   (when pricing config
 
 Base bytes resolve in priority order:
 
-1. Query-history CSV (`bytes_per_run`) — grade **A**
-2. `catalog.json` `stats.num_bytes` — grade **B**
+1. Normalized observation bundle (`[cost.inputs].observations`) — grade **A** (USD > credits > bytes; no partition/view/incremental priors)
+2. Query-history CSV (`bytes_per_run`) — grade **A** (no priors on measured data)
+3. `catalog.json` `stats.num_bytes` — grade **B**
 3. `catalog.json` `stats.row_count × avg_row_bytes` (default 200) — grade **B**
 4. `[cost.sources]` bytes/rows — grade **B**
 5. `default_table_size` prior — grade **C**
 
-Adjustments before pricing:
+Adjustments before pricing (catalog, config source, and size prior only — not measured observations or query history):
 
 - **Partition/cluster priors**: models with `partition_by` or `cluster_by` scale effective scan by 0.7×
 - **Views**: materialized `view` models scale by 0.5×
@@ -36,7 +37,10 @@ Project totals sum each model **once** using moment-matched lognormal aggregatio
 Finding estimates represent **addressable excess cost** (potential monthly savings), not total model spend:
 
 ```
-savings ≈ model_monthly_cost × (rule_multiplier − 1) × structure_factor × fan_out_factor
+savings_fraction = 1 − 1/rule_multiplier
+savings ≈ model_monthly_cost × savings_fraction × structure_factor × fan_out_factor
+post_fix_cost ≈ model_monthly_cost / ∏(rule_multipliers per model)
+potential_savings = model_monthly_cost − post_fix_cost
 ```
 
 - **Rule multiplier**: lognormal prior per `SQLCOST*` rule (unchanged ranges)

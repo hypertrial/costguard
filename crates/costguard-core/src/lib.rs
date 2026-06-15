@@ -148,10 +148,16 @@ impl ScanResult {
             }
         }
         if let Some(delta) = fail_on_monthly_delta {
-            let savings = costguard_cost::total_p50_usd_per_month(&self.diagnostics);
+            let savings = self
+                .cost_summary
+                .as_ref()
+                .and_then(|summary| summary.pr_impact.as_ref())
+                .and_then(|impact| impact.net.monthly_p50)
+                .map(f64::abs)
+                .unwrap_or_else(|| costguard_cost::total_p50_usd_per_month(&self.diagnostics));
             if savings >= delta {
                 eprintln!(
-                    "cost gate failed: estimated new savings ${savings:.0}/mo >= threshold ${delta:.0}/mo"
+                    "cost gate failed: estimated cost impact ${savings:.0}/mo >= threshold ${delta:.0}/mo"
                 );
                 return true;
             }
@@ -292,6 +298,9 @@ mod tests {
             savings_p10_usd_per_month: Some(400.0),
             savings_p50_usd_per_month: Some(500.0),
             savings_p90_usd_per_month: Some(900.0),
+            current_cost_p50_usd_per_month: None,
+            post_fix_cost_p50_usd_per_month: None,
+            unestimated_reason: None,
         });
         let result = result_with(vec![diag]);
         assert!(!result.should_fail(None, None, Some(600.0), None));

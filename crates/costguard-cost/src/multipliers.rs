@@ -15,11 +15,28 @@ pub fn rule_multiplier(rule_id: &str, config: &CostConfig) -> Option<Estimate> {
     default_multipliers().get(rule_id).copied()
 }
 
-fn is_infrastructure_rule(rule_id: &str) -> bool {
+pub fn is_infrastructure_rule(rule_id: &str) -> bool {
     matches!(
-        rule_id,
+        rule_id.to_ascii_uppercase().as_str(),
         "SQLCOST023" | "SQLCOST024" | "SQLCOST025" | "SQLCOST026" | "SQLCOST027"
     )
+}
+
+pub fn is_cost_bearing_rule(rule_id: &str) -> bool {
+    costguard_protocol::is_builtin_rule_id(rule_id) && !is_infrastructure_rule(rule_id)
+}
+
+pub fn unestimated_reason(rule_id: &str, config: &CostConfig) -> Option<String> {
+    if is_infrastructure_rule(rule_id) {
+        return None;
+    }
+    if rule_multiplier(rule_id, config).is_some() {
+        return None;
+    }
+    if !costguard_protocol::is_builtin_rule_id(rule_id) {
+        return Some("unknown rule id".into());
+    }
+    Some("no default multiplier configured".into())
 }
 
 fn mult(p10: f64, p90: f64) -> Estimate {
@@ -60,6 +77,15 @@ fn default_multipliers() -> &'static HashMap<&'static str, Estimate> {
         m.insert("SQLCOST033", mult(2.0, 10.0));
         m.insert("SQLCOST034", mult(1.5, 5.0));
         m.insert("SQLCOST035", mult(2.0, 8.0));
+        m.insert("SQLCOST036", mult(3.0, 20.0));
+        m.insert("SQLCOST037", mult(2.0, 10.0));
+        m.insert("SQLCOST038", mult(3.0, 20.0));
+        m.insert("SQLCOST039", mult(2.0, 8.0));
+        m.insert("SQLCOST040", mult(2.0, 10.0));
+        m.insert("SQLCOST041", mult(1.5, 3.0));
+        m.insert("SQLCOST042", mult(2.0, 10.0));
+        m.insert("SQLCOST043", mult(1.5, 4.0));
+        m.insert("SQLCOST044", mult(2.0, 10.0));
         m
     })
 }
@@ -69,9 +95,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn skips_infrastructure_rules() {
+    fn all_cost_bearing_rules_have_multipliers_or_infrastructure() {
         let config = CostConfig::default();
-        assert!(rule_multiplier("SQLCOST023", &config).is_none());
-        assert!(rule_multiplier("SQLCOST014", &config).is_some());
+        for rule_id in costguard_protocol::BUILTIN_RULE_IDS {
+            if is_infrastructure_rule(rule_id) {
+                assert!(rule_multiplier(rule_id, &config).is_none());
+            } else {
+                assert!(
+                    rule_multiplier(rule_id, &config).is_some(),
+                    "missing multiplier for {rule_id}"
+                );
+            }
+        }
     }
 }

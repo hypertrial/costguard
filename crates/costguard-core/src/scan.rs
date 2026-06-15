@@ -21,8 +21,12 @@ use crate::{
     AnalysisReport, AnalysisViolation, PolicyMetadata, PrSummary, Project, RunMetadata, ScanResult,
 };
 use anyhow::{Context, Result};
-use costguard_cost::{run_cost_analysis, summarize_features, CostInputs, ModelFeatureSummary};
-use costguard_dbt::{compiled_code_by_model_path, MetadataWarning, MetadataWarningKind};
+use costguard_cost::{
+    compute_pr_impact, run_cost_analysis, summarize_features, CostInputs, ModelFeatureSummary,
+};
+use costguard_dbt::{
+    compiled_code_by_model_path, extract_sql_features, MetadataWarning, MetadataWarningKind,
+};
 use costguard_diagnostics::{EvidenceBuilder, Severity};
 use costguard_rules::{ProjectIndexes, RuleRegistry};
 use costguard_scanner::{DiscoveryOptions, ProjectFile, ScanCounts, SkippedFile};
@@ -161,8 +165,26 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
         apply_baseline_filter(diagnostics, baseline.as_ref());
 
     let features_by_path = feature_summaries_by_path(&union_sql_documents);
-    let cost_summary =
+    let mut cost_summary =
         run_optional_cost(config, &root, &project, &mut diagnostics, &features_by_path)?;
+
+    if plan.pr_mode {
+        if let (Some(summary), Some(cost_config)) = (cost_summary.as_mut(), config.cost.as_ref()) {
+            if cost_config.enabled {
+                if let Some(base_summary) = run_base_branch_cost(
+                    config,
+                    &root,
+                    &plan,
+                    &project,
+                    &union_sql_documents,
+                    &project_indexes,
+                )? {
+                    summary.pr_impact =
+                        Some(compute_pr_impact(summary, &base_summary, cost_config));
+                }
+            }
+        }
+    }
 
     diagnostics.sort_by(|left, right| {
         left.path
@@ -354,6 +376,87 @@ fn run_optional_cost(
         }
     }
     Ok(None)
+}
+
+fn run_base_branch_cost(
+    config: &ScanConfig,
+    root: &Path,
+    plan: &ScanPlan,
+    project: &Project,
+    union_sql_documents: &[SqlDocument],
+    project_indexes: &ProjectIndexes,
+) -> Result<Option<costguard_cost::ProjectCostSummary>> {
+    let cost_config = match &config.cost {
+        Some(cost) if cost.enabled => cost,
+        _ => return Ok(None),
+    };
+    let base = config.base_branch.as_deref().unwrap_or("main");
+    let inputs = CostInputs::load(root, cost_config)?;
+    let registry = RuleRegistry::default_rules();
+    let dbt_by_path = dbt_models_by_path(project);
+    let compiled_by_path = project
+        .dbt
+        .as_ref()
+        .map(compiled_code_by_model_path)
+        .unwrap_or_default();
+
+    let mut base_docs = Vec::new();
+    let mut base_files = Vec::new();
+    for file in &plan.targets {
+        if !matches!(
+            file.kind,
+            costguard_scanner::FileKind::Sql | costguard_scanner::FileKind::DbtSqlModel
+        ) {
+            continue;
+        }
+        let Some(text) = costguard_git::file_at_ref(root, base, &file.root_relative_path)? else {
+            continue;
+        };
+        let line_index = costguard_diagnostics::LineIndex::new(&text);
+        let doc = costguard_sql::analyze_sql(
+            file.path.clone(),
+            &text,
+            config.platform,
+            &line_index,
+            compiled_by_path.get(&file.path).map(String::as_str),
+            file.kind == costguard_scanner::FileKind::DbtSqlModel,
+            extract_sql_features(&text),
+        );
+        base_docs.push(doc);
+        base_files.push(file.clone());
+    }
+
+    if base_docs.is_empty() {
+        return Ok(Some(costguard_cost::ProjectCostSummary::default()));
+    }
+
+    let mut base_diagnostics = Vec::new();
+    for file in &base_files {
+        let sql = base_docs.iter().find(|doc| doc.path == file.path);
+        let dbt_model = dbt_by_path.get(&file.root_relative_path).copied();
+        let ctx = costguard_rules::RuleContext {
+            warehouse: config.platform,
+            file,
+            sql,
+            dbt_model,
+            all_sql: union_sql_documents,
+            project_indexes,
+            overrides: &costguard_rules::RuleOverrides::default(),
+        };
+        base_diagnostics.extend(registry.run(&ctx));
+    }
+
+    let base_features = feature_summaries_by_path(&base_docs);
+    Ok(Some(
+        run_cost_analysis(
+            cost_config,
+            project.dbt.as_ref(),
+            &inputs,
+            &mut base_diagnostics,
+            &base_features,
+        )
+        .summary,
+    ))
 }
 
 fn evaluate_analysis(

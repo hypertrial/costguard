@@ -13,7 +13,10 @@ Costguard attaches **estimated monthly savings** to each behavioral finding for 
 | `savings_p10_usd_per_month` / `savings_p50_usd_per_month` / `savings_p90_usd_per_month` | Explicit savings fields (same values as `p*` when priced) |
 | `model_id` | dbt model identifier for the finding |
 | `model_monthly_p50_usd` | Resolved monthly cost of the underlying model (p50) |
-| `grade` | Input provenance: **A** (query history), **B** (catalog/config), **C** (size priors) |
+| `current_cost_p50_usd_per_month` | Same as `model_monthly_p50_usd` on estimated findings |
+| `post_fix_cost_p50_usd_per_month` | Counterfactual monthly cost after fixing the finding |
+| `unestimated_reason` | Present when a cost-bearing rule has no multiplier (instead of silent skip) |
+| `grade` | Input provenance: **A** (observations or query history), **B** (catalog/config), **C** (size priors) |
 | `basis` | Human-readable derivation string |
 
 > **v2 semantics:** `p50_usd_per_month` on findings now means **estimated savings**, not total model cost. Use `model_monthly_p50_usd` for the model baseline.
@@ -25,6 +28,12 @@ When `[cost]` is enabled, scan output includes a `cost` block (JSON) or **Cost s
 | Field | Description |
 | --- | --- |
 | `project_p50_usd` | Deduplicated sum of per-model monthly costs (priced mode) |
+| `current_cost` | Project monthly/annual cost with uncertainty (`CostFigure`) |
+| `post_fix_cost` | Counterfactual cost if all current findings were fixed |
+| `potential_savings` | `current_cost − post_fix_cost` |
+| `coverage` | Mapped-spend fraction, observation age, rules estimated/unestimated |
+| `pr_impact` | Base vs head delta in PR mode (`introduced`, `avoided`, `net`, `efficiency`, `volume`) |
+| `realized_savings` | Before/after observation bundles (`observations_before` + `observations_after`) |
 | `project_gb_months` | Sum of model scan volumes in GB-months |
 | `savings_p50_usd` | Deduplicated sum of new finding savings |
 | `top_models` | Top 5 models by monthly cost |
@@ -53,6 +62,9 @@ usd_per_tb = 6.25
 
 [cost.inputs]
 catalog = "target/catalog.json"
+observations = "cost/observations.json"
+observations_before = "cost/before.json"
+observations_after = "cost/after.json"
 query_history = "exports/jobs_30d.csv"
 
 [cost.sources."raw.events"]

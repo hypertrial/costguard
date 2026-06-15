@@ -13,6 +13,7 @@ mod format;
 mod import;
 mod model_cost;
 mod multipliers;
+mod observations;
 mod pricing;
 mod query_history;
 mod volume;
@@ -30,15 +31,20 @@ pub use config::{
     CostSection, CostSourceOverride, TableSizeClass,
 };
 pub use estimate::{
-    excess_multiplier, format_usd, format_usd_interval, gb_months_from_bytes_runs, round_sig2,
-    sum_lognormals, Estimate,
+    annual_from_monthly, combined_multiplier, excess_multiplier, format_usd, format_usd_interval,
+    gb_months_from_bytes_runs, round_sig2, savings_fraction, sum_lognormals, Estimate,
 };
 pub use format::format_cost_line;
 pub use import::{
     normalize_cost_export, validate_cost_bundle, CostExportFormat, NormalizeCostOptions,
 };
 pub use model_cost::{
-    build_model_cost_index, lookup_model_entry, summarize_project_costs, ModelCostEntry,
-    ModelCostIndex, ProjectCostSummary, TopModelCost,
+    build_model_cost_index, compute_pr_impact, compute_realized_savings, lookup_model_entry,
+    summarize_project_costs, CostFigure, CoverageMetrics, ModelCostEntry, ModelCostIndex,
+    PrCostImpact, ProjectCostSummary, RealizedSavings, TopModelCost,
 };
+pub use multipliers::{
+    is_cost_bearing_rule, is_infrastructure_rule, rule_multiplier, unestimated_reason,
+};
+pub use observations::{load_observations, ObservationStats, ObservedModelCost};
 pub use query_history::QueryHistoryStats;

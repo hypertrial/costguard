@@ -120,7 +120,7 @@ def main() -> int:
         if scan.returncode != 0:
             raise SystemExit(scan.stderr or scan.stdout)
         payload = json.loads(scan.stdout)
-        if payload.get("schema_version") != 3 or not payload.get("analysis", {}).get("passed"):
+        if payload.get("schema_version") != 4 or not payload.get("analysis", {}).get("passed"):
             raise SystemExit("consumer smoke returned an invalid or incomplete scan")
         policy_dir = project / ".costguard"
         policy_dir.mkdir()

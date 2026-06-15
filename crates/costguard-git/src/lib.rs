@@ -69,6 +69,29 @@ pub fn changed_files(root: &Path, base: &str) -> Result<Vec<PathBuf>> {
     Ok(paths.into_iter().collect())
 }
 
+/// Returns file contents at `base:path`, or `None` when the path is new on HEAD.
+pub fn file_at_ref(root: &Path, base: &str, path: &Path) -> Result<Option<String>> {
+    if !is_git_repository(root) {
+        anyhow::bail!("{} is not a git repository", root.display());
+    }
+    let spec = format!("{base}:{}", path.to_string_lossy());
+    let output = run_git(root, &["show", &spec])?;
+    if output.status.success() {
+        return Ok(Some(String::from_utf8_lossy(&output.stdout).into_owned()));
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if stderr.contains("exists on disk, but not in")
+        || stderr.contains("does not exist")
+        || stderr.contains("bad revision")
+    {
+        return Ok(None);
+    }
+    Err(
+        GitCommandError::from_output(&format!("git show {spec}"), output.status, &output.stderr)
+            .into(),
+    )
+}
+
 fn committed_diff(root: &Path, base: &str) -> Result<Vec<PathBuf>> {
     let range = format!("{base}...HEAD");
     let merge_base_args = ["diff", "--name-only", "-z", range.as_str()];
@@ -120,6 +143,27 @@ fn path_from_git_bytes(bytes: &[u8]) -> PathBuf {
 mod tests {
     use super::*;
     use std::fs;
+
+    #[test]
+    fn file_at_ref_reads_committed_base_content() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let root = tempdir.path();
+        fs::create_dir_all(root.join("models")).expect("create models");
+        fs::write(root.join("models/a.sql"), "select 1\n").expect("write");
+        git(root, &["init"]);
+        git(root, &["checkout", "-b", "main"]);
+        git(root, &["config", "user.email", "costguard@example.com"]);
+        git(root, &["config", "user.name", "Costguard Test"]);
+        git(root, &["add", "."]);
+        git(root, &["commit", "-m", "initial"]);
+        git(root, &["checkout", "-b", "feature"]);
+        fs::write(root.join("models/a.sql"), "select 2\n").expect("write");
+        let content = file_at_ref(root, "main", Path::new("models/a.sql")).expect("base content");
+        assert_eq!(content.as_deref(), Some("select 1\n"));
+        assert!(file_at_ref(root, "main", Path::new("models/new.sql"))
+            .expect("missing")
+            .is_none());
+    }
 
     #[test]
     fn changed_files_covers_committed_staged_unstaged_and_untracked_paths() {

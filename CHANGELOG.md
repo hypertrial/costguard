@@ -4,6 +4,21 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ## [Unreleased]
 
+### Added
+
+- `[cost.inputs].observations`, `observations_before`, and `observations_after` for normalized warehouse observation bundles (Grade-A input).
+- Four-number cost reporting: `current_cost`, `post_fix_cost`, `potential_savings`, plus optional `pr_impact` and `realized_savings` with monthly/annual values, uncertainty, coverage, and estimation basis.
+- Default multipliers for SQLCOST036–SQLCOST044; cost-bearing rules emit either an estimate or an explicit `unestimated_reason`.
+- `costguard-git::file_at_ref` for base-branch PR cost comparison.
+- JSON output `schema_version: 4` with structured `cost` blocks (`CostFigure`, `CoverageMetrics`, `PrCostImpact`, `RealizedSavings`).
+- Per-finding `current_cost_p50_usd_per_month`, `post_fix_cost_p50_usd_per_month`, and `unestimated_reason` on `CostEstimate`.
+
+### Changed
+
+- Savings counterfactual uses `1 - 1/multiplier` (not `multiplier - 1`); per-model caps are multiplicative.
+- Measured observations and query-history bytes skip partition/view/incremental priors.
+- `fail_on_monthly_delta` prefers `pr_impact.net` when PR mode produces a base/head comparison.
+
 ### Removed
 
 - Migration CLI (`baseline identity-map-v2`, `baseline migrate-v2`, `baseline migrate-v1`, `policy migrate-v1`) and ordinal identity-map machinery after 2.1 rollout completion.

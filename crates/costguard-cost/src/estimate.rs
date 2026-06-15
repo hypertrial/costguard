@@ -67,9 +67,14 @@ pub fn sum_lognormals(estimates: &[Estimate]) -> Estimate {
 }
 
 pub fn excess_multiplier(multiplier: Estimate) -> Estimate {
-    let p10 = (multiplier.quantile(0.1) - 1.0).max(0.0);
-    let p50 = (multiplier.median() - 1.0).max(0.0);
-    let p90 = (multiplier.quantile(0.9) - 1.0).max(0.0);
+    savings_fraction(multiplier)
+}
+
+/// Fraction of current cost saved when fixing a rule: 1 - 1/multiplier.
+pub fn savings_fraction(multiplier: Estimate) -> Estimate {
+    let p10 = (1.0 - 1.0 / multiplier.quantile(0.9).max(1.001)).clamp(0.0, 0.95);
+    let p50 = (1.0 - 1.0 / multiplier.median().max(1.001)).clamp(0.0, 0.95);
+    let p90 = (1.0 - 1.0 / multiplier.quantile(0.1).max(1.001)).clamp(0.0, 0.95);
     if p50 <= 0.0 {
         return Estimate::from_point(0.001, Some(0.5));
     }
@@ -78,6 +83,14 @@ pub fn excess_multiplier(multiplier: Estimate) -> Estimate {
     } else {
         Estimate::from_point(p50, Some(0.3))
     }
+}
+
+/// Combined multiplier from independent rule excesses: product of multipliers.
+pub fn combined_multiplier(multipliers: &[Estimate]) -> Estimate {
+    multipliers
+        .iter()
+        .copied()
+        .fold(Estimate::from_point(1.0, Some(0.01)), |acc, m| acc * m)
 }
 
 pub fn gb_months_from_bytes_runs(bytes: Estimate, runs: Estimate) -> f64 {
@@ -100,6 +113,17 @@ impl std::ops::Div for Estimate {
     type Output = Self;
 
     fn div(self, rhs: Self) -> Self {
+        Self {
+            mu: self.mu - rhs.mu,
+            sigma: (self.sigma * self.sigma + rhs.sigma * rhs.sigma).sqrt(),
+        }
+    }
+}
+
+impl std::ops::Sub for Estimate {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self {
         Self {
             mu: self.mu - rhs.mu,
             sigma: (self.sigma * self.sigma + rhs.sigma * rhs.sigma).sqrt(),
@@ -164,6 +188,10 @@ fn normal_quantile(p: f64) -> f64 {
         (((((A[0] * r + A[1]) * r + A[2]) * r + A[3]) * r + A[4]) * r + A[5]) * q
             / (((((B[0] * r + B[1]) * r + B[2]) * r + B[3]) * r + B[4]) * r + 1.0)
     }
+}
+
+pub fn annual_from_monthly(monthly: f64) -> f64 {
+    round_sig2(monthly * 12.0)
 }
 
 /// Round to two significant figures for display.
@@ -234,6 +262,14 @@ mod tests {
         ];
         let total = super::sum_lognormals(&estimates);
         assert!((total.mean() - 300.0).abs() < 30.0);
+    }
+
+    #[test]
+    fn savings_fraction_is_one_minus_inverse() {
+        let multiplier = Estimate::from_point(4.0, Some(0.2));
+        let fraction = super::savings_fraction(multiplier);
+        assert!((fraction.median() - 0.75).abs() < 0.05);
+        assert!(fraction.median() < (multiplier.median() - 1.0));
     }
 
     #[test]

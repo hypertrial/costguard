@@ -1,5 +1,6 @@
 use crate::catalog::CatalogStats;
 use crate::config::{parse_bytes_spec, CostConfig, CostSourceOverride};
+use crate::observations::{lookup_observed_cost, ObservationStats};
 use crate::query_history::QueryHistoryStats;
 use crate::Estimate;
 use costguard_dbt::{DbtModel, DbtProject};
@@ -19,10 +20,17 @@ pub struct ResolvedVolume {
     pub bytes: Estimate,
     pub runs_per_month: Estimate,
     pub grade: CostGrade,
+    #[allow(dead_code)] // read in tests; production skips priors via separate Grade-A code paths
+    pub measured: bool,
+    pub estimation_basis: String,
+    pub observation_window: Option<(String, String)>,
+    pub observation_age_days: Option<f64>,
+    pub observed_monthly_cost: Option<Estimate>,
 }
 
 pub struct VolumeContext<'a> {
     pub config: &'a CostConfig,
+    pub observations: Option<&'a ObservationStats>,
     pub catalog: Option<&'a CatalogStats>,
     pub query_history: Option<&'a QueryHistoryStats>,
     pub dbt: Option<&'a DbtProject>,
@@ -41,19 +49,49 @@ impl VolumeContext<'_> {
         let apply_incremental = rule_id.is_none_or(|rule| !skips_incremental_discount(rule));
         let runs = self.runs_for_model(model);
 
+        if let Some(stats) = self.observations {
+            if let Some(observed) = lookup_observed_cost(stats, &lookup_keys(model)) {
+                let monthly_cost = observed.monthly_cost_usd.unwrap_or_else(|| {
+                    Estimate::from_point(observed.monthly_bytes.unwrap_or(0.0), Some(0.1))
+                });
+                let runs_per_month =
+                    Estimate::from_point(observed.monthly_executions.max(1.0), Some(0.1));
+                let bytes = if let Some(monthly_bytes) = observed.monthly_bytes {
+                    if observed.monthly_executions > 0.0 {
+                        Estimate::from_point(monthly_bytes / observed.monthly_executions, Some(0.1))
+                    } else {
+                        Estimate::from_point(monthly_bytes, Some(0.1))
+                    }
+                } else {
+                    monthly_cost / runs_per_month
+                };
+                return ResolvedVolume {
+                    bytes,
+                    runs_per_month,
+                    grade: CostGrade::A,
+                    measured: true,
+                    estimation_basis: observed.basis.clone(),
+                    observation_window: Some((
+                        observed.window_start.clone(),
+                        observed.window_end.clone(),
+                    )),
+                    observation_age_days: Some(observed.age_days),
+                    observed_monthly_cost: Some(monthly_cost),
+                };
+            }
+        }
+
         if let Some(history) = self.query_history {
             for key in lookup_keys(model) {
                 if let Some(entry) = history.by_key.get(&key) {
-                    let mut bytes = Estimate::from_point(entry.bytes_per_run, Some(0.2));
-                    bytes = apply_dbt_scan_priors(model, bytes);
-                    if apply_incremental {
-                        bytes = self.apply_incremental(model, bytes);
-                    }
-                    return ResolvedVolume {
+                    let bytes = Estimate::from_point(entry.bytes_per_run, Some(0.2));
+                    return resolved_volume(
                         bytes,
-                        runs_per_month: Estimate::from_point(entry.runs_per_month, Some(0.1)),
-                        grade: CostGrade::A,
-                    };
+                        Estimate::from_point(entry.runs_per_month, Some(0.1)),
+                        CostGrade::A,
+                        true,
+                        "query-history",
+                    );
                 }
             }
         }
@@ -65,11 +103,7 @@ impl VolumeContext<'_> {
                 if apply_incremental {
                     est = self.apply_incremental(model, est);
                 }
-                return ResolvedVolume {
-                    bytes: est,
-                    runs_per_month: runs,
-                    grade: CostGrade::B,
-                };
+                return resolved_volume(est, runs, CostGrade::B, false, "catalog");
             }
         }
 
@@ -83,11 +117,7 @@ impl VolumeContext<'_> {
         if apply_incremental {
             est = self.apply_incremental(model, est);
         }
-        ResolvedVolume {
-            bytes: est,
-            runs_per_month: runs,
-            grade: CostGrade::C,
-        }
+        resolved_volume(est, runs, CostGrade::C, false, "size-prior")
     }
 
     fn runs_for_model(&self, model: &DbtModel) -> Estimate {
@@ -158,15 +188,36 @@ impl VolumeContext<'_> {
                     if apply_incremental {
                         est = self.apply_incremental(model, est);
                     }
-                    return Some(ResolvedVolume {
-                        bytes: est,
-                        runs_per_month: runs,
-                        grade: CostGrade::B,
-                    });
+                    return Some(resolved_volume(
+                        est,
+                        runs,
+                        CostGrade::B,
+                        false,
+                        "config-source",
+                    ));
                 }
             }
         }
         None
+    }
+}
+
+fn resolved_volume(
+    bytes: Estimate,
+    runs_per_month: Estimate,
+    grade: CostGrade,
+    measured: bool,
+    basis: &str,
+) -> ResolvedVolume {
+    ResolvedVolume {
+        bytes,
+        runs_per_month,
+        grade,
+        measured,
+        estimation_basis: basis.to_string(),
+        observation_window: None,
+        observation_age_days: None,
+        observed_monthly_cost: None,
     }
 }
 
@@ -299,6 +350,7 @@ mod tests {
         };
         let ctx = VolumeContext {
             config: &config,
+            observations: None,
             catalog: None,
             query_history: None,
             dbt: None,
@@ -321,6 +373,7 @@ mod tests {
         };
         let ctx = VolumeContext {
             config: &config,
+            observations: None,
             catalog: None,
             query_history: None,
             dbt: None,
@@ -343,6 +396,7 @@ mod tests {
         let config = CostConfig::default();
         let ctx = VolumeContext {
             config: &config,
+            observations: None,
             catalog: None,
             query_history: None,
             dbt: None,
@@ -368,6 +422,7 @@ mod tests {
         let config = CostConfig::default();
         let ctx = VolumeContext {
             config: &config,
+            observations: None,
             catalog: Some(&catalog),
             query_history: None,
             dbt: None,
@@ -380,5 +435,36 @@ mod tests {
         let vol = ctx.resolve_for_model(&model);
         assert_eq!(vol.grade, CostGrade::B);
         assert!((vol.bytes.median() - 200_000_000.0).abs() < 1.0);
+    }
+
+    #[test]
+    fn query_history_is_measured_without_priors() {
+        use crate::query_history::{QueryHistoryEntry, QueryHistoryStats};
+        let mut history = QueryHistoryStats::default();
+        history.by_key.insert(
+            "fct".into(),
+            QueryHistoryEntry {
+                bytes_per_run: 1_000_000_000.0,
+                runs_per_month: 30.0,
+            },
+        );
+        let config = CostConfig::default();
+        let ctx = VolumeContext {
+            config: &config,
+            observations: None,
+            catalog: None,
+            query_history: Some(&history),
+            dbt: None,
+        };
+        let model = DbtModel {
+            name: "fct".into(),
+            materialized: Some("view".into()),
+            partition_by: Some("dt".into()),
+            ..DbtModel::default()
+        };
+        let vol = ctx.resolve_for_model(&model);
+        assert!(vol.measured);
+        assert_eq!(vol.estimation_basis, "query-history");
+        assert!((vol.bytes.median() - 1_000_000_000.0).abs() < 1.0);
     }
 }
