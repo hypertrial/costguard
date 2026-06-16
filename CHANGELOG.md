@@ -6,6 +6,8 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ### Added
 
+- `scripts/rule_tp_census.py` — full-corpus per-rule TP/FP census across all benchmark repos with PASS bar (≥20 TP or 100% clean) and optional `tests/benchmarks/rule_tp_evidence.json` export.
+- Design doc: [Rule TP coverage](docs/design/rule-tp-coverage.md) — 44/44 rules PASS on spellbook + jaffle-shop + mattermost-warehouse + data-infra.
 - `scripts/top_findings_review.py` — rank top-N cost findings with SQL context, bucket, and registry verdict for Spellbook (or other repo) triage loops.
 - Binary-classification evaluation pipeline: frozen [`tests/benchmarks/eval_labels.toml`](tests/benchmarks/eval_labels.toml), [`scripts/build_eval_dataset.py`](scripts/build_eval_dataset.py), and [`scripts/eval_metrics.py`](scripts/eval_metrics.py) computing precision/recall/F1/MCC/PR-AUC/ROC-AUC with Wilson CIs (eval deps in [`requirements-eval.txt`](requirements-eval.txt)).
 - LLM-as-judge inter-rater reliability: [`scripts/build_llm_judge_labels.py`](scripts/build_llm_judge_labels.py) (local-only, llama-cpp-python), [`scripts/eval_irr.py`](scripts/eval_irr.py) (CI-safe κ validation), committed [`tests/benchmarks/llm_judge_labels.jsonl`](tests/benchmarks/llm_judge_labels.jsonl).
@@ -29,6 +31,10 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ### Fixed
 
+- SQLCOST017 false positives on time-bucket joins: expand bucket column names (`block_time`, `period`, `time`, `hr`, …), exempt coalesce join keys, skip dbt macros, and improve regex fallbacks for coalesce/single-side normalization joins on raw-scanned repos.
+- SQLCOST016 false positive on bounded `date()` partition filters and JOIN ON date_trunc false positives via regex: trust AST non_sargable extraction when parsed; exempt `date()` on partition columns like `date_trunc`.
+- SQLCOST012 false positives on scalar CTE broadcast: skip `CROSS JOIN` to a defined CTE (e.g. Balancer `global_fees`) and resolve join `right_relation` from the table name when the factor is a single-part identifier, not the alias.
+- SQLCOST006/014 false positives on dbt macros: skip unbounded-join and repeated-CTE rules for files under `/macros/`; improve equality detection via `equality_keys`, `USING`, and raw-text `ON … =` fallback when Jinja breaks AST join predicates.
 - SQLCOST014 false positives on CTE homonyms: count CTE references only from single-part `FROM`/`JOIN` table factors (not column/alias/schema segments), traverse CTE bodies during AST extraction, prefer compiled AST for dbt models, and align compiled feature extraction text with normalized SQL.
 - SQLCOST008 false positives when `GROUP BY` deduplicates: extract `group_by_clauses` from AST/regex and skip blind-`DISTINCT` findings when grouping is present (including compiled SQL only visible after dbt compile).
 - SQLCOST035 false positives on subquery joins: stop treating derived-table aliases as catalog names in AST join analysis so same-catalog patterns like `(…) b LEFT JOIN delta_prod.tokens.erc20` no longer flag as cross-catalog.

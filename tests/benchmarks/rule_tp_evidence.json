@@ -1,0 +1,4363 @@
+{
+  "SQLCOST001": {
+    "pass": true,
+    "pass_reason": "tp>=20",
+    "tp": 441,
+    "fp": 0,
+    "unknown": 0,
+    "total": 441,
+    "examples": [
+      {
+        "repo": "jaffle-shop",
+        "path": "models/marts/customers.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "SELECT * in a non-staging model.",
+        "snippet": "with"
+      },
+      {
+        "repo": "jaffle-shop",
+        "path": "models/marts/locations.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "SELECT * in a non-staging model.",
+        "snippet": "with"
+      },
+      {
+        "repo": "jaffle-shop",
+        "path": "models/marts/metricflow_time_spine.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "SELECT * in a non-staging model.",
+        "snippet": "-- metricflow_time_spine.sql"
+      },
+      {
+        "repo": "jaffle-shop",
+        "path": "models/marts/order_items.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "SELECT * in a non-staging model.",
+        "snippet": "with"
+      },
+      {
+        "repo": "jaffle-shop",
+        "path": "models/marts/orders.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "SELECT * in a non-staging model.",
+        "snippet": "with"
+      },
+      {
+        "repo": "jaffle-shop",
+        "path": "models/marts/products.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "SELECT * in a non-staging model.",
+        "snippet": "with"
+      },
+      {
+        "repo": "jaffle-shop",
+        "path": "models/marts/supplies.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "SELECT * in a non-staging model.",
+        "snippet": "with"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_datasets.sql",
+        "line": 59,
+        "bucket": "other",
+        "message": "SELECT * in a non-staging model.",
+        "snippet": "SELECT * FROM int_gtfs_datasets"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__daily_url_index.sql",
+        "line": 4,
+        "bucket": "other",
+        "message": "SELECT * in a non-staging model.",
+        "snippet": "SELECT *"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__distinct_download_configs.sql",
+        "line": 27,
+        "bucket": "other",
+        "message": "SELECT * in a non-staging model.",
+        "snippet": "SELECT * FROM int_gtfs_rt__distinct_download_configs"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__service_alerts_day_map_grouping.sql",
+        "line": 20,
+        "bucket": "other",
+        "message": "SELECT * in a non-staging model.",
+        "snippet": "SELECT *"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__service_alerts_fully_unnested.sql",
+        "line": 4,
+        "bucket": "other",
+        "message": "SELECT * in a non-staging model.",
+        "snippet": "SELECT *"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__service_alerts_trip_day_map_grouping.sql",
+        "line": 20,
+        "bucket": "other",
+        "message": "SELECT * in a non-staging model.",
+        "snippet": "SELECT *"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__trip_updates_trip_day_map_grouping.sql",
+        "line": 20,
+        "bucket": "other",
+        "message": "SELECT * in a non-staging model.",
+        "snippet": "SELECT *"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__trip_updates_trip_stop_day_map_grouping.sql",
+        "line": 20,
+        "bucket": "other",
+        "message": "SELECT * in a non-staging model.",
+        "snippet": "SELECT *"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__unioned_parse_outcomes.sql",
+        "line": 17,
+        "bucket": "other",
+        "message": "SELECT * in a non-staging model.",
+        "snippet": "SELECT *"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__vehicle_positions_trip_day_map_grouping.sql",
+        "line": 20,
+        "bucket": "other",
+        "message": "SELECT * in a non-staging model.",
+        "snippet": "SELECT *,"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__vehicle_positions_trip_stop_day_map_grouping.sql",
+        "line": 181,
+        "bucket": "other",
+        "message": "SELECT * in a non-staging model.",
+        "snippet": "SELECT * FROM vp_counts_near_stops"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_schedule__all_scheduled_service.sql",
+        "line": 4,
+        "bucket": "other",
+        "message": "SELECT * in a non-staging model.",
+        "snippet": "SELECT *"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_schedule__daily_scheduled_service_index.sql",
+        "line": 4,
+        "bucket": "other",
+        "message": "SELECT * in a non-staging model.",
+        "snippet": "SELECT"
+      }
+    ]
+  },
+  "SQLCOST002": {
+    "pass": true,
+    "pass_reason": "tp>=20",
+    "tp": 396,
+    "fp": 0,
+    "unknown": 0,
+    "total": 396,
+    "examples": [
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/macros/project/lifi/lifi_extract_bridge_data_macro.sql",
+        "line": 23,
+        "bucket": "repeated_json",
+        "message": "Repeated JSON extraction detected.",
+        "snippet": "from_hex(json_extract_scalar(bridgedata, '$.{{ field }}')) as {{ field }},"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/macros/project/oneinch/project/oneinch_project_swaps_base_macro.sql",
+        "line": 293,
+        "bucket": "other",
+        "message": "Repeated JSON extraction detected.",
+        "snippet": "('intra-chain: classic: direct',"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/macros/project/oneinch/project/oneinch_project_swaps_second_side_macro.sql",
+        "line": 58,
+        "bucket": "other",
+        "message": "Repeated JSON extraction detected.",
+        "snippet": "('intra-chain: classic: direct', true)"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/macros/project/sui/sui_json.sql",
+        "line": 2,
+        "bucket": "repeated_json",
+        "message": "Repeated JSON extraction detected.",
+        "snippet": "json_extract_scalar({{ col }}, '{{ path }}')"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/macros/project/tesseract/tesseract_ictt_pairs.sql",
+        "line": 36,
+        "bucket": "repeated_json",
+        "message": "Repeated JSON extraction detected.",
+        "snippet": ", from_hex(json_extract_scalar(s.message, '$.destinationAddress')) AS token_home_address"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/macros/project/yield_yak/yield_yak_reinvests.sql",
+        "line": 94,
+        "bucket": "repeated_json",
+        "message": "Repeated JSON extraction detected.",
+        "snippet": ", filter(slice(recent_reinvest_info, greatest(1, cardinality(recent_reinvest_info) - 25 + 1), 25), x -> json_extract_scalar(x, '$.ratio_growth') IS NOT NULL) AS filtered_recent_reinvest_info"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/macros/project/yield_yak/yield_yak_yield_strategies.sql",
+        "line": 19,
+        "bucket": "repeated_json",
+        "message": "Repeated JSON extraction detected.",
+        "snippet": "AND cardinality(filter(c.abi, x -> json_extract_scalar(x, '$.name') IN ('Reinvest', 'Deposit', 'Withdraw') AND json_extract_scalar(x, '$.type') = 'event')) = 3"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/macros/sector/attestation/eas.sql",
+        "line": 93,
+        "bucket": "other",
+        "message": "Repeated JSON extraction detected.",
+        "snippet": "{% set exp_time_raw = \"try_cast(json_query(ca.clean_request, 'lax $.data[*].expirationTime' omit quotes) as bigint)\" %}"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/macros/sector/inscription/inscription_deploys.sql",
+        "line": 11,
+        "bucket": "repeated_json",
+        "message": "Repeated JSON extraction detected.",
+        "snippet": ", json_extract_scalar(full_inscription, '$.p') AS inscription_standard"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/macros/sector/inscription/inscription_mints.sql",
+        "line": 11,
+        "bucket": "repeated_json",
+        "message": "Repeated JSON extraction detected.",
+        "snippet": ", json_extract_scalar(full_inscription, '$.p') AS inscription_standard"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/macros/sector/referral/platforms/soundxyz_v2_referral_rewards.sql",
+        "line": 17,
+        "bucket": "repeated_json",
+        "message": "Repeated JSON extraction detected.",
+        "snippet": ",from_hex(json_value(e.data, 'lax $.affiliate' RETURNING varchar DEFAULT '0x0000000000000000000000000000000000000000' ON EMPTY)) as referrer_address"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_blockchains/near/near_bridge_omni.sql",
+        "line": 183,
+        "bucket": "repeated_json",
+        "message": "Repeated JSON extraction detected.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_blockchains/near/near_fact_intents.sql",
+        "line": 27,
+        "bucket": "repeated_json",
+        "message": "Repeated JSON extraction detected.",
+        "snippet": "logs_with_actions AS ("
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_blockchains/near/v1_signer/near_v1_signer_users.sql",
+        "line": 13,
+        "bucket": "repeated_json",
+        "message": "Repeated JSON extraction detected.",
+        "snippet": "WHERE"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_metrics/fees/chains/tron/tron_fee_correction.sql",
+        "line": 35,
+        "bucket": "repeated_json",
+        "message": "Repeated JSON extraction detected.",
+        "snippet": "FROM ("
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/eigenlayer/ethereum/eigenlayer_ethereum_slashing_withdrawal_queued_flattened.sql",
+        "line": 33,
+        "bucket": "repeated_json",
+        "message": "Repeated JSON extraction detected.",
+        "snippet": "TRY_CAST("
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/eigenlayer/ethereum/eigenlayer_ethereum_withdrawal_queued_v2_flattened.sql",
+        "line": 34,
+        "bucket": "repeated_json",
+        "message": "Repeated JSON extraction detected.",
+        "snippet": "TRY_CAST("
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/polymarket/polygon/polymarket_polygon_market_details.sql",
+        "line": 19,
+        "bucket": "repeated_json",
+        "message": "Repeated JSON extraction detected.",
+        "snippet": "feeBips AS fee_bips,"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/polymarket/polygon/polymarket_polygon_markets.sql",
+        "line": 92,
+        "bucket": "repeated_json",
+        "message": "Repeated JSON extraction detected.",
+        "snippet": "from questions"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_sector/labels/addresses/__single_category_labels__/ofac_sanctionned/labels_ofac_sanctionned_ethereum.sql",
+        "line": 35,
+        "bucket": "other",
+        "message": "Repeated JSON extraction detected.",
+        "snippet": ", ('ethereum', 0x23773e65ed146a459791799d01336db287f25334, 'Tornado Cash: 100000 DAI Pool', 'ofac_sanction', 'hildobby', 'static', TIMESTAMP '2022-09-20' , now(), 'ofac_sanctionned', 'identifier')"
+      }
+    ]
+  },
+  "SQLCOST003": {
+    "pass": true,
+    "pass_reason": "tp>=20",
+    "tp": 32,
+    "fp": 0,
+    "unknown": 0,
+    "total": 32,
+    "examples": [
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/macros/sector/attestation/eas.sql",
+        "line": 215,
+        "bucket": "other",
+        "message": "Repeated regex operations detected.",
+        "snippet": "when regexp_like(from_utf8(from_hex(chunk)), '[[:print:]]+[^\\x00-\\x7F]+[[:print:]]*') then"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/eigenlayer/ethereum/eigenlayer_ethereum_programmatic_incentive_flattened.sql",
+        "line": 14,
+        "bucket": "repeated_regex",
+        "message": "Repeated regex operations detected.",
+        "snippet": "\"delta_prod\".\"eigenlayer_ethereum\".\"RewardsCoordinator_evt_RewardsSubmissionForAllEarnersCreated\""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/eigenlayer/ethereum/eigenlayer_ethereum_rewards_v1_flattened.sql",
+        "line": 15,
+        "bucket": "repeated_regex",
+        "message": "Repeated regex operations detected.",
+        "snippet": "\"delta_prod\".\"eigenlayer_ethereum\".\"RewardsCoordinator_evt_AVSRewardsSubmissionCreated\""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/op/retropgf/optimism/op_retropgf_optimism_round2_recipients.sql",
+        "line": 13,
+        "bucket": "other",
+        "message": "Repeated regex operations detected.",
+        "snippet": ")"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/op/retropgf/optimism/op_retropgf_optimism_round2_voters.sql",
+        "line": 12,
+        "bucket": "other",
+        "message": "Repeated regex operations detected.",
+        "snippet": ")"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/optimism/optimism_attestationstation_optimism_events.sql",
+        "line": 27,
+        "bucket": "other",
+        "message": "Repeated regex operations detected.",
+        "snippet": "),"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/sui/dex_sui_pool_map.sql",
+        "line": 44,
+        "bucket": "repeated_regex",
+        "message": "Repeated regex operations detected.",
+        "snippet": ", trim(element_at(split(generics, ','), 1)) as coin_type_a_raw"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/sui/dex_sui_trades.sql",
+        "line": 116,
+        "bucket": "repeated_regex",
+        "message": "Repeated regex operations detected.",
+        "snippet": "split_part("
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/sui/tvl/dex/sui_tvl_dex_pools_bluefin_bronze.sql",
+        "line": 30,
+        "bucket": "repeated_regex",
+        "message": "Repeated regex operations detected.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/sui/tvl/dex/sui_tvl_dex_pools_gold.sql",
+        "line": 118,
+        "bucket": "repeated_regex",
+        "message": "Repeated regex operations detected.",
+        "snippet": "blockchain"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/sui/tvl/lending/sui_tvl_lending_pools_bucket_bronze.sql",
+        "line": 26,
+        "bucket": "repeated_regex",
+        "message": "Repeated regex operations detected.",
+        "snippet": "where cast(type_ as varchar) like '0xce7ff77a83ea0cb6fd39bd8748e2ec89a3f41e8efdc3f4eb123e0ca37b184db2::bucket::Bucket<%>'"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/sui/tvl/supply/sui_tvl_supply_bronze.sql",
+        "line": 37,
+        "bucket": "repeated_regex",
+        "message": "Repeated regex operations detected.",
+        "snippet": "-- For TBTC GatewayCapabilities, use specific coin type as provided"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/macros/models/_project/paraswap/v6/paraswap_v6_balancer_v2_method.sql",
+        "line": 147,
+        "bucket": "repeated_regex",
+        "message": "Repeated regex operations detected.",
+        "snippet": "from_hex(regexp_replace(srcToken, '^(0x)?(00){12}')) as varchar"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/macros/sector/bridges/zkbridge_v1_deposits.sql",
+        "line": 50,
+        "bucket": "other",
+        "message": "Repeated regex operations detected.",
+        "snippet": ", d.rn + MAX(CAST(regexp_replace(t.bridge_transfer_id, '.*-', '') AS int)) AS rn"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/macros/sector/bridges/zkbridge_v1_withdrawals.sql",
+        "line": 50,
+        "bucket": "other",
+        "message": "Repeated regex operations detected.",
+        "snippet": ", w.rn + MAX(CAST(regexp_replace(t.bridge_transfer_id, '.*-', '') AS int)) AS rn"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/macros/sector/cex/cex_deposit_addresses.sql",
+        "line": 11,
+        "bucket": "repeated_regex",
+        "message": "Repeated regex operations detected.",
+        "snippet": "AND REGEXP_LIKE(ca.distinct_name, 'Deposit( ?\\d+)?$')"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_sector/nft/aggregators/chains/nft_ethereum_aggregators_markers.sql",
+        "line": 12,
+        "bucket": "other",
+        "message": "Repeated regex operations detected.",
+        "snippet": ")"
+      },
+      {
+        "repo": "mattermost-warehouse",
+        "path": "transform/snowflake-dbt/macros/helpers.sql",
+        "line": 79,
+        "bucket": "other",
+        "message": "Repeated regex operations detected.",
+        "snippet": "AND REGEXP_SUBSTR(TABLE_NAME, '[0-9]') IS NULL"
+      },
+      {
+        "repo": "mattermost-warehouse",
+        "path": "transform/snowflake-dbt/models/blp/license_overview.sql",
+        "line": 25,
+        "bucket": "other",
+        "message": "Repeated regex operations detected.",
+        "snippet": "MAX(COALESCE(regexp_substr(ol.productcode, 'E20'), regexp_substr(ol.productcode, 'E10'))) AS edition"
+      },
+      {
+        "repo": "mattermost-warehouse",
+        "path": "transform/snowflake-dbt/models/blp/licenses.sql",
+        "line": 311,
+        "bucket": "other",
+        "message": "Repeated regex operations detected.",
+        "snippet": ", CASE WHEN REGEXP_SUBSTR(company, '[^a-zA-Z]TRIAL$') in ('-TRIAL', 'TRIAL', ' TRIAL') THEN TRUE"
+      }
+    ]
+  },
+  "SQLCOST004": {
+    "pass": true,
+    "pass_reason": "tp>=20",
+    "tp": 60,
+    "fp": 0,
+    "unknown": 0,
+    "total": 60,
+    "examples": [
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_sector/nft/mints/platforms/zora_mints.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model appears to have no unique_key.",
+        "snippet": ""
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__distinct_download_configs.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model appears to have no unique_key.",
+        "snippet": "{{ config("
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__service_alerts_day_map_grouping.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model appears to have no unique_key.",
+        "snippet": "{{"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__service_alerts_trip_day_map_grouping.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model appears to have no unique_key.",
+        "snippet": "{{"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__trip_updates_trip_day_map_grouping.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model appears to have no unique_key.",
+        "snippet": "{{"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__trip_updates_trip_stop_day_map_grouping.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model appears to have no unique_key.",
+        "snippet": "{{"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__unioned_parse_outcomes.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model appears to have no unique_key.",
+        "snippet": "{{ config("
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__vehicle_positions_trip_day_map_grouping.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model appears to have no unique_key.",
+        "snippet": "{{"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__vehicle_positions_trip_stop_day_map_grouping.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model appears to have no unique_key.",
+        "snippet": "{{"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_schedule__stop_times_grouped.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model appears to have no unique_key.",
+        "snippet": "{{"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs_quality/int_gtfs_quality__rt_validation_notices.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model appears to have no unique_key.",
+        "snippet": "{{ config("
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs_quality/int_gtfs_quality__rt_validation_outcomes.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model appears to have no unique_key.",
+        "snippet": "{{ config("
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs_quality/int_gtfs_quality__scheduled_trip_version_summary.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model appears to have no unique_key.",
+        "snippet": "{{ config("
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/audit/fct_bigquery_data_access.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model appears to have no unique_key.",
+        "snippet": "{{ config("
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/audit/fct_bigquery_data_access_referenced_tables.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model appears to have no unique_key.",
+        "snippet": "{{ config("
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs/dim_agency.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model appears to have no unique_key.",
+        "snippet": "{{"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs/dim_areas.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model appears to have no unique_key.",
+        "snippet": "{{"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs/dim_attributions.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model appears to have no unique_key.",
+        "snippet": "{{"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs/dim_calendar.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model appears to have no unique_key.",
+        "snippet": "{{"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs/dim_calendar_dates.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model appears to have no unique_key.",
+        "snippet": "{{"
+      }
+    ]
+  },
+  "SQLCOST005": {
+    "pass": true,
+    "pass_reason": "clean",
+    "tp": 2,
+    "fp": 0,
+    "unknown": 0,
+    "total": 2,
+    "examples": [
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/polymarket/polygon/polymarket_polygon_market_price_recompute_tokens.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model has no obvious date or partition predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/staging/audit/stg_audit__cloudaudit_googleapis_com_data_access.sql",
+        "line": 1,
+        "bucket": "missing_predicate",
+        "message": "Incremental model has no obvious date or partition predicate.",
+        "snippet": "-- This code is designed to only run every day.  If you don't run it every day, it will skip dates."
+      }
+    ]
+  },
+  "SQLCOST006": {
+    "pass": true,
+    "pass_reason": "tp>=20_with_residual_fp",
+    "tp": 93,
+    "fp": 42,
+    "unknown": 0,
+    "total": 135,
+    "examples": [
+      {
+        "repo": "spellbook",
+        "path": "dbt_macros/dune/adapters.sql",
+        "line": 4,
+        "bucket": "other",
+        "message": "Join has no clear equality predicate.",
+        "snippet": "{%- do _properties.update({'partitioned_by': \"ARRAY['\" + (config.get('partition_by') | join(\"', '\") )  + \"']\"}) -%}"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_macros/shared/balancer/balancer_bpt_supply_macro.sql",
+        "line": 135,
+        "bucket": "non_equality_join",
+        "message": "Join has no clear equality predicate.",
+        "snippet": "LEFT JOIN joins_and_exits j ON c.day = j.block_date AND b.token = j.bpt"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/oneinch/arbitrum/project/oneinch_arbitrum_project_calls.sql",
+        "line": 1,
+        "bucket": "non_equality_join",
+        "message": "Join has no clear equality predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/oneinch/avalanche_c/project/oneinch_avalanche_c_project_calls.sql",
+        "line": 1,
+        "bucket": "non_equality_join",
+        "message": "Join has no clear equality predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/oneinch/base/project/oneinch_base_project_calls.sql",
+        "line": 1,
+        "bucket": "non_equality_join",
+        "message": "Join has no clear equality predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/oneinch/bnb/project/oneinch_bnb_project_calls.sql",
+        "line": 1,
+        "bucket": "non_equality_join",
+        "message": "Join has no clear equality predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/oneinch/ethereum/project/oneinch_ethereum_project_calls.sql",
+        "line": 1,
+        "bucket": "non_equality_join",
+        "message": "Join has no clear equality predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/oneinch/fantom/project/oneinch_fantom_project_calls.sql",
+        "line": 1,
+        "bucket": "non_equality_join",
+        "message": "Join has no clear equality predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/oneinch/gnosis/project/oneinch_gnosis_project_calls.sql",
+        "line": 1,
+        "bucket": "non_equality_join",
+        "message": "Join has no clear equality predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/oneinch/linea/project/oneinch_linea_project_calls.sql",
+        "line": 1,
+        "bucket": "non_equality_join",
+        "message": "Join has no clear equality predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/oneinch/optimism/project/oneinch_optimism_project_calls.sql",
+        "line": 1,
+        "bucket": "non_equality_join",
+        "message": "Join has no clear equality predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/oneinch/polygon/project/oneinch_polygon_project_calls.sql",
+        "line": 1,
+        "bucket": "non_equality_join",
+        "message": "Join has no clear equality predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/oneinch/sonic/project/oneinch_sonic_project_calls.sql",
+        "line": 1,
+        "bucket": "non_equality_join",
+        "message": "Join has no clear equality predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/oneinch/unichain/project/oneinch_unichain_project_calls.sql",
+        "line": 1,
+        "bucket": "non_equality_join",
+        "message": "Join has no clear equality predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/oneinch/zksync/project/oneinch_zksync_project_calls.sql",
+        "line": 1,
+        "bucket": "non_equality_join",
+        "message": "Join has no clear equality predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_sector/addresses/addresses_info.sql",
+        "line": 240,
+        "bucket": "other",
+        "message": "Join has no clear equality predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/gyroscope/arbitrum/gyroscope_arbitrum_trades.sql",
+        "line": 1,
+        "bucket": "non_equality_join",
+        "message": "Join has no clear equality predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/gyroscope/avalanche_c/gyroscope_avalanche_c_trades.sql",
+        "line": 1,
+        "bucket": "non_equality_join",
+        "message": "Join has no clear equality predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/gyroscope/ethereum/gyroscope_ethereum_trades.sql",
+        "line": 1,
+        "bucket": "non_equality_join",
+        "message": "Join has no clear equality predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/gyroscope/optimism/gyroscope_optimism_trades.sql",
+        "line": 1,
+        "bucket": "non_equality_join",
+        "message": "Join has no clear equality predicate.",
+        "snippet": ""
+      }
+    ]
+  },
+  "SQLCOST007": {
+    "pass": true,
+    "pass_reason": "tp>=20",
+    "tp": 58,
+    "fp": 0,
+    "unknown": 0,
+    "total": 58,
+    "examples": [
+      {
+        "repo": "jaffle-shop",
+        "path": "models/marts/metricflow_time_spine.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "ORDER BY in a model without LIMIT.",
+        "snippet": "-- metricflow_time_spine.sql"
+      },
+      {
+        "repo": "jaffle-shop",
+        "path": "models/marts/orders.sql",
+        "line": 70,
+        "bucket": "other",
+        "message": "ORDER BY in a model without LIMIT.",
+        "snippet": "order by ordered_at asc"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__daily_url_index.sql",
+        "line": 26,
+        "bucket": "other",
+        "message": "ORDER BY in a model without LIMIT.",
+        "snippet": "QUALIFY RANK() OVER (PARTITION BY configs.dt, base64_url ORDER BY _config_extract_ts DESC) = 1"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__trip_updates_trip_stop_day_map_grouping.sql",
+        "line": 36,
+        "bucket": "other",
+        "message": "ORDER BY in a model without LIMIT.",
+        "snippet": "ORDER BY _extract_ts"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__vehicle_positions_trip_day_map_grouping.sql",
+        "line": 28,
+        "bucket": "other",
+        "message": "ORDER BY in a model without LIMIT.",
+        "snippet": "ORDER BY COALESCE(vehicle_timestamp, header_timestamp, _extract_ts)"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__vehicle_positions_trip_stop_day_map_grouping.sql",
+        "line": 174,
+        "bucket": "other",
+        "message": "ORDER BY in a model without LIMIT.",
+        "snippet": "ARRAY_AGG(distance_meters ORDER BY distance_meters, vp_key) AS distance_meters_array,"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_schedule__frequencies_stop_times.sql",
+        "line": 18,
+        "bucket": "other",
+        "message": "ORDER BY in a model without LIMIT.",
+        "snippet": "ORDER BY stop_sequence"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_schedule__stop_times_grouped.sql",
+        "line": 42,
+        "bucket": "other",
+        "message": "ORDER BY in a model without LIMIT.",
+        "snippet": "QUALIFY RANK() OVER (PARTITION BY feed_key, stop_id ORDER BY ct DESC) = 1"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs_quality/int_gtfs_quality__feed_version_history.sql",
+        "line": 12,
+        "bucket": "other",
+        "message": "ORDER BY in a model without LIMIT.",
+        "snippet": "LAG(feed_key) OVER(PARTITION BY base64_url ORDER BY _valid_from ASC) AS prev_feed_key,"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs_quality/int_gtfs_quality__scheduled_trip_version_summary.sql",
+        "line": 45,
+        "bucket": "other",
+        "message": "ORDER BY in a model without LIMIT.",
+        "snippet": "t2.time_pair, \"-\" ORDER BY t2.stop_sequence ASC"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/ntd_annual_reporting/int_ntd__unioned_agency_information.sql",
+        "line": 5,
+        "bucket": "other",
+        "message": "ORDER BY in a model without LIMIT.",
+        "snippet": "LEAD(execution_ts) OVER (PARTITION BY ntd_id, state_parent_ntd_id ORDER BY execution_ts ASC) AS next_ts,"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/ntd_validation/int_ntd_a30_voms_vins_totals.sql",
+        "line": 29,
+        "bucket": "other",
+        "message": "ORDER BY in a model without LIMIT.",
+        "snippet": "ORDER BY organization, fiscal_year"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/ntd_validation/int_ntd_rr20_financial_specific_funds.sql",
+        "line": 63,
+        "bucket": "other",
+        "message": "ORDER BY in a model without LIMIT.",
+        "snippet": "ORDER BY organization"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/ntd_validation/int_ntd_rr20_service_3ratios_wide.sql",
+        "line": 25,
+        "bucket": "other",
+        "message": "ORDER BY in a model without LIMIT.",
+        "snippet": "ORDER BY organization"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/payments/int_payments__authorisations_deduped.sql",
+        "line": 32,
+        "bucket": "other",
+        "message": "ORDER BY in a model without LIMIT.",
+        "snippet": "ROW_NUMBER() OVER (PARTITION BY _payments_key ORDER BY littlepay_export_ts DESC, _line_number DESC) AS payments_key_appearance_num,"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/payments/int_payments__customer_funding_source_vaults.sql",
+        "line": 10,
+        "bucket": "other",
+        "message": "ORDER BY in a model without LIMIT.",
+        "snippet": "QUALIFY ROW_NUMBER() OVER (PARTITION BY participant_id, funding_source_id ORDER BY littlepay_export_ts DESC) = 1"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/payments/int_payments__dim_product_data.sql",
+        "line": 28,
+        "bucket": "other",
+        "message": "ORDER BY in a model without LIMIT.",
+        "snippet": "COALESCE(LAG(last_seen) OVER(PARTITION BY participant_id, product_id ORDER BY last_seen ASC), TIMESTAMP('2020-01-01')) as _valid_from,"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/payments/int_payments__latest_authorisations_by_aggregation.sql",
+        "line": 18,
+        "bucket": "other",
+        "message": "ORDER BY in a model without LIMIT.",
+        "snippet": "QUALIFY ROW_NUMBER() OVER(PARTITION BY aggregation_id ORDER BY authorisation_date_time_utc DESC) = 1"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/payments/int_payments__matched_device_transactions.sql",
+        "line": 23,
+        "bucket": "other",
+        "message": "ORDER BY in a model without LIMIT.",
+        "snippet": "ROW_NUMBER() OVER(PARTITION BY micropayment_id ORDER BY transaction_date_time_utc) AS row_num"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/payments/int_payments__refunds_deduped.sql",
+        "line": 124,
+        "bucket": "other",
+        "message": "ORDER BY in a model without LIMIT.",
+        "snippet": "QUALIFY DENSE_RANK() OVER (PARTITION BY refund_id ORDER BY littlepay_export_ts DESC) = 1"
+      }
+    ]
+  },
+  "SQLCOST008": {
+    "pass": true,
+    "pass_reason": "tp>=20_with_residual_fp",
+    "tp": 454,
+    "fp": 0,
+    "unknown": 6,
+    "total": 460,
+    "examples": [
+      {
+        "repo": "spellbook",
+        "path": "dbt_macros/shared/balancer/balancer_transfers_bpt_macro.sql",
+        "line": 8,
+        "bucket": "blind_distinct",
+        "message": "SELECT DISTINCT detected.",
+        "snippet": "SELECT"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/macros/project/chainlink/chainlink_ccip_macro.sql",
+        "line": 7,
+        "bucket": "blind_distinct",
+        "message": "SELECT DISTINCT detected.",
+        "snippet": "SELECT DISTINCT"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/macros/project/oneinch/project/oneinch_project_orders_macro.sql",
+        "line": 245,
+        "bucket": "blind_distinct",
+        "message": "SELECT DISTINCT detected.",
+        "snippet": "select"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/macros/project/tesseract/tesseract_ictt_contracts.sql",
+        "line": 15,
+        "bucket": "blind_distinct",
+        "message": "SELECT DISTINCT detected.",
+        "snippet": "SELECT"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/macros/sector/fungible/balances_fungible_noncompliant.sql",
+        "line": 2,
+        "bucket": "blind_distinct",
+        "message": "SELECT DISTINCT detected.",
+        "snippet": "SELECT"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/arbitrum/balancer_v2_arbitrum_transfers_bpt.sql",
+        "line": 1,
+        "bucket": "blind_distinct",
+        "message": "SELECT DISTINCT detected.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/arbitrum/balancer_v3_arbitrum_transfers_bpt.sql",
+        "line": 1,
+        "bucket": "blind_distinct",
+        "message": "SELECT DISTINCT detected.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/avalanche_c/balancer_v2_avalanche_c_transfers_bpt.sql",
+        "line": 1,
+        "bucket": "blind_distinct",
+        "message": "SELECT DISTINCT detected.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/avalanche_c/balancer_v3_avalanche_c_transfers_bpt.sql",
+        "line": 1,
+        "bucket": "blind_distinct",
+        "message": "SELECT DISTINCT detected.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/base/balancer_v2_base_transfers_bpt.sql",
+        "line": 1,
+        "bucket": "blind_distinct",
+        "message": "SELECT DISTINCT detected.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/base/balancer_v3_base_transfers_bpt.sql",
+        "line": 1,
+        "bucket": "blind_distinct",
+        "message": "SELECT DISTINCT detected.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/ethereum/balancer_v2_ethereum_transfers_bpt.sql",
+        "line": 1,
+        "bucket": "blind_distinct",
+        "message": "SELECT DISTINCT detected.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/ethereum/balancer_v3_ethereum_transfers_bpt.sql",
+        "line": 1,
+        "bucket": "blind_distinct",
+        "message": "SELECT DISTINCT detected.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/gnosis/balancer_v2_gnosis_transfers_bpt.sql",
+        "line": 1,
+        "bucket": "blind_distinct",
+        "message": "SELECT DISTINCT detected.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/gnosis/balancer_v3_gnosis_transfers_bpt.sql",
+        "line": 1,
+        "bucket": "blind_distinct",
+        "message": "SELECT DISTINCT detected.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/hyperevm/balancer_v3_hyperevm_transfers_bpt.sql",
+        "line": 1,
+        "bucket": "blind_distinct",
+        "message": "SELECT DISTINCT detected.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/monad/balancer_v3_monad_transfers_bpt.sql",
+        "line": 1,
+        "bucket": "blind_distinct",
+        "message": "SELECT DISTINCT detected.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/optimism/balancer_v2_optimism_transfers_bpt.sql",
+        "line": 1,
+        "bucket": "blind_distinct",
+        "message": "SELECT DISTINCT detected.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/plasma/balancer_v3_plasma_transfers_bpt.sql",
+        "line": 1,
+        "bucket": "blind_distinct",
+        "message": "SELECT DISTINCT detected.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/polygon/balancer_v2_polygon_transfers_bpt.sql",
+        "line": 1,
+        "bucket": "blind_distinct",
+        "message": "SELECT DISTINCT detected.",
+        "snippet": ""
+      }
+    ]
+  },
+  "SQLCOST009": {
+    "pass": true,
+    "pass_reason": "vacuous_clean",
+    "tp": 0,
+    "fp": 0,
+    "unknown": 0,
+    "total": 0,
+    "examples": []
+  },
+  "SQLCOST010": {
+    "pass": true,
+    "pass_reason": "vacuous_clean",
+    "tp": 0,
+    "fp": 0,
+    "unknown": 0,
+    "total": 0,
+    "examples": []
+  },
+  "SQLCOST011": {
+    "pass": true,
+    "pass_reason": "vacuous_clean",
+    "tp": 0,
+    "fp": 0,
+    "unknown": 0,
+    "total": 0,
+    "examples": []
+  },
+  "SQLCOST012": {
+    "pass": true,
+    "pass_reason": "tp>=20_with_residual_fp",
+    "tp": 20,
+    "fp": 20,
+    "unknown": 0,
+    "total": 40,
+    "examples": [
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/macros/project/tesseract/tesseract_ictt_contracts.sql",
+        "line": 20,
+        "bucket": "cross_join_explicit",
+        "message": "Cross join detected without an explicit allow comment.",
+        "snippet": "CROSS JOIN current_chain_id c"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/macros/project/tesseract/tesseract_ictt_pairs.sql",
+        "line": 23,
+        "bucket": "cross_join_explicit",
+        "message": "Cross join detected without an explicit allow comment.",
+        "snippet": "CROSS JOIN {{ source(blockchain, 'logs') }} l"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/kalshi/kalshi_ohlcv_hourly.sql",
+        "line": 1,
+        "bucket": "cross_join_explicit",
+        "message": "Cross join detected without an explicit allow comment.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/polymarket/polygon/polymarket_polygon_ohlcv_hourly.sql",
+        "line": 1,
+        "bucket": "cross_join_explicit",
+        "message": "Cross join detected without an explicit allow comment.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/tesseract/avalanche_c/tesseract_avalanche_c_ictt_pairs.sql",
+        "line": 1,
+        "bucket": "cross_join_explicit",
+        "message": "Cross join detected without an explicit allow comment.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/tesseract/avalanche_c/tesseract_avalanche_c_ictt_pairs.sql",
+        "line": 1,
+        "bucket": "cross_join_explicit",
+        "message": "Cross join detected without an explicit allow comment.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/macros/models/_project/angstrom/angstrom_composable_trades.sql",
+        "line": 38,
+        "bucket": "cross_join_explicit",
+        "message": "Cross join detected without an explicit allow comment.",
+        "snippet": "CROSS JOIN LATERAL ({{ angstrom_composable_protocol_fee_calc('p.protocol_unlocked_fee', 'p.zero_for_one', 'p.amount_specified', 'p.token_amount0', 'p.token_amount1') }}) AS f"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/macros/models/_project/angstrom/bundle_orders/angstrom_bundle_user_order_volume.sql",
+        "line": 46,
+        "bucket": "cross_join_explicit",
+        "message": "Cross join detected without an explicit allow comment.",
+        "snippet": "CROSS JOIN LATERAL ({{ angstrom_user_order_fill_amount('u.zero_for_one', 'u.exact_in', 'u.fill_amount', 'u.extra_fee_asset0', 'u.bundle_fee', 'u.price_1over0') }}) AS a"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/macros/models/_project/angstrom/utils/angstrom_indexes_to_assets.sql",
+        "line": 56,
+        "bucket": "cross_join_explicit",
+        "message": "Cross join detected without an explicit allow comment.",
+        "snippet": "CROSS JOIN _asset_out o"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/macros/models/_project/angstrom/utils/angstrom_pool_info.sql",
+        "line": 68,
+        "bucket": "cross_join_explicit",
+        "message": "Cross join detected without an explicit allow comment.",
+        "snippet": "CROSS JOIN topic_pairs tp"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/macros/project/tapio/tapio_liquidity_macro.sql",
+        "line": 239,
+        "bucket": "cross_join_explicit",
+        "message": "Cross join detected without an explicit allow comment.",
+        "snippet": "CROSS JOIN pool_tokens_list pt"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/tokens/macros/transfers_from_traces/transfers_from_traces_base_macro.sql",
+        "line": 63,
+        "bucket": "comma_join",
+        "message": "Cross join detected without an explicit allow comment.",
+        "snippet": ", cast(tx_hash as varchar)"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs_quality/guidelines_checks/int_gtfs_quality__trip_id_alignment.sql",
+        "line": 47,
+        "bucket": "cross_join_explicit",
+        "message": "Cross join detected without an explicit allow comment.",
+        "snippet": "CROSS JOIN check_start"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs_quality/int_gtfs_quality__guideline_checks_index.sql",
+        "line": 82,
+        "bucket": "cross_join_explicit",
+        "message": "Cross join detected without an explicit allow comment.",
+        "snippet": "CROSS JOIN checks"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_quality/fct_daily_rt_feed_validation_notices.sql",
+        "line": 37,
+        "bucket": "cross_join_explicit",
+        "message": "Cross join detected without an explicit allow comment.",
+        "snippet": "CROSS JOIN {{ ref('stg_gtfs_quality__rt_validation_code_descriptions') }} AS codes"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_quality/fct_monthly_reports_site_organization_file_checks.sql",
+        "line": 80,
+        "bucket": "cross_join_explicit",
+        "message": "Cross join detected without an explicit allow comment.",
+        "snippet": "CROSS JOIN files_of_interest"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/staging/ntd_validation/stg_ntd_a10.sql",
+        "line": 17,
+        "bucket": "comma_join",
+        "message": "Cross join detected without an explicit allow comment.",
+        "snippet": "FROM {{ source('ntd_report_validation', 'all_ntdreports') }},"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/staging/ntd_validation/stg_ntd_a30_assetandresourceinfo.sql",
+        "line": 26,
+        "bucket": "comma_join",
+        "message": "Cross join detected without an explicit allow comment.",
+        "snippet": "FROM {{ source('ntd_report_validation', 'all_ntdreports') }},"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/staging/ntd_validation/stg_ntd_rr20_rural.sql",
+        "line": 22,
+        "bucket": "comma_join",
+        "message": "Cross join detected without an explicit allow comment.",
+        "snippet": "FROM {{ source('ntd_report_validation', 'all_ntdreports') }},"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/staging/ntd_validation/stg_ntd_rr20_urban_tribal.sql",
+        "line": 14,
+        "bucket": "comma_join",
+        "message": "Cross join detected without an explicit allow comment.",
+        "snippet": "FROM {{ source('ntd_report_validation', 'all_ntdreports') }},"
+      }
+    ]
+  },
+  "SQLCOST013": {
+    "pass": true,
+    "pass_reason": "tp>=20",
+    "tp": 223,
+    "fp": 0,
+    "unknown": 0,
+    "total": 223,
+    "examples": [
+      {
+        "repo": "spellbook",
+        "path": "dbt_macros/shared/balancer/balancer_bpt_prices_macro.sql",
+        "line": 418,
+        "bucket": "other",
+        "message": "Window function has no PARTITION BY.",
+        "snippet": "ROW_NUMBER() OVER (ORDER BY evt_block_time DESC) AS rn"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_macros/shared/balancer/balancer_liquidity_macro.sql",
+        "line": 403,
+        "bucket": "other",
+        "message": "Window function has no PARTITION BY.",
+        "snippet": "ROW_NUMBER() OVER (ORDER BY evt_block_time DESC) AS rn"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_macros/shared/balancer/balancer_token_balance_changes_macro.sql",
+        "line": 210,
+        "bucket": "other",
+        "message": "Window function has no PARTITION BY.",
+        "snippet": "ROW_NUMBER() OVER (ORDER BY evt_block_time DESC) AS rn"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/balances/arbitrum/balancer_v3_arbitrum_token_balance_changes.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function has no PARTITION BY.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/balances/avalanche_c/balancer_v3_avalanche_c_token_balance_changes.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function has no PARTITION BY.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/balances/base/balancer_v3_base_token_balance_changes.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function has no PARTITION BY.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/balances/ethereum/balancer_v3_ethereum_token_balance_changes.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function has no PARTITION BY.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/balances/gnosis/balancer_v3_gnosis_token_balance_changes.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function has no PARTITION BY.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/balances/hyperevm/balancer_v3_hyperevm_token_balance_changes.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function has no PARTITION BY.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/balances/monad/balancer_v3_monad_token_balance_changes.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function has no PARTITION BY.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/balances/plasma/balancer_v3_plasma_token_balance_changes.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function has no PARTITION BY.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/arbitrum/balancer_v3_arbitrum_bpt_prices.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function has no PARTITION BY.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/avalanche_c/balancer_v3_avalanche_c_bpt_prices.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function has no PARTITION BY.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/base/balancer_v3_base_bpt_prices.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function has no PARTITION BY.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/ethereum/balancer_v3_ethereum_bpt_prices.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function has no PARTITION BY.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/gnosis/balancer_v3_gnosis_bpt_prices.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function has no PARTITION BY.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/hyperevm/balancer_v3_hyperevm_bpt_prices.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function has no PARTITION BY.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/monad/balancer_v3_monad_bpt_prices.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function has no PARTITION BY.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/plasma/balancer_v3_plasma_bpt_prices.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function has no PARTITION BY.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/liquidity/arbitrum/balancer_v3_arbitrum_liquidity.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function has no PARTITION BY.",
+        "snippet": ""
+      }
+    ]
+  },
+  "SQLCOST014": {
+    "pass": true,
+    "pass_reason": "tp>=20_with_residual_fp",
+    "tp": 594,
+    "fp": 18,
+    "unknown": 0,
+    "total": 612,
+    "examples": [
+      {
+        "repo": "spellbook",
+        "path": "dbt_macros/shared/balancer/balancer_bpt_prices_macro.sql",
+        "line": 187,
+        "bucket": "repeated_cte_ref",
+        "message": "CTE is referenced multiple times.",
+        "snippet": "LEFT JOIN pool_labels p ON p.pool_id = BYTEARRAY_SUBSTRING(b.pool_id, 1, 20)"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_macros/shared/balancer/balancer_bpt_supply_macro.sql",
+        "line": 76,
+        "bucket": "repeated_cte_ref",
+        "message": "CTE is referenced multiple times.",
+        "snippet": "FROM pool_labels p"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_macros/shared/balancer/balancer_liquidity_macro.sql",
+        "line": 248,
+        "bucket": "repeated_cte_ref",
+        "message": "CTE is referenced multiple times.",
+        "snippet": "LEFT JOIN pool_labels p ON p.pool_id = BYTEARRAY_SUBSTRING(b.pool_id, 1, 20)"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_macros/shared/balancer/balancer_pool_token_supply_changes_daily_agg_macro.sql",
+        "line": 36,
+        "bucket": "repeated_cte_ref",
+        "message": "CTE is referenced multiple times.",
+        "snippet": "LEFT JOIN daily_balance b ON b.block_date = c.day"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_macros/shared/balancer/balancer_pool_token_supply_changes_macro.sql",
+        "line": 41,
+        "bucket": "repeated_cte_ref",
+        "message": "CTE is referenced multiple times.",
+        "snippet": "LEFT JOIN pool_labels l ON t.contract_address = l.address"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_macros/shared/balancer/balancer_protocol_fee_macro.sql",
+        "line": 189,
+        "bucket": "repeated_cte_ref",
+        "message": "CTE is referenced multiple times.",
+        "snippet": "LEFT JOIN pool_labels l"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_macros/shared/balancer/balancer_token_balance_changes_daily_agg_macro.sql",
+        "line": 13,
+        "bucket": "repeated_cte_ref",
+        "message": "CTE is referenced multiple times.",
+        "snippet": "FROM {{ source('prices', 'usd') }}"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_macros/shared/balancer/balancer_token_balance_changes_macro.sql",
+        "line": 166,
+        "bucket": "repeated_cte_ref",
+        "message": "CTE is referenced multiple times.",
+        "snippet": "LEFT JOIN pool_labels p ON p.pool_id = BYTEARRAY_SUBSTRING(b.pool_id, 1, 20)"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_macros/shared/balancer/balancer_transfers_bpt_macro.sql",
+        "line": 29,
+        "bucket": "repeated_cte_ref",
+        "message": "CTE is referenced multiple times.",
+        "snippet": "INNER JOIN registered_pools p ON p.pool_address = transfer.contract_address"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_macros/shared/balances_incremental_subset_daily.sql",
+        "line": 79,
+        "bucket": "repeated_cte_ref",
+        "message": "CTE is referenced multiple times.",
+        "snippet": "from filtered_daily_agg_balances"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_metrics/dune_index/metrics_dune_index_stats.sql",
+        "line": 1,
+        "bucket": "repeated_cte_ref",
+        "message": "CTE is referenced multiple times.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_metrics/fees/metrics_gas_fees_stats.sql",
+        "line": 1,
+        "bucket": "repeated_cte_ref",
+        "message": "CTE is referenced multiple times.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_metrics/transactions/metrics_transactions_stats.sql",
+        "line": 1,
+        "bucket": "repeated_cte_ref",
+        "message": "CTE is referenced multiple times.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_metrics/transfers/metrics_transfers_stats.sql",
+        "line": 1,
+        "bucket": "repeated_cte_ref",
+        "message": "CTE is referenced multiple times.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/arbitrum/balancer_v2_arbitrum_bpt_prices.sql",
+        "line": 1,
+        "bucket": "repeated_cte_ref",
+        "message": "CTE is referenced multiple times.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/arbitrum/balancer_v2_arbitrum_bpt_supply.sql",
+        "line": 1,
+        "bucket": "repeated_cte_ref",
+        "message": "CTE is referenced multiple times.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/arbitrum/balancer_v2_arbitrum_bpt_supply_changes.sql",
+        "line": 1,
+        "bucket": "repeated_cte_ref",
+        "message": "CTE is referenced multiple times.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/arbitrum/balancer_v3_arbitrum_bpt_prices.sql",
+        "line": 1,
+        "bucket": "repeated_cte_ref",
+        "message": "CTE is referenced multiple times.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/arbitrum/balancer_v3_arbitrum_bpt_supply.sql",
+        "line": 1,
+        "bucket": "repeated_cte_ref",
+        "message": "CTE is referenced multiple times.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/arbitrum/balancer_v3_arbitrum_bpt_supply_changes.sql",
+        "line": 1,
+        "bucket": "repeated_cte_ref",
+        "message": "CTE is referenced multiple times.",
+        "snippet": ""
+      }
+    ]
+  },
+  "SQLCOST015": {
+    "pass": true,
+    "pass_reason": "tp>=20_with_residual_fp",
+    "tp": 338,
+    "fp": 0,
+    "unknown": 8,
+    "total": 346,
+    "examples": [
+      {
+        "repo": "spellbook",
+        "path": "dbt_macros/shared/balancer/balancer_bpt_prices_macro.sql",
+        "line": 377,
+        "bucket": "json_expression",
+        "message": "Expensive expression appears in multiple files.",
+        "snippet": "ARRAY_AGG(FROM_HEX(json_extract_scalar(token, '$.token')) ORDER BY token_index) AS tokens"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_macros/shared/balancer/balancer_liquidity_macro.sql",
+        "line": 314,
+        "bucket": "json_expression",
+        "message": "Expensive expression appears in multiple files.",
+        "snippet": "ARRAY_AGG(FROM_HEX(json_extract_scalar(token, '$.token')) ORDER BY token_index) AS tokens"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_macros/shared/balancer/balancer_token_balance_changes_macro.sql",
+        "line": 194,
+        "bucket": "json_expression",
+        "message": "Expensive expression appears in multiple files.",
+        "snippet": "ARRAY_AGG(FROM_HEX(json_extract_scalar(token, '$.token')) ORDER BY token_index) AS tokens"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_blockchains/near/near_bridge_omni.sql",
+        "line": 183,
+        "bucket": "json_expression",
+        "message": "Expensive expression appears in multiple files.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_blockchains/near/near_fact_intents.sql",
+        "line": 108,
+        "bucket": "json_expression",
+        "message": "Expensive expression appears in multiple files.",
+        "snippet": "PARTITION BY receipt_id"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/pools/arbitrum/balancer_v3_arbitrum_pools_tokens_weights.sql",
+        "line": 18,
+        "bucket": "json_expression",
+        "message": "Expensive expression appears in multiple files.",
+        "snippet": "GROUP BY 1"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/pools/avalanche_c/balancer_v3_avalanche_c_pools_tokens_weights.sql",
+        "line": 18,
+        "bucket": "json_expression",
+        "message": "Expensive expression appears in multiple files.",
+        "snippet": "GROUP BY 1"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/pools/base/balancer_v3_base_pools_tokens_weights.sql",
+        "line": 18,
+        "bucket": "json_expression",
+        "message": "Expensive expression appears in multiple files.",
+        "snippet": "GROUP BY 1"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/pools/ethereum/balancer_v3_ethereum_pools_tokens_weights.sql",
+        "line": 18,
+        "bucket": "json_expression",
+        "message": "Expensive expression appears in multiple files.",
+        "snippet": "GROUP BY 1"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/pools/gnosis/balancer_v3_gnosis_pools_tokens_weights.sql",
+        "line": 18,
+        "bucket": "json_expression",
+        "message": "Expensive expression appears in multiple files.",
+        "snippet": "GROUP BY 1"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/pools/hyperevm/balancer_v3_hyperevm_pools_tokens_weights.sql",
+        "line": 18,
+        "bucket": "json_expression",
+        "message": "Expensive expression appears in multiple files.",
+        "snippet": "GROUP BY 1"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/pools/monad/balancer_v3_monad_pools_tokens_weights.sql",
+        "line": 19,
+        "bucket": "json_expression",
+        "message": "Expensive expression appears in multiple files.",
+        "snippet": ") AS pool_data"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/pools/plasma/balancer_v3_plasma_pools_tokens_weights.sql",
+        "line": 19,
+        "bucket": "json_expression",
+        "message": "Expensive expression appears in multiple files.",
+        "snippet": ") AS pool_data"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_sector/labels/addresses/__single_category_labels__/beets/labels_beets_pools_sonic.sql",
+        "line": 114,
+        "bucket": "json_expression",
+        "message": "Expensive expression appears in multiple files.",
+        "snippet": "pool,"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_sector/labels/addresses/bridge/identifiers/labels_bridges_arbitrum.sql",
+        "line": 17,
+        "bucket": "other",
+        "message": "Expensive expression appears in multiple files.",
+        "snippet": "('arbitrum', 0x3c2269811836af69497e5f486a85d7316753cf62, 'LayerZero: Arbitrum Endpoint', 'bridge', 'rantum', 'static', DATE '2023-11-15', now(), 'bridges_arbitrum', 'identifier'),"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_sector/labels/addresses/bridge/identifiers/labels_bridges_bnb.sql",
+        "line": 37,
+        "bucket": "other",
+        "message": "Expensive expression appears in multiple files.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_sector/labels/addresses/bridge/identifiers/labels_bridges_ethereum.sql",
+        "line": 20,
+        "bucket": "other",
+        "message": "Expensive expression appears in multiple files.",
+        "snippet": ", ('ethereum', 0xc840838bc438d73c16c2f8b22d2ce3669963cd48, 'Arbitrum Nova: L1 Gateway Router', 'bridge', 'hildobby', 'static', DATE '2022-09-22' , now(), 'bridges_ethereum', 'identifier')"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_sector/labels/addresses/bridge/identifiers/labels_bridges_fantom.sql",
+        "line": 10,
+        "bucket": "other",
+        "message": "Expensive expression appears in multiple files.",
+        "snippet": ", ('fantom', 0x7ab4c5738e39e613186affd4c50dbfdff6c22065, 'DEUS Finance: Bridge', 'bridge', 'Henrystats', 'static', DATE '2023-01-27' , now(), 'bridges_fantom', 'identifier')"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_sector/labels/addresses/bridge/identifiers/labels_bridges_polygon.sql",
+        "line": 9,
+        "bucket": "other",
+        "message": "Expensive expression appears in multiple files.",
+        "snippet": "('polygon', 0xdEF78a28c78A461598d948bc0c689ce88f812AD8, 'Cerby: Bridge Fees Wallet', 'bridge', 'rantum', 'static', DATE '2023-11-15', now(), 'bridges_polygon', 'identifier'),"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/beets/sonic/beets_pools_tokens_weights.sql",
+        "line": 59,
+        "bucket": "json_expression",
+        "message": "Expensive expression appears in multiple files.",
+        "snippet": "SELECT"
+      }
+    ]
+  },
+  "SQLCOST016": {
+    "pass": true,
+    "pass_reason": "vacuous_clean",
+    "tp": 0,
+    "fp": 0,
+    "unknown": 0,
+    "total": 0,
+    "examples": []
+  },
+  "SQLCOST017": {
+    "pass": true,
+    "pass_reason": "clean",
+    "tp": 3,
+    "fp": 0,
+    "unknown": 0,
+    "total": 3,
+    "examples": [
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/stablecoins/stablecoins_multichain_tokens.sql",
+        "line": 1,
+        "bucket": "cast_on_key",
+        "message": "Join equality uses a function-wrapped key.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/sui/tvl/dex/sui_tvl_dex_pools_silver.sql",
+        "line": 1,
+        "bucket": "cast_on_key",
+        "message": "Join equality uses a function-wrapped key.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/sui/tvl/dex/sui_tvl_dex_pools_silver.sql",
+        "line": 1,
+        "bucket": "cast_on_key",
+        "message": "Join equality uses a function-wrapped key.",
+        "snippet": ""
+      }
+    ]
+  },
+  "SQLCOST018": {
+    "pass": true,
+    "pass_reason": "tp>=20",
+    "tp": 378,
+    "fp": 0,
+    "unknown": 0,
+    "total": 378,
+    "examples": [
+      {
+        "repo": "spellbook",
+        "path": "dbt_macros/shared/balancer/balancer_bpt_prices_macro.sql",
+        "line": 298,
+        "bucket": "union_without_all",
+        "message": "Plain UNION detected; UNION ALL is usually cheaper for dbt model stacking.",
+        "snippet": "UNION"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/macros/project/limitbreak/creator_tokens/creator_tokens_inspect_contracts.sql",
+        "line": 66,
+        "bucket": "union_without_all",
+        "message": "Plain UNION detected; UNION ALL is usually cheaper for dbt model stacking.",
+        "snippet": "UNION"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/macros/project/limitbreak/creator_tokens/creator_tokens_inspect_contracts_zkevm.sql",
+        "line": 150,
+        "bucket": "union_without_all",
+        "message": "Plain UNION detected; UNION ALL is usually cheaper for dbt model stacking.",
+        "snippet": "UNION"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/macros/sector/addresses/addresses_stg_transfers_daily.sql",
+        "line": 66,
+        "bucket": "union_without_all",
+        "message": "Plain UNION detected; UNION ALL is usually cheaper for dbt model stacking.",
+        "snippet": "{# Union received + sent daily staging and aggregate to same grain. No read from transfers. Incremental: filter by block_date when merging. #}"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/macros/sector/addresses_stats/addresses_stats.sql",
+        "line": 28,
+        "bucket": "union_without_all",
+        "message": "Plain UNION detected; UNION ALL is usually cheaper for dbt model stacking.",
+        "snippet": "union"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/macros/sector/alm/arrakis_compatible_trades.sql",
+        "line": 121,
+        "bucket": "union_without_all",
+        "message": "Plain UNION detected; UNION ALL is usually cheaper for dbt model stacking.",
+        "snippet": "UNION DISTINCT"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/macros/sector/contracts/contracts_base_iterated_creators.sql",
+        "line": 114,
+        "bucket": "union_without_all",
+        "message": "Plain UNION detected; UNION ALL is usually cheaper for dbt model stacking.",
+        "snippet": "UNION --this was faster than union all'ing distincts"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/arbitrum/balancer_v2_arbitrum_bpt_prices.sql",
+        "line": 1,
+        "bucket": "union_without_all",
+        "message": "Plain UNION detected; UNION ALL is usually cheaper for dbt model stacking.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/avalanche_c/balancer_v2_avalanche_c_bpt_prices.sql",
+        "line": 1,
+        "bucket": "union_without_all",
+        "message": "Plain UNION detected; UNION ALL is usually cheaper for dbt model stacking.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/base/balancer_v2_base_bpt_prices.sql",
+        "line": 1,
+        "bucket": "union_without_all",
+        "message": "Plain UNION detected; UNION ALL is usually cheaper for dbt model stacking.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/ethereum/balancer_v2_ethereum_bpt_prices.sql",
+        "line": 1,
+        "bucket": "union_without_all",
+        "message": "Plain UNION detected; UNION ALL is usually cheaper for dbt model stacking.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/gnosis/balancer_v2_gnosis_bpt_prices.sql",
+        "line": 1,
+        "bucket": "union_without_all",
+        "message": "Plain UNION detected; UNION ALL is usually cheaper for dbt model stacking.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/optimism/balancer_v2_optimism_bpt_prices.sql",
+        "line": 1,
+        "bucket": "union_without_all",
+        "message": "Plain UNION detected; UNION ALL is usually cheaper for dbt model stacking.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/polygon/balancer_v2_polygon_bpt_prices.sql",
+        "line": 1,
+        "bucket": "union_without_all",
+        "message": "Plain UNION detected; UNION ALL is usually cheaper for dbt model stacking.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/zkevm/balancer_v2_zkevm_bpt_prices.sql",
+        "line": 1,
+        "bucket": "union_without_all",
+        "message": "Plain UNION detected; UNION ALL is usually cheaper for dbt model stacking.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/erc4626_tokens/base/balancer_v3_base_erc4626_token_mapping.sql",
+        "line": 1,
+        "bucket": "union_without_all",
+        "message": "Plain UNION detected; UNION ALL is usually cheaper for dbt model stacking.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/erc4626_tokens/ethereum/balancer_v3_ethereum_erc4626_token_mapping.sql",
+        "line": 1,
+        "bucket": "union_without_all",
+        "message": "Plain UNION detected; UNION ALL is usually cheaper for dbt model stacking.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/eigenlayer/ethereum/eigenlayer_ethereum_underlying_token_exchange_rate.sql",
+        "line": 22,
+        "bucket": "union_without_all",
+        "message": "Plain UNION detected; UNION ALL is usually cheaper for dbt model stacking.",
+        "snippet": ")"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/polymarket/polygon/polymarket_polygon_positions_balances_repro.sql",
+        "line": 143,
+        "bucket": "other",
+        "message": "Plain UNION detected; UNION ALL is usually cheaper for dbt model stacking.",
+        "snippet": "or (balance_raw = uint256 '0' and last_updated = day)"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/polymarket/polygon/polymarket_polygon_users_proxies.sql",
+        "line": 12,
+        "bucket": "other",
+        "message": "Plain UNION detected; UNION ALL is usually cheaper for dbt model stacking.",
+        "snippet": "select"
+      }
+    ]
+  },
+  "SQLCOST019": {
+    "pass": true,
+    "pass_reason": "tp>=20",
+    "tp": 67,
+    "fp": 0,
+    "unknown": 0,
+    "total": 67,
+    "examples": [
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/pools/arbitrum/balancer_v3_arbitrum_pools_tokens_weights.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model reads source() before applying a partition or date predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/pools/avalanche_c/balancer_v3_avalanche_c_pools_tokens_weights.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model reads source() before applying a partition or date predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/pools/base/balancer_v3_base_pools_tokens_weights.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model reads source() before applying a partition or date predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/pools/ethereum/balancer_v3_ethereum_pools_tokens_weights.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model reads source() before applying a partition or date predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/pools/gnosis/balancer_v3_gnosis_pools_tokens_weights.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model reads source() before applying a partition or date predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/pools/hyperevm/balancer_v3_hyperevm_pools_tokens_weights.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model reads source() before applying a partition or date predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/kalshi/kalshi_market_details.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model reads source() before applying a partition or date predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_sector/dex/pools/optimism/dex_pools_optimism_balances.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model reads source() before applying a partition or date predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/addresses_summary/addresses_summary_op_mainnet.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model reads source() before applying a partition or date predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/aztec/ethereum/aztec_v2_ethereum_rollupbridge_transfers.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model reads source() before applying a partition or date predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/beets/sonic/beets_pools_tokens_weights.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model reads source() before applying a partition or date predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/arbitrum/chainlink_arbitrum_ccip_nop_reward_daily.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model reads source() before applying a partition or date predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/avalanche_c/chainlink_avalanche_c_ccip_nop_reward_daily.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model reads source() before applying a partition or date predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/base/chainlink_base_ccip_nop_reward_daily.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model reads source() before applying a partition or date predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/bnb/chainlink_bnb_ccip_nop_reward_daily.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model reads source() before applying a partition or date predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/ethereum/chainlink_ethereum_ccip_nop_reward_daily.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model reads source() before applying a partition or date predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/optimism/chainlink_optimism_ccip_nop_reward_daily.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model reads source() before applying a partition or date predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/polygon/chainlink_polygon_ccip_nop_reward_daily.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model reads source() before applying a partition or date predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/sui/dex_sui_pool_map.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model reads source() before applying a partition or date predicate.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/sui/platforms/bluemove_sui_base_trades.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model reads source() before applying a partition or date predicate.",
+        "snippet": ""
+      }
+    ]
+  },
+  "SQLCOST020": {
+    "pass": true,
+    "pass_reason": "tp>=20",
+    "tp": 22,
+    "fp": 0,
+    "unknown": 0,
+    "total": 22,
+    "examples": [
+      {
+        "repo": "jaffle-shop",
+        "path": "models/marts/customers.sql",
+        "line": 1,
+        "bucket": "count_distinct",
+        "message": "Exact COUNT(DISTINCT ...) detected.",
+        "snippet": "with"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_schedule__stop_times_grouped.sql",
+        "line": 92,
+        "bucket": "count_distinct",
+        "message": "Exact COUNT(DISTINCT ...) detected.",
+        "snippet": "COUNT(DISTINCT stop_id) AS num_distinct_stops_served,"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs_quality/guidelines_checks/int_gtfs_quality__scheduled_trips_in_tu_feed.sql",
+        "line": 28,
+        "bucket": "count_distinct",
+        "message": "Exact COUNT(DISTINCT ...) detected.",
+        "snippet": "COUNT(DISTINCT scheduled_trips.trip_id) AS scheduled_trips,"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs_quality/guidelines_checks/int_gtfs_quality__scheduled_trips_in_tu_feed.sql",
+        "line": 29,
+        "bucket": "count_distinct",
+        "message": "Exact COUNT(DISTINCT ...) detected.",
+        "snippet": "COUNT(DISTINCT observed_trips.trip_id) AS observed_trips,"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/ntd_validation/int_ntd_a30_voms_vins_totals.sql",
+        "line": 16,
+        "bucket": "count_distinct",
+        "message": "Exact COUNT(DISTINCT ...) detected.",
+        "snippet": "COUNT(DISTINCT VIN) as a30_vin_n"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/payments/int_payments__authorisations_deduped.sql",
+        "line": 19,
+        "bucket": "count_distinct",
+        "message": "Exact COUNT(DISTINCT ...) detected.",
+        "snippet": "COUNT(DISTINCT _key) > 1 AS is_dup,"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/payments/int_payments__micropayments_to_aggregations.sql",
+        "line": 39,
+        "bucket": "count_distinct",
+        "message": "Exact COUNT(DISTINCT ...) detected.",
+        "snippet": "COUNT(DISTINCT micropayment_id) AS num_micropayments,"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs/fct_daily_feed_scheduled_service_summary.sql",
+        "line": 38,
+        "bucket": "count_distinct",
+        "message": "Exact COUNT(DISTINCT ...) detected.",
+        "snippet": "COUNT(DISTINCT trip_id) AS n_trips,"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs/fct_daily_rt_service_summary.sql",
+        "line": 35,
+        "bucket": "count_distinct",
+        "message": "Exact COUNT(DISTINCT ...) detected.",
+        "snippet": "COUNT(DISTINCT IF(appeared_in_tu IS TRUE, route_id, NULL)) AS n_tu_routes,"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs/fct_daily_schedule_rt_route_direction_summary.sql",
+        "line": 53,
+        "bucket": "count_distinct",
+        "message": "Exact COUNT(DISTINCT ...) detected.",
+        "snippet": "COUNT(DISTINCT trip_instance_key) AS n_trips,"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs/fct_daily_scheduled_shapes.sql",
+        "line": 31,
+        "bucket": "count_distinct",
+        "message": "Exact COUNT(DISTINCT ...) detected.",
+        "snippet": "COUNT(DISTINCT trip_key) AS n_trips,"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs/fct_daily_scheduled_stops.sql",
+        "line": 90,
+        "bucket": "count_distinct",
+        "message": "Exact COUNT(DISTINCT ...) detected.",
+        "snippet": "COUNT(DISTINCT arrival_hour) AS n_hours_in_service,"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs/fct_trip_updates_stop_metrics.sql",
+        "line": 50,
+        "bucket": "count_distinct",
+        "message": "Exact COUNT(DISTINCT ...) detected.",
+        "snippet": "COUNT(DISTINCT trip_key) AS n_tu_trips,"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs/fct_trip_updates_trip_metrics.sql",
+        "line": 46,
+        "bucket": "count_distinct",
+        "message": "Exact COUNT(DISTINCT ...) detected.",
+        "snippet": "COUNT(DISTINCT key) AS n_tu_stops,"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_quality/fct_daily_rt_feed_validation_notices.sql",
+        "line": 22,
+        "bucket": "count_distinct",
+        "message": "Exact COUNT(DISTINCT ...) detected.",
+        "snippet": "COUNT(DISTINCT outcomes.extract_ts) AS validated_extracts,"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_quality/idx_monthly_reports_site.sql",
+        "line": 72,
+        "bucket": "count_distinct",
+        "message": "Exact COUNT(DISTINCT ...) detected.",
+        "snippet": "COUNT(DISTINCT route_id) AS route_ct"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_rollup/fct_monthly_operator_summary.sql",
+        "line": 143,
+        "bucket": "count_distinct",
+        "message": "Exact COUNT(DISTINCT ...) detected.",
+        "snippet": "COUNT(DISTINCT service_date) AS n_days"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_rollup/fct_monthly_schedule_rt_route_direction_summary.sql",
+        "line": 27,
+        "bucket": "count_distinct",
+        "message": "Exact COUNT(DISTINCT ...) detected.",
+        "snippet": "COUNT(DISTINCT route_id) AS n_route_ids,"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_rollup/fct_monthly_scheduled_stops.sql",
+        "line": 51,
+        "bucket": "count_distinct",
+        "message": "Exact COUNT(DISTINCT ...) detected.",
+        "snippet": "ROUND(SUM(daily_arrivals) / COUNT(DISTINCT service_date), 1) AS daily_stop_arrivals,"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_rollup/fct_monthly_scheduled_trips.sql",
+        "line": 42,
+        "bucket": "count_distinct",
+        "message": "Exact COUNT(DISTINCT ...) detected.",
+        "snippet": "COUNT(DISTINCT trip_instance_key) as n_trips,"
+      }
+    ]
+  },
+  "SQLCOST021": {
+    "pass": true,
+    "pass_reason": "vacuous_clean",
+    "tp": 0,
+    "fp": 0,
+    "unknown": 0,
+    "total": 0,
+    "examples": []
+  },
+  "SQLCOST022": {
+    "pass": true,
+    "pass_reason": "vacuous_clean",
+    "tp": 0,
+    "fp": 0,
+    "unknown": 0,
+    "total": 0,
+    "examples": []
+  },
+  "SQLCOST023": {
+    "pass": true,
+    "pass_reason": "infrastructure_na",
+    "tp": 0,
+    "fp": 0,
+    "unknown": 2,
+    "total": 2,
+    "examples": []
+  },
+  "SQLCOST024": {
+    "pass": true,
+    "pass_reason": "infrastructure_na",
+    "tp": 0,
+    "fp": 0,
+    "unknown": 0,
+    "total": 0,
+    "examples": []
+  },
+  "SQLCOST025": {
+    "pass": true,
+    "pass_reason": "infrastructure_na",
+    "tp": 0,
+    "fp": 0,
+    "unknown": 0,
+    "total": 0,
+    "examples": []
+  },
+  "SQLCOST026": {
+    "pass": true,
+    "pass_reason": "infrastructure_na",
+    "tp": 0,
+    "fp": 0,
+    "unknown": 1,
+    "total": 1,
+    "examples": []
+  },
+  "SQLCOST027": {
+    "pass": true,
+    "pass_reason": "infrastructure_na",
+    "tp": 0,
+    "fp": 0,
+    "unknown": 598,
+    "total": 598,
+    "examples": []
+  },
+  "SQLCOST028": {
+    "pass": true,
+    "pass_reason": "tp>=20",
+    "tp": 171,
+    "fp": 0,
+    "unknown": 0,
+    "total": 171,
+    "examples": [
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/benefits/fct_benefits_events.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Mart model has no partition_by or cluster_by configuration.",
+        "snippet": "{{ config(materialized = 'table',"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs/dim_schedule_feeds.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Mart model has no partition_by or cluster_by configuration.",
+        "snippet": "{{ config(materialized='table', event_time='_valid_from') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs/fct_daily_schedule_feeds.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Mart model has no partition_by or cluster_by configuration.",
+        "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs/fct_schedule_feed_downloads.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Mart model has no partition_by or cluster_by configuration.",
+        "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_audit/dim_gtfs_download_configs.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Mart model has no partition_by or cluster_by configuration.",
+        "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_audit/dim_gtfs_schedule_download_outcomes.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Mart model has no partition_by or cluster_by configuration.",
+        "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_audit/dim_gtfs_schedule_file_parse_outcomes.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Mart model has no partition_by or cluster_by configuration.",
+        "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_audit/dim_gtfs_schedule_unzip_outcomes.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Mart model has no partition_by or cluster_by configuration.",
+        "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_audit/dim_gtfs_schedule_validation_notices.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Mart model has no partition_by or cluster_by configuration.",
+        "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_audit/dim_gtfs_schedule_validation_outcomes.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Mart model has no partition_by or cluster_by configuration.",
+        "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_quality/fct_daily_organization_combined_guideline_checks.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Mart model has no partition_by or cluster_by configuration.",
+        "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_quality/fct_daily_reports_site_organization_scheduled_service_summary.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Mart model has no partition_by or cluster_by configuration.",
+        "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_quality/fct_daily_rt_feed_validation_notices.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Mart model has no partition_by or cluster_by configuration.",
+        "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_quality/fct_daily_schedule_feed_validation_notices.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Mart model has no partition_by or cluster_by configuration.",
+        "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_quality/fct_daily_service_combined_guideline_checks.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Mart model has no partition_by or cluster_by configuration.",
+        "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_quality/fct_daily_trip_updates_vehicle_positions_completeness.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Mart model has no partition_by or cluster_by configuration.",
+        "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_quality/fct_implemented_checks.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Mart model has no partition_by or cluster_by configuration.",
+        "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_quality/fct_monthly_reports_site_organization_file_checks.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Mart model has no partition_by or cluster_by configuration.",
+        "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_quality/fct_monthly_reports_site_organization_gtfs_vendors.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Mart model has no partition_by or cluster_by configuration.",
+        "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_quality/fct_monthly_reports_site_organization_guideline_checks.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Mart model has no partition_by or cluster_by configuration.",
+        "snippet": "{{ config(materialized='table') }}"
+      }
+    ]
+  },
+  "SQLCOST029": {
+    "pass": true,
+    "pass_reason": "tp>=20",
+    "tp": 114,
+    "fp": 0,
+    "unknown": 0,
+    "total": 114,
+    "examples": [
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/models/_projects/cow_protocol/arbitrum/cow_protocol_arbitrum_trades.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model uses on_schema_change=sync_all_columns.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/models/_projects/cow_protocol/avalanche_c/cow_protocol_avalanche_c_trades.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model uses on_schema_change=sync_all_columns.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/models/_projects/cow_protocol/base/cow_protocol_base_trades.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model uses on_schema_change=sync_all_columns.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/models/_projects/cow_protocol/bnb/cow_protocol_bnb_trades.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model uses on_schema_change=sync_all_columns.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/models/_projects/cow_protocol/ethereum/cow_protocol_ethereum_trades.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model uses on_schema_change=sync_all_columns.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/models/_projects/cow_protocol/gnosis/cow_protocol_gnosis_trades.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model uses on_schema_change=sync_all_columns.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/models/_projects/cow_protocol/ink/cow_protocol_ink_trades.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model uses on_schema_change=sync_all_columns.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/models/_projects/cow_protocol/lens/cow_protocol_lens_trades.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model uses on_schema_change=sync_all_columns.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/models/_projects/cow_protocol/linea/cow_protocol_linea_trades.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model uses on_schema_change=sync_all_columns.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/models/_projects/cow_protocol/plasma/cow_protocol_plasma_trades.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model uses on_schema_change=sync_all_columns.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/models/_projects/cow_protocol/polygon/cow_protocol_polygon_trades.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model uses on_schema_change=sync_all_columns.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/models/_projects/zeroex/arbitrum/zeroex_arbitrum_api_fills.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model uses on_schema_change=sync_all_columns.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/models/_projects/zeroex/arbitrum/zeroex_arbitrum_api_fills_deduped.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model uses on_schema_change=sync_all_columns.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/models/_projects/zeroex/arbitrum/zeroex_arbitrum_native_fills.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model uses on_schema_change=sync_all_columns.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/models/_projects/zeroex/arbitrum/zeroex_arbitrum_settler_addresses.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model uses on_schema_change=sync_all_columns.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/models/_projects/zeroex/arbitrum/zeroex_v2_arbitrum_settler_txs.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model uses on_schema_change=sync_all_columns.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/models/_projects/zeroex/arbitrum/zeroex_v2_arbitrum_trades.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model uses on_schema_change=sync_all_columns.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/models/_projects/zeroex/avalanche_c/zeroex_avalanche_c_api_fills.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model uses on_schema_change=sync_all_columns.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/models/_projects/zeroex/avalanche_c/zeroex_avalanche_c_api_fills_deduped.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model uses on_schema_change=sync_all_columns.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/models/_projects/zeroex/avalanche_c/zeroex_avalanche_c_settler_addresses.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Incremental model uses on_schema_change=sync_all_columns.",
+        "snippet": ""
+      }
+    ]
+  },
+  "SQLCOST030": {
+    "pass": true,
+    "pass_reason": "clean",
+    "tp": 7,
+    "fp": 0,
+    "unknown": 0,
+    "total": 7,
+    "examples": [
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_project/lido/accounting/ethereum/lido_accounting_ethereum_liquidity_incentives.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Correlated subquery detected.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_project/lido/accounting/ethereum/lido_accounting_ethereum_lox_incentives.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Correlated subquery detected.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_project/lido/accounting/ethereum/lido_accounting_ethereum_operating_expenses.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Correlated subquery detected.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_project/lido/accounting/ethereum/lido_accounting_ethereum_other_expenses.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Correlated subquery detected.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_project/lido/accounting/ethereum/lido_accounting_ethereum_other_income.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Correlated subquery detected.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_project/lido/liquidity/optimism/lido_liquidity_optimism_velodrome_v2_pools.sql",
+        "line": 29,
+        "bucket": "other",
+        "message": "Correlated subquery detected.",
+        "snippet": "where token1 = 0x1F32b1c2345538c0c6f582fCB022739c4A194Ebb"
+      },
+      {
+        "repo": "mattermost-warehouse",
+        "path": "transform/snowflake-dbt/models/blp/enterprise_license_mapping.sql",
+        "line": 54,
+        "bucket": "other",
+        "message": "Correlated subquery detected.",
+        "snippet": "WHERE NOT EXISTS (SELECT 1 FROM {{ source('staging','hist_license_mapping')}} WHERE hist_license_mapping.licenseid = opportunity.license_key__c)"
+      }
+    ]
+  },
+  "SQLCOST031": {
+    "pass": true,
+    "pass_reason": "clean",
+    "tp": 15,
+    "fp": 0,
+    "unknown": 0,
+    "total": 15,
+    "examples": [
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_blockchains/near/near_bridge_omni.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "LIKE predicate starts with a wildcard.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/sui/dex_sui_pool_map.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "LIKE predicate starts with a wildcard.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/sui/tvl/dex/sui_tvl_dex_pools_bluefin_bronze.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "LIKE predicate starts with a wildcard.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/sui/tvl/dex/sui_tvl_dex_pools_cetus_bronze.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "LIKE predicate starts with a wildcard.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/sui/tvl/lending/sui_tvl_lending_pools_gold.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "LIKE predicate starts with a wildcard.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/sui/tvl/lending/sui_tvl_lending_pools_navi_bronze.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "LIKE predicate starts with a wildcard.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/sui/tvl/supply/sui_tvl_supply_bronze.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "LIKE predicate starts with a wildcard.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/solana/models/_sector/dex/phantom_swapper/phantom_swapper_solana_fee_addresses.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "LIKE predicate starts with a wildcard.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/solana/models/_sector/nft/platforms/magiceden_v2_solana_trades.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "LIKE predicate starts with a wildcard.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/solana/models/_sector/nft/platforms/tensorswap_v1_solana_trades.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "LIKE predicate starts with a wildcard.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/tokens/models/aave/aave_v3_tokens.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "LIKE predicate starts with a wildcard.",
+        "snippet": ""
+      },
+      {
+        "repo": "mattermost-warehouse",
+        "path": "transform/snowflake-dbt/models/events/hourly/cloud_portal_pageview_events.sql",
+        "line": 32,
+        "bucket": "other",
+        "message": "LIKE predicate starts with a wildcard.",
+        "snippet": "WHERE path like '%cloud%'"
+      },
+      {
+        "repo": "mattermost-warehouse",
+        "path": "transform/snowflake-dbt/models/finance/arr_transactions.sql",
+        "line": 45,
+        "bucket": "other",
+        "message": "LIKE predicate starts with a wildcard.",
+        "snippet": "where oli.productcode like '%Cloud Professional%'"
+      },
+      {
+        "repo": "mattermost-warehouse",
+        "path": "transform/snowflake-dbt/models/finance/opportunitylineitem_daily_arr.sql",
+        "line": 11,
+        "bucket": "other",
+        "message": "LIKE predicate starts with a wildcard.",
+        "snippet": "WHERE dates.date LIKE '%-02-29'"
+      },
+      {
+        "repo": "mattermost-warehouse",
+        "path": "transform/snowflake-dbt/models/orgm/account_arr_and_seats.sql",
+        "line": 11,
+        "bucket": "other",
+        "message": "LIKE predicate starts with a wildcard.",
+        "snippet": "WHERE dates.date::varchar LIKE '%-02-29'"
+      }
+    ]
+  },
+  "SQLCOST032": {
+    "pass": true,
+    "pass_reason": "vacuous_clean",
+    "tp": 0,
+    "fp": 0,
+    "unknown": 0,
+    "total": 0,
+    "examples": []
+  },
+  "SQLCOST033": {
+    "pass": true,
+    "pass_reason": "clean",
+    "tp": 7,
+    "fp": 0,
+    "unknown": 0,
+    "total": 7,
+    "examples": [
+      {
+        "repo": "mattermost-warehouse",
+        "path": "transform/snowflake-dbt/models/blapi/customers_with_cloud_subs.sql",
+        "line": 23,
+        "bucket": "other",
+        "message": "Join predicate uses pattern matching.",
+        "snippet": "LEFT JOIN {{ source('util', 'postal_code_mapping') }}"
+      },
+      {
+        "repo": "mattermost-warehouse",
+        "path": "transform/snowflake-dbt/models/blapi/customers_with_freemium_subs.sql",
+        "line": 24,
+        "bucket": "other",
+        "message": "Join predicate uses pattern matching.",
+        "snippet": "LEFT JOIN {{ source('util', 'postal_code_mapping') }}"
+      },
+      {
+        "repo": "mattermost-warehouse",
+        "path": "transform/snowflake-dbt/models/blapi/customers_with_onprem_subs.sql",
+        "line": 23,
+        "bucket": "other",
+        "message": "Join predicate uses pattern matching.",
+        "snippet": "LEFT JOIN {{ source('util', 'postal_code_mapping') }}"
+      },
+      {
+        "repo": "mattermost-warehouse",
+        "path": "transform/snowflake-dbt/models/orgm/opportunity_ext.sql",
+        "line": 83,
+        "bucket": "other",
+        "message": "Join predicate uses pattern matching.",
+        "snippet": "LEFT JOIN opp_products on opp_products.id = opportunity.sfid"
+      },
+      {
+        "repo": "mattermost-warehouse",
+        "path": "transform/snowflake-dbt/models/orgm/opportunity_ext.sql",
+        "line": 106,
+        "bucket": "other",
+        "message": "Join predicate uses pattern matching.",
+        "snippet": "JOIN {{ ref('userrole') }} on owner.userroleid = userrole.sfid"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/payments/int_payments__matched_device_transactions.sql",
+        "line": 36,
+        "bucket": "other",
+        "message": "Join predicate uses pattern matching.",
+        "snippet": "LEFT JOIN valid_transactions AS tap_off"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/transit_database/dim_mobility_mart_providers.sql",
+        "line": 64,
+        "bucket": "other",
+        "message": "Join predicate uses pattern matching.",
+        "snippet": "INNER JOIN"
+      }
+    ]
+  },
+  "SQLCOST034": {
+    "pass": true,
+    "pass_reason": "vacuous_clean",
+    "tp": 0,
+    "fp": 0,
+    "unknown": 0,
+    "total": 0,
+    "examples": []
+  },
+  "SQLCOST035": {
+    "pass": true,
+    "pass_reason": "vacuous_clean",
+    "tp": 0,
+    "fp": 0,
+    "unknown": 0,
+    "total": 0,
+    "examples": []
+  },
+  "SQLCOST036": {
+    "pass": true,
+    "pass_reason": "tp>=20",
+    "tp": 193,
+    "fp": 0,
+    "unknown": 0,
+    "total": 193,
+    "examples": [
+      {
+        "repo": "spellbook",
+        "path": "dbt_macros/shared/balancer/balancer_liquidity_macro.sql",
+        "line": 126,
+        "bucket": "other",
+        "message": "Row-exploding UNNEST or LATERAL FLATTEN followed by deduplication.",
+        "snippet": "CROSS JOIN UNNEST (tokens) WITH ORDINALITY as t(tokens,i)"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_macros/shared/balancer/balancer_pool_token_supply_changes_daily_agg_macro.sql",
+        "line": 24,
+        "bucket": "other",
+        "message": "Row-exploding UNNEST or LATERAL FLATTEN followed by deduplication.",
+        "snippet": "FROM unnest(sequence(date('2021-04-21'), date(now()), interval '1' day)) as t(date_sequence)"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_macros/shared/balancer/balancer_token_balance_changes_daily_agg_macro.sql",
+        "line": 109,
+        "bucket": "other",
+        "message": "Row-exploding UNNEST or LATERAL FLATTEN followed by deduplication.",
+        "snippet": "FROM unnest(sequence(date('2021-04-21'), date(now()), interval '1' day)) as t(date_sequence)"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_macros/shared/balances_incremental_subset_daily.sql",
+        "line": 110,
+        "bucket": "other",
+        "message": "Row-exploding UNNEST or LATERAL FLATTEN followed by deduplication.",
+        "snippet": "from unnest("
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/macros/project/oneinch/project/oneinch_project_orders_macro.sql",
+        "line": 190,
+        "bucket": "other",
+        "message": "Row-exploding UNNEST or LATERAL FLATTEN followed by deduplication.",
+        "snippet": "), unnest(trades) as trades(trade)"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/macros/sector/attestation/eas.sql",
+        "line": 75,
+        "bucket": "other",
+        "message": "Row-exploding UNNEST or LATERAL FLATTEN followed by deduplication.",
+        "snippet": "cross join unnest(sr.schema_array) with ordinality as se (element, ordinality)"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/macros/sector/contracts/contracts_deployments.sql",
+        "line": 24,
+        "bucket": "other",
+        "message": "Row-exploding UNNEST or LATERAL FLATTEN followed by deduplication.",
+        "snippet": "CROSS JOIN UNNEST("
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/balances/arbitrum/balancer_v2_arbitrum_token_balance_changes_daily.sql",
+        "line": 96,
+        "bucket": "other",
+        "message": "Row-exploding UNNEST or LATERAL FLATTEN followed by deduplication.",
+        "snippet": "GROUP BY 1, 2, 3, 4, 5, 6"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/balances/arbitrum/balancer_v3_arbitrum_token_balance_changes_daily.sql",
+        "line": 99,
+        "bucket": "other",
+        "message": "Row-exploding UNNEST or LATERAL FLATTEN followed by deduplication.",
+        "snippet": "GROUP BY 1, 2, 3, 4, 5, 6"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/balances/avalanche_c/balancer_v2_avalanche_c_token_balance_changes_daily.sql",
+        "line": 96,
+        "bucket": "other",
+        "message": "Row-exploding UNNEST or LATERAL FLATTEN followed by deduplication.",
+        "snippet": "GROUP BY 1, 2, 3, 4, 5, 6"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/balances/avalanche_c/balancer_v3_avalanche_c_token_balance_changes_daily.sql",
+        "line": 99,
+        "bucket": "other",
+        "message": "Row-exploding UNNEST or LATERAL FLATTEN followed by deduplication.",
+        "snippet": "GROUP BY 1, 2, 3, 4, 5, 6"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/balances/base/balancer_v2_base_token_balance_changes_daily.sql",
+        "line": 96,
+        "bucket": "other",
+        "message": "Row-exploding UNNEST or LATERAL FLATTEN followed by deduplication.",
+        "snippet": "GROUP BY 1, 2, 3, 4, 5, 6"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/balances/base/balancer_v3_base_token_balance_changes_daily.sql",
+        "line": 99,
+        "bucket": "other",
+        "message": "Row-exploding UNNEST or LATERAL FLATTEN followed by deduplication.",
+        "snippet": "GROUP BY 1, 2, 3, 4, 5, 6"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/balances/ethereum/balancer_v2_ethereum_token_balance_changes_daily.sql",
+        "line": 96,
+        "bucket": "other",
+        "message": "Row-exploding UNNEST or LATERAL FLATTEN followed by deduplication.",
+        "snippet": "GROUP BY 1, 2, 3, 4, 5, 6"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/balances/ethereum/balancer_v3_ethereum_token_balance_changes_daily.sql",
+        "line": 99,
+        "bucket": "other",
+        "message": "Row-exploding UNNEST or LATERAL FLATTEN followed by deduplication.",
+        "snippet": "GROUP BY 1, 2, 3, 4, 5, 6"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/balances/gnosis/balancer_v2_gnosis_token_balance_changes_daily.sql",
+        "line": 96,
+        "bucket": "other",
+        "message": "Row-exploding UNNEST or LATERAL FLATTEN followed by deduplication.",
+        "snippet": "GROUP BY 1, 2, 3, 4, 5, 6"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/balances/gnosis/balancer_v3_gnosis_token_balance_changes_daily.sql",
+        "line": 99,
+        "bucket": "other",
+        "message": "Row-exploding UNNEST or LATERAL FLATTEN followed by deduplication.",
+        "snippet": "GROUP BY 1, 2, 3, 4, 5, 6"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/balances/hyperevm/balancer_v3_hyperevm_token_balance_changes_daily.sql",
+        "line": 99,
+        "bucket": "other",
+        "message": "Row-exploding UNNEST or LATERAL FLATTEN followed by deduplication.",
+        "snippet": "GROUP BY 1, 2, 3, 4, 5, 6"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/balances/monad/balancer_v3_monad_token_balance_changes_daily.sql",
+        "line": 99,
+        "bucket": "other",
+        "message": "Row-exploding UNNEST or LATERAL FLATTEN followed by deduplication.",
+        "snippet": "GROUP BY 1, 2, 3, 4, 5, 6"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/balances/optimism/balancer_v2_optimism_token_balance_changes_daily.sql",
+        "line": 96,
+        "bucket": "other",
+        "message": "Row-exploding UNNEST or LATERAL FLATTEN followed by deduplication.",
+        "snippet": "GROUP BY 1, 2, 3, 4, 5, 6"
+      }
+    ]
+  },
+  "SQLCOST037": {
+    "pass": true,
+    "pass_reason": "tp>=20",
+    "tp": 78,
+    "fp": 0,
+    "unknown": 0,
+    "total": 78,
+    "examples": [
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/macros/sector/contracts/contracts_base_iterated_creators.sql",
+        "line": 169,
+        "bucket": "other",
+        "message": "NOT IN (subquery) detected.",
+        "snippet": "AND s.contract_address NOT IN (SELECT contract_address FROM new_contracts) --exclude contract we reinitialize"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/eigenlayer/ethereum/eigenlayer_ethereum_whitelisted_strategy_latest.sql",
+        "line": 15,
+        "bucket": "other",
+        "message": "NOT IN (subquery) detected.",
+        "snippet": ")"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/kalshi/kalshi_ohlcv_hourly.sql",
+        "line": 109,
+        "bucket": "other",
+        "message": "NOT IN (subquery) detected.",
+        "snippet": "hs.market_id,"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_sector/labels/addresses/__single_category_labels__/op_governance/labels_op_governance_retropgf_voters.sql",
+        "line": 11,
+        "bucket": "other",
+        "message": "NOT IN (subquery) detected.",
+        "snippet": "-- FROM attestationstation_v1_optimism.EAS_evt_Revoked"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_sector/labels/addresses/__single_category_labels__/op_transfers/labels_op_transfers_only.sql",
+        "line": 16,
+        "bucket": "other",
+        "message": "NOT IN (subquery) detected.",
+        "snippet": "FROM complete_decoded_log"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_sector/labels/addresses/dex/persona/arbitrage_traders/ethereum/labels_arbitrage_traders_ethereum.sql",
+        "line": 97,
+        "bucket": "other",
+        "message": "NOT IN (subquery) detected.",
+        "snippet": ")"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/coinbase_wallet_quests/optimism/coinbase_wallet_quests_optimism_rewards_transfers.sql",
+        "line": 36,
+        "bucket": "other",
+        "message": "NOT IN (subquery) detected.",
+        "snippet": ", block_number"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/contracts/arbitrum/contracts_arbitrum_base_iterated_creators.sql",
+        "line": 478,
+        "bucket": "other",
+        "message": "NOT IN (subquery) detected.",
+        "snippet": ",code_bytelength"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/contracts/avalanche_c/contracts_avalanche_c_base_iterated_creators.sql",
+        "line": 478,
+        "bucket": "other",
+        "message": "NOT IN (subquery) detected.",
+        "snippet": ",code_bytelength"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/contracts/base/contracts_base_base_iterated_creators.sql",
+        "line": 478,
+        "bucket": "other",
+        "message": "NOT IN (subquery) detected.",
+        "snippet": ",created_tx_index"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/contracts/bnb/contracts_bnb_base_iterated_creators.sql",
+        "line": 478,
+        "bucket": "other",
+        "message": "NOT IN (subquery) detected.",
+        "snippet": ",code_bytelength"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/contracts/celo/contracts_celo_base_iterated_creators.sql",
+        "line": 478,
+        "bucket": "other",
+        "message": "NOT IN (subquery) detected.",
+        "snippet": ",created_tx_index"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/contracts/contracts_contract_creator_address_list.sql",
+        "line": 1089,
+        "bucket": "other",
+        "message": "NOT IN (subquery) detected.",
+        "snippet": "--filter out creators that we never want to map"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/contracts/ethereum/contracts_ethereum_base_iterated_creators.sql",
+        "line": 478,
+        "bucket": "other",
+        "message": "NOT IN (subquery) detected.",
+        "snippet": ",code_bytelength"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/contracts/fantom/contracts_fantom_base_iterated_creators.sql",
+        "line": 478,
+        "bucket": "other",
+        "message": "NOT IN (subquery) detected.",
+        "snippet": ",code_bytelength"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/contracts/gnosis/contracts_gnosis_base_iterated_creators.sql",
+        "line": 478,
+        "bucket": "other",
+        "message": "NOT IN (subquery) detected.",
+        "snippet": ",code_bytelength"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/contracts/optimism/contracts_optimism_base_iterated_creators.sql",
+        "line": 478,
+        "bucket": "other",
+        "message": "NOT IN (subquery) detected.",
+        "snippet": ",code_bytelength"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/contracts/polygon/contracts_polygon_base_iterated_creators.sql",
+        "line": 478,
+        "bucket": "other",
+        "message": "NOT IN (subquery) detected.",
+        "snippet": ",code_bytelength"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/contracts/zksync/contracts_zksync_base_iterated_creators.sql",
+        "line": 478,
+        "bucket": "other",
+        "message": "NOT IN (subquery) detected.",
+        "snippet": ",code_bytelength"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/contracts/zora/contracts_zora_base_iterated_creators.sql",
+        "line": 478,
+        "bucket": "other",
+        "message": "NOT IN (subquery) detected.",
+        "snippet": ",code_bytelength"
+      }
+    ]
+  },
+  "SQLCOST038": {
+    "pass": true,
+    "pass_reason": "tp>=20",
+    "tp": 2021,
+    "fp": 0,
+    "unknown": 0,
+    "total": 2021,
+    "examples": [
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/macros/sector/contracts/contracts_base_iterated_creators.sql",
+        "line": 182,
+        "bucket": "other",
+        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
+        "snippet": "left join {{ ref('contracts_'+ chain +'_find_self_destruct_contracts') }} as sd"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/macros/sector/contracts/contracts_contract_mapping.sql",
+        "line": 110,
+        "bucket": "other",
+        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
+        "snippet": "left join {{ ref('contracts_contract_creator_address_list') }} as cctr"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_metrics/dune_index/metrics_dune_index_stats.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_metrics/dune_index/metrics_dune_index_stats.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_metrics/transactions/chains/ton/metrics_ton_transactions_daily.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_metrics/transactions/chains/ton/metrics_ton_transactions_daily.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_metrics/transactions/chains/ton/metrics_ton_transactions_daily.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/arbitrum/balancer_v2_arbitrum_bpt_supply.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/arbitrum/balancer_v2_arbitrum_bpt_supply.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/arbitrum/balancer_v2_arbitrum_bpt_supply.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/arbitrum/balancer_v2_arbitrum_bpt_supply.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/arbitrum/balancer_v3_arbitrum_bpt_supply.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/arbitrum/balancer_v3_arbitrum_bpt_supply.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/arbitrum/balancer_v3_arbitrum_bpt_supply.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/avalanche_c/balancer_v2_avalanche_c_bpt_supply.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/avalanche_c/balancer_v2_avalanche_c_bpt_supply.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/avalanche_c/balancer_v2_avalanche_c_bpt_supply.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/avalanche_c/balancer_v2_avalanche_c_bpt_supply.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/avalanche_c/balancer_v3_avalanche_c_bpt_supply.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/bpt/avalanche_c/balancer_v3_avalanche_c_bpt_supply.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
+        "snippet": ""
+      }
+    ]
+  },
+  "SQLCOST039": {
+    "pass": true,
+    "pass_reason": "tp>=20",
+    "tp": 71,
+    "fp": 0,
+    "unknown": 0,
+    "total": 71,
+    "examples": [
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/polymarket/polygon/polymarket_polygon_base_ctf_tokens.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "View or ephemeral model is referenced by many downstream models.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/addresses/ethereum/addresses_ethereum_l2_batch_submitters.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "View or ephemeral model is referenced by many downstream models.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chain_info/chain_info_chain_ids.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "View or ephemeral model is referenced by many downstream models.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/arbitrum/chainlink_arbitrum_ocr_operator_admin_meta.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "View or ephemeral model is referenced by many downstream models.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/arbitrum/chainlink_arbitrum_ocr_operator_node_meta.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "View or ephemeral model is referenced by many downstream models.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/arbitrum/chainlink_arbitrum_price_feeds_oracle_addresses.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "View or ephemeral model is referenced by many downstream models.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/avalanche_c/chainlink_avalanche_c_ocr_operator_admin_meta.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "View or ephemeral model is referenced by many downstream models.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/avalanche_c/chainlink_avalanche_c_ocr_operator_node_meta.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "View or ephemeral model is referenced by many downstream models.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/avalanche_c/chainlink_avalanche_c_price_feeds_oracle_addresses.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "View or ephemeral model is referenced by many downstream models.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/bnb/chainlink_bnb_ocr_operator_admin_meta.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "View or ephemeral model is referenced by many downstream models.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/bnb/chainlink_bnb_ocr_operator_node_meta.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "View or ephemeral model is referenced by many downstream models.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/bnb/chainlink_bnb_price_feeds_oracle_addresses.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "View or ephemeral model is referenced by many downstream models.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/chainlink_ccip_network_meta.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "View or ephemeral model is referenced by many downstream models.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/ethereum/chainlink_ethereum_ocr_operator_admin_meta.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "View or ephemeral model is referenced by many downstream models.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/ethereum/chainlink_ethereum_ocr_operator_node_meta.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "View or ephemeral model is referenced by many downstream models.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/ethereum/chainlink_ethereum_price_feeds_oracle_addresses.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "View or ephemeral model is referenced by many downstream models.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/fantom/chainlink_fantom_ocr_operator_admin_meta.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "View or ephemeral model is referenced by many downstream models.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/fantom/chainlink_fantom_ocr_operator_node_meta.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "View or ephemeral model is referenced by many downstream models.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/gnosis/chainlink_gnosis_ocr_operator_admin_meta.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "View or ephemeral model is referenced by many downstream models.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/gnosis/chainlink_gnosis_ocr_operator_node_meta.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "View or ephemeral model is referenced by many downstream models.",
+        "snippet": ""
+      }
+    ]
+  },
+  "SQLCOST040": {
+    "pass": true,
+    "pass_reason": "clean",
+    "tp": 12,
+    "fp": 0,
+    "unknown": 0,
+    "total": 12,
+    "examples": [
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/payments/int_payments__matched_device_transactions.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Table model has a recognized date or partition column but is not incremental.",
+        "snippet": "{{"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs/fct_daily_schedule_feeds.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Table model has a recognized date or partition column but is not incremental.",
+        "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs/fct_daily_schedule_rt_route_direction_summary.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Table model has a recognized date or partition column but is not incremental.",
+        "snippet": "{{"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs/fct_daily_service_alerts.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Table model has a recognized date or partition column but is not incremental.",
+        "snippet": "{{"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_quality/fct_daily_trip_updates_vehicle_positions_completeness.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Table model has a recognized date or partition column but is not incremental.",
+        "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_quality/fct_monthly_reports_site_organization_gtfs_vendors.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Table model has a recognized date or partition column but is not incremental.",
+        "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_quality/idx_monthly_reports_site.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Table model has a recognized date or partition column but is not incremental.",
+        "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_rollup/fct_monthly_operator_summary.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Table model has a recognized date or partition column but is not incremental.",
+        "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_rollup/fct_monthly_schedule_rt_route_direction_summary.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Table model has a recognized date or partition column but is not incremental.",
+        "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_rollup/fct_monthly_scheduled_stops.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Table model has a recognized date or partition column but is not incremental.",
+        "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_rollup/fct_monthly_scheduled_trips.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Table model has a recognized date or partition column but is not incremental.",
+        "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_rollup/fct_operator_hourly_summary.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Table model has a recognized date or partition column but is not incremental.",
+        "snippet": "{{ config(materialized='table') }}"
+      }
+    ]
+  },
+  "SQLCOST041": {
+    "pass": true,
+    "pass_reason": "tp>=20",
+    "tp": 62,
+    "fp": 0,
+    "unknown": 0,
+    "total": 62,
+    "examples": [
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_project/lido/liquidity/arbitrum/lido_liquidity_arbitrum_balancer_pools.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function uses an unbounded frame.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_project/lido/liquidity/arbitrum/lido_liquidity_arbitrum_camelot_pools.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function uses an unbounded frame.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_project/lido/liquidity/arbitrum/lido_liquidity_arbitrum_curve_pools.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function uses an unbounded frame.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_project/lido/liquidity/arbitrum/lido_liquidity_arbitrum_kyberswap_pools.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function uses an unbounded frame.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_project/lido/liquidity/arbitrum/lido_liquidity_arbitrum_kyberswap_v2_pools.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function uses an unbounded frame.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_project/lido/liquidity/arbitrum/lido_liquidity_arbitrum_pancakeswap_v3_pools.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function uses an unbounded frame.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_project/lido/liquidity/arbitrum/lido_liquidity_arbitrum_ramses_pools.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function uses an unbounded frame.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_project/lido/liquidity/arbitrum/lido_liquidity_arbitrum_uniswap_v3_pools.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function uses an unbounded frame.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_project/lido/liquidity/arbitrum/lido_liquidity_arbitrum_wombat_pools.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function uses an unbounded frame.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_project/lido/liquidity/base/lido_liquidity_base_aerodrome_cl_pools.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function uses an unbounded frame.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_project/lido/liquidity/base/lido_liquidity_base_aerodrome_pools.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function uses an unbounded frame.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_project/lido/liquidity/base/lido_liquidity_base_balancer_pools.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function uses an unbounded frame.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_project/lido/liquidity/base/lido_liquidity_base_kyberswap_pools.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function uses an unbounded frame.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_project/lido/liquidity/base/lido_liquidity_base_maverick_pools.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function uses an unbounded frame.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_project/lido/liquidity/base/lido_liquidity_base_pancakeswap_v3_pools.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function uses an unbounded frame.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_project/lido/liquidity/base/lido_liquidity_base_uniswap_v3_pools.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function uses an unbounded frame.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_project/lido/liquidity/bnb/lido_liquidity_bnb_pancakeswap_v3_pools.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function uses an unbounded frame.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_project/lido/liquidity/bnb/lido_liquidity_bnb_thena_pools.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function uses an unbounded frame.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_project/lido/liquidity/ethereum/lido_liquidity_ethereum_balancer_pools.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function uses an unbounded frame.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_project/lido/liquidity/ethereum/lido_liquidity_ethereum_curve_steth_conc_pool.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Window function uses an unbounded frame.",
+        "snippet": ""
+      }
+    ]
+  },
+  "SQLCOST042": {
+    "pass": true,
+    "pass_reason": "tp>=20",
+    "tp": 604,
+    "fp": 0,
+    "unknown": 0,
+    "total": 604,
+    "examples": [
+      {
+        "repo": "data-infra",
+        "path": "warehouse/macros/annotate_payments_entities.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "BigQuery model reads source() or ref() without an obvious partition or date filter.",
+        "snippet": "{% macro label_elavon_entities(input_model, date_col = 'payment_date') %}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/macros/get_latest_schedule_data.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "BigQuery model reads source() or ref() without an obvious partition or date filter.",
+        "snippet": "{% macro get_latest_schedule_data(table_name, clean_table_name) %}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/macros/gtfs_rt_messages_keying.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "BigQuery model reads source() or ref() without an obvious partition or date filter.",
+        "snippet": "{% macro gtfs_rt_messages_keying(raw_messages) %}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__daily_url_index.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "BigQuery model reads source() or ref() without an obvious partition or date filter.",
+        "snippet": "{{ config(materialized='table', event_time='dt') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__distinct_download_configs.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "BigQuery model reads source() or ref() without an obvious partition or date filter.",
+        "snippet": "{{ config("
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__service_alerts_day_map_grouping.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "BigQuery model reads source() or ref() without an obvious partition or date filter.",
+        "snippet": "{{"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__service_alerts_trip_day_map_grouping.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "BigQuery model reads source() or ref() without an obvious partition or date filter.",
+        "snippet": "{{"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__trip_updates_trip_day_map_grouping.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "BigQuery model reads source() or ref() without an obvious partition or date filter.",
+        "snippet": "{{"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__trip_updates_trip_stop_day_map_grouping.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "BigQuery model reads source() or ref() without an obvious partition or date filter.",
+        "snippet": "{{"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__unioned_parse_outcomes.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "BigQuery model reads source() or ref() without an obvious partition or date filter.",
+        "snippet": "{{ config("
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__vehicle_positions_trip_day_map_grouping.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "BigQuery model reads source() or ref() without an obvious partition or date filter.",
+        "snippet": "{{"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__vehicle_positions_trip_stop_day_map_grouping.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "BigQuery model reads source() or ref() without an obvious partition or date filter.",
+        "snippet": "{{"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_schedule__all_scheduled_service.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "BigQuery model reads source() or ref() without an obvious partition or date filter.",
+        "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_schedule__daily_scheduled_service_index.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "BigQuery model reads source() or ref() without an obvious partition or date filter.",
+        "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_schedule__frequencies_stop_times.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "BigQuery model reads source() or ref() without an obvious partition or date filter.",
+        "snippet": "{{ config(materialized = \"table\") }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_schedule__grouped_feed_file_parse_outcomes.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "BigQuery model reads source() or ref() without an obvious partition or date filter.",
+        "snippet": "WITH stg_gtfs_schedule__file_parse_outcomes AS ("
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_schedule__joined_feed_outcomes.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "BigQuery model reads source() or ref() without an obvious partition or date filter.",
+        "snippet": "WITH stg_gtfs_schedule__download_outcomes AS ("
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_schedule__keyed_parse_outcomes.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "BigQuery model reads source() or ref() without an obvious partition or date filter.",
+        "snippet": "WITH stg_gtfs_schedule__parse_outcomes AS ("
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_schedule__long_calendar.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "BigQuery model reads source() or ref() without an obvious partition or date filter.",
+        "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_schedule__stop_order_by_route.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "BigQuery model reads source() or ref() without an obvious partition or date filter.",
+        "snippet": "{{"
+      }
+    ]
+  },
+  "SQLCOST043": {
+    "pass": true,
+    "pass_reason": "vacuous_clean",
+    "tp": 0,
+    "fp": 0,
+    "unknown": 0,
+    "total": 0,
+    "examples": []
+  },
+  "SQLCOST044": {
+    "pass": true,
+    "pass_reason": "clean",
+    "tp": 6,
+    "fp": 0,
+    "unknown": 0,
+    "total": 6,
+    "examples": [
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/nexusmutual/ethereum/staking/base/nexusmutual_ethereum_base_staking_deposit_extensions.sql",
+        "line": 1,
+        "bucket": "other",
+        "message": "Recursive CTE detected.",
+        "snippet": ""
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/macros/models/_project/angstrom/decoding/angstrom_bundle_decoding_assets.sql",
+        "line": 26,
+        "bucket": "other",
+        "message": "Recursive CTE detected.",
+        "snippet": "WITH RECURSIVE decode_asset (tx_hash, block_number, buf, len, idx, addr, save, take, settle) AS ("
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/macros/models/_project/angstrom/decoding/angstrom_bundle_decoding_pairs.sql",
+        "line": 26,
+        "bucket": "other",
+        "message": "Recursive CTE detected.",
+        "snippet": "WITH RECURSIVE decode_pair (tx_hash, block_number, buf, len, idx, index0, index1, store_index, price_1over0) AS ("
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/macros/models/_project/angstrom/decoding/angstrom_bundle_decoding_pool_updates.sql",
+        "line": 32,
+        "bucket": "other",
+        "message": "Recursive CTE detected.",
+        "snippet": "WITH RECURSIVE decode_pool_update ("
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/macros/models/_project/angstrom/decoding/angstrom_bundle_decoding_tob_orders.sql",
+        "line": 35,
+        "bucket": "other",
+        "message": "Recursive CTE detected.",
+        "snippet": "WITH RECURSIVE decode_tob_order ("
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/macros/models/_project/angstrom/decoding/angstrom_bundle_decoding_user_orders.sql",
+        "line": 44,
+        "bucket": "other",
+        "message": "Recursive CTE detected.",
+        "snippet": "WITH RECURSIVE decode_user_order ("
+      }
+    ]
+  }
+}

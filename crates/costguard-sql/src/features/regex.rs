@@ -451,7 +451,10 @@ impl RegexName for Regex {
 
 fn function_on_join_key(predicate: &str) -> bool {
     let lower = predicate.to_ascii_lowercase();
-    if is_symmetric_normalization_predicate(&lower) || is_time_bucket_join_predicate(&lower) {
+    if is_symmetric_normalization_predicate(&lower)
+        || is_time_bucket_join_predicate(&lower)
+        || is_single_side_normalization_predicate(&lower)
+    {
         return false;
     }
     let parts: Vec<&str> = lower.split(" and ").collect();
@@ -460,8 +463,41 @@ fn function_on_join_key(predicate: &str) -> bool {
     }
     parts.iter().any(|part| {
         let part = part.trim();
-        !is_coalesce_null_safe_join_predicate(part) && function_on_join_key_regex().is_match(part)
+        !is_coalesce_null_safe_join_predicate(part)
+            && !is_coalesce_join_predicate(part)
+            && function_on_join_key_regex().is_match(part)
     })
+}
+
+fn is_coalesce_join_predicate(predicate: &str) -> bool {
+    predicate.contains("coalesce(") && predicate.contains('=')
+}
+
+fn is_single_side_normalization_predicate(predicate: &str) -> bool {
+    static RE1: OnceLock<Regex> = OnceLock::new();
+    static RE2: OnceLock<Regex> = OnceLock::new();
+    let re1 = RE1.get_or_init(|| {
+        Regex::new(
+            r"(?i)(?:lower|upper|trim|ltrim|rtrim)\s*\(\s*(?:\w+\.)?(\w+)\s*\)\s*=\s*(?:\w+\.)?(\w+)\b",
+        )
+        .expect("single-side normalization join regex")
+    });
+    let re2 = RE2.get_or_init(|| {
+        Regex::new(
+            r"(?i)(?:\w+\.)?(\w+)\s*=\s*(?:lower|upper|trim|ltrim|rtrim)\s*\(\s*(?:\w+\.)?(\w+)\s*\)",
+        )
+        .expect("single-side normalization join regex reverse")
+    });
+    for re in [re1, re2] {
+        if let Some(captures) = re.captures(predicate) {
+            if let (Some(left), Some(right)) = (captures.get(1), captures.get(2)) {
+                if left.as_str() == right.as_str() {
+                    return true;
+                }
+            }
+        }
+    }
+    false
 }
 
 fn coalesce_null_safe_join_re() -> &'static Regex {
@@ -654,7 +690,7 @@ static DATE_TRUNC_JOIN_RE: OnceLock<Regex> = OnceLock::new();
 fn time_bucket_column_re() -> &'static Regex {
     TIME_BUCKET_COLUMN_RE.get_or_init(|| {
         Regex::new(
-            r#"(?i)\b(?:minute|hour|day|date|week|month|block_date|block_day|evt_block_date)\b"#,
+            r#"(?i)\b(?:minute|hour|hr|day|date|week|month|block_time|evt_block_time|block_date|block_day|block_month|date_month|evt_block_date|period|time|timestamp|ts)\b"#,
         )
         .expect("time bucket column regex")
     })

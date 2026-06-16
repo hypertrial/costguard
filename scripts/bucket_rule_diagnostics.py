@@ -404,10 +404,12 @@ def read_sql_for_diagnostic(
     compiled_by_path: dict[str, str],
 ) -> str:
     rel_path = diagnostic.get("path", "").replace("\\", "/")
+    if not rel_path:
+        return ""
     if rel_path in compiled_by_path:
         return compiled_by_path[rel_path]
     file_path = checkout / rel_path
-    if file_path.exists():
+    if file_path.is_file():
         return file_path.read_text(encoding="utf-8", errors="replace")
     return ""
 

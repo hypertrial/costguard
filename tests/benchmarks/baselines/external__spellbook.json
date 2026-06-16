@@ -1,7 +1,7 @@
 {
   "commit": "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738",
   "kind": "external",
-  "max_rss_bytes": 3028254720,
+  "max_rss_bytes": 2954919936,
   "metrics": {
     "counts": {
       "manifest": 0,
@@ -16,14 +16,13 @@
       "SQLCOST003": 17,
       "SQLCOST004": 1,
       "SQLCOST005": 1,
-      "SQLCOST006": 116,
+      "SQLCOST006": 58,
       "SQLCOST008": 421,
-      "SQLCOST012": 89,
+      "SQLCOST012": 26,
       "SQLCOST013": 125,
-      "SQLCOST014": 506,
+      "SQLCOST014": 434,
       "SQLCOST015": 330,
-      "SQLCOST016": 1,
-      "SQLCOST017": 219,
+      "SQLCOST017": 3,
       "SQLCOST018": 356,
       "SQLCOST019": 67,
       "SQLCOST026": 1,
@@ -32,19 +31,19 @@
       "SQLCOST031": 11,
       "SQLCOST036": 183,
       "SQLCOST037": 71,
-      "SQLCOST038": 1998,
+      "SQLCOST038": 2021,
       "SQLCOST039": 70,
       "SQLCOST041": 55,
       "SQLCOST044": 6
     },
     "diagnostics_by_severity": {
-      "high": 2328,
-      "low": 507,
-      "med": 2308
+      "high": 2350,
+      "low": 435,
+      "med": 1971
     },
     "metadata_only_scan": false,
     "metadata_warnings": 2,
-    "new_findings": 5143,
+    "new_findings": 4756,
     "sql_parse_compiled_failures": 0,
     "sql_parse_compiled_total": 8033,
     "sql_parse_failures": 0,
@@ -53,20 +52,20 @@
     "sql_parse_total": 8033,
     "yaml_parse_failures": 0
   },
-  "runtime_max_ms": 7442,
-  "runtime_median_ms": 7274,
+  "runtime_max_ms": 7417,
+  "runtime_median_ms": 7233,
   "runtime_samples_ms": [
-    7204,
-    7442,
-    7274
+    7161,
+    7417,
+    7233
   ],
   "target": "external/spellbook",
   "thresholds": {
     "max_diagnostics_by_rule": {
       "SQLCOST005": 1,
-      "SQLCOST012": 89,
+      "SQLCOST012": 26,
       "SQLCOST016": 1,
-      "SQLCOST017": 219,
+      "SQLCOST017": 3,
       "SQLCOST019": 67
     },
     "max_parse_failure_delta": 50,

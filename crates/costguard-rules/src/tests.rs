@@ -406,6 +406,54 @@ fn blind_distinct_skips_when_group_by_present() {
 }
 
 #[test]
+fn macro_template_skips_function_wrapped_join_rule() {
+    let file = sql_file(
+        "dbt_subprojects/hourly_spellbook/macros/sector/gas/evm_l1_gas_fees.sql",
+        "select * from base b join prices p on p.timestamp = date_trunc('day', b.block_time)",
+    );
+    let doc = analyze(&file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(!ids.contains(&"SQLCOST017".to_string()));
+}
+
+#[test]
+fn cross_join_to_scalar_cte_is_not_flagged() {
+    let file = sql_file(
+        "models/marts/fct.sql",
+        "with global_fees as (select fee from rates where rn = 1) \
+         select swap.amount from swap cross join global_fees g where g.rn = 1",
+    );
+    let doc = analyze_for_rule("SQLCOST012", &file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(!ids.contains(&"SQLCOST012".to_string()));
+}
+
+#[test]
+fn macro_template_skips_repeated_cte_and_unbounded_join_rules() {
+    let file = sql_file(
+        "dbt_subprojects/dex/macros/add_amount_usd_dex_trades.sql",
+        "with prices as (select price from t), trusted_tokens as (select contract_address from t) \
+         select * from x bt left join prices pb on bt.id = pb.id left join prices ps on bt.id = ps.id \
+         left join trusted_tokens tt_bought on bt.id = tt_bought.id \
+         left join trusted_tokens tt_sold on bt.id = tt_sold.id",
+    );
+    let doc = analyze(&file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(!ids.contains(&"SQLCOST014".to_string()));
+}
+
+#[test]
+fn macro_equality_join_text_is_not_unbounded() {
+    let file = sql_file(
+        "dbt_subprojects/daily_spellbook/macros/project/tesseract/tesseract_ictt_volume_events.sql",
+        "select * from events e inner join recv r on r.evt_tx_hash = e.evt_tx_hash",
+    );
+    let doc = analyze(&file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(!ids.contains(&"SQLCOST006".to_string()));
+}
+
+#[test]
 fn suppression_still_applies_after_rule_split() {
     let file = sql_file(
         "models/marts/fct.sql",

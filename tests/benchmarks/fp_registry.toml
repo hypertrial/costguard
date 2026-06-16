@@ -633,4 +633,51 @@ verdict = "tp"
 corpus_case = "recall_recursive_cte_plain"
 notes = "recursive CTEs are valid medium-severity cost signals"
 
+[[finding]]
+rule = "SQLCOST001"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "recall_select_star_plain"
+notes = "SELECT * in downstream models is a valid cost signal"
+
+[[finding]]
+rule = "SQLCOST004"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "recall_incremental_no_key_inline"
+notes = "residual incremental unique_key findings are true positives"
+
+[[finding]]
+rule = "SQLCOST005"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "recall_incremental_missing_id_predicate"
+notes = "residual incremental predicate findings default to true positives"
+
+[[finding]]
+rule = "SQLCOST007"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "recall_order_by_plain"
+notes = "ORDER BY in models without LIMIT is a valid cost signal"
+
+[[finding]]
+rule = "SQLCOST028"
+repo = "spellbook"
+bucket = "other"
+verdict = "tp"
+corpus_case = "recall_missing_partition_plain"
+notes = "mart models missing partition or cluster config are valid cost signals"
+
+[[finding]]
+rule = "SQLCOST017"
+repo = "spellbook"
+bucket = "coalesce_key"
+verdict = "fp"
+corpus_case = "join_key_staging"
+notes = "coalesce null-safe join keys in staging or enrichment paths are acceptable"
 

@@ -1,8 +1,8 @@
 use crate::evidence;
-use crate::helpers::{diagnostic, is_downstream_model, is_staging_model};
+use crate::helpers::{diagnostic, is_dbt_macro_path, is_downstream_model, is_staging_model};
 use crate::registry::{Rule, RuleContext};
 use costguard_diagnostics::{Confidence, Diagnostic, Severity};
-use costguard_sql::JoinKind;
+use costguard_sql::{CteFeature, JoinFeature, JoinKind};
 use std::collections::HashMap;
 
 pub(crate) struct SelectStarRule;
@@ -14,12 +14,36 @@ pub(crate) struct UnpartitionedWindowRule;
 pub(crate) struct RepeatedCteRule;
 pub(crate) struct RecursiveCteRule;
 
-fn join_has_clear_equality(join: &costguard_sql::JoinFeature) -> bool {
-    join.has_equality
-        || join
-            .predicate
+fn join_has_clear_equality(join: &JoinFeature, file_text: &str) -> bool {
+    if join.has_equality || !join.equality_keys.is_empty() {
+        return true;
+    }
+    if join.predicate.as_ref().is_some_and(|predicate| {
+        let lower = predicate.to_ascii_lowercase();
+        lower.contains('=') || lower.starts_with("using(")
+    }) {
+        return true;
+    }
+    join_on_clause_has_equality(file_text, join.span.byte_end)
+}
+
+fn join_on_clause_has_equality(text: &str, after_join: usize) -> bool {
+    let start = after_join.min(text.len());
+    let end = (start + 400).min(text.len());
+    let lower = text[start..end].to_ascii_lowercase();
+    let Some(on_idx) = lower.find(" on ") else {
+        return false;
+    };
+    let after_on = &lower[on_idx..];
+    after_on.contains('=') && !after_on.contains("<=") && !after_on.contains(">=")
+}
+
+fn is_cte_broadcast_cross_join(join: &JoinFeature, ctes: &[CteFeature]) -> bool {
+    matches!(join.kind, JoinKind::Cross)
+        && join
+            .right_relation
             .as_ref()
-            .is_some_and(|predicate| predicate.contains('='))
+            .is_some_and(|rel| ctes.iter().any(|cte| cte.name == *rel))
 }
 
 impl Rule for SelectStarRule {
@@ -81,6 +105,9 @@ impl Rule for UnboundedJoinRule {
         Severity::Medium
     }
     fn check(&self, ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
+        if is_dbt_macro_path(&ctx.file.root_relative_path) {
+            return Vec::new();
+        }
         let Some(sql) = ctx.sql else {
             return Vec::new();
         };
@@ -91,7 +118,7 @@ impl Rule for UnboundedJoinRule {
                 matches!(
                     join.kind,
                     JoinKind::Inner | JoinKind::Left | JoinKind::Right | JoinKind::Full
-                ) && !join_has_clear_equality(join)
+                ) && !join_has_clear_equality(join, &ctx.file.text)
             })
             .map(|join| {
                 diagnostic(
@@ -218,7 +245,10 @@ impl Rule for CrossJoinRule {
         sql.features
             .joins
             .iter()
-            .filter(|join| matches!(join.kind, JoinKind::Cross | JoinKind::Comma))
+            .filter(|join| {
+                matches!(join.kind, JoinKind::Cross | JoinKind::Comma)
+                    && !is_cte_broadcast_cross_join(join, &sql.features.ctes)
+            })
             .map(|join| {
                 let confidence = if sql.feature_extraction_used_ast {
                     Confidence::High
@@ -296,6 +326,9 @@ impl Rule for RepeatedCteRule {
         Severity::Low
     }
     fn check(&self, ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
+        if is_dbt_macro_path(&ctx.file.root_relative_path) {
+            return Vec::new();
+        }
         let Some(sql) = ctx.sql else {
             return Vec::new();
         };

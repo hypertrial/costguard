@@ -366,7 +366,7 @@ fn extract_non_sargable_predicates(
             | BinaryOperator::Gt
             | BinaryOperator::GtEq => {
                 for side in [left.as_ref(), right.as_ref()] {
-                    if is_non_sargable_filter(side) {
+                    if is_non_sargable_filter(side, Some(op)) {
                         let snippet = side.to_string();
                         let raw_after = features
                             .non_sargable_predicates
@@ -495,10 +495,16 @@ fn row_explosion_text(factor: &TableFactor) -> String {
 
 fn table_factor_relation_name(factor: &TableFactor) -> Option<String> {
     match factor {
-        TableFactor::Table { name, alias, .. } => alias
-            .as_ref()
-            .map(|alias| alias.name.value.to_ascii_lowercase())
-            .or_else(|| name.0.last().map(|ident| ident.value.to_ascii_lowercase())),
+        TableFactor::Table { name, alias, .. } => {
+            if name.0.len() == 1 {
+                Some(name.0[0].value.to_ascii_lowercase())
+            } else {
+                alias
+                    .as_ref()
+                    .map(|alias| alias.name.value.to_ascii_lowercase())
+                    .or_else(|| name.0.last().map(|ident| ident.value.to_ascii_lowercase()))
+            }
+        }
         TableFactor::Derived {
             alias: Some(alias), ..
         } => Some(alias.name.value.to_ascii_lowercase()),
@@ -696,16 +702,25 @@ fn is_word_char(ch: char) -> bool {
     ch.is_ascii_alphanumeric() || ch == '_'
 }
 
-fn is_non_sargable_filter(expr: &Expr) -> bool {
+fn is_non_sargable_filter(expr: &Expr, op: Option<&BinaryOperator>) -> bool {
     match expr {
         Expr::Function(function) => {
             let name = function_name(function);
-            if matches!(name.as_str(), "date_trunc" | "timestamp_trunc")
+            if matches!(name.as_str(), "date_trunc" | "timestamp_trunc" | "date")
                 && function
                     .args
                     .args()
                     .iter()
                     .any(expr_contains_partition_column_in_arg)
+                && op.is_some_and(|op| {
+                    matches!(
+                        op,
+                        BinaryOperator::Lt
+                            | BinaryOperator::LtEq
+                            | BinaryOperator::Gt
+                            | BinaryOperator::GtEq
+                    )
+                })
             {
                 return false;
             }
@@ -717,7 +732,7 @@ fn is_non_sargable_filter(expr: &Expr) -> bool {
                     .any(expr_contains_partition_column_in_arg)
         }
         Expr::Cast { .. } => false,
-        Expr::Nested(inner) => is_non_sargable_filter(inner),
+        Expr::Nested(inner) => is_non_sargable_filter(inner, op),
         _ => false,
     }
 }
@@ -987,7 +1002,12 @@ pub fn merge_shape_features(
     merge_field!(window_functions);
     merge_field!(ctes);
     merge_field!(cte_references);
-    merge_field!(non_sargable_predicates);
+    if parsed {
+        // ponytail: regex non_sargable matches JOIN ON date_trunc; trust AST WHERE-only extraction
+        base.non_sargable_predicates = ast.non_sargable_predicates;
+    } else {
+        merge_field!(non_sargable_predicates);
+    }
     merge_field!(unions_without_all);
     merge_field!(count_distincts);
     merge_field!(wildcard_table_scans);

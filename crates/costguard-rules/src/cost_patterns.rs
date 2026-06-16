@@ -1,5 +1,5 @@
 use crate::evidence;
-use crate::helpers::{diagnostic, is_downstream_model, is_staging_model};
+use crate::helpers::{diagnostic, is_dbt_macro_path, is_downstream_model, is_staging_model};
 use crate::registry::{Platform, Rule, RuleContext};
 use costguard_diagnostics::{Confidence, Diagnostic, Severity};
 use costguard_sql::JoinKind;
@@ -83,6 +83,9 @@ impl Rule for FunctionWrappedJoinKeyRule {
         Severity::Medium
     }
     fn check(&self, ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
+        if is_dbt_macro_path(&ctx.file.root_relative_path) {
+            return Vec::new();
+        }
         let Some(sql) = ctx.sql else {
             return Vec::new();
         };

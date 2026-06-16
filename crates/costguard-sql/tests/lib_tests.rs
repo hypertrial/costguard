@@ -364,6 +364,157 @@ fn cross_join_date_spine_is_not_flagged() {
 }
 
 #[test]
+fn date_equality_on_block_time_is_non_sargable() {
+    let text = "select id from events where date(block_time) = current_date";
+    let index = LineIndex::new(text);
+    let doc = analyze_test_sql(
+        PathBuf::from("models/marts/fct.sql"),
+        text,
+        Platform::Trino,
+        &index,
+        None,
+        true,
+    );
+    assert!(!doc.features.non_sargable_predicates.is_empty());
+}
+
+#[test]
+fn bounded_date_call_on_block_time_filter_is_not_non_sargable() {
+    let text = "select id from t where date(call_block_time) >= date('2023-01-04')";
+    let index = LineIndex::new(text);
+    let doc = analyze_test_sql(
+        PathBuf::from("models/marts/fct.sql"),
+        text,
+        Platform::Trino,
+        &index,
+        None,
+        true,
+    );
+    assert!(doc.features.non_sargable_predicates.is_empty());
+}
+
+#[test]
+fn coalesce_join_key_is_not_function_wrapped() {
+    let text = "select * from claims cp inner join prices p on coalesce(cp.claim_payout_date, cp.claim_date) = p.block_date";
+    let index = LineIndex::new(text);
+    let doc = analyze_test_sql(
+        PathBuf::from("models/marts/fct.sql"),
+        text,
+        Platform::Trino,
+        &index,
+        None,
+        true,
+    );
+    assert!(!doc
+        .features
+        .joins
+        .iter()
+        .any(|join| join.function_on_join_key));
+}
+
+#[test]
+fn timestamp_date_trunc_day_join_is_not_function_wrapped_key() {
+    let text =
+        "select * from blocks b join prices p on p.timestamp = date_trunc('day', b.block_time)";
+    let index = LineIndex::new(text);
+    let doc = analyze_test_sql(
+        PathBuf::from("macros/gas.sql"),
+        text,
+        Platform::Trino,
+        &index,
+        None,
+        true,
+    );
+    assert!(!doc
+        .features
+        .joins
+        .iter()
+        .any(|join| join.function_on_join_key));
+}
+
+#[test]
+fn lower_email_join_is_not_function_wrapped_key() {
+    let text =
+        "select * from trial_requests left join lead on trial_requests.email = lower(lead.email)";
+    let index = LineIndex::new(text);
+    let doc = analyze_test_sql(
+        PathBuf::from("models/marts/fct.sql"),
+        text,
+        Platform::Snowflake,
+        &index,
+        None,
+        true,
+    );
+    assert!(!doc
+        .features
+        .joins
+        .iter()
+        .any(|join| join.function_on_join_key));
+}
+
+#[test]
+fn period_date_trunc_join_is_not_function_wrapped_key() {
+    let text = "select * from accounts a left join tokens_prices p on cast(date_trunc('day', a.period) as date) = p.period";
+    let index = LineIndex::new(text);
+    let doc = analyze_test_sql(
+        PathBuf::from("models/marts/fct.sql"),
+        text,
+        Platform::Trino,
+        &index,
+        None,
+        true,
+    );
+    assert!(!doc
+        .features
+        .joins
+        .iter()
+        .any(|join| join.function_on_join_key));
+}
+
+#[test]
+fn block_time_alias_date_trunc_join_is_not_function_wrapped_key() {
+    let text = "with arbitrum_usd as (select minute as block_time, price from prices) \
+         select tx.hash from transactions tx \
+         left join arbitrum_usd on date_trunc('minute', tx.block_time) = arbitrum_usd.block_time";
+    let index = LineIndex::new(text);
+    let doc = analyze_test_sql(
+        PathBuf::from("models/marts/fct.sql"),
+        text,
+        Platform::Trino,
+        &index,
+        None,
+        true,
+    );
+    assert!(!doc
+        .features
+        .joins
+        .iter()
+        .any(|join| join.function_on_join_key));
+}
+
+#[test]
+fn compiled_join_date_trunc_day_on_block_time_is_not_non_sargable() {
+    let raw = "select * from {{ ref('events') }}";
+    let compiled =
+        "select a.amount from logs a join prices b on date_trunc('day', a.block_time) = b.day";
+    let index = LineIndex::new(raw);
+    let doc = analyze_test_sql(
+        PathBuf::from("models/marts/fct.sql"),
+        raw,
+        Platform::Trino,
+        &index,
+        Some(compiled),
+        true,
+    );
+    assert!(doc.features.non_sargable_predicates.is_empty());
+    assert!(!doc
+        .features
+        .joins
+        .iter()
+        .any(|join| join.function_on_join_key));
+}
+
+#[test]
 fn minute_date_trunc_join_is_not_function_wrapped_key() {
     let text = "select p.price from prices p join logs le on p.minute = date_trunc('minute', le.block_time)";
     let index = LineIndex::new(text);

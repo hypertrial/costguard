@@ -89,6 +89,18 @@ Top cost-ranked **SQLCOST008** on oneinch `*_mapped_contracts` models (`distinct
 
 No confirmed false positives remain in the top 10. Re-triage: `python3 scripts/top_findings_review.py --repo spellbook --top 10`.
 
+## Top-250 follow-up (2026-06-16)
+
+Extended the triage loop to the top 250 cost-ranked findings. Fourteen registry FPs were identified and fixed:
+
+| Rule | Bucket | Count | Root cause | Fix |
+|------|--------|-------|------------|-----|
+| SQLCOST012 | `cross_join_unnest` | 8 | Balancer v3 `CROSS JOIN global_fees g` — scalar CTE broadcast, not UNNEST | Skip cross joins whose `right_relation` is a defined CTE; use table name (not alias) for single-part join factors |
+| SQLCOST014 | `other` | 4 | dbt macro templates with homonym CTE names / multi-join enrichment | Skip SQLCOST014 for `/macros/` paths |
+| SQLCOST006 | `equality_join` | 2 | dbt macros where Jinja breaks AST join predicates despite clear `ON … =` | Skip SQLCOST006 for `/macros/`; add `equality_keys` + raw-text `ON` fallback |
+
+**After fix:** `python3 scripts/top_findings_review.py --repo spellbook --top 250` → **250 / 250 registry TP**, 0 FP, 0 uncertain.
+
 ## Adjudication method
 
 For each finding: read compiled SQL via manifest, check rule rubric ([`docs/rules/SQLCOST015.md`](../rules/SQLCOST015.md)), classify bucket via [`scripts/bucket_rule_diagnostics.py`](../../scripts/bucket_rule_diagnostics.py), compare to [`tests/benchmarks/fp_registry.toml`](../../tests/benchmarks/fp_registry.toml), and trace the triggering feature key against [`json_regex`](../../crates/costguard-sql/src/features/regex.rs).

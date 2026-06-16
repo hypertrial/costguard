@@ -1,7 +1,7 @@
 {
   "commit": "08ef1d578de5b55f226aae34f30d7077df8e9f35",
   "kind": "external",
-  "max_rss_bytes": 34029568,
+  "max_rss_bytes": 37519360,
   "metrics": {
     "counts": {
       "manifest": 0,
@@ -13,18 +13,17 @@
     "dbt_project_parse_failures": 0,
     "diagnostics_by_rule": {
       "SQLCOST001": 7,
-      "SQLCOST007": 1,
-      "SQLCOST014": 3,
-      "SQLCOST020": 2
+      "SQLCOST007": 2,
+      "SQLCOST014": 1,
+      "SQLCOST020": 1
     },
     "diagnostics_by_severity": {
-      "high": 2,
-      "low": 4,
-      "med": 7
+      "low": 3,
+      "med": 8
     },
     "metadata_only_scan": false,
     "metadata_warnings": 0,
-    "new_findings": 13,
+    "new_findings": 11,
     "sql_parse_compiled_failures": 0,
     "sql_parse_compiled_total": 13,
     "sql_parse_failures": 0,
@@ -33,12 +32,12 @@
     "sql_parse_total": 13,
     "yaml_parse_failures": 0
   },
-  "runtime_max_ms": 29,
-  "runtime_median_ms": 28,
+  "runtime_max_ms": 32,
+  "runtime_median_ms": 32,
   "runtime_samples_ms": [
-    28,
-    29,
-    28
+    32,
+    32,
+    32
   ],
   "target": "external/jaffle-shop",
   "thresholds": {

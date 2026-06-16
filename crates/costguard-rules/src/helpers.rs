@@ -47,6 +47,10 @@ pub(crate) fn is_staging_model(path: &Path) -> bool {
     path.contains("staging/") || path.contains("/stg_") || path.contains("/stage/")
 }
 
+pub(crate) fn is_dbt_macro_path(path: &Path) -> bool {
+    normalized_path(path).contains("/macros/")
+}
+
 pub(crate) fn normalized_path(path: &Path) -> String {
     path.to_string_lossy()
         .replace('\\', "/")

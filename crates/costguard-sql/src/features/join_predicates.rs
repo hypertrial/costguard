@@ -10,6 +10,8 @@ pub(crate) fn join_predicate_has_function_on_key(expr: &Expr) -> bool {
             if is_symmetric_normalization_eq(left, right)
                 || is_time_bucket_join_eq(left, right)
                 || is_coalesce_null_safe_join_eq(left, right)
+                || is_coalesce_join_key(left)
+                || is_coalesce_join_key(right)
                 || is_normalization_of_same_column(left, right)
                 || is_normalization_of_same_column(right, left)
                 || is_symmetric_hash_eq(left, right)
@@ -168,14 +170,27 @@ fn is_time_bucket_column_name(name: &str) -> bool {
         name,
         "minute"
             | "hour"
+            | "hr"
             | "day"
             | "date"
             | "week"
             | "month"
+            | "block_time"
+            | "evt_block_time"
             | "block_date"
             | "block_day"
+            | "block_month"
+            | "date_month"
             | "evt_block_date"
+            | "timestamp"
+            | "ts"
+            | "period"
+            | "time"
     )
+}
+
+fn is_coalesce_join_key(expr: &Expr) -> bool {
+    matches!(expr, Expr::Function(function) if function_name(function) == "coalesce")
 }
 
 fn is_function_wrapped_join_key(expr: &Expr) -> bool {
