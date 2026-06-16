@@ -643,6 +643,53 @@ fn scan_min_confidence_suppresses_low_confidence_high_severity() {
 }
 
 #[test]
+fn scan_min_confidence_filter_omits_low_confidence_from_json_output() {
+    let path = fixture("min_confidence_low_comma.sql");
+    let default_run = costguard_command()
+        .arg("scan")
+        .arg(&path)
+        .arg("--warehouse")
+        .arg("generic")
+        .arg("--format")
+        .arg("json")
+        .output()
+        .expect("run costguard");
+    let default_json: serde_json::Value =
+        serde_json::from_slice(&default_run.stdout).expect("json");
+    let default_count = default_json["diagnostics"]
+        .as_array()
+        .map(|items| items.len())
+        .unwrap_or(0);
+    assert!(
+        default_count > 0,
+        "expected default scan to emit diagnostics: {default_json}"
+    );
+
+    let filtered_run = costguard_command()
+        .arg("scan")
+        .arg(&path)
+        .arg("--warehouse")
+        .arg("generic")
+        .arg("--format")
+        .arg("json")
+        .arg("--min-confidence")
+        .arg("high")
+        .arg("--min-confidence-filter")
+        .output()
+        .expect("run costguard");
+    let filtered_json: serde_json::Value =
+        serde_json::from_slice(&filtered_run.stdout).expect("json");
+    let filtered_count = filtered_json["diagnostics"]
+        .as_array()
+        .map(|items| items.len())
+        .unwrap_or(0);
+    assert_eq!(
+        filtered_count, 0,
+        "expected filtered scan to omit low-confidence diagnostics: {filtered_json}"
+    );
+}
+
+#[test]
 fn scan_sarif_outputs_valid_schema_fields() {
     let output = costguard_command()
         .arg("scan")

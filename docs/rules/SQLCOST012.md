@@ -23,6 +23,6 @@ CROSS JOIN b
 
 Both `-- costguard: allow cross-join` and bare `costguard: allow cross-join` are accepted.
 
-Regex-only comma/cross join detection emits `confidence: low`. Use `--min-confidence high` to suppress regex-only hits in PR gates.
+Regex-only comma/cross join detection emits `confidence: low`. Parsed comma joins emit `confidence: medium` (regex-derived even when the file parses). AST-confirmed `CROSS JOIN` emits `confidence: high`. Use `--min-confidence high` (and optionally `--min-confidence-filter`) to hide lower-confidence hits in PR gates.
 
 See [Suppressions](../book/reference/suppressions.md).

@@ -20,6 +20,7 @@ ignore = ["target", "dbt_packages"]
 format = "text"
 fail_on = "high"
 # min_confidence = "high"  # optional; suppress regex-only findings in PR gates
+# min_confidence_filter = true  # optional; hide findings below min_confidence from output
 
 [dbt]
 manifest_path = "target/manifest.json"
@@ -54,6 +55,7 @@ severity = "high"
 | `format` | string | `text`, `json`, `github`, `markdown`, `md`, `sarif` |
 | `fail_on` | string | Minimum failing severity |
 | `min_confidence` | string | Optional confidence floor for fail logic: `low`, `medium`/`med`, `high` |
+| `min_confidence_filter` | boolean | When `true`, omit findings below `min_confidence` from output (default `false`) |
 | `baseline` | string | Finding baseline JSON path for grandfathering |
 
 ## `[dbt]`

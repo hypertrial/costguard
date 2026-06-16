@@ -1,6 +1,6 @@
 use crate::baseline::{apply_finding_baseline, FindingBaseline};
 use crate::config::ScanConfig;
-use costguard_diagnostics::{Diagnostic, SourceProvenance, Suppressions};
+use costguard_diagnostics::{Confidence, Diagnostic, SourceProvenance, Suppressions};
 use costguard_policy::{apply_governance, PolicyViolation, ResolvedPolicy};
 use costguard_rules::{RuleOverride, RuleOverrides, RuleRegistry};
 use costguard_scanner::ProjectFile;
@@ -255,6 +255,24 @@ pub fn apply_baseline_filter(
     }
 }
 
+/// Drop diagnostics below `min_confidence` when output filtering is enabled.
+pub fn filter_by_min_confidence(
+    diagnostics: Vec<Diagnostic>,
+    min_confidence: Option<Confidence>,
+    enabled: bool,
+) -> Vec<Diagnostic> {
+    if !enabled {
+        return diagnostics;
+    }
+    let Some(threshold) = min_confidence else {
+        return diagnostics;
+    };
+    diagnostics
+        .into_iter()
+        .filter(|diagnostic| diagnostic.confidence >= threshold)
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -301,5 +319,23 @@ mod tests {
         diagnostic.governance.evidence_key.clear();
         let err = assign_semantic_identities(vec![diagnostic]).unwrap_err();
         assert!(err.to_string().contains("lacks semantic evidence"));
+    }
+
+    #[test]
+    fn filter_by_min_confidence_drops_below_threshold_when_enabled() {
+        let low = sample("SQLCOST012", "sem-v1:join:comma", 1, Confidence::Low);
+        let medium = sample("SQLCOST012", "sem-v1:join:comma2", 2, Confidence::Medium);
+        let high = sample("SQLCOST012", "sem-v1:join:cross", 3, Confidence::High);
+        let inputs = vec![low, medium, high];
+        let filtered =
+            super::filter_by_min_confidence(inputs.clone(), Some(Confidence::High), true);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].confidence, Confidence::High);
+
+        let kept = super::filter_by_min_confidence(inputs.clone(), Some(Confidence::High), false);
+        assert_eq!(kept.len(), 3);
+
+        let unset = super::filter_by_min_confidence(inputs, None, true);
+        assert_eq!(unset.len(), 3);
     }
 }

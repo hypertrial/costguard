@@ -526,6 +526,39 @@ fn ast_equality_join_emits_medium_confidence_when_rule_fires() {
 }
 
 #[test]
+fn cross_join_confidence_matches_join_kind_and_extraction() {
+    let cross_file = sql_file("models/marts/fct.sql", "select * from a cross join b");
+    let cross_doc = analyze_for_rule("SQLCOST012", &cross_file);
+    assert!(cross_doc.feature_extraction_used_ast);
+    let cross = run_diagnostics_for_file(&cross_file, &[cross_doc])
+        .into_iter()
+        .find(|diagnostic| diagnostic.rule_id == "SQLCOST012")
+        .expect("expected SQLCOST012 cross join");
+    assert_eq!(cross.confidence, Confidence::High);
+
+    let comma_file = sql_file("models/marts/fct.sql", "select * from a, b");
+    let comma_doc = analyze_for_rule("SQLCOST012", &comma_file);
+    assert!(comma_doc.feature_extraction_used_ast);
+    let comma = run_diagnostics_for_file(&comma_file, &[comma_doc])
+        .into_iter()
+        .find(|diagnostic| diagnostic.rule_id == "SQLCOST012")
+        .expect("expected SQLCOST012 comma join");
+    assert_eq!(comma.confidence, Confidence::Medium);
+
+    let regex_file = sql_file(
+        "models/marts/fct.sql",
+        "{{ not_parsable }} select * from a, b",
+    );
+    let regex_doc = analyze(&regex_file);
+    assert!(!regex_doc.feature_extraction_used_ast);
+    let regex = run_diagnostics_for_file(&regex_file, &[regex_doc])
+        .into_iter()
+        .find(|diagnostic| diagnostic.rule_id == "SQLCOST012")
+        .expect("expected SQLCOST012 regex comma join");
+    assert_eq!(regex.confidence, Confidence::Low);
+}
+
+#[test]
 fn suppression_still_applies_after_rule_split() {
     let file = sql_file(
         "models/marts/fct.sql",

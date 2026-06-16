@@ -186,6 +186,7 @@ warehouse = "{warehouse}"
 # [output]
 # fail_on = "high"
 # min_confidence = "high"
+# min_confidence_filter = true
 
 # [dbt]
 # manifest_path = "target/manifest.json"

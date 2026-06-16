@@ -99,6 +99,8 @@ struct ScanArgs {
     #[arg(long)]
     min_confidence: Option<String>,
     #[arg(long)]
+    min_confidence_filter: bool,
+    #[arg(long)]
     baseline: Option<PathBuf>,
     #[arg(long)]
     write_baseline: Option<PathBuf>,
@@ -184,6 +186,8 @@ struct PrArgs {
     fail_on: Option<String>,
     #[arg(long)]
     min_confidence: Option<String>,
+    #[arg(long)]
+    min_confidence_filter: bool,
     #[arg(long)]
     baseline: Option<PathBuf>,
     #[arg(long)]
@@ -614,6 +618,9 @@ fn config_from_scan_args(args: ScanArgs) -> Result<ScanConfig> {
     args.common.apply_common(&mut overrides);
     overrides.fail_on = args.fail_on;
     overrides.min_confidence = args.min_confidence;
+    if args.min_confidence_filter {
+        overrides.min_confidence_filter = Some(true);
+    }
     overrides.baseline_path = args.baseline;
     overrides.write_baseline_path = args.write_baseline;
     overrides.cost = args.cost;
@@ -654,6 +661,9 @@ fn config_from_pr_args(args: PrArgs) -> Result<ScanConfig> {
     args.common.apply_common(&mut overrides);
     overrides.fail_on = args.fail_on;
     overrides.min_confidence = args.min_confidence;
+    if args.min_confidence_filter {
+        overrides.min_confidence_filter = Some(true);
+    }
     overrides.baseline_path = args.baseline;
     overrides.cost = args.cost;
     overrides.fail_on_cost_delta = args.fail_on_cost_delta;

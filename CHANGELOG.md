@@ -6,6 +6,7 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ### Added
 
+- **`min_confidence_filter`** — opt-in output filter (`[output].min_confidence_filter` / `--min-confidence-filter`) that omits findings below `min_confidence` from emitted diagnostics, not just the CI exit gate.
 - **SQLCOST045** — stale dbt manifest detection when `target/manifest.json` is older than modified model SQL files; fails closed under `--analysis-policy strict`.
 - `scripts/rule_tp_census.py` — cost-ranked FP-elimination census (≤100 examples/rule, 0 fp_bug + 0 unknown pass bar) with optional `tests/benchmarks/rule_tp_evidence.json` export and `--rule` / `--sample-cap` flags.
 - Design doc: [Rule TP coverage](docs/design/rule-tp-coverage.md) — 44/44 rules PASS on spellbook + jaffle-shop + mattermost-warehouse + data-infra.
@@ -21,6 +22,7 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ### Changed
 
+- **SQLCOST012** — comma joins on parsed files now emit `confidence: medium` (regex-derived); AST-confirmed `CROSS JOIN` stays `high`; regex-only stays `low`.
 - Missing/stale manifest guidance now names `dbt compile` remediation (SQLCOST023, SQLCOST045, strict `manifest_required` / `manifest_stale` violations). Local scan docs add a `dbt compile && costguard scan` iteration recipe.
 - **Benchmark compile**: all four repos in [`tests/benchmarks/repos.toml`](tests/benchmarks/repos.toml) set `compile_dbt = true`. mattermost-warehouse and data-infra use `compile_best_effort = true` with offline dummy Snowflake/BigQuery profiles. [`scripts/dbt_compile_for_costguard.py`](scripts/dbt_compile_for_costguard.py) reuses existing manifests on compile failure, extends manifest cache to single-project repos, and passes `--no-introspect --no-populate-cache` for offline compile attempts.
 - SQLCOST006: `confidence: low` when feature extraction is regex-only; symmetric coalesce/cast/hash equality keys in AST; subquery join `ON` detection after balanced parenthesis scan (reduces distant-`ON` false positives).

@@ -119,6 +119,7 @@ pub struct ScanConfig {
     pub changed_only: bool,
     pub fail_on: Option<Severity>,
     pub min_confidence: Option<Confidence>,
+    pub min_confidence_filter: bool,
     pub rule_overrides: RuleOverrides,
     pub baseline_path: Option<PathBuf>,
     pub write_baseline_path: Option<PathBuf>,
@@ -141,6 +142,7 @@ impl Default for ScanConfig {
             changed_only: false,
             fail_on: Some(Severity::High),
             min_confidence: None,
+            min_confidence_filter: false,
             rule_overrides: RuleOverrides::default(),
             baseline_path: None,
             write_baseline_path: None,
@@ -179,6 +181,7 @@ pub struct OutputSection {
     pub format: Option<String>,
     pub fail_on: Option<String>,
     pub min_confidence: Option<String>,
+    pub min_confidence_filter: Option<bool>,
     pub baseline: Option<PathBuf>,
 }
 
@@ -257,6 +260,9 @@ pub fn apply_file_config(mut config: ScanConfig, file_config: FileConfig) -> Res
         if let Some(min_confidence) = output.min_confidence {
             config.min_confidence = Some(min_confidence.parse().map_err(anyhow::Error::msg)?);
         }
+        if let Some(min_confidence_filter) = output.min_confidence_filter {
+            config.min_confidence_filter = min_confidence_filter;
+        }
         if let Some(baseline) = output.baseline {
             config.baseline_path = Some(baseline);
         }
@@ -322,6 +328,7 @@ pub struct ScanRuntimeOverrides {
     pub manifest_path: Option<PathBuf>,
     pub fail_on: Option<String>,
     pub min_confidence: Option<String>,
+    pub min_confidence_filter: Option<bool>,
     pub baseline_path: Option<PathBuf>,
     pub write_baseline_path: Option<PathBuf>,
     pub cost: bool,
@@ -352,6 +359,9 @@ impl ScanRuntimeOverrides {
         }
         if let Some(min_confidence) = &self.min_confidence {
             config.min_confidence = Some(min_confidence.parse().map_err(anyhow::Error::msg)?);
+        }
+        if let Some(min_confidence_filter) = self.min_confidence_filter {
+            config.min_confidence_filter = min_confidence_filter;
         }
         if let Some(baseline) = &self.baseline_path {
             config.baseline_path = Some(baseline.clone());

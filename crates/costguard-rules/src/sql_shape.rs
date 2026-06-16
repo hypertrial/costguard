@@ -383,7 +383,11 @@ impl Rule for CrossJoinRule {
             })
             .map(|join| {
                 let confidence = if sql.feature_extraction_used_ast {
-                    Confidence::High
+                    match join.kind {
+                        JoinKind::Cross => Confidence::High,
+                        JoinKind::Comma => Confidence::Medium,
+                        _ => Confidence::Medium,
+                    }
                 } else {
                     Confidence::Low
                 };

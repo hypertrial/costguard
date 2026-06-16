@@ -215,6 +215,12 @@ expect_rules = []
 forbid_rules = ["SQLCOST012"]
 
 [[case]]
+name = "forbid_cross_join_group_by_comma"
+path = "forbid_cross_join_group_by_comma"
+expect_rules = []
+forbid_rules = ["SQLCOST012"]
+
+[[case]]
 name = "cross_join_date_ranges"
 path = "cross_join_date_ranges"
 expect_rules = []
@@ -307,6 +313,12 @@ forbid_rules = []
 [[case]]
 name = "recall_equality_join_ok"
 path = "recall_equality_join_ok"
+expect_rules = []
+forbid_rules = ["SQLCOST006"]
+
+[[case]]
+name = "forbid_unbounded_subquery_distant_on"
+path = "forbid_unbounded_subquery_distant_on"
 expect_rules = []
 forbid_rules = ["SQLCOST006"]
 

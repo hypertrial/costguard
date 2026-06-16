@@ -169,6 +169,12 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
     let (mut diagnostics, baselined_findings) =
         apply_baseline_filter(diagnostics, baseline.as_ref());
 
+    diagnostics = crate::pipeline::filter_by_min_confidence(
+        diagnostics,
+        config.min_confidence,
+        config.min_confidence_filter,
+    );
+
     let features_by_path = feature_summaries_by_path(&union_sql_documents);
     let mut cost_summary =
         run_optional_cost(config, &root, &project, &mut diagnostics, &features_by_path)?;

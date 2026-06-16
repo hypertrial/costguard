@@ -33,6 +33,16 @@ CROSS JOIN b
 
 Bare `costguard: allow cross-join` (without `--`) also works.
 
+## Hide low-confidence findings
+
+`--min-confidence` (or `[output].min_confidence`) gates CI exit only by default: low-confidence findings still appear in JSON/SARIF/text output.
+
+Pair it with `--min-confidence-filter` (or `[output].min_confidence_filter = true`) to omit findings below the floor from emitted output. Recommended PR gate for noisy repos:
+
+```bash
+costguard pr --fail-on high --min-confidence high --min-confidence-filter
+```
+
 ## Guidance
 
 - Suppress only intentional exceptions with documented rationale.
