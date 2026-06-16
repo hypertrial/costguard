@@ -54,10 +54,12 @@ from llm_judge_lib import (  # noqa: E402
     JudgeRecord,
     LlamaJudge,
     RuleMetadata,
+    StructuredVerdict,
     build_grouped_messages,
     build_messages,
     cache_key,
     candidate_sort_key,
+    fewshots_file_sha,
     finding_id_for_diagnostic,
     finding_span,
     load_judge_records,
@@ -68,6 +70,7 @@ from llm_judge_lib import (  # noqa: E402
     runtime_version,
     utc_now_iso,
     verdict_from_letter,
+    verdict_from_structured,
     verify_gguf_chat_template,
     write_judge_records,
     write_manifest,
@@ -223,6 +226,8 @@ def make_record(
     logprobs: dict[str, float],
     abstention_reason: str | None,
     input_sha256: str,
+    structured: StructuredVerdict | None = None,
+    fewshots_sha: str = "",
 ) -> JudgeRecord:
     diagnostic = candidate.diagnostic
     rule_id = str(diagnostic.get("rule_id", ""))
@@ -242,6 +247,7 @@ def make_record(
         model_file_sha256=model_sha256,
         runtime_version=runtime_ver,
         mode=manifest.mode,
+        fewshots_sha=fewshots_sha,
     )
     return JudgeRecord(
         finding_id=finding_id,
@@ -271,6 +277,10 @@ def make_record(
         message=message,
         dialect=dialect,
         mode=manifest.mode,
+        exemption_applies=structured.exemption_applies if structured else None,
+        failure_condition_met=structured.failure_condition_met if structured else None,
+        raw_verdict_json=structured.raw_json if structured else "",
+        fewshots_sha=fewshots_sha,
     )
 
 
@@ -283,6 +293,7 @@ def judge_file_prefix(
     model_sha256: str,
     judge: LlamaJudge,
     cache: dict[str, JudgeRecord],
+    fewshots_sha: str,
 ) -> list[JudgeRecord]:
     runtime_ver = runtime_version()
     records: list[JudgeRecord] = []
@@ -307,6 +318,7 @@ def judge_file_prefix(
             model_file_sha256=model_sha256,
             runtime_version=runtime_ver,
             mode=manifest.mode,
+            fewshots_sha=fewshots_sha,
         )
         cached = cache.get(key)
         if cached is not None:
@@ -336,6 +348,7 @@ def judge_file_prefix(
                     logprobs={},
                     abstention_reason="unsure_due_to_context_limit",
                     input_sha256=messages_sha256(system, user),
+                    fewshots_sha=fewshots_sha,
                 )
             )
             continue
@@ -348,8 +361,8 @@ def judge_file_prefix(
             message=message,
             sql=file_ctx.sql,
         )
-        letter = judge.judge(system, user, max_tokens=manifest.max_new_tokens)
-        llm_verdict, abstention_reason = verdict_from_letter(letter)
+        structured = judge.judge(system, user, max_tokens=manifest.max_new_tokens)
+        llm_verdict, abstention_reason, label_token = verdict_from_structured(structured)
         if file_ctx.truncated and llm_verdict in {"tp", "fp"} and abstention_reason is None:
             llm_verdict = "unsure"
             abstention_reason = "context_truncated"
@@ -363,10 +376,12 @@ def judge_file_prefix(
                 model_sha256=model_sha256,
                 runtime_ver=runtime_ver,
                 llm_verdict=llm_verdict,
-                label_token=letter,
+                label_token=label_token,
                 logprobs={},
                 abstention_reason=abstention_reason,
                 input_sha256=messages_sha256(system, user),
+                structured=structured,
+                fewshots_sha=fewshots_sha,
             )
         )
     return records
@@ -381,6 +396,7 @@ def judge_file_grouped(
     model_sha256: str,
     judge: LlamaJudge,
     cache: dict[str, JudgeRecord],
+    fewshots_sha: str,
 ) -> list[JudgeRecord]:
     runtime_ver = runtime_version()
     if file_ctx.too_large:
@@ -392,6 +408,7 @@ def judge_file_grouped(
             model_sha256=model_sha256,
             judge=judge,
             cache=cache,
+            fewshots_sha=fewshots_sha,
         )
 
     prompt_inputs: list[FindingPromptInput] = []
@@ -430,6 +447,7 @@ def judge_file_grouped(
             model_file_sha256=model_sha256,
             runtime_version=runtime_ver,
             mode=manifest.mode,
+            fewshots_sha=fewshots_sha,
         )
         cached = cache.get(key)
         if cached is not None:
@@ -455,6 +473,7 @@ def judge_file_grouped(
                 logprobs={},
                 abstention_reason=abstention_reason,
                 input_sha256=input_sha256,
+                fewshots_sha=fewshots_sha,
             )
 
     return [records_by_index[index] for index in range(len(file_ctx.candidates))]
@@ -486,6 +505,12 @@ def main() -> int:
         "--grouped",
         action="store_true",
         help="One LLM call per file with JSON verdict array (no logprob margin)",
+    )
+    parser.add_argument(
+        "--checkpoint-every",
+        type=int,
+        default=1,
+        help="Write labels JSONL after every N files (default 1)",
     )
     parser.add_argument("--dry-run", action="store_true", help="Enumerate candidates only")
     args = parser.parse_args()
@@ -554,6 +579,7 @@ def main() -> int:
 
     existing = load_judge_records(args.out)
     cache = {record.cache_key: record for record in existing}
+    fewshots_sha = fewshots_file_sha()
     rule_meta_map = load_rule_metadata()
     judge = LlamaJudge(
         model_path,
@@ -570,8 +596,9 @@ def main() -> int:
         compiled=compiled,
         manifest=manifest,
     )
-    records: list[JudgeRecord] = []
+    records: list[JudgeRecord] = list(existing)
     judged = 0
+    files_done = 0
     for file_ctx in file_contexts:
         if manifest.mode == MODE_GROUPED:
             file_records = judge_file_grouped(
@@ -582,6 +609,7 @@ def main() -> int:
                 model_sha256=model_sha256,
                 judge=judge,
                 cache=cache,
+                fewshots_sha=fewshots_sha,
             )
         else:
             file_records = judge_file_prefix(
@@ -592,10 +620,16 @@ def main() -> int:
                 model_sha256=model_sha256,
                 judge=judge,
                 cache=cache,
+                fewshots_sha=fewshots_sha,
             )
-        records.extend(file_records)
+        for record in file_records:
+            cache[record.cache_key] = record
+        records = sorted(cache.values(), key=lambda item: (item.path, item.line, item.finding_id))
         judged += len(file_records)
+        files_done += 1
         print(f"judged {judged}/{len(capped)} ({file_ctx.path})")
+        if args.checkpoint_every > 0 and files_done % args.checkpoint_every == 0:
+            write_judge_records(records, args.out)
 
     write_judge_records(records, args.out)
     write_manifest(manifest, args.manifest_out)

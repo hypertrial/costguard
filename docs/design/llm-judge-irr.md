@@ -26,7 +26,7 @@ Shared helpers live in `scripts/llm_judge_lib.py`.
 | Batch | `n_batch=2048`, `n_ubatch=512` |
 | SQL target | **~8000 tokens** per file (`sql_token_target`) |
 | Prompting | **ChatML** via `create_chat_completion` (GGUF embedded template) |
-| Output | Single constrained token: `A` / `B` / `C` (default mode) |
+| Output | Structured JSON verdict (~32 tokens): `exemption_applies`, `failure_condition_met`, `verdict` |
 | Sampling | `temperature=0`, fixed seed `3407`, concurrency **1** |
 
 Fallback order: Qwen3-30B-A3B Q4 → Qwen3-32B Q4 → Gemma 3 27B-it Q4.
@@ -49,37 +49,47 @@ For ~1,200 spellbook findings with sane packed prompts (~2–8k tokens/file):
 | `--grouped`: one call per file | **1–6 hours** |
 | Naive per-finding full compiled SQL | **12–55+ hours** |
 
-### Default mode (`mode = prefix`, prompt `irr_judge_v2`)
+### Default mode (`mode = prefix`, prompt `irr_judge_v3`)
 
 1. Group capped findings by SQL file (`path`).
 2. Build **one shared SQL context per file** via deterministic union excerpt packing.
 3. Sort findings by `(path, rule, line)` so consecutive calls share the `system + SQL` chat prefix.
-4. Reuse KV cache (`LlamaRAMCache`) across per-finding `A/B/C` calls via `create_chat_completion`.
+4. Reuse KV cache (`LlamaRAMCache`) across per-finding structured JSON calls via `create_chat_completion`.
+5. **Checkpoint** after each file (default `--checkpoint-every 1`) so long runs resume without losing progress.
 
-### Grouped mode (`--grouped`, prompt `irr_judge_v2+grouped`)
+### Grouped mode (`--grouped`, prompt `irr_judge_v3+grouped`)
 
 One LLM call per file returns a JSON verdict array for all findings in that file. Faster prefill amortization; abstention when the model emits `C` (`abstention_reason=model_unsure`).
 
 ## Judging strategy
 
-The model is **not** asked for free-form rationale. Default mode uses one-token classification via GBNF grammar:
+The model is **not** asked for free-form rationale. Default mode returns a small JSON object (GBNF-constrained):
 
-| Token | Verdict |
+| Field | Meaning |
 | --- | --- |
-| `A` | true positive |
-| `B` | false positive |
-| `C` | unsure |
+| `exemption_applies` | Documented rubric exemption applies |
+| `failure_condition_met` | Rule failure condition clearly met in SQL |
+| `verdict` | `A` / `B` / `C` letter |
+
+Deterministic post-processing (`map_structured_verdict`) maps fields to `tp` / `fp` / `unsure`:
+
+- `C` → `unsure` (`model_unsure`)
+- `exemption_applies=true` → `fp`
+- `failure_condition_met=true` (and not exempt) → `tp`
+- else → `fp`
+
+Per-rule **few-shot exemplars** live in `tests/benchmarks/judge_fewshots.toml` (SQLCOST012, SQLCOST017, SQLCOST006, SQLCOST014). Their SHA is part of `cache_key`.
 
 **Abstention:** when the model emits `C`, verdict is `unsure` with `abstention_reason=model_unsure`. Truncated SQL contexts also force `unsure` (`context_truncated`). Do not map `unsure` to `fp` when computing κ.
 
-The v2 prompt defaults to **B (false positive)** when the rule's failure condition is not clearly met — countering confirm-bias from v1's raw completion mode.
+The v3 prompt is **balanced** — no global default-to-B — so the model must apply rubric exemptions and failure conditions literally.
 
 Prompt versions:
 
 | Mode | `prompt_version` |
 | --- | --- |
-| Default (prefix reuse) | `irr_judge_v2` |
-| Grouped JSON | `irr_judge_v2+grouped` |
+| Default (prefix reuse) | `irr_judge_v3` |
+| Grouped JSON | `irr_judge_v3+grouped` |
 
 The user message puts **SQL before per-finding rule context** so the shared prefix is stable across findings in a file. It **excludes** registry bucket names, existing `y_true`, and triage rationale.
 
@@ -107,7 +117,7 @@ Each JSONL record stores a `cache_key` = SHA256 of:
 
 ```
 finding_id + rule_id + rule_description_sha + sql_sha + finding_span
-+ prompt_version + model_file_sha256 + runtime_version + mode
++ prompt_version + model_file_sha256 + runtime_version + mode + fewshots_sha
 ```
 
 Stale entries are not silently reused when prompt, model, SQL, or mode changes.
@@ -116,9 +126,13 @@ Stale entries are not silently reused when prompt, model, SQL, or mode changes.
 
 `eval_irr.py` reports on the **non-abstain** subset where both raters gave `tp` or `fp`:
 
-- `kappa_binary_non_abstain` (Cohen's κ)
+- `kappa_binary_non_abstain` (Cohen's κ) — co-primary with FP recall under class skew
+- `mcc` (Matthews correlation)
+- `registry_fp_recall` — P(judge=fp \| registry=fp)
+- `registry_tp_recall` — P(judge=tp \| registry=tp)
+- `registry_fp_precision` — P(registry=fp \| judge=fp)
 - coverage, abstain rate, disagreement rate
-- per-rule κ (rules with ≥ 5 scorable samples)
+- per-rule κ, MCC, and FP recall (rules with ≥ 5 scorable samples)
 - top disagreement `(rule, bucket)` pairs
 
 CI is **report-only** — no κ floor gate yet.

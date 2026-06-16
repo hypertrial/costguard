@@ -17,10 +17,11 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_LABELS_JSONL = ROOT / "tests" / "benchmarks" / "llm_judge_labels.jsonl"
 DEFAULT_MANIFEST = ROOT / "tests" / "benchmarks" / "llm_judge_manifest.toml"
 DEFAULT_IRR_REPORT = ROOT / "tests" / "benchmarks" / "irr_report.json"
+DEFAULT_FEWSHOTS = ROOT / "tests" / "benchmarks" / "judge_fewshots.toml"
 RULE_GUIDES = ROOT / "docs" / "rules"
 
-PROMPT_VERSION = "irr_judge_v2"
-PROMPT_VERSION_GROUPED = "irr_judge_v2+grouped"
+PROMPT_VERSION = "irr_judge_v3"
+PROMPT_VERSION_GROUPED = "irr_judge_v3+grouped"
 MODE_PREFIX = "prefix"
 MODE_GROUPED = "grouped"
 JUDGE_NAME = "costguard-local-llm-judge"
@@ -33,7 +34,7 @@ DEFAULT_CONTEXT_TOKENS = 32768
 DEFAULT_N_BATCH = 2048
 DEFAULT_N_UBATCH = 512
 DEFAULT_SQL_TOKEN_TARGET = 8000
-DEFAULT_MAX_NEW_TOKENS = 1
+DEFAULT_MAX_NEW_TOKENS = 32
 DEFAULT_CAP = 50
 DEFAULT_FLASH_ATTN = True
 DEFAULT_SPAN_LINES = 40
@@ -41,29 +42,37 @@ DEFAULT_KV_CACHE_CAPACITY = 2
 
 LABEL_TOKEN_TO_VERDICT = {"A": "tp", "B": "fp", "C": "unsure"}
 
-# ponytail: one-token GBNF; upgrade path is JSON-schema if we add fields
+# ponytail: grouped mode still uses one-letter GBNF per finding in JSON array
 LABEL_GRAMMAR = r"""
 root ::= letter
 letter ::= "A" | "B" | "C"
 """
 
+# ponytail: compact GBNF (no ws rule); spaced grammar stalls on whitespace after "{"
+JSON_VERDICT_GRAMMAR = r"""
+root ::= object
+object ::= "{" "\"exemption_applies\":" bool ",\"failure_condition_met\":" bool ",\"verdict\":" letter "}"
+bool ::= "true" | "false"
+letter ::= "\"A\"" | "\"B\"" | "\"C\""
+"""
+
 SYSTEM_PROMPT = """\
 You are an independent SQL performance-review adjudicator.
 You are NOT evaluating whether Costguard fired correctly.
-You decide whether the described rule truly applies to the SQL shown.
-Static-analysis findings are frequently false positives.
-Default to B (false positive) when the rule's failure condition is not clearly met in the SQL or evidence is insufficient.
-Use C (unsure) only when the SQL needed to judge is genuinely missing from the context.
+Apply the rule rubric and documented exemptions literally to the SQL shown.
+A (true positive) only when the failure condition is clearly met and no exemption applies.
+B (false positive) when an exemption applies OR the failure condition is not met.
+C (unsure) only when the SQL needed to judge is genuinely missing from the context—not merely ambiguous.
 Do not use prior labels, registry buckets, or Costguard implementation details.\
 """
 
 DECISION_SUFFIX = """\
-First identify the rule's failure condition silently, then decide:
-A = true positive ONLY if the SQL clearly exhibits the rule's failure condition.
-B = false positive if the finding is not applicable, is harmless, or evidence is insufficient.
-C = unsure ONLY if the SQL context is genuinely insufficient to judge.
+Decide using the rubric:
+1. Does a documented exemption apply? Set exemption_applies accordingly.
+2. Is the rule's failure condition clearly met in the SQL? Set failure_condition_met accordingly.
+3. verdict: A if failure condition met and not exempt; B if exempt or condition not met; C only if SQL is insufficient.
 
-Return exactly one letter (A, B, or C). No explanation.\
+Return JSON only with keys exemption_applies, failure_condition_met, verdict (A/B/C). No explanation.\
 """
 
 GROUPED_DECISION_SUFFIX = """\
@@ -127,6 +136,10 @@ class JudgeRecord:
     message: str = ""
     dialect: str = ""
     mode: str = MODE_PREFIX
+    exemption_applies: bool | None = None
+    failure_condition_met: bool | None = None
+    raw_verdict_json: str = ""
+    fewshots_sha: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
@@ -166,6 +179,10 @@ class JudgeRecord:
             message=str(payload.get("message", "")),
             dialect=str(payload.get("dialect", "")),
             mode=mode,
+            exemption_applies=payload.get("exemption_applies"),
+            failure_condition_met=payload.get("failure_condition_met"),
+            raw_verdict_json=str(payload.get("raw_verdict_json", "")),
+            fewshots_sha=str(payload.get("fewshots_sha", "")),
         )
 
 
@@ -249,6 +266,7 @@ def cache_key(
     model_file_sha256: str,
     runtime_version: str,
     mode: str = MODE_PREFIX,
+    fewshots_sha: str = "",
 ) -> str:
     material = "|".join(
         [
@@ -261,9 +279,18 @@ def cache_key(
             model_file_sha256,
             runtime_version,
             mode,
+            fewshots_sha,
         ]
     )
     return sha256_text(material)
+
+
+@dataclass(frozen=True)
+class StructuredVerdict:
+    exemption_applies: bool
+    failure_condition_met: bool
+    letter: str
+    raw_json: str
 
 
 def verdict_from_letter(letter: str) -> tuple[str, str | None]:
@@ -275,6 +302,53 @@ def verdict_from_letter(letter: str) -> tuple[str, str | None]:
     if verdict == "unsure":
         return verdict, "model_unsure"
     return verdict, None
+
+
+def parse_structured_verdict(text: str) -> StructuredVerdict:
+    """Parse JSON verdict; malformed output defaults to C."""
+    raw = text.strip()
+    start = raw.find("{")
+    end = raw.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        raw = raw[start : end + 1]
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return StructuredVerdict(False, False, "C", text.strip())
+    if not isinstance(data, dict):
+        return StructuredVerdict(False, False, "C", text.strip())
+    exemption = bool(data.get("exemption_applies", False))
+    condition = bool(data.get("failure_condition_met", False))
+    letter = str(data.get("verdict", "C")).strip().upper()[:1] or "C"
+    if letter not in {"A", "B", "C"}:
+        letter = "C"
+    return StructuredVerdict(exemption, condition, letter, raw)
+
+
+def map_structured_verdict(
+    exemption_applies: bool,
+    failure_condition_met: bool,
+    letter: str,
+) -> tuple[str, str | None, str]:
+    """Return (llm_verdict, abstention_reason, label_token)."""
+    label_token = letter.strip().upper()[:1] or "C"
+    if label_token not in {"A", "B", "C"}:
+        label_token = "C"
+    if label_token == "C":
+        return "unsure", "model_unsure", label_token
+    if exemption_applies:
+        return "fp", None, label_token
+    if failure_condition_met:
+        return "tp", None, label_token
+    return "fp", None, label_token
+
+
+def verdict_from_structured(structured: StructuredVerdict) -> tuple[str, str | None, str]:
+    return map_structured_verdict(
+        structured.exemption_applies,
+        structured.failure_condition_met,
+        structured.letter,
+    )
 
 
 def messages_sha256(system: str, user: str) -> str:
@@ -317,6 +391,64 @@ def load_rule_guide(rule_id: str) -> str:
     return guide.read_text(encoding="utf-8").strip()
 
 
+def fewshots_file_sha(path: Path | None = None) -> str:
+    fewshots_path = path or DEFAULT_FEWSHOTS
+    if not fewshots_path.exists():
+        return sha256_text("")
+    return sha256_text(fewshots_path.read_text(encoding="utf-8"))
+
+
+def load_fewshots(rule_id: str, path: Path | None = None) -> str:
+    fewshots_path = path or DEFAULT_FEWSHOTS
+    if not fewshots_path.exists():
+        return ""
+    data = tomllib.loads(fewshots_path.read_text(encoding="utf-8"))
+    examples = [item for item in data.get("example", []) if item.get("rule_id") == rule_id]
+    if not examples:
+        return ""
+    blocks: list[str] = []
+    for index, example in enumerate(examples, start=1):
+        payload = {
+            "exemption_applies": bool(example.get("exemption_applies", False)),
+            "failure_condition_met": bool(example.get("failure_condition_met", False)),
+            "verdict": str(example.get("verdict", "B")).strip().upper()[:1] or "B",
+        }
+        blocks.append(
+            "\n".join(
+                [
+                    f"Example {index}:",
+                    f"SQL: {example.get('sql_excerpt', '')}",
+                    f"Message: {example.get('message', '')}",
+                    f"Output: {json.dumps(payload, sort_keys=True)}",
+                ]
+            )
+        )
+    return "\n\n".join(blocks)
+
+
+def _rubric_exemption_blurb(rubric: str) -> str:
+    if not rubric:
+        return ""
+    paragraphs = [part.strip() for part in rubric.split("\n\n") if part.strip()]
+    if len(paragraphs) < 2:
+        return ""
+    return paragraphs[1]
+
+
+def _decision_checklist(rule_id: str) -> str:
+    if rule_id not in {"SQLCOST012", "SQLCOST017"}:
+        return ""
+    if rule_id == "SQLCOST012":
+        return (
+            "Checklist: distinguish UNNEST/array cross joins (often exempt) "
+            "from bare comma/CROSS JOIN without predicate."
+        )
+    return (
+        "Checklist: symmetric lower()/trim() on both join sides is often exempt; "
+        "one-sided cast()/function wrap is a failure."
+    )
+
+
 def load_rule_metadata() -> dict[str, RuleMetadata]:
     rules = fetch_rules_json()
     metadata: dict[str, RuleMetadata] = {}
@@ -340,6 +472,7 @@ def _finding_suffix_parts(
     span: str,
     message: str,
     index: int | None = None,
+    fewshots: str = "",
 ) -> list[str]:
     parts = [
         f"Rule ID: {rule_meta.rule_id}",
@@ -348,6 +481,14 @@ def _finding_suffix_parts(
     ]
     if rule_meta.rubric:
         parts.append(f"Rule rubric:\n{rule_meta.rubric}")
+        blurb = _rubric_exemption_blurb(rule_meta.rubric)
+        if blurb:
+            parts.append(f"Known exemptions (from rubric):\n{blurb}")
+    checklist = _decision_checklist(rule_meta.rule_id)
+    if checklist:
+        parts.append(checklist)
+    if fewshots:
+        parts.append(f"Few-shot examples:\n{fewshots}")
     if index is not None:
         parts.append(f"Finding index: {index}")
     if dialect:
@@ -369,14 +510,19 @@ def build_messages(
     span: str,
     message: str,
     sql: str,
+    fewshots_path: Path | None = None,
 ) -> tuple[str, str]:
+    fewshots = load_fewshots(rule_meta.rule_id, fewshots_path)
     suffix_parts = _finding_suffix_parts(
         rule_meta,
         dialect=dialect,
         line=line,
         span=span,
         message=message,
+        fewshots=fewshots,
     )
+    suffix_parts.append("---")
+    suffix_parts.append("Current finding:")
     suffix_parts.append(DECISION_SUFFIX)
     suffix = "\n\n".join(suffix_parts)
     user = f"SQL:\n{sql}\n\n{suffix}"
@@ -696,6 +842,7 @@ class LlamaJudge:
                 "install with: pip install -r requirements-judge.txt"
             ) from exc
         self._seed = seed
+        self._json_grammar = LlamaGrammar.from_string(JSON_VERDICT_GRAMMAR.strip())
         self._label_grammar = LlamaGrammar.from_string(LABEL_GRAMMAR.strip())
         self._llm = Llama(
             model_path=str(model_path),
@@ -711,7 +858,7 @@ class LlamaJudge:
         # ponytail: small RAM cache (~1-2 KV states); upgrade path is disk cache
         self._llm.set_cache(LlamaRAMCache(capacity_bytes=256 * 1024 * 1024))
 
-    def judge(self, system: str, user: str, *, max_tokens: int = DEFAULT_MAX_NEW_TOKENS) -> str:
+    def judge(self, system: str, user: str, *, max_tokens: int = DEFAULT_MAX_NEW_TOKENS) -> StructuredVerdict:
         output = self._llm.create_chat_completion(
             messages=[
                 {"role": "system", "content": system},
@@ -721,12 +868,12 @@ class LlamaJudge:
             temperature=0.0,
             top_p=1.0,
             seed=self._seed,
-            grammar=self._label_grammar,
+            grammar=self._json_grammar,
         )
         choice = output["choices"][0]
         message = choice.get("message") or {}
-        letter = str(message.get("content", "")).strip().upper()[:1] or "C"
-        return letter
+        text = str(message.get("content", ""))
+        return parse_structured_verdict(text)
 
     def judge_grouped(self, system: str, user: str, n: int) -> list[str]:
         max_tokens = max(32, min(512, 12 * n))

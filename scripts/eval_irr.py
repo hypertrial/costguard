@@ -10,7 +10,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-from sklearn.metrics import cohen_kappa_score
+from sklearn.metrics import cohen_kappa_score, matthews_corrcoef
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -54,6 +54,7 @@ def validate_records(records: list[JudgeRecord], manifest: JudgeManifest) -> lis
             model_file_sha256=record.model_sha256,
             runtime_version=record.runtime_version,
             mode=record.mode,
+            fewshots_sha=record.fewshots_sha,
         )
         if record.cache_key != expected:
             errors.append(f"{record.finding_id}: cache_key mismatch")
@@ -68,6 +69,69 @@ def kappa_or_none(y_true: list[str], y_pred: list[str]) -> float | None:
     return float(cohen_kappa_score(y_true, y_pred, labels=["tp", "fp"]))
 
 
+def mcc_or_none(y_true: list[str], y_pred: list[str]) -> float | None:
+    if len(y_true) < 2:
+        return None
+    label_to_int = {"fp": 0, "tp": 1}
+    y_true_i = [label_to_int[item] for item in y_true]
+    y_pred_i = [label_to_int[item] for item in y_pred]
+    if len(set(y_true_i)) < 2 and len(set(y_pred_i)) < 2:
+        return 1.0 if y_true_i == y_pred_i else None
+    return float(matthews_corrcoef(y_true_i, y_pred_i))
+
+
+def class_metrics(records: list[JudgeRecord]) -> dict[str, float | None]:
+    registry_fp = [record for record in records if record.registry_verdict == "fp"]
+    registry_tp = [record for record in records if record.registry_verdict == "tp"]
+    judge_fp = [record for record in records if record.llm_verdict == "fp"]
+    judge_tp = [record for record in records if record.llm_verdict == "tp"]
+
+    def recall(registry_label: str, judge_label: str) -> float | None:
+        subset = [record for record in records if record.registry_verdict == registry_label]
+        if not subset:
+            return None
+        hits = sum(1 for record in subset if record.llm_verdict == judge_label)
+        return hits / len(subset)
+
+    def precision(judge_label: str, registry_label: str) -> float | None:
+        subset = [record for record in records if record.llm_verdict == judge_label]
+        if not subset:
+            return None
+        hits = sum(1 for record in subset if record.registry_verdict == registry_label)
+        return hits / len(subset)
+
+    return {
+        "registry_fp_recall": recall("fp", "fp"),
+        "registry_tp_recall": recall("tp", "tp"),
+        "registry_fp_precision": precision("fp", "fp"),
+        "registry_tp_precision": precision("tp", "tp"),
+        "registry_fp_n": len(registry_fp),
+        "registry_tp_n": len(registry_tp),
+        "judge_fp_n": len(judge_fp),
+        "judge_tp_n": len(judge_tp),
+    }
+
+
+def metrics_block(records: list[JudgeRecord]) -> dict[str, float | None]:
+    if not records:
+        return {
+            "kappa_binary_non_abstain": None,
+            "mcc": None,
+            "registry_fp_recall": None,
+            "registry_tp_recall": None,
+            "registry_fp_precision": None,
+            "registry_tp_precision": None,
+        }
+    registry_labels = [record.registry_verdict for record in records]
+    llm_labels = [record.llm_verdict for record in records]
+    block = {
+        "kappa_binary_non_abstain": kappa_or_none(registry_labels, llm_labels),
+        "mcc": mcc_or_none(registry_labels, llm_labels),
+    }
+    block.update(class_metrics(records))
+    return block
+
+
 def build_report(records: list[JudgeRecord], manifest: JudgeManifest) -> dict[str, Any]:
     total = len(records)
     abstain = [record for record in records if record.llm_verdict == "unsure"]
@@ -78,8 +142,6 @@ def build_report(records: list[JudgeRecord], manifest: JudgeManifest) -> dict[st
         if record.registry_verdict in {"tp", "fp"} and record.llm_verdict in {"tp", "fp"}
     ]
 
-    registry_labels = [record.registry_verdict for record in scorable]
-    llm_labels = [record.llm_verdict for record in scorable]
     disagreements = [
         {
             "finding_id": record.finding_id,
@@ -102,12 +164,13 @@ def build_report(records: list[JudgeRecord], manifest: JudgeManifest) -> dict[st
     for rule_id, rule_records in sorted(by_rule.items()):
         if len(rule_records) < MIN_RULE_SAMPLES:
             continue
+        rule_metrics = metrics_block(rule_records)
         per_rule[rule_id] = {
             "n": len(rule_records),
-            "kappa": kappa_or_none(
-                [item.registry_verdict for item in rule_records],
-                [item.llm_verdict for item in rule_records],
-            ),
+            "kappa": rule_metrics["kappa_binary_non_abstain"],
+            "mcc": rule_metrics["mcc"],
+            "registry_fp_recall": rule_metrics["registry_fp_recall"],
+            "registry_tp_recall": rule_metrics["registry_tp_recall"],
             "disagreements": sum(
                 1
                 for item in rule_records
@@ -136,6 +199,7 @@ def build_report(records: list[JudgeRecord], manifest: JudgeManifest) -> dict[st
         else None
     )
 
+    overall_metrics = metrics_block(scorable)
     return {
         "generated_at": utc_now_iso(),
         "manifest": {
@@ -152,7 +216,7 @@ def build_report(records: list[JudgeRecord], manifest: JudgeManifest) -> dict[st
             "abstain": len(abstain),
         },
         "overall": {
-            "kappa_binary_non_abstain": kappa_or_none(registry_labels, llm_labels),
+            **overall_metrics,
             "coverage": coverage,
             "abstain_rate": abstain_rate,
             "disagreement_rate": disagreement_rate,
@@ -186,7 +250,8 @@ def main() -> int:
     counts = report["counts"]
     print(
         f"IRR: total={counts['total']} scorable={counts['scorable_non_abstain']} "
-        f"kappa={overall['kappa_binary_non_abstain']} "
+        f"kappa={overall['kappa_binary_non_abstain']} mcc={overall['mcc']} "
+        f"fp_recall={overall['registry_fp_recall']} "
         f"coverage={overall['coverage']:.3f} abstain={overall['abstain_rate']:.3f}"
     )
     print(f"wrote {args.json_out}")

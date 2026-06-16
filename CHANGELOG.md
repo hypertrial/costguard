@@ -16,6 +16,7 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ### Changed
 
+- LLM judge v3: structured JSON verdict (`exemption_applies`, `failure_condition_met`, `verdict`) with balanced rubric prompt, per-rule few-shots (`tests/benchmarks/judge_fewshots.toml`), deterministic `map_structured_verdict`, per-file checkpointing, and richer IRR metrics (MCC + registry FP/TP recall/precision). Compact GBNF grammar required for llama.cpp (spaced `ws` grammar stalls generation).
 - LLM judge v2: ChatML `create_chat_completion` (fixes instruct-model confirm-bias), anti-FP prompt, `n_ctx=32768`, `sql_token_target=8000`, model-chosen `C` abstention (drops logprob margin), `--rule-id` filter, `flash_attn=true`.
 - LLM judge build tool: per-file SQL context packing with KV prefix reuse (default), optional `--grouped` one-call-per-file mode, and tunable batch/SQL token targets for M4 Air performance.
 - Folded `costguard-git` into `costguard-core` and `costguard-platform` into `costguard-sql` (11 workspace crates).

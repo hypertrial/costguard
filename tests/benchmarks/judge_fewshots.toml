@@ -1,0 +1,65 @@
+# Per-rule few-shot exemplars for LLM judge v3 (deterministic, no registry labels).
+
+[[example]]
+rule_id = "SQLCOST012"
+sql_excerpt = "SELECT t.id, u.id FROM t CROSS JOIN UNNEST(u.items) AS x(item)"
+message = "Cross join detected without an explicit allow comment."
+exemption_applies = true
+failure_condition_met = false
+verdict = "B"
+
+[[example]]
+rule_id = "SQLCOST012"
+sql_excerpt = "SELECT a.id, b.id FROM a, b WHERE a.k = b.k"
+message = "Cross join detected without an explicit allow comment."
+exemption_applies = false
+failure_condition_met = true
+verdict = "A"
+
+[[example]]
+rule_id = "SQLCOST017"
+sql_excerpt = "SELECT * FROM a JOIN b ON lower(a.name) = lower(b.name)"
+message = "Function-wrapped join key detected."
+exemption_applies = true
+failure_condition_met = false
+verdict = "B"
+
+[[example]]
+rule_id = "SQLCOST017"
+sql_excerpt = "SELECT * FROM a JOIN b ON cast(a.id as varchar) = b.id"
+message = "Function-wrapped join key detected."
+exemption_applies = false
+failure_condition_met = true
+verdict = "A"
+
+[[example]]
+rule_id = "SQLCOST006"
+sql_excerpt = "SELECT * FROM a JOIN b ON a.id = b.id"
+message = "Join has no clear equality predicate."
+exemption_applies = false
+failure_condition_met = false
+verdict = "B"
+
+[[example]]
+rule_id = "SQLCOST006"
+sql_excerpt = "SELECT * FROM a JOIN b ON 1=1"
+message = "Join has no clear equality predicate."
+exemption_applies = false
+failure_condition_met = true
+verdict = "A"
+
+[[example]]
+rule_id = "SQLCOST014"
+sql_excerpt = "WITH c AS (SELECT 1) SELECT * FROM c UNION ALL SELECT * FROM c"
+message = "CTE referenced multiple times downstream."
+exemption_applies = false
+failure_condition_met = true
+verdict = "A"
+
+[[example]]
+rule_id = "SQLCOST014"
+sql_excerpt = "WITH c AS (SELECT 1) SELECT * FROM c"
+message = "CTE referenced multiple times downstream."
+exemption_applies = false
+failure_condition_met = false
+verdict = "B"

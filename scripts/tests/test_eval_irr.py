@@ -19,6 +19,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from build_llm_judge_labels import CandidateFinding, cap_candidates  # noqa: E402
 from llm_judge_lib import (  # noqa: E402
+    DEFAULT_FEWSHOTS,
     MODE_GROUPED,
     MODE_PREFIX,
     PROMPT_VERSION,
@@ -33,12 +34,16 @@ from llm_judge_lib import (  # noqa: E402
     build_prompt,
     cache_key,
     candidate_sort_key,
+    fewshots_file_sha,
+    load_fewshots,
     load_judge_records,
     load_manifest,
+    map_structured_verdict,
     messages_sha256,
     pack_sql,
     pack_sql_for_file,
     parse_grouped_verdicts,
+    parse_structured_verdict,
     verdict_from_letter,
     write_judge_records,
     write_manifest,
@@ -94,6 +99,7 @@ def sample_record(**overrides: object) -> JudgeRecord:
                 model_file_sha256=record.model_sha256,
                 runtime_version=record.runtime_version,
                 mode=record.mode,
+                fewshots_sha=record.fewshots_sha,
             ),
         }
     )
@@ -143,12 +149,67 @@ class JudgeLibTests(unittest.TestCase):
         grouped = cache_key(**shared, mode=MODE_GROUPED)
         self.assertNotEqual(prefix, grouped)
 
-    def test_build_messages_sql_before_rule(self) -> None:
+    def test_cache_key_differs_by_fewshots_sha(self) -> None:
+        shared = {
+            "finding_id": "cgf_1",
+            "rule_id": "SQLCOST012",
+            "rule_description_sha": "abc",
+            "sql_sha": "def",
+            "finding_span": "1:1-1",
+            "prompt_version": PROMPT_VERSION,
+            "model_file_sha256": "model",
+            "runtime_version": "0.3.0",
+            "mode": MODE_PREFIX,
+        }
+        empty = cache_key(**shared, fewshots_sha="")
+        hashed = cache_key(**shared, fewshots_sha="fewshots")
+        self.assertNotEqual(empty, hashed)
+
+    def test_map_structured_verdict_exemption_overrides(self) -> None:
+        verdict, reason, token = map_structured_verdict(True, True, "A")
+        self.assertEqual(verdict, "fp")
+        self.assertIsNone(reason)
+        self.assertEqual(token, "A")
+
+    def test_map_structured_verdict_failure_condition_tp(self) -> None:
+        verdict, reason, token = map_structured_verdict(False, True, "A")
+        self.assertEqual(verdict, "tp")
+        self.assertIsNone(reason)
+        self.assertEqual(token, "A")
+
+    def test_map_structured_verdict_c_abstains(self) -> None:
+        verdict, reason, token = map_structured_verdict(False, False, "C")
+        self.assertEqual(verdict, "unsure")
+        self.assertEqual(reason, "model_unsure")
+        self.assertEqual(token, "C")
+
+    def test_parse_structured_verdict_malformed_defaults_c(self) -> None:
+        parsed = parse_structured_verdict("not json")
+        self.assertEqual(parsed.letter, "C")
+        self.assertFalse(parsed.exemption_applies)
+
+    def test_parse_structured_verdict_sqlcost012_exempt(self) -> None:
+        raw = '{"exemption_applies": true, "failure_condition_met": false, "verdict": "B"}'
+        parsed = parse_structured_verdict(raw)
+        verdict, reason, _token = map_structured_verdict(
+            parsed.exemption_applies,
+            parsed.failure_condition_met,
+            parsed.letter,
+        )
+        self.assertEqual(verdict, "fp")
+        self.assertIsNone(reason)
+
+    def test_load_fewshots_includes_rule_examples(self) -> None:
+        text = load_fewshots("SQLCOST012", DEFAULT_FEWSHOTS)
+        self.assertIn("UNNEST", text)
+        self.assertIn("exemption_applies", text)
+
+    def test_build_messages_includes_fewshots_and_json(self) -> None:
         meta = RuleMetadata(
             rule_id="SQLCOST012",
             title="Cross join",
             description="Detects cross joins",
-            rubric="Allow UNNEST patterns.",
+            rubric="Intro\n\nAllow UNNEST patterns.",
         )
         _system, user = build_messages(
             meta,
@@ -161,7 +222,9 @@ class JudgeLibTests(unittest.TestCase):
         sql_idx = user.index("SQL:")
         rule_idx = user.index("Rule ID:")
         self.assertLess(sql_idx, rule_idx)
-        self.assertIn("Return exactly one letter", user)
+        self.assertIn("Return JSON only", user)
+        self.assertIn("Few-shot examples", user)
+        self.assertIn("Current finding", user)
 
     def test_build_prompt_sql_before_rule(self) -> None:
         meta = RuleMetadata(
@@ -344,9 +407,38 @@ class EvalIrrTests(unittest.TestCase):
         self.assertEqual(loaded.prompt_version, PROMPT_VERSION)
 
     @unittest.skipIf(not EVAL_DEPS, "eval deps not installed (pip install -r requirements-eval.txt)")
+    def test_registry_fp_recall(self) -> None:
+        manifest = JudgeManifest(model_file_sha256="modelsha", prompt_version=PROMPT_VERSION)
+        records = [
+            sample_record(registry_verdict="fp", llm_verdict="fp"),
+            sample_record(
+                finding_id="cgf_def",
+                registry_verdict="fp",
+                llm_verdict="tp",
+                label_token="A",
+            ),
+            sample_record(
+                finding_id="cgf_ghi",
+                registry_verdict="tp",
+                llm_verdict="tp",
+                label_token="A",
+            ),
+        ]
+        report = build_report(records, manifest)
+        self.assertEqual(report["overall"]["registry_fp_recall"], 0.5)
+        self.assertEqual(report["overall"]["registry_tp_recall"], 1.0)
+
+    @unittest.skipIf(not EVAL_DEPS, "eval deps not installed (pip install -r requirements-eval.txt)")
     def test_grouped_prompt_version(self) -> None:
         manifest = JudgeManifest(mode=MODE_GROUPED, prompt_version=PROMPT_VERSION_GROUPED)
         self.assertEqual(manifest.prompt_version, PROMPT_VERSION_GROUPED)
+        self.assertEqual(PROMPT_VERSION, "irr_judge_v3")
+
+    @unittest.skipIf(not EVAL_DEPS, "eval deps not installed (pip install -r requirements-eval.txt)")
+    def test_fewshots_sha_stable(self) -> None:
+        digest = fewshots_file_sha(DEFAULT_FEWSHOTS)
+        self.assertEqual(len(digest), 64)
+        self.assertEqual(digest, fewshots_file_sha(DEFAULT_FEWSHOTS))
 
 
 if __name__ == "__main__":

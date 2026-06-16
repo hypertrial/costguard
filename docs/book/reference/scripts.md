@@ -304,6 +304,7 @@ python3 scripts/build_llm_judge_labels.py --dry-run
 | `--sql-token-target` | Per-file SQL excerpt target in tokens (default 8000) |
 | `--rule-id` | Limit to rule ID(s); repeatable (e.g. `--rule-id SQLCOST012`) |
 | `--grouped` | One LLM call per file with JSON verdict array (faster) |
+| `--checkpoint-every` | Write labels JSONL after every N files (default 1) |
 | `--dry-run` | Enumerate capped candidates without loading the model |
 | `--out` | Output JSONL (default `tests/benchmarks/llm_judge_labels.jsonl`) |
 | `--manifest-out` | Manifest TOML (default `tests/benchmarks/llm_judge_manifest.toml`) |
@@ -312,7 +313,7 @@ See [LLM judge IRR](../../design/llm-judge-irr.md).
 
 ## `eval_irr.py`
 
-Validate committed LLM judge labels against the pinned manifest and recompute Cohen's κ (report-only; no κ floor gate). Runs in `./scripts/ci_local.sh` via `.venv-eval`:
+Validate committed LLM judge labels against the pinned manifest and recompute Cohen's κ, MCC, and class recall/precision (report-only; no κ floor gate). Runs in `./scripts/ci_local.sh` via `.venv-eval`:
 
 ```bash
 .venv-eval/bin/python scripts/eval_irr.py
