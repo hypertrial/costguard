@@ -347,6 +347,18 @@ fn cross_file_expensive_expression_ignores_comment_prose() {
 }
 
 #[test]
+fn cross_catalog_join_ignores_subquery_alias() {
+    let file = sql_file(
+        "models/marts/fct.sql",
+        "select * from (select token from delta_prod.balancer_v2_arbitrum.events) b \
+         left join delta_prod.tokens.erc20 t on t.contract_address = b.token",
+    );
+    let doc = analyze_for_rule("SQLCOST035", &file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(!ids.contains(&"SQLCOST035".to_string()));
+}
+
+#[test]
 fn suppression_still_applies_after_rule_split() {
     let file = sql_file(
         "models/marts/fct.sql",

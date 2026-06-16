@@ -737,9 +737,7 @@ fn table_name_has_wildcard(name: &ObjectName) -> bool {
 fn table_factor_catalog(factor: &TableFactor) -> Option<String> {
     match factor {
         TableFactor::Table { name, .. } => object_name_catalog(name),
-        TableFactor::Derived { alias, .. } => alias
-            .as_ref()
-            .map(|alias| alias.name.value.to_ascii_lowercase()),
+        TableFactor::Derived { .. } => None,
         _ => None,
     }
 }

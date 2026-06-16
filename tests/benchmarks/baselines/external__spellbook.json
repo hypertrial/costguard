@@ -1,7 +1,7 @@
 {
   "commit": "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738",
   "kind": "external",
-  "max_rss_bytes": 3011919872,
+  "max_rss_bytes": 2928492544,
   "metrics": {
     "counts": {
       "manifest": 0,
@@ -30,7 +30,6 @@
       "SQLCOST030": 6,
       "SQLCOST031": 9,
       "SQLCOST033": 1,
-      "SQLCOST035": 110,
       "SQLCOST036": 71,
       "SQLCOST037": 52,
       "SQLCOST038": 639,
@@ -40,11 +39,11 @@
     "diagnostics_by_severity": {
       "high": 838,
       "low": 833,
-      "med": 2083
+      "med": 1973
     },
     "metadata_only_scan": false,
     "metadata_warnings": 2,
-    "new_findings": 3754,
+    "new_findings": 3644,
     "sql_parse_compiled_failures": 0,
     "sql_parse_compiled_total": 8033,
     "sql_parse_failures": 0,
@@ -53,12 +52,12 @@
     "sql_parse_total": 8033,
     "yaml_parse_failures": 0
   },
-  "runtime_max_ms": 7450,
-  "runtime_median_ms": 7263,
+  "runtime_max_ms": 7100,
+  "runtime_median_ms": 7011,
   "runtime_samples_ms": [
-    7082,
-    7450,
-    7263
+    7100,
+    6982,
+    7011
   ],
   "target": "external/spellbook",
   "thresholds": {

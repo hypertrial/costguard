@@ -706,3 +706,20 @@ fn comment_prose_does_not_create_json_extractions() {
     );
     assert!(doc.features.json_extractions.is_empty());
 }
+
+#[test]
+fn subquery_join_same_catalog_is_not_cross_catalog() {
+    let text = "select * from (select token from delta_prod.balancer_v2_arbitrum.events) b \
+                left join delta_prod.tokens.erc20 t on t.contract_address = b.token";
+    let index = LineIndex::new(text);
+    let doc = analyze_test_sql(
+        PathBuf::from("x.sql"),
+        text,
+        Platform::Trino,
+        &index,
+        None,
+        true,
+    );
+    let join = doc.features.joins.first().expect("join");
+    assert!(!join.cross_catalog);
+}

@@ -61,6 +61,12 @@ All ten share `relative_index = 2600` and `savings_p50_usd_per_month = null`. Th
 
 Fixed in [`crates/costguard-sql/src/features/regex.rs`](../../crates/costguard-sql/src/features/regex.rs): expensive-expression regexes (`json_extractions`, `regex_calls`, `normalization_calls`) now run on comment-masked SQL (length-preserving `--`, `/* */`, and `{# #}` masking). Spellbook smoke baseline SQLCOST015 dropped from 229 → 13; full spellbook 785 → 330. The stablecoin seed-model FPs documented above are resolved.
 
+## SQLCOST035 follow-up (2026-06-16)
+
+After the SQLCOST015 fix, the new top-10-by-cost findings were all **SQLCOST035** on Balancer token balance models (`(…) b LEFT JOIN delta_prod.tokens.erc20`). Manual review: **false positives** — same catalog (`delta_prod`), cross-schema only. Root cause: [`table_factor_catalog`](../../crates/costguard-sql/src/features/ast.rs) returned the subquery alias (`b`) as the left “catalog”, so `"b" != "delta_prod"` triggered cross-catalog detection.
+
+Fixed by returning `None` for `TableFactor::Derived`. Spellbook smoke SQLCOST035 dropped from 14 → 0; full spellbook 110 → 0.
+
 ## Adjudication method
 
 For each finding: read compiled SQL via manifest, check rule rubric ([`docs/rules/SQLCOST015.md`](../rules/SQLCOST015.md)), classify bucket via [`scripts/bucket_rule_diagnostics.py`](../../scripts/bucket_rule_diagnostics.py), compare to [`tests/benchmarks/fp_registry.toml`](../../tests/benchmarks/fp_registry.toml), and trace the triggering feature key against [`json_regex`](../../crates/costguard-sql/src/features/regex.rs).
