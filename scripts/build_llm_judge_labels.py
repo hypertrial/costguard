@@ -38,23 +38,32 @@ from llm_judge_lib import (  # noqa: E402
     DEFAULT_MANIFEST,
     DEFAULT_MAX_NEW_TOKENS,
     DEFAULT_MODEL_ID,
+    DEFAULT_N_BATCH,
+    DEFAULT_N_UBATCH,
     DEFAULT_QUANT,
     DEFAULT_RUNTIME,
     DEFAULT_SEED,
+    DEFAULT_SQL_TOKEN_TARGET,
     JUDGE_NAME,
     JUDGE_VERSION,
-    PROMPT_VERSION,
+    MODE_GROUPED,
+    MODE_PREFIX,
+    FindingPromptInput,
     JudgeManifest,
     JudgeRecord,
     LlamaJudge,
+    RuleMetadata,
+    build_grouped_prompt,
     build_prompt,
     cache_key,
+    candidate_sort_key,
     decide_verdict,
     finding_id_for_diagnostic,
     finding_span,
     load_judge_records,
     load_rule_metadata,
-    pack_sql,
+    pack_sql_for_file,
+    prompt_version_for_mode,
     runtime_version,
     sha256_text,
     utc_now_iso,
@@ -69,6 +78,16 @@ class CandidateFinding:
     diagnostic: dict[str, Any]
     bucket: str
     registry_verdict: str | None
+
+
+@dataclass(frozen=True)
+class FileContext:
+    path: str
+    sql: str
+    sql_sha: str
+    truncated: bool
+    too_large: bool
+    candidates: list[CandidateFinding]
 
 
 def bucket_verdict_map(repo_name: str, labels_path: Path) -> dict[tuple[str, str], str]:
@@ -149,114 +168,79 @@ def cap_candidates(
             capped.extend(group)
         else:
             capped.extend(rng.sample(group, cap))
-    return capped
+    return sorted(capped, key=candidate_sort_key)
 
 
-def build_record(
-    candidate: CandidateFinding,
+def build_file_contexts(
+    candidates: list[CandidateFinding],
     *,
     checkout: Path,
     compiled: dict[str, str],
+    manifest: JudgeManifest,
+) -> list[FileContext]:
+    by_path: dict[str, list[CandidateFinding]] = defaultdict(list)
+    for candidate in candidates:
+        rel_path = normalize_path(str(candidate.diagnostic.get("path", "")))
+        by_path[rel_path].append(candidate)
+
+    contexts: list[FileContext] = []
+    for path in sorted(by_path):
+        group = by_path[path]
+        first = group[0].diagnostic
+        sql_raw = read_sql_for_diagnostic(checkout, first, compiled)
+        lines = [int(item.diagnostic.get("line", 0) or 0) for item in group]
+        packed, sql_sha, truncated, too_large = pack_sql_for_file(
+            sql_raw,
+            lines,
+            sql_token_target=manifest.sql_token_target,
+        )
+        contexts.append(
+            FileContext(
+                path=path,
+                sql=packed,
+                sql_sha=sql_sha,
+                truncated=truncated,
+                too_large=too_large,
+                candidates=group,
+            )
+        )
+    return contexts
+
+
+def make_record(
+    candidate: CandidateFinding,
+    *,
+    file_ctx: FileContext,
     dialect: str,
-    rule_meta_map: dict[str, Any],
+    rule_meta: RuleMetadata,
     manifest: JudgeManifest,
     model_sha256: str,
-    judge: LlamaJudge | None,
-    cache: dict[str, JudgeRecord],
+    runtime_ver: str,
+    llm_verdict: str,
+    label_token: str,
+    logprobs: dict[str, float],
+    abstention_reason: str | None,
+    input_sha256: str,
 ) -> JudgeRecord:
     diagnostic = candidate.diagnostic
     rule_id = str(diagnostic.get("rule_id", ""))
-    rule_meta = rule_meta_map.get(rule_id)
-    if rule_meta is None:
-        raise SystemExit(f"missing rule metadata for {rule_id}")
-
     rel_path = normalize_path(str(diagnostic.get("path", "")))
     line = int(diagnostic.get("line", 0) or 0)
     message = str(diagnostic.get("message", ""))
     finding_id = finding_id_for_diagnostic(candidate.repo, diagnostic)
     span = finding_span(diagnostic)
-
-    sql_raw = read_sql_for_diagnostic(checkout, diagnostic, compiled)
-    packed_sql, truncated, too_large = pack_sql(
-        sql_raw,
-        line,
-        context_tokens=manifest.context_tokens,
-    )
-    sql_sha = sha256_text(packed_sql)
     rule_description_sha = rule_meta.description_sha
-    runtime_ver = runtime_version()
     key = cache_key(
         finding_id=finding_id,
         rule_id=rule_id,
         rule_description_sha=rule_description_sha,
-        sql_sha=sql_sha,
+        sql_sha=file_ctx.sql_sha,
         finding_span=span,
         prompt_version=manifest.prompt_version,
         model_file_sha256=model_sha256,
         runtime_version=runtime_ver,
+        mode=manifest.mode,
     )
-    cached = cache.get(key)
-    if cached is not None:
-        return cached
-
-    if too_large:
-        return JudgeRecord(
-            finding_id=finding_id,
-            rule_id=rule_id,
-            repo=candidate.repo,
-            path=rel_path,
-            line=line,
-            bucket=candidate.bucket,
-            registry_verdict=candidate.registry_verdict,
-            llm_verdict="unsure",
-            label_token="C",
-            model=manifest.model_id,
-            quant=manifest.quantization,
-            runtime=manifest.runtime,
-            prompt_version=manifest.prompt_version,
-            input_sha256=sha256_text(build_prompt(
-                rule_meta,
-                dialect=dialect,
-                line=line,
-                span=span,
-                message=message,
-                sql=packed_sql,
-            )),
-            model_sha256=model_sha256,
-            cache_key=key,
-            created_at=utc_now_iso(),
-            logprobs={"A": -100.0, "B": -100.0, "C": 0.0},
-            abstention_reason="unsure_due_to_context_limit",
-            context_truncated=truncated,
-            rule_description_sha=rule_description_sha,
-            sql_sha=sql_sha,
-            finding_span=span,
-            runtime_version=runtime_ver,
-            message=message,
-            dialect=dialect,
-        )
-
-    prompt = build_prompt(
-        rule_meta,
-        dialect=dialect,
-        line=line,
-        span=span,
-        message=message,
-        sql=packed_sql,
-    )
-    if judge is None:
-        raise SystemExit("judge backend required for uncached findings")
-
-    letter, logprobs = judge.judge(prompt, max_tokens=manifest.max_new_tokens)
-    llm_verdict, abstention_reason = decide_verdict(
-        logprobs["A"],
-        logprobs["B"],
-        letter,
-    )
-    if truncated and llm_verdict in {"tp", "fp"} and abstention_reason is None:
-        llm_verdict = "unsure"
-        abstention_reason = "context_truncated"
-
     return JudgeRecord(
         finding_id=finding_id,
         rule_id=rule_id,
@@ -266,25 +250,213 @@ def build_record(
         bucket=candidate.bucket,
         registry_verdict=candidate.registry_verdict,
         llm_verdict=llm_verdict,
-        label_token=letter,
+        label_token=label_token,
         model=manifest.model_id,
         quant=manifest.quantization,
         runtime=manifest.runtime,
         prompt_version=manifest.prompt_version,
-        input_sha256=sha256_text(prompt),
+        input_sha256=input_sha256,
         model_sha256=model_sha256,
         cache_key=key,
         created_at=utc_now_iso(),
         logprobs=logprobs,
         abstention_reason=abstention_reason,
-        context_truncated=truncated,
+        context_truncated=file_ctx.truncated,
         rule_description_sha=rule_description_sha,
-        sql_sha=sql_sha,
+        sql_sha=file_ctx.sql_sha,
         finding_span=span,
         runtime_version=runtime_ver,
         message=message,
         dialect=dialect,
+        mode=manifest.mode,
     )
+
+
+def judge_file_prefix(
+    file_ctx: FileContext,
+    *,
+    dialect: str,
+    rule_meta_map: dict[str, RuleMetadata],
+    manifest: JudgeManifest,
+    model_sha256: str,
+    judge: LlamaJudge,
+    cache: dict[str, JudgeRecord],
+) -> list[JudgeRecord]:
+    runtime_ver = runtime_version()
+    records: list[JudgeRecord] = []
+    for candidate in file_ctx.candidates:
+        diagnostic = candidate.diagnostic
+        rule_id = str(diagnostic.get("rule_id", ""))
+        rule_meta = rule_meta_map.get(rule_id)
+        if rule_meta is None:
+            raise SystemExit(f"missing rule metadata for {rule_id}")
+        line = int(diagnostic.get("line", 0) or 0)
+        message = str(diagnostic.get("message", ""))
+        span = finding_span(diagnostic)
+        finding_id = finding_id_for_diagnostic(candidate.repo, diagnostic)
+        rule_description_sha = rule_meta.description_sha
+        key = cache_key(
+            finding_id=finding_id,
+            rule_id=rule_id,
+            rule_description_sha=rule_description_sha,
+            sql_sha=file_ctx.sql_sha,
+            finding_span=span,
+            prompt_version=manifest.prompt_version,
+            model_file_sha256=model_sha256,
+            runtime_version=runtime_ver,
+            mode=manifest.mode,
+        )
+        cached = cache.get(key)
+        if cached is not None:
+            records.append(cached)
+            continue
+
+        if file_ctx.too_large:
+            prompt = build_prompt(
+                rule_meta,
+                dialect=dialect,
+                line=line,
+                span=span,
+                message=message,
+                sql=file_ctx.sql,
+            )
+            records.append(
+                make_record(
+                    candidate,
+                    file_ctx=file_ctx,
+                    dialect=dialect,
+                    rule_meta=rule_meta,
+                    manifest=manifest,
+                    model_sha256=model_sha256,
+                    runtime_ver=runtime_ver,
+                    llm_verdict="unsure",
+                    label_token="C",
+                    logprobs={"A": -100.0, "B": -100.0, "C": 0.0},
+                    abstention_reason="unsure_due_to_context_limit",
+                    input_sha256=sha256_text(prompt),
+                )
+            )
+            continue
+
+        prompt = build_prompt(
+            rule_meta,
+            dialect=dialect,
+            line=line,
+            span=span,
+            message=message,
+            sql=file_ctx.sql,
+        )
+        letter, logprobs = judge.judge(prompt, max_tokens=manifest.max_new_tokens)
+        llm_verdict, abstention_reason = decide_verdict(logprobs["A"], logprobs["B"], letter)
+        if file_ctx.truncated and llm_verdict in {"tp", "fp"} and abstention_reason is None:
+            llm_verdict = "unsure"
+            abstention_reason = "context_truncated"
+        records.append(
+            make_record(
+                candidate,
+                file_ctx=file_ctx,
+                dialect=dialect,
+                rule_meta=rule_meta,
+                manifest=manifest,
+                model_sha256=model_sha256,
+                runtime_ver=runtime_ver,
+                llm_verdict=llm_verdict,
+                label_token=letter,
+                logprobs=logprobs,
+                abstention_reason=abstention_reason,
+                input_sha256=sha256_text(prompt),
+            )
+        )
+    return records
+
+
+def judge_file_grouped(
+    file_ctx: FileContext,
+    *,
+    dialect: str,
+    rule_meta_map: dict[str, RuleMetadata],
+    manifest: JudgeManifest,
+    model_sha256: str,
+    judge: LlamaJudge,
+    cache: dict[str, JudgeRecord],
+) -> list[JudgeRecord]:
+    runtime_ver = runtime_version()
+    if file_ctx.too_large:
+        return judge_file_prefix(
+            file_ctx,
+            dialect=dialect,
+            rule_meta_map=rule_meta_map,
+            manifest=manifest,
+            model_sha256=model_sha256,
+            judge=judge,
+            cache=cache,
+        )
+
+    prompt_inputs: list[FindingPromptInput] = []
+    for index, candidate in enumerate(file_ctx.candidates):
+        rule_id = str(candidate.diagnostic.get("rule_id", ""))
+        rule_meta = rule_meta_map.get(rule_id)
+        if rule_meta is None:
+            raise SystemExit(f"missing rule metadata for {rule_id}")
+        prompt_inputs.append(
+            FindingPromptInput(
+                index=index,
+                rule_meta=rule_meta,
+                line=int(candidate.diagnostic.get("line", 0) or 0),
+                span=finding_span(candidate.diagnostic),
+                message=str(candidate.diagnostic.get("message", "")),
+            )
+        )
+
+    prompt = build_grouped_prompt(prompt_inputs, dialect=dialect, sql=file_ctx.sql)
+    input_sha256 = sha256_text(prompt)
+
+    uncached: list[tuple[int, CandidateFinding, RuleMetadata]] = []
+    records_by_index: dict[int, JudgeRecord] = {}
+    for index, candidate in enumerate(file_ctx.candidates):
+        rule_id = str(candidate.diagnostic.get("rule_id", ""))
+        rule_meta = rule_meta_map[rule_id]
+        finding_id = finding_id_for_diagnostic(candidate.repo, candidate.diagnostic)
+        span = finding_span(candidate.diagnostic)
+        key = cache_key(
+            finding_id=finding_id,
+            rule_id=rule_id,
+            rule_description_sha=rule_meta.description_sha,
+            sql_sha=file_ctx.sql_sha,
+            finding_span=span,
+            prompt_version=manifest.prompt_version,
+            model_file_sha256=model_sha256,
+            runtime_version=runtime_ver,
+            mode=manifest.mode,
+        )
+        cached = cache.get(key)
+        if cached is not None:
+            records_by_index[index] = cached
+        else:
+            uncached.append((index, candidate, rule_meta))
+
+    if uncached:
+        letters = judge.judge_grouped(prompt, len(file_ctx.candidates))
+        for index, candidate, rule_meta in uncached:
+            letter = letters[index]
+            llm_verdict = "unsure" if letter == "C" else ("tp" if letter == "A" else "fp")
+            abstention_reason = "grouped_unsure" if letter == "C" else None
+            records_by_index[index] = make_record(
+                candidate,
+                file_ctx=file_ctx,
+                dialect=dialect,
+                rule_meta=rule_meta,
+                manifest=manifest,
+                model_sha256=model_sha256,
+                runtime_ver=runtime_ver,
+                llm_verdict=llm_verdict,
+                label_token=letter,
+                logprobs={},
+                abstention_reason=abstention_reason,
+                input_sha256=input_sha256,
+            )
+
+    return [records_by_index[index] for index in range(len(file_ctx.candidates))]
 
 
 def main() -> int:
@@ -300,8 +472,18 @@ def main() -> int:
     parser.add_argument("--cap", type=int, default=DEFAULT_CAP)
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--context-tokens", type=int, default=DEFAULT_CONTEXT_TOKENS)
+    parser.add_argument("--n-batch", type=int, default=DEFAULT_N_BATCH)
+    parser.add_argument("--n-ubatch", type=int, default=DEFAULT_N_UBATCH)
+    parser.add_argument("--sql-token-target", type=int, default=DEFAULT_SQL_TOKEN_TARGET)
+    parser.add_argument(
+        "--grouped",
+        action="store_true",
+        help="One LLM call per file with JSON verdict array (no logprob margin)",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Enumerate candidates only")
     args = parser.parse_args()
+
+    mode = MODE_GROUPED if args.grouped else MODE_PREFIX
 
     model_path = args.model
     if model_path is None:
@@ -321,7 +503,9 @@ def main() -> int:
 
     if args.dry_run:
         labeled = sum(1 for item in capped if item.registry_verdict is not None)
+        file_count = len({normalize_path(str(item.diagnostic.get("path", ""))) for item in capped})
         print(f"Labeled buckets: {labeled}/{len(capped)}")
+        print(f"Unique files: {file_count}")
         return 0
 
     assert model_path is not None
@@ -337,7 +521,7 @@ def main() -> int:
         quantization=args.quant,
         runtime=DEFAULT_RUNTIME,
         runtime_version=runtime_version(),
-        prompt_version=PROMPT_VERSION,
+        prompt_version=prompt_version_for_mode(mode),
         temperature=0.0,
         seed=args.seed,
         context_tokens=args.context_tokens,
@@ -345,29 +529,55 @@ def main() -> int:
         cap=args.cap,
         repo=args.repo,
         sample_seed=args.seed,
+        n_batch=args.n_batch,
+        n_ubatch=args.n_ubatch,
+        sql_token_target=args.sql_token_target,
+        mode=mode,
     )
 
     existing = load_judge_records(args.out)
     cache = {record.cache_key: record for record in existing}
     rule_meta_map = load_rule_metadata()
-    judge = LlamaJudge(model_path, n_ctx=manifest.context_tokens, seed=manifest.seed)
+    judge = LlamaJudge(
+        model_path,
+        n_ctx=manifest.context_tokens,
+        seed=manifest.seed,
+        n_batch=manifest.n_batch,
+        n_ubatch=manifest.n_ubatch,
+    )
 
+    file_contexts = build_file_contexts(
+        capped,
+        checkout=checkout,
+        compiled=compiled,
+        manifest=manifest,
+    )
     records: list[JudgeRecord] = []
-    for index, candidate in enumerate(capped, start=1):
-        record = build_record(
-            candidate,
-            checkout=checkout,
-            compiled=compiled,
-            dialect=dialect,
-            rule_meta_map=rule_meta_map,
-            manifest=manifest,
-            model_sha256=model_sha256,
-            judge=judge,
-            cache=cache,
-        )
-        records.append(record)
-        if index % 10 == 0 or index == len(capped):
-            print(f"judged {index}/{len(capped)}")
+    judged = 0
+    for file_ctx in file_contexts:
+        if manifest.mode == MODE_GROUPED:
+            file_records = judge_file_grouped(
+                file_ctx,
+                dialect=dialect,
+                rule_meta_map=rule_meta_map,
+                manifest=manifest,
+                model_sha256=model_sha256,
+                judge=judge,
+                cache=cache,
+            )
+        else:
+            file_records = judge_file_prefix(
+                file_ctx,
+                dialect=dialect,
+                rule_meta_map=rule_meta_map,
+                manifest=manifest,
+                model_sha256=model_sha256,
+                judge=judge,
+                cache=cache,
+            )
+        records.extend(file_records)
+        judged += len(file_records)
+        print(f"judged {judged}/{len(capped)} ({file_ctx.path})")
 
     write_judge_records(records, args.out)
     write_manifest(manifest, args.manifest_out)

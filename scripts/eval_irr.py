@@ -53,6 +53,7 @@ def validate_records(records: list[JudgeRecord], manifest: JudgeManifest) -> lis
             prompt_version=record.prompt_version,
             model_file_sha256=record.model_sha256,
             runtime_version=record.runtime_version,
+            mode=record.mode,
         )
         if record.cache_key != expected:
             errors.append(f"{record.finding_id}: cache_key mismatch")

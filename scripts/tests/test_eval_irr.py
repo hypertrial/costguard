@@ -17,17 +17,26 @@ import sys
 
 sys.path.insert(0, str(ROOT / "scripts"))
 
+from build_llm_judge_labels import CandidateFinding, cap_candidates  # noqa: E402
 from llm_judge_lib import (  # noqa: E402
+    MODE_GROUPED,
+    MODE_PREFIX,
     PROMPT_VERSION,
+    PROMPT_VERSION_GROUPED,
+    FindingPromptInput,
     JudgeManifest,
     JudgeRecord,
     RuleMetadata,
+    build_grouped_prompt,
     build_prompt,
     cache_key,
+    candidate_sort_key,
     decide_verdict,
     load_judge_records,
     load_manifest,
     pack_sql,
+    pack_sql_for_file,
+    parse_grouped_verdicts,
     write_judge_records,
     write_manifest,
 )
@@ -65,6 +74,7 @@ def sample_record(**overrides: object) -> JudgeRecord:
         "sql_sha": "sqlsha",
         "finding_span": "12:1-12",
         "runtime_version": "0.3.0",
+        "mode": MODE_PREFIX,
     }
     base.update(overrides)
     record = JudgeRecord.from_dict(base)
@@ -80,10 +90,20 @@ def sample_record(**overrides: object) -> JudgeRecord:
                 prompt_version=record.prompt_version,
                 model_file_sha256=record.model_sha256,
                 runtime_version=record.runtime_version,
+                mode=record.mode,
             ),
         }
     )
     return record
+
+
+def make_candidate(path: str, rule: str, line: int) -> CandidateFinding:
+    return CandidateFinding(
+        repo="spellbook",
+        diagnostic={"path": path, "rule_id": rule, "line": line},
+        bucket="other",
+        registry_verdict=None,
+    )
 
 
 class JudgeLibTests(unittest.TestCase):
@@ -97,43 +117,22 @@ class JudgeLibTests(unittest.TestCase):
         self.assertEqual(verdict, "tp")
         self.assertIsNone(reason)
 
-    def test_cache_key_stable(self) -> None:
-        first = cache_key(
-            finding_id="cgf_1",
-            rule_id="SQLCOST012",
-            rule_description_sha="abc",
-            sql_sha="def",
-            finding_span="1:1-1",
-            prompt_version=PROMPT_VERSION,
-            model_file_sha256="model",
-            runtime_version="0.3.0",
-        )
-        second = cache_key(
-            finding_id="cgf_1",
-            rule_id="SQLCOST012",
-            rule_description_sha="abc",
-            sql_sha="def",
-            finding_span="1:1-1",
-            prompt_version=PROMPT_VERSION,
-            model_file_sha256="model",
-            runtime_version="0.3.0",
-        )
-        self.assertEqual(first, second)
-        self.assertNotEqual(
-            first,
-            cache_key(
-                finding_id="cgf_1",
-                rule_id="SQLCOST012",
-                rule_description_sha="changed",
-                sql_sha="def",
-                finding_span="1:1-1",
-                prompt_version=PROMPT_VERSION,
-                model_file_sha256="model",
-                runtime_version="0.3.0",
-            ),
-        )
+    def test_cache_key_differs_by_mode(self) -> None:
+        shared = {
+            "finding_id": "cgf_1",
+            "rule_id": "SQLCOST012",
+            "rule_description_sha": "abc",
+            "sql_sha": "def",
+            "finding_span": "1:1-1",
+            "prompt_version": PROMPT_VERSION,
+            "model_file_sha256": "model",
+            "runtime_version": "0.3.0",
+        }
+        prefix = cache_key(**shared, mode=MODE_PREFIX)
+        grouped = cache_key(**shared, mode=MODE_GROUPED)
+        self.assertNotEqual(prefix, grouped)
 
-    def test_build_prompt_includes_rule_and_decision(self) -> None:
+    def test_build_prompt_sql_before_rule(self) -> None:
         meta = RuleMetadata(
             rule_id="SQLCOST012",
             title="Cross join",
@@ -148,9 +147,74 @@ class JudgeLibTests(unittest.TestCase):
             message="cross join detected",
             sql="select 1",
         )
-        self.assertIn("SQLCOST012", prompt)
+        sql_idx = prompt.index("SQL:")
+        rule_idx = prompt.index("Rule ID:")
+        self.assertLess(sql_idx, rule_idx)
         self.assertIn("Verdict:", prompt)
         self.assertNotIn("cross_join_unnest", prompt)
+
+    def test_pack_sql_for_file_unions_windows(self) -> None:
+        sql = "\n".join(f"line {idx}" for idx in range(1, 151))
+        packed, digest, truncated, too_large = pack_sql_for_file(
+            sql,
+            [10, 11],
+            sql_token_target=300,
+        )
+        self.assertTrue(truncated)
+        self.assertFalse(too_large)
+        self.assertIn("line 10", packed)
+        self.assertIn("line 11", packed)
+        self.assertLess(len(packed), len(sql))
+        self.assertEqual(len(digest), 64)
+
+    def test_pack_sql_for_file_too_large(self) -> None:
+        sql = "\n".join(f"select {idx} from t" for idx in range(5000))
+        packed, _digest, truncated, too_large = pack_sql_for_file(
+            sql,
+            list(range(1, 5000, 50)),
+            sql_token_target=100,
+        )
+        self.assertTrue(truncated)
+        self.assertTrue(too_large)
+        self.assertLess(len(packed), len(sql))
+
+    def test_parse_grouped_verdicts_defaults_missing_to_c(self) -> None:
+        text = '[{"index":0,"verdict":"A"},{"index":2,"verdict":"B"}]'
+        letters = parse_grouped_verdicts(text, 4)
+        self.assertEqual(letters, ["A", "C", "B", "C"])
+
+    def test_parse_grouped_verdicts_malformed_defaults_to_c(self) -> None:
+        letters = parse_grouped_verdicts("not json at all", 2)
+        self.assertEqual(letters, ["C", "C"])
+
+    def test_candidate_sort_key_order(self) -> None:
+        items = [
+            make_candidate("b.sql", "SQLCOST002", 5),
+            make_candidate("a.sql", "SQLCOST012", 10),
+            make_candidate("a.sql", "SQLCOST005", 3),
+        ]
+        ordered = sorted(items, key=candidate_sort_key)
+        self.assertEqual(ordered[0].diagnostic["path"], "a.sql")
+        self.assertEqual(ordered[0].diagnostic["line"], 3)
+        self.assertEqual(ordered[-1].diagnostic["path"], "b.sql")
+
+    def test_cap_candidates_sorted(self) -> None:
+        items = [
+            make_candidate("z.sql", "SQLCOST012", 1),
+            make_candidate("a.sql", "SQLCOST012", 1),
+        ]
+        capped = cap_candidates(items, cap=50, seed=3407)
+        self.assertEqual(capped[0].diagnostic["path"], "a.sql")
+
+    def test_build_grouped_prompt_includes_indices(self) -> None:
+        meta = RuleMetadata("SQLCOST012", "Cross join", "desc", "rubric")
+        prompt = build_grouped_prompt(
+            [FindingPromptInput(0, meta, 10, "10:1-10", "msg")],
+            dialect="trino",
+            sql="select 1",
+        )
+        self.assertIn("Finding index: 0", prompt)
+        self.assertIn("Verdicts:", prompt)
 
     def test_pack_sql_truncates_large_input(self) -> None:
         sql = "\n".join(f"select {idx} from t" for idx in range(5000))
@@ -166,6 +230,7 @@ class JudgeLibTests(unittest.TestCase):
             loaded = load_judge_records(path)
         self.assertEqual(len(loaded), 1)
         self.assertEqual(loaded[0].finding_id, "cgf_abc")
+        self.assertEqual(loaded[0].mode, MODE_PREFIX)
 
 
 class EvalIrrTests(unittest.TestCase):
@@ -218,12 +283,28 @@ class EvalIrrTests(unittest.TestCase):
 
     @unittest.skipIf(not EVAL_DEPS, "eval deps not installed (pip install -r requirements-eval.txt)")
     def test_manifest_round_trip(self) -> None:
-        manifest = JudgeManifest(model_file_sha256="abc123")
+        manifest = JudgeManifest(
+            model_file_sha256="abc123",
+            n_batch=2048,
+            n_ubatch=512,
+            sql_token_target=2000,
+            mode=MODE_PREFIX,
+            context_tokens=16384,
+        )
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "manifest.toml"
             write_manifest(manifest, path)
             loaded = load_manifest(path)
         self.assertEqual(loaded.model_file_sha256, "abc123")
+        self.assertEqual(loaded.n_batch, 2048)
+        self.assertEqual(loaded.context_tokens, 16384)
+        self.assertEqual(loaded.mode, MODE_PREFIX)
+        self.assertEqual(loaded.prompt_version, PROMPT_VERSION)
+
+    @unittest.skipIf(not EVAL_DEPS, "eval deps not installed (pip install -r requirements-eval.txt)")
+    def test_grouped_prompt_version(self) -> None:
+        manifest = JudgeManifest(mode=MODE_GROUPED, prompt_version=PROMPT_VERSION_GROUPED)
+        self.assertEqual(manifest.prompt_version, PROMPT_VERSION_GROUPED)
 
 
 if __name__ == "__main__":

@@ -20,20 +20,26 @@ DEFAULT_IRR_REPORT = ROOT / "tests" / "benchmarks" / "irr_report.json"
 RULE_GUIDES = ROOT / "docs" / "rules"
 
 PROMPT_VERSION = "irr_judge_v1"
+PROMPT_VERSION_GROUPED = "irr_judge_v1+grouped"
+MODE_PREFIX = "prefix"
+MODE_GROUPED = "grouped"
 JUDGE_NAME = "costguard-local-llm-judge"
 JUDGE_VERSION = "v1"
 DEFAULT_MODEL_ID = "Qwen3-30B-A3B-Instruct-2507"
 DEFAULT_QUANT = "Q4_K_M"
 DEFAULT_RUNTIME = "llama.cpp"
 DEFAULT_SEED = 3407
-DEFAULT_CONTEXT_TOKENS = 32768
+DEFAULT_CONTEXT_TOKENS = 16384
+DEFAULT_N_BATCH = 2048
+DEFAULT_N_UBATCH = 512
+DEFAULT_SQL_TOKEN_TARGET = 2000
 DEFAULT_MAX_NEW_TOKENS = 1
 DEFAULT_CAP = 50
 DEFAULT_MARGIN = 0.5
 DEFAULT_SPAN_LINES = 40
+DEFAULT_KV_CACHE_CAPACITY = 2
 
 LABEL_TOKEN_TO_VERDICT = {"A": "tp", "B": "fp", "C": "unsure"}
-VERDICT_TO_LABEL_TOKEN = {value: key for key, value in LABEL_TOKEN_TO_VERDICT.items()}
 
 # ponytail: one-token GBNF; upgrade path is JSON-schema if we add fields
 LABEL_GRAMMAR = r"""
@@ -58,6 +64,13 @@ C = unsure: the SQL/rule context is ambiguous or insufficient.
 
 Verdict:"""
 
+GROUPED_DECISION_SUFFIX = """\
+For each finding below, return one verdict letter (A/B/C) per finding.
+Return a JSON array only, e.g. [{"index":0,"verdict":"A"},{"index":1,"verdict":"B"}].
+A = true positive, B = false positive, C = unsure.
+
+Verdicts:"""
+
 
 @dataclass
 class RuleMetadata:
@@ -71,6 +84,15 @@ class RuleMetadata:
     def description_sha(self) -> str:
         material = f"{self.title}\n{self.description}\n{self.rubric}"
         return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+
+@dataclass(frozen=True)
+class FindingPromptInput:
+    index: int
+    rule_meta: RuleMetadata
+    line: int
+    span: str
+    message: str
 
 
 @dataclass
@@ -101,6 +123,7 @@ class JudgeRecord:
     runtime_version: str = ""
     message: str = ""
     dialect: str = ""
+    mode: str = MODE_PREFIX
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
@@ -110,6 +133,8 @@ class JudgeRecord:
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> JudgeRecord:
+        prompt_version = str(payload.get("prompt_version", PROMPT_VERSION))
+        mode = str(payload.get("mode", mode_from_prompt_version(prompt_version)))
         return cls(
             finding_id=str(payload["finding_id"]),
             rule_id=str(payload["rule_id"]),
@@ -123,7 +148,7 @@ class JudgeRecord:
             model=str(payload.get("model", DEFAULT_MODEL_ID)),
             quant=str(payload.get("quant", DEFAULT_QUANT)),
             runtime=str(payload.get("runtime", DEFAULT_RUNTIME)),
-            prompt_version=str(payload.get("prompt_version", PROMPT_VERSION)),
+            prompt_version=prompt_version,
             input_sha256=str(payload.get("input_sha256", "")),
             model_sha256=str(payload.get("model_sha256", "")),
             cache_key=str(payload.get("cache_key", "")),
@@ -137,6 +162,7 @@ class JudgeRecord:
             runtime_version=str(payload.get("runtime_version", "")),
             message=str(payload.get("message", "")),
             dialect=str(payload.get("dialect", "")),
+            mode=mode,
         )
 
 
@@ -157,6 +183,10 @@ class JudgeManifest:
     cap: int = DEFAULT_CAP
     repo: str = "spellbook"
     sample_seed: int = DEFAULT_SEED
+    n_batch: int = DEFAULT_N_BATCH
+    n_ubatch: int = DEFAULT_N_UBATCH
+    sql_token_target: int = DEFAULT_SQL_TOKEN_TARGET
+    mode: str = MODE_PREFIX
 
     def to_toml(self) -> str:
         lines = [
@@ -178,17 +208,29 @@ class JudgeManifest:
             f"cap = {self.cap}",
             f'repo = "{self.repo}"',
             f"sample_seed = {self.sample_seed}",
+            f"n_batch = {self.n_batch}",
+            f"n_ubatch = {self.n_ubatch}",
+            f"sql_token_target = {self.sql_token_target}",
+            f'mode = "{self.mode}"',
             "",
         ]
         return "\n".join(lines)
 
 
+def mode_from_prompt_version(prompt_version: str) -> str:
+    if prompt_version.endswith("+grouped"):
+        return MODE_GROUPED
+    return MODE_PREFIX
+
+
+def prompt_version_for_mode(mode: str) -> str:
+    if mode == MODE_GROUPED:
+        return PROMPT_VERSION_GROUPED
+    return PROMPT_VERSION
+
+
 def sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
-
-
-def sha256_bytes(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
 
 
 def cache_key(
@@ -201,6 +243,7 @@ def cache_key(
     prompt_version: str,
     model_file_sha256: str,
     runtime_version: str,
+    mode: str = MODE_PREFIX,
 ) -> str:
     material = "|".join(
         [
@@ -212,6 +255,7 @@ def cache_key(
             prompt_version,
             model_file_sha256,
             runtime_version,
+            mode,
         ]
     )
     return sha256_text(material)
@@ -267,6 +311,35 @@ def load_rule_metadata() -> dict[str, RuleMetadata]:
     return metadata
 
 
+def _finding_suffix_parts(
+    rule_meta: RuleMetadata,
+    *,
+    dialect: str,
+    line: int,
+    span: str,
+    message: str,
+    index: int | None = None,
+) -> list[str]:
+    parts = [
+        f"Rule ID: {rule_meta.rule_id}",
+        f"Rule title: {rule_meta.title}",
+        f"Rule description: {rule_meta.description}",
+    ]
+    if rule_meta.rubric:
+        parts.append(f"Rule rubric:\n{rule_meta.rubric}")
+    if index is not None:
+        parts.append(f"Finding index: {index}")
+    if dialect:
+        parts.append(f"SQL dialect: {dialect}")
+    if line:
+        parts.append(f"Finding line: {line}")
+    if span:
+        parts.append(f"Finding span: {span}")
+    if message:
+        parts.append(f"Diagnostic message: {message}")
+    return parts
+
+
 def build_prompt(
     rule_meta: RuleMetadata,
     *,
@@ -276,30 +349,42 @@ def build_prompt(
     message: str,
     sql: str,
 ) -> str:
-    parts = [
-        f"Rule ID: {rule_meta.rule_id}",
-        f"Rule title: {rule_meta.title}",
-        f"Rule description: {rule_meta.description}",
-    ]
-    if rule_meta.rubric:
-        parts.append(f"Rule rubric:\n{rule_meta.rubric}")
-    if dialect:
-        parts.append(f"SQL dialect: {dialect}")
-    if line:
-        parts.append(f"Finding line: {line}")
-    if span:
-        parts.append(f"Finding span: {span}")
-    if message:
-        parts.append(f"Diagnostic message: {message}")
-    parts.append(f"SQL:\n{sql}")
-    parts.append(DECISION_SUFFIX)
-    user = "\n\n".join(parts)
-    return f"{SYSTEM_PROMPT}\n\n{user}"
+    suffix_parts = _finding_suffix_parts(
+        rule_meta,
+        dialect=dialect,
+        line=line,
+        span=span,
+        message=message,
+    )
+    suffix_parts.append(DECISION_SUFFIX)
+    suffix = "\n\n".join(suffix_parts)
+    return f"{SYSTEM_PROMPT}\n\nSQL:\n{sql}\n\n{suffix}"
 
 
-def _estimate_char_budget(context_tokens: int) -> int:
+def build_grouped_prompt(
+    findings: list[FindingPromptInput],
+    *,
+    dialect: str,
+    sql: str,
+) -> str:
+    blocks: list[str] = []
+    for item in findings:
+        parts = _finding_suffix_parts(
+            item.rule_meta,
+            dialect=dialect,
+            line=item.line,
+            span=item.span,
+            message=item.message,
+            index=item.index,
+        )
+        blocks.append("\n\n".join(parts))
+    findings_text = "\n\n---\n\n".join(blocks)
+    return f"{SYSTEM_PROMPT}\n\nSQL:\n{sql}\n\nFindings:\n{findings_text}\n\n{GROUPED_DECISION_SUFFIX}"
+
+
+def _estimate_char_budget(token_target: int) -> int:
     # ponytail: chars/4 heuristic; upgrade path is tokenizer-aware budget
-    return max(1024, context_tokens * 3)
+    return max(1024, token_target * 3)
 
 
 def _line_window(sql: str, line: int, radius: int) -> str:
@@ -339,6 +424,24 @@ def _referenced_cte_defs(sql: str, block: str) -> str:
     return "\n".join(chunks)
 
 
+def _union_excerpts(sql: str, lines: list[int], span_lines: int) -> str:
+    parts: list[str] = []
+    seen: set[str] = set()
+    for line in sorted(set(lines)):
+        window = _line_window(sql, line, span_lines)
+        cte_block = _extract_cte_block(sql, line)
+        cte_defs = _referenced_cte_defs(sql, cte_block or window)
+        for part in (cte_defs, cte_block or window):
+            if not part:
+                continue
+            digest = sha256_text(part)
+            if digest in seen:
+                continue
+            seen.add(digest)
+            parts.append(part)
+    return "\n\n---\n\n".join(parts)
+
+
 def pack_sql(
     sql: str,
     line: int,
@@ -359,6 +462,63 @@ def pack_sql(
     if len(packed) <= budget:
         return packed, True, False
     return packed[:budget], True, True
+
+
+def pack_sql_for_file(
+    sql: str,
+    lines: list[int],
+    *,
+    sql_token_target: int = DEFAULT_SQL_TOKEN_TARGET,
+    span_lines: int = DEFAULT_SPAN_LINES,
+) -> tuple[str, str, bool, bool]:
+    """Return (context, sql_sha, context_truncated, too_large)."""
+    budget = _estimate_char_budget(sql_token_target)
+    if len(sql) <= budget:
+        digest = sha256_text(sql)
+        return sql, digest, False, False
+
+    packed = _union_excerpts(sql, lines, span_lines)
+    digest = sha256_text(packed)
+    if len(packed) <= budget:
+        return packed, digest, True, False
+    clipped = packed[:budget]
+    return clipped, sha256_text(clipped), True, True
+
+
+def parse_grouped_verdicts(text: str, n: int) -> list[str]:
+    """Parse grouped JSON verdicts; missing/garbled entries default to C."""
+    letters = ["C"] * n
+    payload = text.strip()
+    start = payload.find("[")
+    end = payload.rfind("]")
+    if start != -1 and end != -1 and end > start:
+        payload = payload[start : end + 1]
+    try:
+        parsed = json.loads(payload)
+    except json.JSONDecodeError:
+        for match in re.finditer(r'"index"\s*:\s*(\d+)\s*,\s*"verdict"\s*:\s*"([ABC])"', text):
+            idx = int(match.group(1))
+            if 0 <= idx < n:
+                letters[idx] = match.group(2)
+        return letters
+    if not isinstance(parsed, list):
+        return letters
+    for item in parsed:
+        if not isinstance(item, dict):
+            continue
+        idx_raw = item.get("index")
+        verdict_raw = item.get("verdict")
+        if idx_raw is None or verdict_raw is None:
+            continue
+        try:
+            idx = int(idx_raw)
+        except (TypeError, ValueError):
+            continue
+        if not (0 <= idx < n):
+            continue
+        letter = str(verdict_raw).strip().upper()[:1]
+        letters[idx] = letter if letter in {"A", "B", "C"} else "C"
+    return letters
 
 
 def finding_id_for_diagnostic(repo: str, diagnostic: dict[str, Any]) -> str:
@@ -385,6 +545,14 @@ def finding_span(diagnostic: dict[str, Any]) -> str:
     return f"{start}:{column}-{end}"
 
 
+def candidate_sort_key(candidate: Any) -> tuple[str, str, int]:
+    diagnostic = candidate.diagnostic
+    path = str(diagnostic.get("path", "")).replace("\\", "/")
+    rule_id = str(diagnostic.get("rule_id", ""))
+    line = int(diagnostic.get("line", 0) or 0)
+    return (path, rule_id, line)
+
+
 def load_judge_records(path: Path | None = None) -> list[JudgeRecord]:
     labels_path = path or DEFAULT_LABELS_JSONL
     if not labels_path.exists():
@@ -409,6 +577,7 @@ def load_manifest(path: Path | None = None) -> JudgeManifest:
     if not manifest_path.exists():
         return JudgeManifest()
     data = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
+    mode = str(data.get("mode", MODE_PREFIX))
     return JudgeManifest(
         judge_name=str(data.get("judge_name", JUDGE_NAME)),
         judge_version=str(data.get("judge_version", JUDGE_VERSION)),
@@ -417,7 +586,7 @@ def load_manifest(path: Path | None = None) -> JudgeManifest:
         quantization=str(data.get("quantization", DEFAULT_QUANT)),
         runtime=str(data.get("runtime", DEFAULT_RUNTIME)),
         runtime_version=str(data.get("runtime_version", "")),
-        prompt_version=str(data.get("prompt_version", PROMPT_VERSION)),
+        prompt_version=str(data.get("prompt_version", prompt_version_for_mode(mode))),
         temperature=float(data.get("temperature", 0.0)),
         seed=int(data.get("seed", DEFAULT_SEED)),
         context_tokens=int(data.get("context_tokens", DEFAULT_CONTEXT_TOKENS)),
@@ -425,6 +594,10 @@ def load_manifest(path: Path | None = None) -> JudgeManifest:
         cap=int(data.get("cap", DEFAULT_CAP)),
         repo=str(data.get("repo", "spellbook")),
         sample_seed=int(data.get("sample_seed", DEFAULT_SEED)),
+        n_batch=int(data.get("n_batch", DEFAULT_N_BATCH)),
+        n_ubatch=int(data.get("n_ubatch", DEFAULT_N_UBATCH)),
+        sql_token_target=int(data.get("sql_token_target", DEFAULT_SQL_TOKEN_TARGET)),
+        mode=mode,
     )
 
 
@@ -471,9 +644,14 @@ class LlamaJudge:
         n_ctx: int = DEFAULT_CONTEXT_TOKENS,
         seed: int = DEFAULT_SEED,
         n_gpu_layers: int = -1,
+        n_batch: int = DEFAULT_N_BATCH,
+        n_ubatch: int = DEFAULT_N_UBATCH,
     ) -> None:
         try:
             from llama_cpp import Llama  # type: ignore[import-not-found]
+            from llama_cpp.llama_cache import (
+                LlamaRAMCache,  # type: ignore[import-not-found]
+            )
         except ImportError as exc:  # pragma: no cover - local-only dep
             raise SystemExit(
                 "llama-cpp-python is required for build_llm_judge_labels.py; "
@@ -482,11 +660,15 @@ class LlamaJudge:
         self._llm = Llama(
             model_path=str(model_path),
             n_ctx=n_ctx,
+            n_batch=n_batch,
+            n_ubatch=n_ubatch,
             seed=seed,
             n_gpu_layers=n_gpu_layers,
             logits_all=False,
             verbose=False,
         )
+        # ponytail: small RAM cache (~1-2 KV states); upgrade path is disk cache
+        self._llm.set_cache(LlamaRAMCache(capacity_bytes=256 * 1024 * 1024))
 
     def judge(self, prompt: str, *, max_tokens: int = DEFAULT_MAX_NEW_TOKENS) -> tuple[str, dict[str, float]]:
         output = self._llm(
@@ -502,6 +684,18 @@ class LlamaJudge:
         letter = str(choice.get("text", "")).strip().upper()[:1] or "C"
         logprobs = extract_label_logprobs(choice.get("logprobs"))
         return letter, logprobs
+
+    def judge_grouped(self, prompt: str, n: int) -> list[str]:
+        max_tokens = max(32, min(512, 12 * n))
+        output = self._llm(
+            prompt,
+            max_tokens=max_tokens,
+            temperature=0.0,
+            top_p=1.0,
+        )
+        choice = output["choices"][0]
+        text = str(choice.get("text", ""))
+        return parse_grouped_verdicts(text, n)
 
 
 def utc_now_iso() -> str:

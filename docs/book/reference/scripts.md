@@ -298,7 +298,11 @@ python3 scripts/build_llm_judge_labels.py --dry-run
 | `--model` | Path to local GGUF (or set `COSTGUARD_JUDGE_GGUF`) |
 | `--cap` | Max findings per `(rule, bucket)` (default 50) |
 | `--seed` | Deterministic sampling seed (default 3407) |
-| `--context-tokens` | llama.cpp context size (default 32768) |
+| `--context-tokens` | llama.cpp context size (default 16384) |
+| `--n-batch` | llama.cpp batch size (default 2048) |
+| `--n-ubatch` | llama.cpp micro-batch size (default 512) |
+| `--sql-token-target` | Per-file SQL excerpt target in tokens (default 2000) |
+| `--grouped` | One LLM call per file with JSON verdict array (faster, no logprob margin) |
 | `--dry-run` | Enumerate capped candidates without loading the model |
 | `--out` | Output JSONL (default `tests/benchmarks/llm_judge_labels.jsonl`) |
 | `--manifest-out` | Manifest TOML (default `tests/benchmarks/llm_judge_manifest.toml`) |

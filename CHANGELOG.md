@@ -16,7 +16,7 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ### Changed
 
-- Cost estimate docs and human-readable output use canonical terms for current/post-fix/potential savings and addressable finding savings; cost summaries include advisory disclaimers and a grade-C caveat when no measured spend is mapped.
+- LLM judge build tool: per-file SQL context packing with KV prefix reuse (default), optional `--grouped` one-call-per-file mode, default `n_ctx=16384`, and tunable batch/SQL token targets for M4 Air performance.
 - Folded `costguard-git` into `costguard-core` and `costguard-platform` into `costguard-sql` (11 workspace crates).
 
 ### Removed
