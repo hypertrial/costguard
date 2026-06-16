@@ -6,7 +6,7 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ### Added
 
-- `scripts/rule_tp_census.py` — full-corpus per-rule TP/FP census across all benchmark repos with PASS bar (≥20 TP or 100% clean) and optional `tests/benchmarks/rule_tp_evidence.json` export.
+- `scripts/rule_tp_census.py` — cost-ranked FP-elimination census (≤100 examples/rule, 0 fp_bug + 0 unknown pass bar) with optional `tests/benchmarks/rule_tp_evidence.json` export and `--rule` / `--sample-cap` flags.
 - Design doc: [Rule TP coverage](docs/design/rule-tp-coverage.md) — 44/44 rules PASS on spellbook + jaffle-shop + mattermost-warehouse + data-infra.
 - Design doc: [Manual rule review playbook](docs/design/manual-rule-review.md) — canonical workflow for adjudicating findings, registry entries, and census validation.
 - `scripts/top_findings_review.py` — rank top-N cost findings with SQL context, bucket, and registry verdict for Spellbook (or other repo) triage loops.
@@ -20,6 +20,9 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ### Changed
 
+- **FP-elimination census**: `rule_tp_census.py` now cost-ranks up to 100 findings per rule (100% if fewer) and passes only when the examined sample has 0 `fp_bug` and 0 `unknown`. Registry `verdict = "fp"` rows require `class = "exempt"` or `"bug"`. Evidence JSON exports `examined`, `exempt`, `fp_bug`, and `examined_examples`.
+- SQLCOST006: extended raw-text `ON … =` fallback window for subquery joins; skip `dbt_macros/` paths.
+- SQLCOST008: skip blind-DISTINCT rule for dbt macro paths.
 - LLM judge v3: structured JSON verdict (`exemption_applies`, `failure_condition_met`, `verdict`) with balanced rubric prompt, per-rule few-shots (`tests/benchmarks/judge_fewshots.toml`), deterministic `map_structured_verdict`, per-file checkpointing, and richer IRR metrics (MCC + registry FP/TP recall/precision). Compact GBNF grammar required for llama.cpp (spaced `ws` grammar stalls generation).
 - LLM judge v2: ChatML `create_chat_completion` (fixes instruct-model confirm-bias), anti-FP prompt, `n_ctx=32768`, `sql_token_target=8000`, model-chosen `C` abstention (drops logprob margin), `--rule-id` filter, `flash_attn=true`.
 - LLM judge build tool: per-file SQL context packing with KV prefix reuse (default), optional `--grouped` one-call-per-file mode, and tunable batch/SQL token targets for M4 Air performance.

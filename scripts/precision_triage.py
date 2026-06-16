@@ -43,8 +43,8 @@ def load_fp_registry() -> list[dict[str, Any]]:
     return data.get("finding", [])
 
 
-def registry_verdict_map() -> dict[tuple[str, str, str], str]:
-    verdicts: dict[tuple[str, str, str], str] = {}
+def registry_entry_map() -> dict[tuple[str, str, str], dict[str, Any]]:
+    entries: dict[tuple[str, str, str], dict[str, Any]] = {}
     for entry in load_fp_registry():
         rule = entry.get("rule")
         bucket = entry.get("bucket")
@@ -53,18 +53,37 @@ def registry_verdict_map() -> dict[tuple[str, str, str], str]:
         if not rule or not bucket or not verdict:
             continue
         key = (repo, rule, bucket)
-        if key in verdicts and verdicts[key] != verdict:
+        if key in entries and entries[key].get("verdict") != verdict:
             raise SystemExit(
                 f"conflicting fp_registry verdicts for {repo}/{rule}/{bucket}: "
-                f"{verdicts[key]} vs {verdict}"
+                f"{entries[key].get('verdict')} vs {verdict}"
             )
-        verdicts[key] = verdict
-    return verdicts
+        entries[key] = entry
+    return entries
+
+
+def registry_verdict_map() -> dict[tuple[str, str, str], str]:
+    return {
+        key: entry["verdict"]
+        for key, entry in registry_entry_map().items()
+        if entry.get("verdict")
+    }
 
 
 def registry_verdict(repo: str, rule: str, bucket: str) -> str | None:
-    verdicts = registry_verdict_map()
-    return verdicts.get((repo, rule, bucket)) or verdicts.get(("spellbook", rule, bucket))
+    entries = registry_entry_map()
+    entry = entries.get((repo, rule, bucket)) or entries.get(("spellbook", rule, bucket))
+    if entry is None:
+        return None
+    return entry.get("verdict")
+
+
+def registry_class(repo: str, rule: str, bucket: str) -> str | None:
+    entries = registry_entry_map()
+    entry = entries.get((repo, rule, bucket)) or entries.get(("spellbook", rule, bucket))
+    if entry is None:
+        return None
+    return entry.get("class")
 
 
 def classify_diagnostic(

@@ -48,7 +48,8 @@ pub(crate) fn is_staging_model(path: &Path) -> bool {
 }
 
 pub(crate) fn is_dbt_macro_path(path: &Path) -> bool {
-    normalized_path(path).contains("/macros/")
+    let path = normalized_path(path);
+    path.contains("/macros/") || path.contains("/dbt_macros/") || path.starts_with("dbt_macros/")
 }
 
 pub(crate) fn normalized_path(path: &Path) -> String {

@@ -24,18 +24,33 @@ fn join_has_clear_equality(join: &JoinFeature, file_text: &str) -> bool {
     }) {
         return true;
     }
-    join_on_clause_has_equality(file_text, join.span.byte_end)
+    join_on_clause_has_equality(file_text, join.span.byte_start)
 }
 
-fn join_on_clause_has_equality(text: &str, after_join: usize) -> bool {
-    let start = after_join.min(text.len());
-    let end = (start + 400).min(text.len());
+fn join_on_clause_has_equality(text: &str, join_start: usize) -> bool {
+    let start = join_start.min(text.len());
+    let end = (start + 3000).min(text.len());
     let lower = text[start..end].to_ascii_lowercase();
-    let Some(on_idx) = lower.find(" on ") else {
-        return false;
-    };
-    let after_on = &lower[on_idx..];
-    after_on.contains('=') && !after_on.contains("<=") && !after_on.contains(">=")
+    for (idx, _) in lower.match_indices(" on ") {
+        let after = &lower[idx..];
+        if after.starts_with(" on only ") {
+            continue;
+        }
+        if after.starts_with(" using") {
+            return true;
+        }
+        if let Some(eq_pos) = after.find('=') {
+            let before = &after[..eq_pos];
+            if !before.contains("<=")
+                && !before.contains(">=")
+                && !before.contains("!=")
+                && !before.contains("<>")
+            {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 fn is_cte_broadcast_cross_join(join: &JoinFeature, ctes: &[CteFeature]) -> bool {
@@ -194,6 +209,9 @@ impl Rule for BlindDistinctRule {
         Severity::Medium
     }
     fn check(&self, ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
+        if is_dbt_macro_path(&ctx.file.root_relative_path) {
+            return Vec::new();
+        }
         let Some(sql) = ctx.sql else {
             return Vec::new();
         };

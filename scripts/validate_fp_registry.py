@@ -58,6 +58,12 @@ def main() -> int:
             )
             continue
 
+        fp_class = finding.get("class")
+        if fp_class is not None and fp_class not in {"exempt", "bug"}:
+            errors.append(f"finding #{idx}: class must be 'exempt' or 'bug', got '{fp_class}'")
+        if verdict == "fp" and fp_class is None:
+            errors.append(f"finding #{idx}: verdict 'fp' requires class ('exempt' or 'bug')")
+
         if verdict == "fp":
             if rule not in corpus[corpus_case]["forbid"]:
                 errors.append(

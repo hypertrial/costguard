@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Full-corpus per-rule TP/FP census across benchmark repos."""
+"""Full-corpus per-rule FP-elimination census across benchmark repos."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from bucket_rule_diagnostics import (  # noqa: E402
 )
 from costguard_tooling import load_repos, run_costguard_scan  # noqa: E402
 from dbt_compile_for_costguard import compile_dbt_repo  # noqa: E402
-from precision_triage import classify_diagnostic  # noqa: E402
+from precision_triage import classify_diagnostic, registry_class  # noqa: E402
 
 BUILTIN_RULE_IDS = [f"SQLCOST{i:03d}" for i in range(1, 45)]
 INFRASTRUCTURE_RULES = {
@@ -35,7 +35,7 @@ INFRASTRUCTURE_RULES = {
 }
 DEFAULT_REPOS = ["spellbook", "jaffle-shop", "mattermost-warehouse", "data-infra"]
 EVIDENCE_PATH = ROOT / "tests" / "benchmarks" / "rule_tp_evidence.json"
-TP_TARGET = 20
+SAMPLE_TARGET = 100
 
 
 def snippet_for(sql: str, line: int, *, width: int = 240) -> str:
@@ -47,26 +47,84 @@ def snippet_for(sql: str, line: int, *, width: int = 240) -> str:
     return text.strip()[:width]
 
 
-def pass_reason(*, tp: int, fp: int, unknown: int, total: int, infrastructure: bool) -> str:
+def savings_key(diagnostic: dict[str, Any]) -> float:
+    cost = diagnostic.get("cost_estimate") or {}
+    savings = cost.get("savings_p50_usd_per_month")
+    if isinstance(savings, (int, float)):
+        return float(savings)
+    rel = cost.get("relative_index")
+    if isinstance(rel, (int, float)):
+        return float(rel)
+    return 0.0
+
+
+def adjudication_label(*, verdict: str | None, fp_class: str | None) -> str:
+    if verdict is None:
+        return "unknown"
+    if verdict == "tp":
+        return "tp"
+    if verdict == "fp":
+        if fp_class == "exempt":
+            return "exempt"
+        return "fp_bug"
+    return "unknown"
+
+
+def pass_reason(
+    *,
+    tp: int,
+    exempt: int,
+    fp_bug: int,
+    unknown: int,
+    examined: int,
+    total: int,
+    infrastructure: bool,
+) -> str:
     if infrastructure:
         return "infrastructure_na"
-    if fp == 0 and unknown == 0:
-        if tp >= TP_TARGET:
-            return f"tp>={TP_TARGET}"
-        if total == 0:
-            return "vacuous_clean"
-        return "clean"
-    if tp >= TP_TARGET:
-        return f"tp>={TP_TARGET}_with_residual_fp"
+    if total == 0:
+        return "vacuous_clean"
+    if fp_bug == 0 and unknown == 0:
+        if examined < total:
+            return f"sampled_{examined}_of_{total}"
+        return "fully_examined"
     return "fail"
 
 
-def rule_passes(*, tp: int, fp: int, unknown: int, infrastructure: bool) -> bool:
+def rule_passes(*, fp_bug: int, unknown: int, infrastructure: bool) -> bool:
     if infrastructure:
         return True
-    if fp == 0 and unknown == 0:
-        return True
-    return tp >= TP_TARGET
+    return fp_bug == 0 and unknown == 0
+
+
+def sample_findings(
+    findings: list[dict[str, Any]],
+    *,
+    sample_cap: int,
+) -> list[dict[str, Any]]:
+    if not findings:
+        return []
+    ranked = sorted(
+        findings,
+        key=lambda item: (
+            -item["savings"],
+            item.get("repo", ""),
+            item.get("path", ""),
+            item.get("line", 0),
+        ),
+    )
+    return ranked[: min(sample_cap, len(ranked))]
+
+
+def summarize_sample(findings: list[dict[str, Any]]) -> dict[str, Any]:
+    counts = Counter(item["label"] for item in findings)
+    return {
+        "examined": len(findings),
+        "tp": counts.get("tp", 0),
+        "exempt": counts.get("exempt", 0),
+        "fp_bug": counts.get("fp_bug", 0),
+        "unknown": counts.get("unknown", 0),
+    }
 
 
 def scan_repo(
@@ -86,14 +144,13 @@ def scan_repo(
     )
     manifest = checkout / "target" / "manifest.json"
     compiled = load_manifest_sql(manifest) if manifest.is_file() else {}
-    enable_cost = bool(repo.get("cost", False))
     payload, _ = run_costguard_scan(
         checkout,
         warehouse=repo.get("warehouse", "generic"),
         scan_paths=repo.get("scan_paths", ["."]),
         fail_on=repo.get("fail_on", "critical"),
         manifest=manifest if manifest.is_file() else None,
-        cost=enable_cost,
+        cost=True,
     )
     return payload.get("diagnostics", []), checkout, compiled
 
@@ -103,45 +160,45 @@ def aggregate_diagnostics(
     diagnostics: list[dict[str, Any]],
     checkout: Path,
     compiled: dict[str, str],
+    *,
+    rule_filter: str | None = None,
 ) -> dict[str, dict[str, Any]]:
     by_rule: dict[str, dict[str, Any]] = defaultdict(
         lambda: {
             "total": 0,
-            "tp": 0,
-            "fp": 0,
-            "unknown": 0,
-            "examples": [],
+            "findings": [],
+            "fp_bug_buckets": Counter(),
             "unknown_buckets": Counter(),
-            "fp_buckets": Counter(),
         }
     )
     for diagnostic in diagnostics:
         rule_id = diagnostic.get("rule_id", "")
-        if not rule_id:
+        if not rule_id or (rule_filter and rule_id != rule_filter):
             continue
         bucket, verdict = classify_diagnostic(diagnostic, checkout, compiled, repo_name)
+        fp_class = registry_class(repo_name, rule_id, bucket) if verdict == "fp" else None
+        label = adjudication_label(verdict=verdict, fp_class=fp_class)
+        line = int(diagnostic.get("line") or 0)
+        sql = read_sql_for_diagnostic(checkout, diagnostic, compiled)
         entry = by_rule[rule_id]
         entry["total"] += 1
-        if verdict == "tp":
-            entry["tp"] += 1
-            if len(entry["examples"]) < TP_TARGET:
-                line = int(diagnostic.get("line") or 0)
-                sql = read_sql_for_diagnostic(checkout, diagnostic, compiled)
-                entry["examples"].append(
-                    {
-                        "repo": repo_name,
-                        "path": diagnostic.get("path", ""),
-                        "line": line,
-                        "bucket": bucket,
-                        "message": diagnostic.get("message", ""),
-                        "snippet": snippet_for(sql, line),
-                    }
-                )
-        elif verdict == "fp":
-            entry["fp"] += 1
-            entry["fp_buckets"][f"{repo_name}:{bucket}"] += 1
-        else:
-            entry["unknown"] += 1
+        entry["findings"].append(
+            {
+                "repo": repo_name,
+                "path": diagnostic.get("path", ""),
+                "line": line,
+                "bucket": bucket,
+                "verdict": verdict,
+                "class": fp_class,
+                "label": label,
+                "message": diagnostic.get("message", ""),
+                "savings": savings_key(diagnostic),
+                "snippet": snippet_for(sql, line),
+            }
+        )
+        if label == "fp_bug":
+            entry["fp_bug_buckets"][f"{repo_name}:{bucket}"] += 1
+        elif label == "unknown":
             entry["unknown_buckets"][f"{repo_name}:{bucket}"] += 1
     return by_rule
 
@@ -155,73 +212,73 @@ def merge_rule_stats(
             rule_id,
             {
                 "total": 0,
-                "tp": 0,
-                "fp": 0,
-                "unknown": 0,
-                "examples": [],
+                "findings": [],
+                "fp_bug_buckets": Counter(),
                 "unknown_buckets": Counter(),
-                "fp_buckets": Counter(),
             },
         )
         entry["total"] += stats["total"]
-        entry["tp"] += stats["tp"]
-        entry["fp"] += stats["fp"]
-        entry["unknown"] += stats["unknown"]
+        entry["findings"].extend(stats["findings"])
+        entry["fp_bug_buckets"].update(stats["fp_bug_buckets"])
         entry["unknown_buckets"].update(stats["unknown_buckets"])
-        entry["fp_buckets"].update(stats["fp_buckets"])
-        for example in stats["examples"]:
-            if len(entry["examples"]) >= TP_TARGET:
-                break
-            entry["examples"].append(example)
 
 
 def build_report(
     merged: dict[str, dict[str, Any]],
     *,
     repos: list[str],
+    sample_cap: int,
+    rule_filter: str | None = None,
 ) -> dict[str, Any]:
+    rule_ids = [rule_filter] if rule_filter else BUILTIN_RULE_IDS
     rules: dict[str, dict[str, Any]] = {}
-    for rule_id in BUILTIN_RULE_IDS:
+    for rule_id in rule_ids:
         stats = merged.get(
             rule_id,
             {
                 "total": 0,
-                "tp": 0,
-                "fp": 0,
-                "unknown": 0,
-                "examples": [],
+                "findings": [],
+                "fp_bug_buckets": Counter(),
                 "unknown_buckets": Counter(),
-                "fp_buckets": Counter(),
             },
         )
-        tp = stats["tp"]
-        fp = stats["fp"]
-        unknown = stats["unknown"]
-        total = stats["total"]
-        passed = rule_passes(tp=tp, fp=fp, unknown=unknown, infrastructure=rule_id in INFRASTRUCTURE_RULES)
+        sampled = sample_findings(stats["findings"], sample_cap=sample_cap)
+        summary = summarize_sample(sampled)
+        passed = rule_passes(
+            fp_bug=summary["fp_bug"],
+            unknown=summary["unknown"],
+            infrastructure=rule_id in INFRASTRUCTURE_RULES,
+        )
         rules[rule_id] = {
-            "total": total,
-            "tp": tp,
-            "fp": fp,
-            "unknown": unknown,
+            "total": stats["total"],
+            "examined": summary["examined"],
+            "tp": summary["tp"],
+            "exempt": summary["exempt"],
+            "fp_bug": summary["fp_bug"],
+            "unknown": summary["unknown"],
             "pass": passed,
             "pass_reason": pass_reason(
-                tp=tp, fp=fp, unknown=unknown, total=total,
+                tp=summary["tp"],
+                exempt=summary["exempt"],
+                fp_bug=summary["fp_bug"],
+                unknown=summary["unknown"],
+                examined=summary["examined"],
+                total=stats["total"],
                 infrastructure=rule_id in INFRASTRUCTURE_RULES,
             ),
             "infrastructure": rule_id in INFRASTRUCTURE_RULES,
+            "fp_bug_buckets": dict(stats["fp_bug_buckets"]),
             "unknown_buckets": dict(stats["unknown_buckets"]),
-            "fp_buckets": dict(stats["fp_buckets"]),
-            "examples": stats["examples"],
+            "examined_examples": sampled,
         }
 
     failing = [rid for rid, item in rules.items() if not item["pass"]]
     return {
         "repos": repos,
-        "tp_target": TP_TARGET,
+        "sample_cap": sample_cap,
         "rules": rules,
         "summary": {
-            "total_rules": len(BUILTIN_RULE_IDS),
+            "total_rules": len(rule_ids),
             "passing": sum(1 for item in rules.values() if item["pass"]),
             "failing": len(failing),
             "failing_rules": failing,
@@ -233,22 +290,27 @@ def print_report(report: dict[str, Any]) -> None:
     summary = report["summary"]
     print(
         f"Census across {', '.join(report['repos'])}: "
-        f"{summary['passing']}/{summary['total_rules']} rules PASS"
+        f"{summary['passing']}/{summary['total_rules']} rules PASS "
+        f"(sample cap {report['sample_cap']})"
     )
     if summary["failing_rules"]:
         print(f"FAIL ({len(summary['failing_rules'])}): {', '.join(summary['failing_rules'])}")
     print()
     for rule_id, stats in report["rules"].items():
-        if stats["pass"] and stats["fp"] == 0 and stats["unknown"] == 0:
-            continue
+        if stats["pass"] and stats["fp_bug"] == 0 and stats["unknown"] == 0:
+            if stats["total"] == 0 or (
+                stats["examined"] == stats["total"] and stats["exempt"] == 0
+            ):
+                continue
         status = "PASS" if stats["pass"] else "FAIL"
         print(
-            f"{status} {rule_id}: total={stats['total']} tp={stats['tp']} "
-            f"fp={stats['fp']} unknown={stats['unknown']} ({stats['pass_reason']})"
+            f"{status} {rule_id}: total={stats['total']} examined={stats['examined']} "
+            f"tp={stats['tp']} exempt={stats['exempt']} fp_bug={stats['fp_bug']} "
+            f"unknown={stats['unknown']} ({stats['pass_reason']})"
         )
-        if stats["fp_buckets"]:
-            for key, count in sorted(stats["fp_buckets"].items(), key=lambda x: -x[1])[:5]:
-                print(f"  fp bucket {key}: {count}")
+        if stats["fp_bug_buckets"]:
+            for key, count in sorted(stats["fp_bug_buckets"].items(), key=lambda x: -x[1])[:5]:
+                print(f"  fp_bug bucket {key}: {count}")
         if stats["unknown_buckets"]:
             for key, count in sorted(stats["unknown_buckets"].items(), key=lambda x: -x[1])[:5]:
                 print(f"  unknown bucket {key}: {count}")
@@ -273,6 +335,13 @@ def main() -> int:
         ),
     )
     parser.add_argument("--force-compile", action="store_true")
+    parser.add_argument("--rule", help="single rule id to census (e.g. SQLCOST012)")
+    parser.add_argument(
+        "--sample-cap",
+        type=int,
+        default=SAMPLE_TARGET,
+        help=f"max findings examined per rule (default: {SAMPLE_TARGET})",
+    )
     parser.add_argument("--json", action="store_true", help="emit JSON report")
     parser.add_argument(
         "--emit-evidence",
@@ -280,6 +349,9 @@ def main() -> int:
         help=f"write {EVIDENCE_PATH.relative_to(ROOT)}",
     )
     args = parser.parse_args()
+
+    if args.rule and args.rule not in BUILTIN_RULE_IDS:
+        raise SystemExit(f"unknown rule '{args.rule}'")
 
     known = {repo["name"] for repo in load_repos()}
     for repo_name in args.repos:
@@ -294,21 +366,34 @@ def main() -> int:
             cache_dir=args.cache,
             force_compile=args.force_compile,
         )
-        repo_stats = aggregate_diagnostics(repo_name, diagnostics, checkout, compiled)
+        repo_stats = aggregate_diagnostics(
+            repo_name,
+            diagnostics,
+            checkout,
+            compiled,
+            rule_filter=args.rule,
+        )
         merge_rule_stats(merged, repo_stats)
         print(f"  {len(diagnostics)} diagnostics", file=sys.stderr)
 
-    report = build_report(merged, repos=args.repos)
+    report = build_report(
+        merged,
+        repos=args.repos,
+        sample_cap=args.sample_cap,
+        rule_filter=args.rule,
+    )
     if args.emit_evidence:
         evidence = {
             rule_id: {
                 "pass": stats["pass"],
                 "pass_reason": stats["pass_reason"],
-                "tp": stats["tp"],
-                "fp": stats["fp"],
-                "unknown": stats["unknown"],
                 "total": stats["total"],
-                "examples": stats["examples"],
+                "examined": stats["examined"],
+                "tp": stats["tp"],
+                "exempt": stats["exempt"],
+                "fp_bug": stats["fp_bug"],
+                "unknown": stats["unknown"],
+                "examined_examples": stats["examined_examples"],
             }
             for rule_id, stats in report["rules"].items()
         }

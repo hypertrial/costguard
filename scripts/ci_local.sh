@@ -7,11 +7,13 @@ cd "$ROOT"
 SPELLBOOK_SMOKE=0
 DATA_INFRA_SMOKE=0
 PRECISION_GATE=0
+CENSUS_GATE=0
 for arg in "$@"; do
   case "$arg" in
     --spellbook-smoke) SPELLBOOK_SMOKE=1 ;;
     --data-infra-smoke) DATA_INFRA_SMOKE=1 ;;
     --precision) PRECISION_GATE=1 ;;
+    --census) CENSUS_GATE=1 ;;
     *) echo "unknown argument: $arg" >&2; exit 2 ;;
   esac
 done
@@ -74,6 +76,16 @@ if [ "$PRECISION_GATE" -eq 1 ]; then
     run "$EVAL_PY" scripts/eval_metrics.py --split real
   else
     echo "ERROR: spellbook cache missing; precision gate cannot run" >&2
+    exit 2
+  fi
+fi
+if [ "$CENSUS_GATE" -eq 1 ]; then
+  CACHE_ROOT="${HOME}/.cache/costguard/benchmarks"
+  if [ -f "${CACHE_ROOT}/spellbook/target/manifest.json" ] \
+    && [ -f "${CACHE_ROOT}/jaffle-shop/target/manifest.json" ]; then
+    run python3 scripts/rule_tp_census.py --emit-evidence
+  else
+    echo "ERROR: benchmark cache missing; census gate cannot run" >&2
     exit 2
   fi
 fi

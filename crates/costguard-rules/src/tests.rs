@@ -454,6 +454,28 @@ fn macro_equality_join_text_is_not_unbounded() {
 }
 
 #[test]
+fn subquery_left_join_with_distant_on_is_not_unbounded() {
+    let file = sql_file(
+        "models/marts/license_daily_details.sql",
+        "select l.* from licenses l left join (select a.user_id, l.date from licenses l join activity a on l.server_id = a.user_id and a.timestamp <= l.date group by 1, 2) a on l.server_id = a.user_id and a.date = l.date",
+    );
+    let doc = analyze(&file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(!ids.contains(&"SQLCOST006".to_string()));
+}
+
+#[test]
+fn dbt_macros_path_skips_unbounded_join_rule() {
+    let file = sql_file(
+        "dbt_macros/dune/adapters.sql",
+        "select * from a cross join b on a.id = b.id",
+    );
+    let doc = analyze(&file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(!ids.contains(&"SQLCOST006".to_string()));
+}
+
+#[test]
 fn suppression_still_applies_after_rule_split() {
     let file = sql_file(
         "models/marts/fct.sql",

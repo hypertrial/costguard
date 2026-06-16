@@ -15,15 +15,16 @@ Full workflow, artifact contracts, bucket taxonomy, and decision tree:
 
 **[Manual rule review playbook](../../design/manual-rule-review.md)**
 
-Outcome scoreboard (44/44 PASS as of 2026-06-16):
+Outcome scoreboard (44/44 PASS as of 2026-06-16, cost-ranked ≤100 sample):
 
 **[Rule TP coverage](../../design/rule-tp-coverage.md)**
 
 ## Command cheat sheet
 
 ```bash
-# 44-rule census + evidence export
+# Cost-ranked review queue
 python3 scripts/rule_tp_census.py --emit-evidence
+python3 scripts/rule_tp_census.py --rule SQLCOST012 --sample-cap 100
 
 # Bucket one rule on Spellbook
 python3 scripts/bucket_rule_diagnostics.py --repo spellbook --rule SQLCOST012
