@@ -31,7 +31,11 @@ from bucket_rule_diagnostics import (  # noqa: E402
     load_manifest_sql,
     read_sql_for_diagnostic,
 )
-from costguard_tooling import repo_by_name, run_costguard_scan  # noqa: E402
+from costguard_tooling import (  # noqa: E402
+    apply_benchmark_cost_config,
+    repo_by_name,
+    run_costguard_scan,
+)
 from eval_lib import (  # noqa: E402
     DEFAULT_LABELS,
     EvalLabel,
@@ -124,13 +128,16 @@ def scan_external_repo(repo_name: str, cache: Path) -> tuple[dict[str, Any], Pat
         raise SystemExit(
             f"missing manifest at {manifest}; run benchmark_external_repo.py --repo {repo_name} first"
         )
+    cost_enabled = bool(repo.get("cost", False))
+    if cost_enabled:
+        apply_benchmark_cost_config(checkout, repo)
     payload, _ = run_costguard_scan(
         checkout,
         warehouse=repo.get("warehouse", "generic"),
         scan_paths=repo.get("scan_paths", ["."]),
         fail_on="critical",
         manifest=manifest,
-        cost=bool(repo.get("cost", False)),
+        cost=cost_enabled,
     )
     compiled = load_manifest_sql(manifest)
     return payload, checkout, compiled

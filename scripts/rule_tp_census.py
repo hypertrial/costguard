@@ -21,7 +21,11 @@ from bucket_rule_diagnostics import (  # noqa: E402
     load_repo,
     read_sql_for_diagnostic,
 )
-from costguard_tooling import load_repos, run_costguard_scan  # noqa: E402
+from costguard_tooling import (  # noqa: E402
+    apply_benchmark_cost_config,
+    load_repos,
+    run_costguard_scan,
+)
 from dbt_compile_for_costguard import compile_dbt_repo  # noqa: E402
 from precision_triage import classify_diagnostic, registry_class  # noqa: E402
 
@@ -144,6 +148,7 @@ def scan_repo(
     )
     manifest = checkout / "target" / "manifest.json"
     compiled = load_manifest_sql(manifest) if manifest.is_file() else {}
+    apply_benchmark_cost_config(checkout, repo)
     payload, _ = run_costguard_scan(
         checkout,
         warehouse=repo.get("warehouse", "generic"),

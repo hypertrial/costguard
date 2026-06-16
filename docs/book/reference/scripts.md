@@ -181,6 +181,8 @@ Common flags:
 | `--cost` | Include cost summary in benchmark JSON reports (also enabled per-repo via `cost = true` in `repos.toml`) |
 | `--warehouse` | Override scan warehouse (defaults per target) |
 
+Committed Grade C cost priors for external repos live in `tests/benchmarks/cost-configs/{repo}.toml`. When cost is enabled, the harness copies that file into the checkout as `costguard.toml` before scanning. Dollar figures are estimates only; see [Cost estimates](cost-estimates.md#benchmark-repo-cost-configs).
+
 Reports include `compile_cache: hit|miss|skip` when dbt compile is enabled. External reports may include a `cost` block when cost estimation is enabled. Benchmark scripts use release CLI builds via `costguard_tooling.py`.
 
 Validate vendored baselines in Rust:

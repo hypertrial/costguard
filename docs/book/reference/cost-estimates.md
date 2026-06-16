@@ -60,6 +60,12 @@ They are close but not identical by construction. Gating uses the addressable fi
 2. **Scan-priced dollars** — BigQuery on-demand, Athena, Trino-on-S3: set `[cost.pricing] model = "scan"` and `usd_per_tb`.
 3. **Compute-priced dollars** — Snowflake credits, Databricks DBUs: set `model = "compute"`, `usd_per_credit`, and `tb_per_credit_hour` range.
 
+## Benchmark repo cost configs
+
+External benchmark repos in [`tests/benchmarks/repos.toml`](../../../tests/benchmarks/repos.toml) can carry committed Grade C cost priors under [`tests/benchmarks/cost-configs/`](../../../tests/benchmarks/cost-configs/). Before each cost-enabled scan, the benchmark harness copies `{repo}.toml` into the cached checkout as `costguard.toml`.
+
+**These configs are estimates only.** Dollar figures use size priors (Grade C), not measured warehouse spend. Each file includes a header disclaimer; treat outputs as illustrative prioritization signals until query history (Grade A) or catalog stats (Grade B) are available.
+
 ## Example configuration
 
 ```toml

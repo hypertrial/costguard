@@ -18,6 +18,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 CRATES = ROOT / "crates"
 REPOS_TOML = ROOT / "tests" / "benchmarks" / "repos.toml"
+BENCHMARK_COST_CONFIGS = REPOS_TOML.parent / "cost-configs"
 RELEASE_BIN_NAME = "costguard"
 WINDOWS_BIN_NAME = "costguard.exe"
 
@@ -128,6 +129,15 @@ def repo_by_name(name: str, repos_toml: Path | None = None) -> dict[str, Any]:
         if repo["name"] == name:
             return repo
     raise SystemExit(f"unknown repo '{name}' in {path}")
+
+
+def apply_benchmark_cost_config(checkout: Path, repo: dict[str, Any]) -> bool:
+    """Copy committed benchmark cost config into checkout if one exists."""
+    src = BENCHMARK_COST_CONFIGS / f"{repo['name']}.toml"
+    if not src.is_file():
+        return False
+    (checkout / "costguard.toml").write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+    return True
 
 
 def run_costguard_scan(

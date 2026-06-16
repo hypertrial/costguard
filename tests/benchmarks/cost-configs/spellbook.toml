@@ -1,0 +1,12 @@
+# ESTIMATE ONLY - Grade C size priors, NOT measured warehouse data.
+# Dollar figures are illustrative; real numbers require query-history (Grade A).
+# Calibrated midpoint: 50GB/model, daily runs, Trino-on-S3 proxy $5/TB.
+[cost]
+enabled = true
+interval = 0.80
+default_runs_per_month = 30
+default_table_size = "medium"
+
+[cost.pricing]
+model = "scan"
+usd_per_tb = 5.0

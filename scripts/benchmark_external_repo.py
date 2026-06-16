@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from costguard_tooling import (  # noqa: E402
+    apply_benchmark_cost_config,
     measure_costguard_scan,
     repo_by_name,
     summarize_measurements,
@@ -342,6 +343,8 @@ def run_external(
         target = f"external/{repo_name}"
     manifest = checkout / "target" / "manifest.json"
     enable_cost = cost or bool(repo.get("cost", False))
+    if enable_cost:
+        apply_benchmark_cost_config(checkout, repo)
     scan_result = run_costguard(
         checkout,
         warehouse=repo.get("warehouse", "generic"),

@@ -18,7 +18,10 @@ from bucket_rule_diagnostics import (  # noqa: E402
     load_repo,
     read_sql_for_diagnostic,
 )
-from costguard_tooling import run_costguard_scan  # noqa: E402
+from costguard_tooling import (  # noqa: E402
+    apply_benchmark_cost_config,
+    run_costguard_scan,
+)
 from eval_lib import repo_checkout  # noqa: E402
 from precision_triage import classify_diagnostic  # noqa: E402
 
@@ -67,6 +70,7 @@ def build_packets(
     checkout = repo_checkout(repo_name, cache)
     manifest = checkout / "target" / "manifest.json"
     compiled = load_manifest_sql(manifest) if manifest.is_file() else {}
+    apply_benchmark_cost_config(checkout, repo)
 
     payload, _ = run_costguard_scan(
         checkout,
