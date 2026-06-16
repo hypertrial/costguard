@@ -67,6 +67,28 @@ After the SQLCOST015 fix, the new top-10-by-cost findings were all **SQLCOST035*
 
 Fixed by returning `None` for `TableFactor::Derived`. Spellbook smoke SQLCOST035 dropped from 14 → 0; full spellbook 110 → 0.
 
+## SQLCOST014 follow-up (2026-06-16)
+
+After SQLCOST015/035 fixes, the top-10-by-cost slice was dominated by **SQLCOST014** on Balancer CowSwap AMM models (`pools`/`prices` CTE homonyms). Manual review: **false positives** — word `\bpools\b` matched column `p.pools`, alias `AS pools`, and schema segment `"prices"."usd"`, not table-position CTE reuse.
+
+Fixed in [`crates/costguard-sql/src/features/ast.rs`](../../crates/costguard-sql/src/features/ast.rs): accumulate single-part table refs from `FROM`/`JOIN`, filter to defined CTE names after definition span, traverse CTE query bodies, and prefer compiled AST (with normalized span alignment) for dbt scans. Re-run via [`scripts/top_findings_review.py`](../../scripts/top_findings_review.py).
+
+**After fix:** no clear SQLCOST014 FPs in the cost-ranked top 10; remaining leaders are registry TPs or addressed SQLCOST008 items below.
+
+## SQLCOST008 follow-up (2026-06-16)
+
+Top cost-ranked **SQLCOST008** on oneinch `*_mapped_contracts` models (`distinct_with_group_by` bucket, registry FP): `SELECT DISTINCT` inside a CTE with outer `GROUP BY` in compiled SQL. Fixed by extracting `group_by_clauses` and skipping SQLCOST008 when grouping is present in analyzed SQL features.
+
+## Clean top-10 (2026-06-16, post SQLCOST014 + SQLCOST008)
+
+| # | Rule | Pattern | Verdict |
+|---|------|---------|---------|
+| 1–8 | SQLCOST036 | Balancer v2 `*_liquidity` models | TP (registry) |
+| 9 | SQLCOST014 | `curve_ethereum_view_pools` repeated `regular_pools` CTE | Uncertain / lean TP |
+| 10 | SQLCOST018 | Uniswap v3 optimism pools `UNION` without `ALL` | TP (registry) |
+
+No confirmed false positives remain in the top 10. Re-triage: `python3 scripts/top_findings_review.py --repo spellbook --top 10`.
+
 ## Adjudication method
 
 For each finding: read compiled SQL via manifest, check rule rubric ([`docs/rules/SQLCOST015.md`](../rules/SQLCOST015.md)), classify bucket via [`scripts/bucket_rule_diagnostics.py`](../../scripts/bucket_rule_diagnostics.py), compare to [`tests/benchmarks/fp_registry.toml`](../../tests/benchmarks/fp_registry.toml), and trace the triggering feature key against [`json_regex`](../../crates/costguard-sql/src/features/regex.rs).

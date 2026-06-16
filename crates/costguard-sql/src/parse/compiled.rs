@@ -18,7 +18,7 @@ pub(crate) fn compiled_ast_features(
 ) -> (SqlFeatures, bool) {
     let dialect = platform.sqlparser_dialect();
     let normalized = normalize_for_parse(compiled, platform);
-    let compiled_index = costguard_diagnostics::LineIndex::new(compiled);
+    let normalized_index = costguard_diagnostics::LineIndex::new(&normalized);
     let strip_map = strip::JinjaStripMap::identity(normalized.len());
     let Ok(stmts) = Parser::parse_sql(dialect.as_ref(), &normalized) else {
         return (regex_features, false);
@@ -26,10 +26,12 @@ pub(crate) fn compiled_ast_features(
     let ast_features = features::extract_shape_features_ast(
         &stmts,
         &normalized,
-        compiled,
+        &normalized,
         &strip_map,
-        &compiled_index,
+        &normalized_index,
     );
+    let mut regex_features = regex_features;
+    regex_features.cte_references.clear();
     (
         features::merge_shape_features(
             regex_features,
@@ -46,6 +48,7 @@ fn mark_compiled_unmapped(mut features: SqlFeatures) -> SqlFeatures {
         .select_stars
         .iter_mut()
         .chain(features.order_by_clauses.iter_mut())
+        .chain(features.group_by_clauses.iter_mut())
         .chain(features.distincts.iter_mut())
         .chain(features.json_extractions.iter_mut())
         .chain(features.regex_calls.iter_mut())

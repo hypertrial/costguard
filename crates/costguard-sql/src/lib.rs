@@ -50,6 +50,7 @@ pub struct SqlDocument {
 pub struct SqlFeatures {
     pub select_stars: Vec<ExpressionFeature>,
     pub order_by_clauses: Vec<ExpressionFeature>,
+    pub group_by_clauses: Vec<ExpressionFeature>,
     pub distincts: Vec<ExpressionFeature>,
     pub joins: Vec<JoinFeature>,
     pub window_functions: Vec<WindowFeature>,
@@ -146,15 +147,15 @@ pub fn analyze_sql(
         (parsed_raw, ParseInput::Raw)
     };
     let regex_features = features::extract_features(text, &sanitized, line_index, parsed_raw);
-    let (features, feature_extraction_used_ast) = if let Some(stmts) = &statements {
+    let (features, feature_extraction_used_ast) = if parsed_compiled {
+        parse::compiled_ast_features(compiled_code.unwrap_or_default(), platform, regex_features)
+    } else if let Some(stmts) = &statements {
         let ast_features =
             features::extract_shape_features_ast(stmts, &sanitized, text, &strip_map, line_index);
         (
             features::merge_shape_features(regex_features, ast_features, parsed_raw, true),
             parsed_raw,
         )
-    } else if parsed_compiled {
-        parse::compiled_ast_features(compiled_code.unwrap_or_default(), platform, regex_features)
     } else {
         (regex_features, false)
     };

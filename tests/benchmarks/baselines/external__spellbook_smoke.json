@@ -1,7 +1,7 @@
 {
   "commit": "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738",
   "kind": "external",
-  "max_rss_bytes": 616349696,
+  "max_rss_bytes": 600276992,
   "metrics": {
     "counts": {
       "manifest": 0,
@@ -13,28 +13,29 @@
     "dbt_project_parse_failures": 0,
     "diagnostics_by_rule": {
       "SQLCOST002": 16,
-      "SQLCOST006": 9,
+      "SQLCOST006": 5,
       "SQLCOST008": 4,
-      "SQLCOST012": 6,
+      "SQLCOST012": 5,
       "SQLCOST013": 3,
-      "SQLCOST014": 15,
+      "SQLCOST014": 14,
       "SQLCOST015": 13,
+      "SQLCOST017": 63,
       "SQLCOST018": 112,
       "SQLCOST019": 5,
       "SQLCOST026": 1,
       "SQLCOST031": 1,
       "SQLCOST036": 4,
       "SQLCOST037": 1,
-      "SQLCOST038": 32
+      "SQLCOST038": 160
     },
     "diagnostics_by_severity": {
-      "high": 42,
-      "low": 16,
-      "med": 164
+      "high": 170,
+      "low": 15,
+      "med": 222
     },
     "metadata_only_scan": false,
     "metadata_warnings": 2,
-    "new_findings": 222,
+    "new_findings": 407,
     "sql_parse_compiled_failures": 0,
     "sql_parse_compiled_total": 981,
     "sql_parse_failures": 0,
@@ -43,18 +44,18 @@
     "sql_parse_total": 981,
     "yaml_parse_failures": 0
   },
-  "runtime_max_ms": 779,
-  "runtime_median_ms": 774,
+  "runtime_max_ms": 768,
+  "runtime_median_ms": 764,
   "runtime_samples_ms": [
-    779,
-    772,
-    774
+    764,
+    768,
+    758
   ],
   "target": "external/spellbook_smoke",
   "thresholds": {
     "max_diagnostics_by_rule": {
-      "SQLCOST012": 6,
-      "SQLCOST017": 1,
+      "SQLCOST012": 5,
+      "SQLCOST017": 63,
       "SQLCOST019": 5
     },
     "max_parse_failure_delta": 50,

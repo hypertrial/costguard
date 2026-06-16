@@ -6,6 +6,7 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ### Added
 
+- `scripts/top_findings_review.py` — rank top-N cost findings with SQL context, bucket, and registry verdict for Spellbook (or other repo) triage loops.
 - Binary-classification evaluation pipeline: frozen [`tests/benchmarks/eval_labels.toml`](tests/benchmarks/eval_labels.toml), [`scripts/build_eval_dataset.py`](scripts/build_eval_dataset.py), and [`scripts/eval_metrics.py`](scripts/eval_metrics.py) computing precision/recall/F1/MCC/PR-AUC/ROC-AUC with Wilson CIs (eval deps in [`requirements-eval.txt`](requirements-eval.txt)).
 - LLM-as-judge inter-rater reliability: [`scripts/build_llm_judge_labels.py`](scripts/build_llm_judge_labels.py) (local-only, llama-cpp-python), [`scripts/eval_irr.py`](scripts/eval_irr.py) (CI-safe κ validation), committed [`tests/benchmarks/llm_judge_labels.jsonl`](tests/benchmarks/llm_judge_labels.jsonl).
 - Design doc: [Classification metrics](docs/design/classification-metrics.md).
@@ -28,6 +29,8 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ### Fixed
 
+- SQLCOST014 false positives on CTE homonyms: count CTE references only from single-part `FROM`/`JOIN` table factors (not column/alias/schema segments), traverse CTE bodies during AST extraction, prefer compiled AST for dbt models, and align compiled feature extraction text with normalized SQL.
+- SQLCOST008 false positives when `GROUP BY` deduplicates: extract `group_by_clauses` from AST/regex and skip blind-`DISTINCT` findings when grouping is present (including compiled SQL only visible after dbt compile).
 - SQLCOST035 false positives on subquery joins: stop treating derived-table aliases as catalog names in AST join analysis so same-catalog patterns like `(…) b LEFT JOIN delta_prod.tokens.erc20` no longer flag as cross-catalog.
 - SQLCOST015 false positives on comment prose: mask SQL/Jinja comments before json/regex/normalization feature extraction so header comments like `-- core list: frozen` no longer create phantom cross-file expensive-expression keys.
 - `Estimate::Sub` now computes a dollar difference instead of a log-ratio, so `potential_savings` reports real savings instead of a mis-scaled value.

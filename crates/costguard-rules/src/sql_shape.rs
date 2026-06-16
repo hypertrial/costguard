@@ -170,7 +170,9 @@ impl Rule for BlindDistinctRule {
         let Some(sql) = ctx.sql else {
             return Vec::new();
         };
-        if ctx.file.text.to_ascii_lowercase().contains("group by") {
+        if !sql.features.group_by_clauses.is_empty()
+            || ctx.file.text.to_ascii_lowercase().contains("group by")
+        {
             return Vec::new();
         }
         sql.features

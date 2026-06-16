@@ -10,9 +10,10 @@ use crate::strip::JinjaStripMap;
 use crate::{CteFeature, ExpressionFeature, JoinFeature, JoinKind, SqlFeatures, WindowFeature};
 use costguard_diagnostics::{LineIndex, Span};
 use sqlparser::ast::{
-    BinaryOperator, DuplicateTreatment, Expr, Function, FunctionArguments, Join, JoinConstraint,
-    JoinOperator, ObjectName, Query, Select, SelectItem, SetExpr, SetOperator, SetQuantifier,
-    Statement, TableFactor, TableWithJoins, Value, WindowFrameBound, WindowSpec, WindowType, With,
+    BinaryOperator, DuplicateTreatment, Expr, Function, FunctionArguments, GroupByExpr, Join,
+    JoinConstraint, JoinOperator, ObjectName, Query, Select, SelectItem, SetExpr, SetOperator,
+    SetQuantifier, Statement, TableFactor, TableWithJoins, Value, WindowFrameBound, WindowSpec,
+    WindowType, With,
 };
 use std::collections::HashMap;
 
@@ -30,7 +31,7 @@ pub fn extract_shape_features_ast(
             extract_query(query, &mut finder, &mut features);
         }
     }
-    features.cte_references = extract_cte_references_from_names(&features.ctes, &finder);
+    features.cte_references = filter_cte_table_references(&features.ctes, &features.cte_references);
     features
 }
 
@@ -65,6 +66,7 @@ fn extract_with(with: &With, finder: &mut SpanFinder<'_>, features: &mut SqlFeat
         if let Some(span) = finder.find_word_next(&name) {
             features.ctes.push(CteFeature { name, span });
         }
+        extract_query(&cte.query, finder, features);
     }
 }
 
@@ -110,6 +112,16 @@ fn extract_select(select: &Select, finder: &mut SpanFinder<'_>, features: &mut S
         }
     }
 
+    if select_has_group_by(select) {
+        if let Some(span) = finder.find_next("group by") {
+            features.group_by_clauses.push(ExpressionFeature {
+                span,
+                key: "group by".into(),
+                text: "group by".into(),
+            });
+        }
+    }
+
     if let Some(where_expr) = &select.selection {
         extract_non_sargable_predicates(where_expr, finder, features);
         extract_leading_wildcard_likes(where_expr, finder, features);
@@ -146,13 +158,24 @@ fn extract_select(select: &Select, finder: &mut SpanFinder<'_>, features: &mut S
     }
 }
 
+fn select_has_group_by(select: &Select) -> bool {
+    match &select.group_by {
+        GroupByExpr::All(exprs) => !exprs.is_empty(),
+        GroupByExpr::Expressions(exprs, _) => !exprs.is_empty(),
+    }
+}
+
 fn extract_table_with_joins(
     table: &TableWithJoins,
     finder: &mut SpanFinder<'_>,
     features: &mut SqlFeatures,
 ) {
     let mut left_catalog = table_factor_catalog(&table.relation);
-    extract_table_factor(&table.relation, finder, features);
+    let from_min = finder
+        .find_next("from")
+        .map(|span| span.byte_end)
+        .unwrap_or(0);
+    extract_table_factor(&table.relation, finder, features, from_min);
     for join in &table.joins {
         let right_catalog = table_factor_catalog(&join.relation);
         let cross_catalog = catalogs_differ(left_catalog.as_deref(), right_catalog.as_deref());
@@ -217,7 +240,11 @@ fn extract_join(
             _ => (None, false, false, false, Vec::new()),
         };
     if matches!(kind, JoinKind::Cross) && is_exempt_cross_join_target(&join.relation) {
-        extract_table_factor(&join.relation, finder, features);
+        let join_min = finder
+            .find_next(needle)
+            .map(|span| span.byte_end)
+            .unwrap_or(0);
+        extract_table_factor(&join.relation, finder, features, join_min);
         return;
     }
     let span = if kind == JoinKind::Inner {
@@ -237,14 +264,17 @@ fn extract_join(
             right_relation,
             equality_keys,
         });
+        extract_table_factor(&join.relation, finder, features, span.byte_end);
+    } else {
+        extract_table_factor(&join.relation, finder, features, 0);
     }
-    extract_table_factor(&join.relation, finder, features);
 }
 
 fn extract_table_factor(
     factor: &TableFactor,
     finder: &mut SpanFinder<'_>,
     features: &mut SqlFeatures,
+    min_byte: usize,
 ) {
     if is_row_explosion_factor(factor) {
         let text = row_explosion_text(factor);
@@ -258,6 +288,7 @@ fn extract_table_factor(
     }
     match factor {
         TableFactor::Table { name, .. } => {
+            record_single_part_table_reference(name, finder, features, min_byte);
             if table_name_has_wildcard(name) && !finder.text_has_table_suffix_bound() {
                 let table_text = name.to_string();
                 if let Some(span) = finder.find_next(&table_text) {
@@ -387,21 +418,44 @@ fn extract_window(
     }
 }
 
-fn extract_cte_references_from_names(
-    ctes: &[CteFeature],
-    finder: &SpanFinder<'_>,
-) -> Vec<ExpressionFeature> {
-    let mut references = Vec::new();
-    for cte in ctes {
-        for span in finder.find_word_all_after(&cte.name, cte.span.byte_end) {
-            references.push(ExpressionFeature {
-                span,
-                key: cte.name.clone(),
-                text: cte.name.clone(),
-            });
-        }
+fn record_single_part_table_reference(
+    name: &ObjectName,
+    finder: &mut SpanFinder<'_>,
+    features: &mut SqlFeatures,
+    min_byte: usize,
+) {
+    if name.0.len() != 1 {
+        return;
     }
-    references
+    let ident = name.0[0].value.to_ascii_lowercase();
+    // ponytail: min_byte skips homonyms before the current FROM/JOIN; table-ref cursor is separate from CTE-name search
+    let span = if min_byte > 0 {
+        finder.find_word_after(&ident, min_byte)
+    } else {
+        finder.find_word_next_table_ref(&ident)
+    };
+    if let Some(span) = span {
+        features.cte_references.push(ExpressionFeature {
+            span,
+            key: ident.clone(),
+            text: ident,
+        });
+    }
+}
+
+fn filter_cte_table_references(
+    ctes: &[CteFeature],
+    table_refs: &[ExpressionFeature],
+) -> Vec<ExpressionFeature> {
+    table_refs
+        .iter()
+        .filter(|reference| {
+            ctes.iter().any(|cte| {
+                cte.name == reference.key && reference.span.byte_start > cte.span.byte_end
+            })
+        })
+        .cloned()
+        .collect()
 }
 
 fn is_exempt_cross_join_target(factor: &TableFactor) -> bool {
@@ -568,19 +622,24 @@ impl<'a> SpanFinder<'a> {
         Some(span)
     }
 
-    fn find_word_all_after(&self, word: &str, raw_after: usize) -> Vec<Span> {
+    fn find_word_next_table_ref(&mut self, word: &str) -> Option<Span> {
         let lower_word = word.to_ascii_lowercase();
-        let mut spans = Vec::new();
-        let mut start_from = 0usize;
-        while let Some((start, span)) =
+        let cursor_key = format!("table_ref:{lower_word}");
+        let start_from = self.cursors.get(&cursor_key).copied().unwrap_or(0);
+        let (start, span) =
             self.find_sanitized_from(&lower_word, start_from, |raw_start, raw_end| {
-                raw_start >= raw_after && self.word_boundaries(raw_start, raw_end)
-            })
-        {
-            start_from = start + lower_word.len();
-            spans.push(span);
-        }
-        spans
+                self.word_boundaries(raw_start, raw_end)
+            })?;
+        self.cursors.insert(cursor_key, start + lower_word.len());
+        Some(span)
+    }
+
+    fn find_word_after(&self, word: &str, raw_after: usize) -> Option<Span> {
+        let lower_word = word.to_ascii_lowercase();
+        self.find_sanitized_from(&lower_word, 0, |raw_start, raw_end| {
+            raw_start >= raw_after && self.word_boundaries(raw_start, raw_end)
+        })
+        .map(|(_, span)| span)
     }
 
     fn text_has_table_suffix_bound(&self) -> bool {
@@ -923,6 +982,7 @@ pub fn merge_shape_features(
         merge_field!(select_stars);
     }
     merge_field!(order_by_clauses);
+    merge_field!(group_by_clauses);
     merge_field!(distincts);
     merge_field!(window_functions);
     merge_field!(ctes);

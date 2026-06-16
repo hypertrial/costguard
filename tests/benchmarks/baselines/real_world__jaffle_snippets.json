@@ -24,7 +24,7 @@
   "target": "real_world/jaffle_snippets",
   "thresholds": {
     "exact_diagnostics_by_rule": {
-      "SQLCOST001": 0
+      "SQLCOST001": 1
     },
     "max_sql_parse_failures": 0
   },

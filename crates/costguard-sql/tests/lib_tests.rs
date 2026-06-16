@@ -723,3 +723,68 @@ fn subquery_join_same_catalog_is_not_cross_catalog() {
     let join = doc.features.joins.first().expect("join");
     assert!(!join.cross_catalog);
 }
+
+#[test]
+fn cte_references_ignore_column_and_schema_homonyms() {
+    let text = "with pools as (select bpool as pools from t), \
+                joins as (select p.pools as pool from pools p), \
+                exits as (select p.pools as pool from pools p) \
+                select * from joins union all select * from exits";
+    let index = LineIndex::new(text);
+    let doc = analyze_test_sql(
+        PathBuf::from("x.sql"),
+        text,
+        Platform::Trino,
+        &index,
+        None,
+        true,
+    );
+    let pools_refs: Vec<_> = doc
+        .features
+        .cte_references
+        .iter()
+        .filter(|reference| reference.key == "pools")
+        .collect();
+    assert_eq!(pools_refs.len(), 2, "{:?}", doc.features.cte_references);
+}
+
+#[test]
+fn balancer_balances_pools_has_two_table_refs() {
+    let text = include_str!("../../../tests/fixtures/balancer_balances_compiled.sql");
+    let index = LineIndex::new(text);
+    let doc = analyze_test_sql(
+        PathBuf::from("x.sql"),
+        text,
+        Platform::Trino,
+        &index,
+        Some(text),
+        true,
+    );
+    let mut counts = std::collections::HashMap::new();
+    for reference in &doc.features.cte_references {
+        *counts.entry(reference.key.clone()).or_default() += 1;
+    }
+    assert_eq!(counts.get("pools").copied().unwrap_or(0), 2, "{counts:?}");
+}
+
+#[test]
+fn balancer_balances_scan_path_pools_has_two_table_refs() {
+    let raw = include_str!("../../../tests/fixtures/balancer_balances_raw.sql");
+    let compiled = include_str!("../../../tests/fixtures/balancer_balances_compiled.sql");
+    let index = LineIndex::new(raw);
+    let doc = analyze_test_sql(
+        PathBuf::from("x.sql"),
+        raw,
+        Platform::Trino,
+        &index,
+        Some(compiled),
+        true,
+    );
+    let mut counts = std::collections::HashMap::new();
+    for reference in &doc.features.cte_references {
+        *counts.entry(reference.key.clone()).or_default() += 1;
+    }
+    assert!(doc.parsed_compiled);
+    assert!(doc.feature_extraction_used_ast);
+    assert_eq!(counts.get("pools").copied().unwrap_or(0), 2, "{counts:?}");
+}

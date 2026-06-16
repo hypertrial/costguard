@@ -75,6 +75,8 @@ pub(crate) fn extract_features(
     features.select_stars = matches_as_features(text, line_index, select_star_regex(), normalize);
     features.order_by_clauses =
         matches_as_features(text, line_index, order_by_regex(), |_| "order by".into());
+    features.group_by_clauses =
+        matches_as_features(text, line_index, group_by_regex(), |_| "group by".into());
     features.distincts = matches_as_features(text, line_index, distinct_regex(), |_| {
         "select distinct".into()
     });
@@ -590,6 +592,11 @@ fn select_star_regex() -> &'static Regex {
 fn order_by_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     cached_regex(&RE, r#"(?i)\border\s+by\b"#)
+}
+
+fn group_by_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    cached_regex(&RE, r#"(?i)\bgroup\s+by\b"#)
 }
 
 fn distinct_regex() -> &'static Regex {

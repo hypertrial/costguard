@@ -359,6 +359,53 @@ fn cross_catalog_join_ignores_subquery_alias() {
 }
 
 #[test]
+fn repeated_cte_ignores_column_and_schema_homonyms() {
+    let file = sql_file(
+        "models/marts/fct.sql",
+        "with pools as (select bpool as pools from t), \
+         joins as (select p.pools from delta_prod.prices.usd inner join pools p on true), \
+         exits as (select p.pools from delta_prod.prices.usd inner join pools p on true) \
+         select * from joins union all select * from exits",
+    );
+    let doc = analyze_for_rule("SQLCOST014", &file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(!ids.contains(&"SQLCOST014".to_string()));
+}
+
+#[test]
+fn balancer_balances_model_does_not_fire_repeated_cte() {
+    let raw = include_str!("../../../tests/fixtures/balancer_balances_raw.sql");
+    let compiled = include_str!("../../../tests/fixtures/balancer_balances_compiled.sql");
+    let file = sql_file(
+        "dbt_subprojects/daily_spellbook/models/_projects/balancer_cowswap_amm/arbitrum/balancer_cowswap_amm_arbitrum_balances.sql",
+        raw,
+    );
+    let dbt = extract_sql_features(&file.text);
+    let doc = analyze_sql(
+        file.path.clone(),
+        &file.text,
+        Platform::Trino,
+        &file.line_index,
+        Some(compiled),
+        true,
+        dbt,
+    );
+    let ids = run_for_file(&file, &[doc]);
+    assert!(!ids.contains(&"SQLCOST014".to_string()));
+}
+
+#[test]
+fn blind_distinct_skips_when_group_by_present() {
+    let file = sql_file(
+        "models/marts/fct.sql",
+        "with contracts as (select distinct address from t) select address from contracts group by 1",
+    );
+    let doc = analyze_for_rule("SQLCOST008", &file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(!ids.contains(&"SQLCOST008".to_string()));
+}
+
+#[test]
 fn suppression_still_applies_after_rule_split() {
     let file = sql_file(
         "models/marts/fct.sql",
