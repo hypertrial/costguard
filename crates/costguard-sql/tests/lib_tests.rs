@@ -691,3 +691,18 @@ fn extracts_join_right_relation_and_equality_keys() {
     assert_eq!(join.right_relation.as_deref(), Some("dim_users"));
     assert!(join.equality_keys.iter().any(|key| key == "user_id"));
 }
+
+#[test]
+fn comment_prose_does_not_create_json_extractions() {
+    let text = "-- core list: frozen stablecoin addresses\nselect contract_address from t";
+    let index = LineIndex::new(text);
+    let doc = analyze_test_sql(
+        PathBuf::from("x.sql"),
+        text,
+        Platform::Generic,
+        &index,
+        None,
+        true,
+    );
+    assert!(doc.features.json_extractions.is_empty());
+}

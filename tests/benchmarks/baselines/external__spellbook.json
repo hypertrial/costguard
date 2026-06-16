@@ -1,7 +1,7 @@
 {
   "commit": "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738",
   "kind": "external",
-  "max_rss_bytes": 2721267712,
+  "max_rss_bytes": 3011919872,
   "metrics": {
     "counts": {
       "manifest": 0,
@@ -12,33 +12,39 @@
     },
     "dbt_project_parse_failures": 0,
     "diagnostics_by_rule": {
-      "SQLCOST002": 393,
+      "SQLCOST002": 380,
       "SQLCOST003": 17,
       "SQLCOST004": 1,
       "SQLCOST005": 1,
-      "SQLCOST006": 87,
-      "SQLCOST008": 428,
-      "SQLCOST012": 25,
-      "SQLCOST013": 168,
+      "SQLCOST006": 148,
+      "SQLCOST008": 347,
+      "SQLCOST012": 55,
+      "SQLCOST013": 89,
       "SQLCOST014": 832,
-      "SQLCOST015": 785,
-      "SQLCOST017": 69,
-      "SQLCOST018": 529,
+      "SQLCOST015": 330,
+      "SQLCOST017": 81,
+      "SQLCOST018": 328,
       "SQLCOST019": 67,
       "SQLCOST026": 1,
       "SQLCOST029": 113,
-      "SQLCOST030": 7,
-      "SQLCOST031": 16,
-      "SQLCOST035": 111
+      "SQLCOST030": 6,
+      "SQLCOST031": 9,
+      "SQLCOST033": 1,
+      "SQLCOST035": 110,
+      "SQLCOST036": 71,
+      "SQLCOST037": 52,
+      "SQLCOST038": 639,
+      "SQLCOST039": 70,
+      "SQLCOST044": 6
     },
     "diagnostics_by_severity": {
-      "high": 76,
+      "high": 838,
       "low": 833,
-      "med": 2741
+      "med": 2083
     },
     "metadata_only_scan": false,
-    "metadata_warnings": 1,
-    "new_findings": 3650,
+    "metadata_warnings": 2,
+    "new_findings": 3754,
     "sql_parse_compiled_failures": 0,
     "sql_parse_compiled_total": 8033,
     "sql_parse_failures": 0,
@@ -47,20 +53,20 @@
     "sql_parse_total": 8033,
     "yaml_parse_failures": 0
   },
-  "runtime_max_ms": 7128,
-  "runtime_median_ms": 7014,
+  "runtime_max_ms": 7450,
+  "runtime_median_ms": 7263,
   "runtime_samples_ms": [
-    6914,
-    7014,
-    7128
+    7082,
+    7450,
+    7263
   ],
   "target": "external/spellbook",
   "thresholds": {
     "max_diagnostics_by_rule": {
       "SQLCOST005": 1,
-      "SQLCOST012": 25,
+      "SQLCOST012": 55,
       "SQLCOST016": 15,
-      "SQLCOST017": 69,
+      "SQLCOST017": 81,
       "SQLCOST019": 67
     },
     "max_parse_failure_delta": 50,

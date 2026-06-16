@@ -68,6 +68,9 @@ pub(crate) fn extract_features(
     line_index: &LineIndex,
     parsed_raw: bool,
 ) -> SqlFeatures {
+    // ponytail: only expensive-expression regexes see masked text; extend to all regex
+    // features if comment FPs surface elsewhere.
+    let code_text = mask_comments(text);
     let mut features = SqlFeatures::default();
     features.select_stars = matches_as_features(text, line_index, select_star_regex(), normalize);
     features.order_by_clauses =
@@ -76,10 +79,11 @@ pub(crate) fn extract_features(
         "select distinct".into()
     });
     features.json_extractions =
-        matches_as_features(text, line_index, json_regex(), normalize_json_key);
-    features.regex_calls = matches_as_features(text, line_index, regex_call_regex(), normalize);
+        matches_as_features(&code_text, line_index, json_regex(), normalize_json_key);
+    features.regex_calls =
+        matches_as_features(&code_text, line_index, regex_call_regex(), normalize);
     features.normalization_calls =
-        matches_as_features(text, line_index, normalization_regex(), normalize);
+        matches_as_features(&code_text, line_index, normalization_regex(), normalize);
     features.window_functions = extract_windows(text, line_index);
     features.joins = extract_joins(text, comma_text, line_index, parsed_raw);
     features.ctes = extract_ctes(text, line_index);
@@ -291,6 +295,94 @@ fn cross_join_table_name(after: &str) -> Option<String> {
         return None;
     }
     Some(name.to_ascii_lowercase())
+}
+
+fn mask_comments(text: &str) -> String {
+    let mut output = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut block_depth = 0usize;
+    let mut in_jinja = false;
+
+    while let Some(ch) = chars.next() {
+        if in_jinja {
+            if ch == '#' && chars.peek() == Some(&'}') {
+                chars.next();
+                output.push(' ');
+                output.push(' ');
+                in_jinja = false;
+            } else {
+                output.push(if ch == '\n' { '\n' } else { ' ' });
+            }
+            continue;
+        }
+
+        if block_depth > 0 {
+            if ch == '/' && chars.peek() == Some(&'*') {
+                chars.next();
+                block_depth += 1;
+                output.push(' ');
+                output.push(' ');
+                continue;
+            }
+            if ch == '*' && chars.peek() == Some(&'/') {
+                chars.next();
+                block_depth -= 1;
+                output.push(' ');
+                output.push(' ');
+            } else {
+                output.push(if ch == '\n' { '\n' } else { ' ' });
+            }
+            continue;
+        }
+
+        if !in_single && !in_double && ch == '{' && chars.peek() == Some(&'#') {
+            chars.next();
+            output.push(' ');
+            output.push(' ');
+            in_jinja = true;
+            continue;
+        }
+
+        if !in_single && !in_double && ch == '/' && chars.peek() == Some(&'*') {
+            chars.next();
+            block_depth = 1;
+            output.push(' ');
+            output.push(' ');
+            continue;
+        }
+
+        if !in_single && !in_double && ch == '-' && chars.peek() == Some(&'-') {
+            chars.next();
+            output.push(' ');
+            output.push(' ');
+            for next in chars.by_ref() {
+                if next == '\n' {
+                    output.push('\n');
+                    break;
+                }
+                output.push(' ');
+            }
+            continue;
+        }
+
+        if !in_double && ch == '\'' {
+            in_single = !in_single;
+            output.push(ch);
+            continue;
+        }
+
+        if !in_single && ch == '"' {
+            in_double = !in_double;
+            output.push(ch);
+            continue;
+        }
+
+        output.push(ch);
+    }
+
+    output
 }
 
 fn mask_string_literals(text: &str) -> String {

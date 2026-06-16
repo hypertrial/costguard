@@ -333,6 +333,20 @@ fn cross_file_expensive_expression_uses_project_index() {
 }
 
 #[test]
+fn cross_file_expensive_expression_ignores_comment_prose() {
+    let header =
+        "-- core list: frozen stablecoin addresses used for initial incremental balances\n";
+    let body = "select 'arbitrum' as blockchain, contract_address from (values (0x1)) as t(contract_address)";
+    let first = sql_file("models/marts/a.sql", &format!("{header}{body}"));
+    let second = sql_file("models/marts/b.sql", &format!("{header}{body}"));
+    let third = sql_file("models/marts/c.sql", &format!("{header}{body}"));
+    let docs = vec![analyze(&first), analyze(&second), analyze(&third)];
+    let ids = run_for_file(&first, &docs);
+    assert!(!ids.contains(&"SQLCOST015".to_string()));
+    assert!(!ids.contains(&"SQLCOST002".to_string()));
+}
+
+#[test]
 fn suppression_still_applies_after_rule_split() {
     let file = sql_file(
         "models/marts/fct.sql",

@@ -28,6 +28,7 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ### Fixed
 
+- SQLCOST015 false positives on comment prose: mask SQL/Jinja comments before json/regex/normalization feature extraction so header comments like `-- core list: frozen` no longer create phantom cross-file expensive-expression keys.
 - `Estimate::Sub` now computes a dollar difference instead of a log-ratio, so `potential_savings` reports real savings instead of a mis-scaled value.
 - Project `post_fix_cost` and `potential_savings` are deduplicated per model (not per finding), so post-fix cost cannot exceed current cost on repos with many findings per model.
 
