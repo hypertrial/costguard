@@ -18,7 +18,7 @@ pub fn rule_multiplier(rule_id: &str, config: &CostConfig) -> Option<Estimate> {
 pub fn is_infrastructure_rule(rule_id: &str) -> bool {
     matches!(
         rule_id.to_ascii_uppercase().as_str(),
-        "SQLCOST023" | "SQLCOST024" | "SQLCOST025" | "SQLCOST026" | "SQLCOST027"
+        "SQLCOST023" | "SQLCOST024" | "SQLCOST025" | "SQLCOST026" | "SQLCOST027" | "SQLCOST045"
     )
 }
 

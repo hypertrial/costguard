@@ -29,6 +29,30 @@ costguard scan --warehouse trino --manifest target/manifest.json
 
 Run `dbt compile` before scanning when you want manifest-backed analysis on Jinja-heavy models. See [Requirements](requirements.md).
 
+## Local iteration
+
+For laptop workflows, compile then scan in one step:
+
+```bash
+dbt compile && costguard scan
+```
+
+If you edit models without recompiling, Costguard emits **SQLCOST045** (stale manifest). Under `--analysis-policy strict`, that fails the run until you recompile.
+
+Optional pre-commit hook (uses your installed dbt and profiles):
+
+```yaml
+repos:
+  - repo: local
+    hooks:
+      - id: costguard
+        name: costguard compile + scan
+        entry: bash -c 'dbt compile && costguard scan'
+        language: system
+        pass_filenames: false
+        files: \.(sql|yml|yaml)$
+```
+
 ## Explain
 
 Run rules against a single file:

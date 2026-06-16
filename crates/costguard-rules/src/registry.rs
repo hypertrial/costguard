@@ -161,6 +161,7 @@ impl RuleRegistry {
                 Box::new(crate::metadata::DbtProjectMetadataRule),
                 Box::new(crate::metadata::FileSkippedRule),
                 Box::new(crate::metadata::SqlParseFailedRule),
+                Box::new(crate::metadata::StaleManifestRule),
                 Box::new(crate::dbt::MissingPartitionClusterRule),
                 Box::new(crate::dbt::FullRefreshHeavyIncrementalRule),
                 Box::new(crate::cost_patterns::CorrelatedSubqueryRule),

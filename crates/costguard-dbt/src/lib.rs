@@ -143,6 +143,7 @@ pub enum MetadataWarningKind {
     DbtProjectParseFailed,
     DbtProjectAmbiguousModels,
     NoManifest,
+    StaleManifest,
     FileSkipped,
 }
 

@@ -36,6 +36,7 @@ python3 scripts/generate_rule_docs.py
 | low | `SQLCOST025` | dbt_project.yml metadata issue | [SQLCOST025](../../rules/SQLCOST025.md) |
 | low | `SQLCOST026` | File skipped during scan | [SQLCOST026](../../rules/SQLCOST026.md) |
 | info | `SQLCOST027` | SQL parse failure | [SQLCOST027](../../rules/SQLCOST027.md) |
+| info | `SQLCOST045` | Stale dbt manifest | [SQLCOST045](../../rules/SQLCOST045.md) |
 | high | `SQLCOST028` | Missing partition or cluster config on large mart model | [SQLCOST028](../../rules/SQLCOST028.md) |
 | medium | `SQLCOST029` | Full-refresh-heavy incremental config | [SQLCOST029](../../rules/SQLCOST029.md) |
 | high | `SQLCOST030` | Correlated subquery | [SQLCOST030](../../rules/SQLCOST030.md) |
@@ -271,6 +272,14 @@ Fix guidance: [SQLCOST026.md](../../rules/SQLCOST026.md)
 Reports when a dbt model SQL file could not be parsed and rules may fall back to regex heuristics.
 
 Fix guidance: [SQLCOST027.md](../../rules/SQLCOST027.md)
+
+### `SQLCOST045` — Stale dbt manifest
+
+**Severity:** info
+
+Reports when target/manifest.json is older than modified dbt model SQL files.
+
+Fix guidance: [SQLCOST045.md](../../rules/SQLCOST045.md)
 
 ### `SQLCOST028` — Missing partition or cluster config on large mart model
 

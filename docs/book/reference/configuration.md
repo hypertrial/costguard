@@ -85,7 +85,7 @@ Optional analysis completeness policy. CLI and GitHub Action default is `standar
 | `max_skipped_files` | integer | Maximum allowed skipped or unreadable files |
 | `fail_on_metadata_errors` | bool | Fail when YAML or dbt project metadata cannot be parsed |
 
-When `policy = "strict"`, Costguard enforces manifest presence, zero parse failures, zero skipped files, and metadata errors regardless of the other thresholds above.
+When `policy = "strict"`, Costguard enforces manifest presence, manifest freshness (not older than modified model SQL files), zero parse failures, zero skipped files, and metadata errors regardless of the other thresholds above.
 
 ## `[policy]`
 

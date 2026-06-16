@@ -8,6 +8,7 @@ use costguard_dbt::{
 use costguard_scanner::{FileKind, ProjectFile};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 pub(crate) struct DbtLoadOutcome {
     pub project: Option<DbtProject>,
@@ -82,6 +83,47 @@ fn model_key_for_file(index: &ModelIndex, path: &Path, name: &str) -> String {
         .unwrap_or_else(|| synthesized_model_id(None, Some(path), name))
 }
 
+// ponytail: mtime heuristic. In a fresh CI checkout git normalizes mtimes, so this
+// can under-report; the real guarantee remains the user's dbt compile step.
+// Upgrade path: compare each manifest node's `checksum` against the current file hash.
+fn manifest_is_stale(
+    manifest_mtime: SystemTime,
+    mut source_mtimes: impl Iterator<Item = SystemTime>,
+) -> bool {
+    source_mtimes.any(|mtime| mtime > manifest_mtime)
+}
+
+fn detect_stale_manifest(manifest_path: &Path, files: &[ProjectFile]) -> Option<MetadataWarning> {
+    let manifest_mtime = std::fs::metadata(manifest_path).ok()?.modified().ok()?;
+    let mut source_mtimes = Vec::new();
+    let mut newer_count = 0usize;
+    for file in files {
+        if file.kind != FileKind::DbtSqlModel {
+            continue;
+        }
+        let Some(source_mtime) = std::fs::metadata(&file.path)
+            .ok()
+            .and_then(|meta| meta.modified().ok())
+        else {
+            continue;
+        };
+        source_mtimes.push(source_mtime);
+        if source_mtime > manifest_mtime {
+            newer_count += 1;
+        }
+    }
+    if !manifest_is_stale(manifest_mtime, source_mtimes.into_iter()) {
+        return None;
+    }
+    Some(MetadataWarning {
+        kind: MetadataWarningKind::StaleManifest,
+        path: Some(manifest_path.to_path_buf()),
+        message: format!(
+            "dbt manifest is older than {newer_count} modified model file(s); compiled SQL may be stale"
+        ),
+    })
+}
+
 pub(crate) fn load_dbt_project(
     root: &Path,
     config: &ScanConfig,
@@ -113,6 +155,12 @@ pub(crate) fn load_dbt_project(
                 .find(|file| file.kind == FileKind::ManifestJson)
                 .map(|file| file.path.clone())
         });
+
+    if let Some(path) = manifest_path.as_ref() {
+        if let Some(warning) = detect_stale_manifest(path, files) {
+            warnings.push(warning);
+        }
+    }
 
     let loaded_manifest = manifest_path.is_some();
     let mut project = match manifest_path {
@@ -366,5 +414,15 @@ mod tests {
                 .map(String::as_str),
             Some("model.pkg.orders")
         );
+    }
+
+    #[test]
+    fn manifest_is_stale_when_any_source_is_newer() {
+        use std::time::{Duration, UNIX_EPOCH};
+        let manifest = UNIX_EPOCH + Duration::from_secs(100);
+        let older = UNIX_EPOCH + Duration::from_secs(50);
+        let newer = UNIX_EPOCH + Duration::from_secs(150);
+        assert!(!manifest_is_stale(manifest, [older, manifest].into_iter()));
+        assert!(manifest_is_stale(manifest, [older, newer].into_iter()));
     }
 }

@@ -6,6 +6,7 @@ pub(crate) struct YamlParseFailedRule;
 pub(crate) struct DbtProjectMetadataRule;
 pub(crate) struct FileSkippedRule;
 pub(crate) struct SqlParseFailedRule;
+pub(crate) struct StaleManifestRule;
 
 impl Rule for MetadataOnlyScanRule {
     fn id(&self) -> &'static str {
@@ -88,6 +89,24 @@ impl Rule for SqlParseFailedRule {
     }
     fn description(&self) -> &'static str {
         "Reports when a dbt model SQL file could not be parsed and rules may fall back to regex heuristics."
+    }
+    fn default_severity(&self) -> Severity {
+        Severity::Info
+    }
+    fn check(&self, _ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
+        Vec::new()
+    }
+}
+
+impl Rule for StaleManifestRule {
+    fn id(&self) -> &'static str {
+        "SQLCOST045"
+    }
+    fn name(&self) -> &'static str {
+        "Stale dbt manifest"
+    }
+    fn description(&self) -> &'static str {
+        "Reports when target/manifest.json is older than modified dbt model SQL files."
     }
     fn default_severity(&self) -> Severity {
         Severity::Info

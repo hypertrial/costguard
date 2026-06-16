@@ -20,6 +20,8 @@ Costguard reads **source files, git history, and (optionally) `target/manifest.j
 
 If `--manifest` is omitted, Costguard auto-loads `target/manifest.json` when that file exists in the scan root. Raw source analysis still works without a manifest; compiled-SQL metrics and some Jinja-heavy findings improve when a manifest is present.
 
+When a manifest is loaded but model SQL files are newer than the manifest file, Costguard emits **SQLCOST045** (stale manifest). Under `--analysis-policy strict`, a stale manifest fails the scan until you re-run `dbt compile`.
+
 For Jinja-heavy dbt models, run `dbt compile` in your existing CI job before Costguard so `compiled_code` is available in the manifest.
 
 ## Related

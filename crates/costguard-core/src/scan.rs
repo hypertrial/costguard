@@ -56,6 +56,10 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
     let union_files = plan.union_files();
     let dbt_load = load_dbt_project(&root, config, &union_files)?;
     let metadata_only = dbt_load.metadata_only;
+    let manifest_stale = dbt_load
+        .warnings
+        .iter()
+        .any(|warning| warning.kind == MetadataWarningKind::StaleManifest);
     let yaml_parse_failures = dbt_load
         .warnings
         .iter()
@@ -226,6 +230,7 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
         &metrics,
         plan.target_skips.len(),
         metadata_only,
+        manifest_stale,
         plan.pr_mode,
         context_report.as_ref(),
     );
@@ -528,6 +533,7 @@ fn evaluate_analysis(
     metrics: &crate::ScanMetrics,
     target_skipped_files: usize,
     metadata_only: bool,
+    manifest_stale: bool,
     pr_mode: bool,
     context: Option<&ContextReport>,
 ) -> AnalysisReport {
@@ -586,9 +592,17 @@ fn evaluate_analysis(
     if analysis.require_manifest && metadata_only {
         violations.push(AnalysisViolation {
             code: "manifest_required".into(),
-            message: "a dbt manifest is required for this analysis policy".into(),
+            message: "a dbt manifest is required for this analysis policy; run 'dbt compile' to produce target/manifest.json or pass --manifest <path>".into(),
             observed: 0.0,
             allowed: 1.0,
+        });
+    }
+    if analysis.require_manifest && manifest_stale {
+        violations.push(AnalysisViolation {
+            code: "manifest_stale".into(),
+            message: "dbt manifest is stale (older than modified models); run 'dbt compile' before scanning".into(),
+            observed: 1.0,
+            allowed: 0.0,
         });
     }
     if pr_mode {
@@ -707,8 +721,14 @@ fn metadata_warning_to_diagnostic(
         MetadataWarningKind::NoManifest => (
             "SQLCOST023",
             Severity::Info,
-            "run dbt compile and pass --manifest target/manifest.json for richer metadata",
+            "run 'dbt compile' to produce target/manifest.json, then scan again (or pass --manifest <path>)",
             "no_manifest",
+        ),
+        MetadataWarningKind::StaleManifest => (
+            "SQLCOST045",
+            Severity::Info,
+            "re-run 'dbt compile' so target/manifest.json reflects current models, then scan again",
+            "stale_manifest",
         ),
         MetadataWarningKind::YamlParseFailed => (
             "SQLCOST024",
