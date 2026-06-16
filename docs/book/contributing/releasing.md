@@ -5,27 +5,18 @@ GitHub Actions is the sole publication authority. Local scripts qualify code and
 Matt (`mattfaltyn`) is the sole release owner. The `release-owners` team contains only Matt and bypasses PR, review, and required-check rules, so Matt may self-merge or push directly to `main`. Other contributors require one approval plus successful `pr-gate`, `scale`, and `costguard` checks. Force pushes and default-branch deletion have no bypass. A direct push receives CI feedback after entering `main`; fix failures with a new commit, never by rewriting history.
 
 1. Merge or directly push the release commit to `main` as Matt. PRs are recommended for reviewability but do not require another approver.
-2. Complete full-history secret/customer-data scanning, then explicitly make the repository public. Run `configure_github_release.py` in `--plan`, `--apply`, and `--verify` modes to enable public security features, the Matt-only bypass, branch rules, the release environment, and `RELEASE_SSH_ALLOWED_SIGNERS`.
+2. Complete full-history secret/customer-data scanning, then explicitly make the repository public. Enable public security features, the Matt-only bypass, branch rules, the release environment, and `RELEASE_SSH_ALLOWED_SIGNERS` in GitHub repository settings.
 3. Produce one successful push-triggered `ci.yml` run for the exact release commit. The run must complete `pr-gate`, `scale`, `spellbook-smoke`, and `data-infra-smoke`; the release workflow enforces this by commit SHA.
 4. Use Matt's existing passphrase-protected `~/.ssh/id_ed25519` key to create signed annotated `v2.0.0`. Do not add another key or change global Git configuration.
 5. Confirm the workflow publishes the exact stable tag and passes Linux, macOS ARM/x86, and Windows packaging and consumer smoke with checksums, SBOMs, and attestations.
 6. Perform a clean-machine installation and one credential-free scan from the published package.
 7. Never replace an exact release. Publish post-GA fixes as `2.0.1` and move `v2` only after verification.
 
-Strict qualification requires a clean worktree, the exact signed tag at `HEAD`, `mdbook`, and `cargo-deny`. Development skip flags cannot create release evidence. Local recovery packaging uses `python3 scripts/publish_release_local.py --package-only`; publication remains disabled outside GitHub Actions.
+Strict qualification requires a clean worktree, the exact signed tag at `HEAD`, `mdbook`, and `cargo-deny`. Development skip flags cannot create release evidence. Publication remains disabled outside GitHub Actions.
 
 ## Public repository controls
 
-The configuration command requires a GitHub token with `repo`, `admin:org`, and repository administration access. It intentionally refuses private repositories and never changes visibility.
-
-```bash
-export GH_TOKEN="$(gh auth token)"
-python3 scripts/configure_github_release.py --plan
-python3 scripts/configure_github_release.py --apply
-python3 scripts/configure_github_release.py --verify
-```
-
-The tracked [allowed-signers file](../../../.github/release_allowed_signers) contains only Matt's existing public key. Its expected fingerprint is `SHA256:uiM1q8pDCkb7iW+6sNTblHdSYh4h0XUocIFIsUu8gGc`. The setup script rejects another key, extra release-team members, disabled security controls, or ruleset drift.
+The tracked [allowed-signers file](../../../.github/release_allowed_signers) contains only Matt's existing public key. Its expected fingerprint is `SHA256:uiM1q8pDCkb7iW+6sNTblHdSYh4h0XUocIFIsUu8gGc`. Release controls require the Matt-only `release-owners` bypass team, enabled security features, protected release environment, and named branch rulesets.
 
 ## GA signing and qualification
 

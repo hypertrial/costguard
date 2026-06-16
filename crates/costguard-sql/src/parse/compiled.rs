@@ -1,5 +1,5 @@
+use crate::Platform;
 use costguard_diagnostics::SourceProvenance;
-use costguard_platform::Platform;
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
 

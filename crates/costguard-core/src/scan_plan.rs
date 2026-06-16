@@ -40,11 +40,11 @@ pub(crate) fn build_scan_plan(
     discovery_options: &DiscoveryOptions,
 ) -> anyhow::Result<ScanPlan> {
     if config.changed_only {
-        if !costguard_git::is_git_repository(root) {
+        if !crate::git::is_git_repository(root) {
             anyhow::bail!("{} is not a git repository", root.display());
         }
         let base = config.base_branch.as_deref().unwrap_or("main");
-        let changed_files = costguard_git::changed_files(root, base)
+        let changed_files = crate::git::changed_files(root, base)
             .with_context(|| format!("failed to resolve changed files against base '{base}'"))?;
         let changed_discovery = costguard_scanner::read_existing_paths_with_options(
             root,

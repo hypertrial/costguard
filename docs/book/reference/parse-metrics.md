@@ -72,7 +72,7 @@ Headline parse success (`parsed`) and AST feature extraction can diverge:
 Audit compiled parse failures against a merged manifest:
 
 ```bash
-python3 scripts/audit_compiled_parse_failures.py path/to/manifest.json --bucket
+cargo run -p costguard-sql --bin audit-compiled-parse --features audit-bin -- path/to/manifest.json --bucket
 ```
 
 See [Scripts](scripts.md) for flags on the underlying `audit-compiled-parse` binary.

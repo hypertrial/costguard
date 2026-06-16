@@ -6,14 +6,17 @@
 
 use costguard_dbt::DbtSqlFeatures;
 use costguard_diagnostics::Span;
-use costguard_platform::Platform;
 use serde::{Deserialize, Serialize};
 use sqlparser::parser::Parser;
 use std::path::PathBuf;
 
 mod features;
 mod parse;
+mod platform;
 mod strip;
+mod trino;
+
+pub use platform::Platform;
 
 pub use parse::{normalize_for_parse, try_parse_compiled_sql, try_parse_compiled_sql_error};
 

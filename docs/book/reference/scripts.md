@@ -56,24 +56,6 @@ python3 scripts/release_check.py --version 2.0.0
 
 `--development`, `--skip-external`, and `--skip-external-links` are development aids. Development mode does not write a release qualification receipt. Strict qualification also requires `mdbook` and `cargo-deny` so documentation and dependency policy checks cannot be silently skipped.
 
-## `configure_github_release.py`
-
-Plans, applies, and verifies public GitHub production controls. It manages the Matt-only `release-owners` bypass team, public security features, protected release environment, existing SSH allowed signer, and named branch rulesets. It never changes repository visibility and refuses to apply while a repository is private.
-
-```bash
-export GH_TOKEN="$(gh auth token)"
-python3 scripts/configure_github_release.py --plan
-python3 scripts/configure_github_release.py --apply
-python3 scripts/configure_github_release.py --verify
-
-python3 scripts/configure_github_release.py \
-  --repository hypertrial/costguard-consumer-smoke \
-  --profile consumer \
-  --verify
-```
-
-The primary profile requires `pr-gate`, `scale`, and `costguard`. The consumer profile requires `standard` and `strict`. Both profiles block force pushes and default-branch deletion without bypass.
-
 ## `verify_ci_history.py`
 
 Release qualification helper used by `release.yml`. For the exact release SHA it requires the latest three completed `ci.yml` runs to be one push and two workflow dispatches, all successful, with successful `pr-gate`, `scale`, `spellbook-smoke`, and `data-infra-smoke` jobs.
@@ -85,22 +67,6 @@ Builds a host-platform release tarball using the same layout as [`.github/workfl
 ```bash
 python3 scripts/verify_release_assets.py
 ```
-
-## `publish_release_local.py`
-
-Local package-recovery tool. It requires a clean checkout at a verified signed annotated tag, builds all four release targets, creates deterministic archives, and validates available native smoke receipts. It cannot publish; GitHub Actions is the sole publication authority.
-
-```bash
-python3 scripts/publish_release_local.py --package-only --version 2.0.0
-```
-
-| Flag | Description |
-| --- | --- |
-| `--package-only` | Build deterministic assets and available local smoke receipts for inspection and Windows transfer |
-| `--version` | Required version; must equal the workspace version and signed tag |
-| `--workdir` | Output directory (default `dist/release`) |
-| `--receipt` | Optional native smoke receipt to validate and retain with recovery artifacts |
-| `--qualification-receipt` | Qualification evidence (default `WORKDIR/release-check.json`) |
 
 ### Cross-compile toolchain matrix (strict all-target builds)
 
@@ -127,7 +93,7 @@ python3 scripts/smoke_release_asset.py \
 
 1. Install the cross toolchains from the matrix above.
 2. Qualify the exact signed tag locally with `python3 scripts/release_check.py --version 2.0.0`.
-3. Package with `--package-only`, inspect `SHA256SUMS`, and run native smoke tests as needed.
+3. Build release targets with `python3 scripts/verify_release_assets.py` or `python3 scripts/package_release_target.py`, inspect `SHA256SUMS`, and run native smoke tests as needed.
 4. Restore GitHub Actions publication and rerun the immutable tag workflow. Do not upload recovery artifacts manually or replace an exact release.
 
 ## `ci_local.sh`
@@ -202,25 +168,13 @@ Validate vendored baselines in Rust:
 cargo test -p costguard-core --test benchmark vendored_baselines_match
 ```
 
-## `audit_compiled_parse_failures.py`
-
-Audit compiled SQL parse failures from a dbt manifest (Spellbook gate).
-
-```bash
-python3 scripts/audit_compiled_parse_failures.py path/to/manifest.json
-python3 scripts/audit_compiled_parse_failures.py path/to/manifest.json --bucket
-python3 scripts/audit_compiled_parse_failures.py path/to/manifest.json --json
-```
-
-Builds and runs the `audit-compiled-parse` binary from `costguard-sql`.
-
 ### `audit-compiled-parse` binary
 
 Not installed by `cargo install --path crates/costguard-cli`. Build explicitly:
 
 ```bash
-cargo build -p costguard-sql --bin audit-compiled-parse --features audit-bin
-./target/debug/audit-compiled-parse [--bucket] [--model NAME] [--json] MANIFEST.json
+cargo run -p costguard-sql --bin audit-compiled-parse --features audit-bin -- path/to/manifest.json --bucket
+cargo run -p costguard-sql --bin audit-compiled-parse --features audit-bin -- path/to/manifest.json --json
 ```
 
 | Flag | Description |
@@ -297,17 +251,6 @@ python3 scripts/recall_report.py --rules SQLCOST030 SQLCOST031
 ```
 
 Exit code `1` when any checked rule falls below the minimum case counts.
-
-## `calibrate_cost_model.py`
-
-Calibrate compute conversion factors and validate 80% interval coverage from an offline query-history CSV export:
-
-```bash
-python3 scripts/calibrate_cost_model.py exports/jobs_30d.csv
-python3 scripts/calibrate_cost_model.py exports/jobs_30d.csv --json
-```
-
-Exit code `1` when coverage falls outside the 60–95% target band.
 
 ## `validate_fp_registry.py`
 

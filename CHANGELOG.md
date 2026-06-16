@@ -7,6 +7,12 @@ All notable changes to Costguard are documented here. The project follows [Seman
 ### Changed
 
 - Cost estimate docs and human-readable output use canonical terms for current/post-fix/potential savings and addressable finding savings; cost summaries include advisory disclaimers and a grade-C caveat when no measured spend is mapped.
+- Folded `costguard-git` into `costguard-core` and `costguard-platform` into `costguard-sql` (11 workspace crates).
+
+### Removed
+
+- Orphaned scripts: `audit_compiled_parse_failures.py`, `calibrate_cost_model.py`, `configure_github_release.py`, and `publish_release_local.py`. Use `cargo run -p costguard-sql --bin audit-compiled-parse` for manifest parse audits.
+- Unused protocol type `FindingV1`, scanner wrappers, and dead evidence helpers.
 
 ### Fixed
 

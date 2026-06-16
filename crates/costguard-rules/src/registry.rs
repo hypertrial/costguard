@@ -6,7 +6,7 @@ use costguard_sql::SqlDocument;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap};
 
-pub use costguard_platform::Platform;
+pub use costguard_sql::Platform;
 
 /// Per-rule override from configuration (enable, severity, threshold).
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -243,10 +243,7 @@ fn rule_facts(ctx: &RuleContext<'_>) -> costguard_policy::RuleFactsV1 {
         .insert("platform".into(), ctx.warehouse.to_string());
     facts.strings.insert(
         "path".into(),
-        ctx.file
-            .root_relative_path
-            .to_string_lossy()
-            .replace('\\', "/"),
+        costguard_diagnostics::posix_path(&ctx.file.root_relative_path),
     );
     facts.strings.insert(
         "file.kind".into(),

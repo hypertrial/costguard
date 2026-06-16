@@ -443,7 +443,7 @@ fn load_base_dbt_project(
     config: &ScanConfig,
 ) -> Result<Option<DbtProject>> {
     let manifest_rel = base_manifest_rel_path(root, config);
-    let Some(text) = costguard_git::file_at_ref(root, base, &manifest_rel)? else {
+    let Some(text) = crate::git::file_at_ref(root, base, &manifest_rel)? else {
         return Ok(None);
     };
     Ok(Some(parse_manifest_text(&text)?))
@@ -500,7 +500,7 @@ fn base_sql_files_at_ref(
         ) {
             continue;
         }
-        let Some(text) = costguard_git::file_at_ref(root, base, &rel_path)? else {
+        let Some(text) = crate::git::file_at_ref(root, base, &rel_path)? else {
             continue;
         };
         files.push(ProjectFile {
@@ -739,7 +739,7 @@ fn metadata_warning_to_diagnostic(
                 .unwrap_or_else(|_| path.clone())
         })
         .unwrap_or_else(|| PathBuf::from("."));
-    let subject = path.to_string_lossy().replace('\\', "/");
+    let subject = costguard_diagnostics::posix_path(&path);
     let evidence_key = EvidenceBuilder::new("metadata")
         .field("kind", kind)
         .field("subject", subject)
@@ -777,7 +777,7 @@ fn build_context_report(
                 .unwrap_or_else(|_| doc.path.clone());
             issues.push(ContextIssue {
                 rule_id: "SQLCOST027".into(),
-                path: path.to_string_lossy().replace('\\', "/"),
+                path: costguard_diagnostics::posix_path(&path),
                 message: format!(
                     "SQL parse failed for {}",
                     doc.path
@@ -792,12 +792,7 @@ fn build_context_report(
         let path = warning
             .path
             .as_ref()
-            .map(|p| {
-                p.strip_prefix(root)
-                    .unwrap_or(p)
-                    .to_string_lossy()
-                    .replace('\\', "/")
-            })
+            .map(|p| costguard_diagnostics::posix_path(p.strip_prefix(root).unwrap_or(p)))
             .unwrap_or_else(|| ".".into());
         issues.push(ContextIssue {
             rule_id: "SQLCOST026".into(),

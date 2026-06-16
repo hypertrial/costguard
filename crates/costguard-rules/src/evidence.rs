@@ -122,21 +122,6 @@ pub fn python_pattern(pattern: &str) -> String {
         .build()
 }
 
-#[allow(dead_code)]
-pub fn metadata_warning(kind: &str, subject: &str) -> String {
-    EvidenceBuilder::new("metadata")
-        .field("kind", kind)
-        .field("subject", subject)
-        .build()
-}
-
-#[allow(dead_code)]
-pub fn parse_failure(filename: &str) -> String {
-    EvidenceBuilder::new("parse_failure")
-        .field("file", filename)
-        .build()
-}
-
 pub fn declarative(rule_id: &str, predicate_hash: &str) -> String {
     EvidenceBuilder::new("declarative")
         .field("rule", rule_id)

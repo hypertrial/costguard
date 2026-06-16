@@ -1,5 +1,5 @@
 use costguard_core::{apply_file_config, load_config, scan, ScanConfig};
-use costguard_platform::Platform;
+use costguard_sql::Platform;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;

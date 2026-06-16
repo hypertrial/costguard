@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 /// Finding severity, ordered from Info (lowest) to Critical (highest).
@@ -241,11 +241,6 @@ impl Diagnostic {
         }
     }
 
-    pub fn with_cost_estimate(mut self, cost_estimate: CostEstimate) -> Self {
-        self.cost_estimate = Some(cost_estimate);
-        self
-    }
-
     pub fn with_risk(mut self, risk: impl Into<String>) -> Self {
         self.risk = Some(risk.into());
         self
@@ -268,7 +263,7 @@ impl Diagnostic {
 
     pub fn assign_identity(&mut self, evidence_key: impl Into<String>) {
         self.governance.evidence_key = evidence_key.into();
-        let path = self.path.to_string_lossy().replace('\\', "/");
+        let path = posix_path(&self.path);
         let material = format!(
             "{}|{}|{}",
             self.rule_id.to_ascii_uppercase(),
@@ -279,9 +274,14 @@ impl Diagnostic {
     }
 }
 
-fn hex_sha256(bytes: &[u8]) -> String {
+pub fn hex_sha256(bytes: &[u8]) -> String {
     let digest = Sha256::digest(bytes);
     digest.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+/// Normalize a path for stable cross-platform comparison and output.
+pub fn posix_path(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
 }
 
 /// Builds a semantic-v1 evidence key from a kind and canonical sorted fields.

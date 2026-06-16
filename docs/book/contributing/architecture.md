@@ -1,6 +1,6 @@
 # Architecture
 
-Costguard is a Rust workspace of 13 crates. The CLI delegates to `costguard-core`, which orchestrates file discovery, SQL/dbt parsing, rule evaluation, cost annotation, and output rendering.
+Costguard is a Rust workspace of 11 crates. The CLI delegates to `costguard-core`, which orchestrates file discovery, SQL/dbt parsing, rule evaluation, cost annotation, and output rendering.
 
 ## Crate dependency graph
 
@@ -16,14 +16,11 @@ graph TD
   core --> rules[costguard-rules]
   core --> cost
   core --> diagnostics[costguard-diagnostics]
-  core --> git[costguard-git]
   core --> policy
   rules --> diagnostics
-  rules --> platform[costguard-platform]
   rules --> sql
   rules --> dbt
   rules --> scanner
-  sql --> platform
   sql --> dbt
   output --> core
   output --> diagnostics
@@ -41,7 +38,7 @@ graph TD
 
 ```mermaid
 flowchart LR
-  git[costguard-git] -->|changed files| scanner[costguard-scanner]
+  git[core git module] -->|changed files| scanner[costguard-scanner]
   scanner -->|ProjectFile| core[costguard-core]
   core --> dbt[costguard-dbt]
   core --> sql[costguard-sql]
@@ -55,7 +52,7 @@ flowchart LR
 
 A typical `costguard pr` run:
 
-1. **Git** — `costguard-git` resolves changed files against the base branch.
+1. **Git** — `costguard-core` resolves changed files against the base branch.
 2. **Scanner** — `costguard-scanner` classifies files (SQL, dbt YAML, Python, manifest).
 3. **dbt + SQL** — `costguard-dbt` loads manifest/YAML; `costguard-sql` parses SQL and extracts shape features.
 4. **Rules** — `costguard-rules` evaluates 44 SQLCOST rules against each file's `RuleContext`.
@@ -66,16 +63,14 @@ A typical `costguard pr` run:
 ## Crate responsibilities
 
 - **costguard-cli** — Clap CLI: `scan`, `explain`, `pr`, `cost`, `rules`, `baseline`, `policy`.
-- **costguard-core** — Scan orchestration, configuration loading, baseline management, `ScanResult`.
+- **costguard-core** — Scan orchestration, configuration loading, baseline management, git integration for PR scans, `ScanResult`.
 - **costguard-scanner** — File discovery, classification, and size/ignore filtering.
-- **costguard-sql** — Jinja stripping, sqlparser dialect parsing, feature extraction.
+- **costguard-sql** — Warehouse enum, sqlparser dialect mapping, Jinja stripping, feature extraction.
 - **costguard-dbt** — Manifest JSON, YAML schema, `dbt_project.yml` folder configs, model graph.
 - **costguard-rules** — 44 SQLCOST rules, `RuleRegistry`, per-rule overrides.
 - **costguard-diagnostics** — `Diagnostic`, severity, confidence, spans, inline suppressions.
 - **costguard-cost** — Lognormal cost model, catalog/query-history import, savings attribution.
 - **costguard-output** — Result rendering in five output formats (JSON schema v4).
-- **costguard-git** — Changed-file detection for PR-scoped scans.
-- **costguard-platform** — Warehouse enum and sqlparser dialect mapping.
 - **costguard-policy** — Ed25519 signed policy compile/sign/verify/resolve/enforce.
 - **costguard-protocol** — Shared JSON schema types (`SignedDocumentV1`, `EnforcementOutcome`, etc.).
 

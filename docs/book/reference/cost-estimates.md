@@ -128,12 +128,7 @@ JSON schema version is **4** with an optional top-level `cost` object (v3 consum
 
 ## Calibration
 
-```bash
-python3 scripts/calibrate_cost_model.py exports/jobs_30d.csv
-python3 scripts/calibrate_cost_model.py exports/jobs_30d.csv --json
-```
-
-Reports bytes-per-run interval coverage, model monthly scan volume, and suggested compute conversion bounds.
+Tune `[cost.pricing]` and `[cost.compute]` in `costguard.toml` using warehouse query-history exports. Validate bytes-per-run interval coverage and compute conversion bounds against your repo's observed spend.
 
 ## Related
 

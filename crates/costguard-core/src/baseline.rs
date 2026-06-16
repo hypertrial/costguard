@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use costguard_diagnostics::Diagnostic;
-use costguard_platform::Platform;
+use costguard_sql::Platform;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::Path;
@@ -154,7 +154,7 @@ fn sort_and_deduplicate(findings: &mut Vec<BaselinedFinding>) {
 }
 
 fn normalize_path(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/")
+    costguard_diagnostics::posix_path(path)
 }
 
 #[cfg(test)]

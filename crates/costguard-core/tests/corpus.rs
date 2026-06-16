@@ -1,6 +1,6 @@
 use costguard_core::{scan, ScanConfig};
 use costguard_diagnostics::Severity;
-use costguard_platform::Platform;
+use costguard_sql::Platform;
 use serde::Deserialize;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -92,7 +92,7 @@ fn corpus_cases_match_expected_rules() {
 
 #[test]
 fn compiled_manifest_parse_uses_compiled_code_for_metrics() {
-    use costguard_platform::Platform;
+    use costguard_sql::Platform;
 
     let case_path = corpus_root().join("compiled_manifest_parse");
     let config = ScanConfig {
@@ -112,7 +112,7 @@ fn compiled_manifest_parse_uses_compiled_code_for_metrics() {
 
 #[test]
 fn trino_parse_fixture_uses_compiled_normalization() {
-    use costguard_platform::Platform;
+    use costguard_sql::Platform;
 
     let case_path = corpus_root().join("trino_parse");
     let config = ScanConfig {
@@ -132,7 +132,7 @@ fn trino_parse_fixture_uses_compiled_normalization() {
 
 #[test]
 fn spellbook_compiled_parse_fixture_has_zero_compiled_failures() {
-    use costguard_platform::Platform;
+    use costguard_sql::Platform;
 
     let case_path = corpus_root().join("spellbook_compiled_parse");
     let config = ScanConfig {

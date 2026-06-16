@@ -1,6 +1,6 @@
 use costguard_dbt::extract_sql_features;
 use costguard_diagnostics::{LineIndex, SourceProvenance};
-use costguard_platform::Platform;
+use costguard_sql::Platform;
 use costguard_sql::*;
 use sqlparser::parser::Parser;
 use std::path::PathBuf;

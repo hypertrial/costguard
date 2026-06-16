@@ -180,7 +180,7 @@ pub fn assign_semantic_identities(diagnostics: Vec<Diagnostic>) -> anyhow::Resul
 fn collapse_duplicates(diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
     let mut groups: HashMap<(String, String, String), Vec<Diagnostic>> = HashMap::new();
     for diagnostic in diagnostics {
-        let path = diagnostic.path.to_string_lossy().replace('\\', "/");
+        let path = costguard_diagnostics::posix_path(&diagnostic.path);
         let key = (
             diagnostic.rule_id.to_ascii_uppercase(),
             path,
@@ -225,7 +225,7 @@ pub fn apply_policy_governance(
 ) -> anyhow::Result<Vec<PolicyViolation>> {
     let mut violations = Vec::new();
     for diagnostic in diagnostics {
-        let path = diagnostic.path.to_string_lossy().replace('\\', "/");
+        let path = costguard_diagnostics::posix_path(&diagnostic.path);
         let resolved = resolve(&path)?;
         violations.extend(apply_governance(
             std::slice::from_mut(diagnostic),

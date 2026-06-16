@@ -77,11 +77,6 @@ class ActionContractTest(unittest.TestCase):
             self.assertIn("name: ci-release-binary", job)
             self.assertIn("chmod +x target/release/costguard", job)
 
-    def test_local_release_tool_cannot_publish(self) -> None:
-        publisher = (ROOT / "scripts/publish_release_local.py").read_text(encoding="utf-8")
-        self.assertNotIn('add_argument("--publish"', publisher)
-        self.assertNotIn("gh release create", publisher)
-
     def test_action_run_blocks_do_not_interpolate_inputs_directly(self) -> None:
         action = (ROOT / ".github/actions/costguard/action.yml").read_text(encoding="utf-8")
         for block in run_blocks(action):

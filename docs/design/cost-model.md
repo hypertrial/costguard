@@ -82,11 +82,7 @@ Either condition fails the check (OR with severity gate). Failure messages print
 
 ## Calibration
 
-`scripts/calibrate_cost_model.py` reads query-history CSV and:
-
-1. Computes 80% interval coverage for bytes-per-run estimates
-2. Reports deduplicated model monthly scan volume (TB)
-3. Suggests `tb_per_credit_hour` bounds for compute-priced repos
+Offline query-history calibration is not shipped as a script. Tune `[cost.pricing]` and `[cost.compute]` in `costguard.toml` using warehouse exports and validate interval coverage manually.
 
 ## Implementation
 

@@ -6,9 +6,8 @@
 //! and enforcement outcomes. All public structs derive [`JsonSchema`] for
 //! schema generation.
 
-use schemars::{schema::RootSchema, JsonSchema};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 pub const POLICY_SCHEMA_VERSION: u8 = 2;
 pub const BASELINE_SCHEMA_VERSION: u8 = 3;
@@ -112,27 +111,6 @@ pub struct AppliedExceptionV1 {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct FindingV1 {
-    pub finding_id: String,
-    pub evidence_key: String,
-    pub rule_id: String,
-    pub severity: String,
-    pub confidence: String,
-    pub path: String,
-    pub line: usize,
-    pub column: usize,
-    pub message: String,
-    pub enforcement: EnforcementOutcome,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub policy: Option<PolicyProvenanceV1>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub exception: Option<AppliedExceptionV1>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cost: Option<Value>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
 pub struct CostObservationBundleV1 {
     pub schema_version: u8,
     pub organization: String,
@@ -168,9 +146,4 @@ pub struct SignedDocumentV1 {
     pub algorithm: String,
     pub payload: String,
     pub signature: String,
-}
-
-/// Generate a JSON Schema for a protocol type.
-pub fn schema_for<T: JsonSchema>() -> RootSchema {
-    schemars::schema_for!(T)
 }

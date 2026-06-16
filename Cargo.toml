@@ -10,8 +10,6 @@ members = [
     "crates/costguard-rules",
     "crates/costguard-diagnostics",
     "crates/costguard-output",
-    "crates/costguard-git",
-    "crates/costguard-platform",
     "crates/costguard-cost",
 ]
 resolver = "2"

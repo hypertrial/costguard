@@ -10,6 +10,7 @@ mod config;
 mod context;
 mod dbt_graph;
 mod dbt_load;
+mod git;
 mod governance;
 mod pipeline;
 mod scan;
@@ -32,9 +33,9 @@ pub use costguard_dbt::{
     DbtSourceRef, DbtSqlFeatures, DbtTest,
 };
 pub use costguard_diagnostics::{Confidence, LineIndex, Span};
-pub use costguard_platform::Platform;
 pub use costguard_rules::{Rule, RuleContext, RuleMetadata, RuleOverrides};
 pub use costguard_scanner::{FileKind as ProjectFileKind, ProjectFile as ScannedProjectFile};
+pub use costguard_sql::Platform;
 pub use costguard_sql::{
     CteFeature, ExpressionFeature, JoinFeature, ParseInput, SqlFeatures, WindowFeature,
 };

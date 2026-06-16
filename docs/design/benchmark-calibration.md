@@ -23,7 +23,7 @@ python3 scripts/benchmark_external_repo.py --repo spellbook --smoke
 python3 scripts/benchmark_external_repo.py --repo spellbook --force-compile
 
 # Audit compiled parse failures (Spellbook manifest gate)
-python3 scripts/audit_compiled_parse_failures.py \
+cargo run -p costguard-sql --bin audit-compiled-parse --features audit-bin -- \
   ~/.cache/costguard/benchmarks/spellbook/target/manifest.json --json
 
 # Bucket rule diagnostics for triage (requires cached Spellbook checkout + manifest)
@@ -79,7 +79,7 @@ Machine-readable FP contracts live in [`tests/benchmarks/fp_registry.toml`](../.
 
 1. Run Spellbook benchmark and inspect `tests/benchmarks/reports/external__spellbook.json`.
 2. Bucket noisy rules with `scripts/bucket_rule_diagnostics.py` (supports `--parse-input-filter`, `--join-audit`).
-3. Audit parse failures with `audit_compiled_parse_failures.py --json` (items include `original_file_path`).
+3. Audit parse failures with `cargo run -p costguard-sql --bin audit-compiled-parse --features audit-bin -- MANIFEST.json --json` (items include `original_file_path`).
 4. Extract corpus fixtures, register in `fp_registry.toml`, and refresh baselines.
 
 ### Parse metric semantics

@@ -1,8 +1,8 @@
 use crate::{ProjectIndexes, RuleContext, RuleOverrides, RuleRegistry};
 use costguard_dbt::extract_sql_features;
 use costguard_diagnostics::{apply_suppressions, LineIndex};
-use costguard_platform::Platform;
 use costguard_scanner::{FileKind, ProjectFile};
+use costguard_sql::Platform;
 use costguard_sql::{analyze_sql, SqlDocument};
 use std::path::PathBuf;
 

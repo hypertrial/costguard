@@ -1,4 +1,4 @@
-use costguard_platform::Platform;
+use crate::Platform;
 use regex::Regex;
 use std::sync::OnceLock;
 

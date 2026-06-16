@@ -1,8 +1,8 @@
 use crate::{FileParseStatus, Project, ScanMetrics};
 use costguard_dbt::{extract_sql_features, DbtModel};
 use costguard_diagnostics::{Confidence, Diagnostic, EvidenceBuilder, Severity};
-use costguard_platform::Platform;
 use costguard_scanner::{FileKind, ProjectFile, ScanCounts};
+use costguard_sql::Platform;
 use costguard_sql::{analyze_sql, SqlDocument};
 use rayon::prelude::*;
 use std::collections::{BTreeMap, HashMap};

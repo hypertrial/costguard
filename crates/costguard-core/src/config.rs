@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use costguard_cost::{CostConfig, CostSection};
 use costguard_diagnostics::{Confidence, Severity};
-use costguard_platform::Platform;
 use costguard_rules::{RuleOverrides, RuleRegistry};
+use costguard_sql::Platform;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;

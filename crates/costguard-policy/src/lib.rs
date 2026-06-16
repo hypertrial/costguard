@@ -9,6 +9,7 @@
 use anyhow::{Context, Result};
 use base64::Engine;
 use chrono::{DateTime, Utc};
+use costguard_diagnostics::hex_sha256;
 use costguard_diagnostics::{Confidence, Diagnostic, Severity};
 use costguard_protocol::{
     AppliedExceptionV1, EnforcementMode, EnforcementOutcome, PolicyProvenanceV1, SignedDocumentV1,
@@ -20,7 +21,6 @@ use rand_core::OsRng;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
@@ -535,7 +535,7 @@ pub fn canonical_json<T: Serialize>(value: &T) -> Result<String> {
 
 pub fn policy_digest(policy: &PolicyDocumentV2) -> Result<String> {
     let canonical = canonical_json(policy)?;
-    Ok(format!("sha256:{}", hex_digest(canonical.as_bytes())))
+    Ok(format!("sha256:{}", hex_sha256(canonical.as_bytes())))
 }
 
 pub fn read_signed_policy(path: &Path) -> Result<SignedDocumentV1> {
@@ -772,7 +772,7 @@ fn exception_matches(
     let repository_match = Glob::new(&exception.repository)?
         .compile_matcher()
         .is_match(repository);
-    let path = diagnostic.path.to_string_lossy().replace('\\', "/");
+    let path = costguard_diagnostics::posix_path(&diagnostic.path);
     let path_match = Glob::new(&exception.path)?.compile_matcher().is_match(path);
     let finding_match = exception
         .finding_id
@@ -881,14 +881,6 @@ fn sort_json(value: Value) -> Value {
         other => other,
     }
 }
-
-fn hex_digest(bytes: &[u8]) -> String {
-    Sha256::digest(bytes)
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

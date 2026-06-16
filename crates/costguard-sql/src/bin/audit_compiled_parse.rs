@@ -1,4 +1,4 @@
-use costguard_platform::Platform;
+use costguard_sql::Platform;
 use costguard_sql::{normalize_for_parse, try_parse_compiled_sql, try_parse_compiled_sql_error};
 use serde_json::Value;
 use std::collections::HashMap;

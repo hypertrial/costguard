@@ -58,10 +58,6 @@ pub struct DiscoveryOptions {
 }
 
 impl DiscoveryOptions {
-    pub fn with_ignore(ignore: Vec<PathBuf>) -> Self {
-        Self::from_scan(ignore, None)
-    }
-
     pub fn from_scan(ignore: Vec<PathBuf>, max_file_bytes: Option<u64>) -> Self {
         Self {
             ignore,
@@ -101,10 +97,6 @@ impl ScanCounts {
     }
 }
 
-pub fn discover(root: &Path, requested_paths: &[PathBuf]) -> Result<Vec<ProjectFile>> {
-    Ok(discover_with_options(root, requested_paths, &DiscoveryOptions::default())?.files)
-}
-
 pub fn discover_with_options(
     root: &Path,
     requested_paths: &[PathBuf],
@@ -128,14 +120,9 @@ pub fn discover_with_options(
             .collect()
     };
 
+    let (ignored, max_file_bytes) = resolve_discovery_options(&root, options);
     let mut paths = Vec::new();
     let mut skipped_files = Vec::new();
-    let ignored = normalize_ignored(&root, &options.ignore);
-    let max_file_bytes = if options.max_file_bytes == 0 {
-        DEFAULT_MAX_FILE_BYTES
-    } else {
-        options.max_file_bytes
-    };
     for requested_scan_root in requested_scan_roots {
         let scan_root = canonical_within_root(&root, &requested_scan_root)
             .with_context(|| format!("invalid scan path {}", requested_scan_root.display()))?;
@@ -165,34 +152,17 @@ pub fn discover_with_options(
                     continue;
                 }
             };
-            if is_ignored_path(&path, &ignored) {
-                continue;
-            }
-            let kind = classify(&path, &root);
-            if kind != FileKind::Other {
-                if file_too_large(&path, max_file_bytes) {
-                    skipped_files.push(skipped_file(&root, path, max_file_bytes));
-                    continue;
-                }
-                paths.push((path, kind));
-            }
+            collect_scannable_path(
+                &root,
+                path,
+                &ignored,
+                max_file_bytes,
+                &mut paths,
+                &mut skipped_files,
+            );
         }
     }
-    paths.sort_by(|left, right| left.0.cmp(&right.0));
-    paths.dedup_by(|left, right| left.0 == right.0);
-    let loaded = load_project_files(&root, paths);
-    skipped_files.extend(loaded.skipped_files);
-    Ok(DiscoveryResult {
-        files: loaded.files,
-        skipped_files,
-    })
-}
-
-pub fn read_existing_paths(root: &Path, requested_paths: &[PathBuf]) -> Result<Vec<ProjectFile>> {
-    Ok(
-        read_existing_paths_with_options(root, requested_paths, &DiscoveryOptions::default())?
-            .files,
-    )
+    Ok(finish_discovery(&root, paths, skipped_files))
 }
 
 pub fn read_existing_paths_with_options(
@@ -203,12 +173,7 @@ pub fn read_existing_paths_with_options(
     let root = root
         .canonicalize()
         .with_context(|| format!("failed to resolve project root {}", root.display()))?;
-    let ignored = normalize_ignored(&root, &options.ignore);
-    let max_file_bytes = if options.max_file_bytes == 0 {
-        DEFAULT_MAX_FILE_BYTES
-    } else {
-        options.max_file_bytes
-    };
+    let (ignored, max_file_bytes) = resolve_discovery_options(&root, options);
     let mut skipped_files = Vec::new();
     let mut paths = Vec::new();
     for requested in requested_paths {
@@ -231,27 +196,66 @@ pub fn read_existing_paths_with_options(
                 continue;
             }
         };
-        if !path.is_file() || is_ignored_path(&path, &ignored) {
+        if !path.is_file() {
             continue;
         }
-        let kind = classify(&path, &root);
-        if kind == FileKind::Other {
-            continue;
-        }
-        if file_too_large(&path, max_file_bytes) {
-            skipped_files.push(skipped_file(&root, path, max_file_bytes));
-            continue;
-        }
-        paths.push((path, kind));
+        collect_scannable_path(
+            &root,
+            path,
+            &ignored,
+            max_file_bytes,
+            &mut paths,
+            &mut skipped_files,
+        );
     }
+    Ok(finish_discovery(&root, paths, skipped_files))
+}
+
+fn resolve_discovery_options(root: &Path, options: &DiscoveryOptions) -> (Vec<PathBuf>, u64) {
+    let ignored = normalize_ignored(root, &options.ignore);
+    let max_file_bytes = if options.max_file_bytes == 0 {
+        DEFAULT_MAX_FILE_BYTES
+    } else {
+        options.max_file_bytes
+    };
+    (ignored, max_file_bytes)
+}
+
+fn collect_scannable_path(
+    root: &Path,
+    path: PathBuf,
+    ignored: &[PathBuf],
+    max_file_bytes: u64,
+    paths: &mut Vec<(PathBuf, FileKind)>,
+    skipped_files: &mut Vec<SkippedFile>,
+) {
+    if is_ignored_path(&path, ignored) {
+        return;
+    }
+    let kind = classify(&path, root);
+    if kind == FileKind::Other {
+        return;
+    }
+    if file_too_large(&path, max_file_bytes) {
+        skipped_files.push(skipped_file(root, path, max_file_bytes));
+        return;
+    }
+    paths.push((path, kind));
+}
+
+fn finish_discovery(
+    root: &Path,
+    mut paths: Vec<(PathBuf, FileKind)>,
+    mut skipped_files: Vec<SkippedFile>,
+) -> DiscoveryResult {
     paths.sort_by(|left, right| left.0.cmp(&right.0));
     paths.dedup_by(|left, right| left.0 == right.0);
-    let loaded = load_project_files(&root, paths);
+    let loaded = load_project_files(root, paths);
     skipped_files.extend(loaded.skipped_files);
-    Ok(DiscoveryResult {
+    DiscoveryResult {
         files: loaded.files,
         skipped_files,
-    })
+    }
 }
 
 fn load_project_files(root: &Path, paths: Vec<(PathBuf, FileKind)>) -> DiscoveryResult {
@@ -328,11 +332,7 @@ pub fn classify(path: &Path, root: &Path) -> FileKind {
         .and_then(|extension| extension.to_str())
         .unwrap_or_default()
         .to_ascii_lowercase();
-    let relative = path
-        .strip_prefix(root)
-        .unwrap_or(path)
-        .to_string_lossy()
-        .replace('\\', "/")
+    let relative = costguard_diagnostics::posix_path(path.strip_prefix(root).unwrap_or(path))
         .to_ascii_lowercase();
 
     if file_name == "manifest.json" {
@@ -400,11 +400,7 @@ fn is_dbt_yaml(path: &Path, root: &Path, text: &str) -> bool {
     if path.file_name().and_then(|name| name.to_str()) == Some("dbt_project.yml") {
         return true;
     }
-    let relative = path
-        .strip_prefix(root)
-        .unwrap_or(path)
-        .to_string_lossy()
-        .replace('\\', "/")
+    let relative = costguard_diagnostics::posix_path(path.strip_prefix(root).unwrap_or(path))
         .to_ascii_lowercase();
     if relative.contains("/models/") || relative.starts_with("models/") {
         return true;
@@ -464,7 +460,7 @@ mod tests {
         let result = discover_with_options(
             root,
             &[],
-            &DiscoveryOptions::with_ignore(vec![PathBuf::from("ignored")]),
+            &DiscoveryOptions::from_scan(vec![PathBuf::from("ignored")], None),
         )
         .expect("discover");
 
@@ -486,8 +482,9 @@ mod tests {
         )
         .expect("write ci");
 
-        let result = discover(root, &[]).expect("discover");
-        assert!(result.is_empty(), "{result:?}");
+        let result =
+            discover_with_options(root, &[], &DiscoveryOptions::default()).expect("discover");
+        assert!(result.files.is_empty(), "{result:?}");
     }
 
     #[test]
@@ -520,8 +517,12 @@ mod tests {
         let root = tempfile::tempdir().expect("root");
         let outside = tempfile::tempdir().expect("outside");
         fs::write(outside.path().join("model.sql"), "select 1").expect("write outside");
-        let err = discover(root.path(), &[outside.path().join("model.sql")])
-            .expect_err("outside path must fail");
+        let err = discover_with_options(
+            root.path(),
+            &[outside.path().join("model.sql")],
+            &DiscoveryOptions::default(),
+        )
+        .expect_err("outside path must fail");
         assert!(
             format!("{err:#}").contains("outside project root"),
             "{err:#}"

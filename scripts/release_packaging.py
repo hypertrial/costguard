@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import gzip
-import json
 import os
 import shutil
 import subprocess
@@ -189,45 +188,3 @@ def optional_command_output(command: list[str], *, cwd: Path) -> str | None:
     if completed.returncode != 0:
         return None
     return (completed.stdout or completed.stderr).strip()
-
-
-def write_provenance(
-    root: Path,
-    workdir: Path,
-    *,
-    version: str,
-    assets: list[Path],
-    receipts: list[Path],
-) -> Path:
-    import platform
-
-    payload = {
-        "schema_version": 1,
-        "version": version,
-        "commit": command_output(["git", "rev-parse", "HEAD"], cwd=root),
-        "source_date_epoch": int(command_output(["git", "show", "-s", "--format=%ct", "HEAD"], cwd=root)),
-        "toolchains": {
-            "rustc": command_output(["rustc", "--version"], cwd=root),
-            "cargo": command_output(["cargo", "--version"], cwd=root),
-            "rustup": command_output(["rustup", "--version"], cwd=root).splitlines()[0],
-            "python": platform.python_version(),
-            "zig": optional_command_output(["zig", "version"], cwd=root),
-            "cargo-zigbuild": optional_command_output(
-                ["cargo", "zigbuild", "--version"], cwd=root
-            ),
-            "cargo-xwin": optional_command_output(
-                ["cargo", "xwin", "--version"], cwd=root
-            ),
-        },
-        "targets": list(RELEASE_TARGETS),
-        "build_commands": {target: build_command(target) for target in RELEASE_TARGETS},
-        "assets": {path.name: file_sha256(path) for path in sorted(assets)},
-        "receipts": {path.name: file_sha256(path) for path in sorted(receipts)},
-        "verification_results": {
-            path.name: json.loads(path.read_text(encoding="utf-8"))
-            for path in sorted(receipts)
-        },
-    }
-    output = workdir / "provenance.json"
-    output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    return output

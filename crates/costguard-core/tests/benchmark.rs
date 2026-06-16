@@ -1,6 +1,6 @@
 use costguard_core::{apply_file_config, load_config, scan, ScanConfig};
 use costguard_diagnostics::Severity;
-use costguard_platform::Platform;
+use costguard_sql::Platform;
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};

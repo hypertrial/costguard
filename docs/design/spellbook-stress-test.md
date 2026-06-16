@@ -20,7 +20,7 @@ The script compiles five subprojects, **merges** their manifests into root `targ
 Compiled-parse gate:
 
 ```bash
-python3 scripts/audit_compiled_parse_failures.py \
+cargo run -p costguard-sql --bin audit-compiled-parse --features audit-bin -- \
   ~/.cache/costguard/benchmarks/spellbook/target/manifest.json --bucket
 ```
 
