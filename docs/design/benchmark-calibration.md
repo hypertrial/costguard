@@ -44,6 +44,12 @@ python3 -m venv .venv-eval && .venv-eval/bin/pip install -r requirements-eval.tx
 # Sampled precision report (requires cached Spellbook checkout + manifest)
 python3 scripts/precision_triage.py --repo spellbook --sample-size 200
 
+# Per-rule TP census across all benchmark repos (44-rule pass bar)
+python3 scripts/rule_tp_census.py --emit-evidence
+
+# Cost-ranked finding review packets (Spellbook or other repo)
+python3 scripts/top_findings_review.py --repo spellbook --top 50
+
 # Refresh baselines after intentional rule tuning
 python3 scripts/benchmark_external_repo.py --fixture real_world/jaffle_snippets --update-baseline
 python3 scripts/benchmark_external_repo.py --repo spellbook --update-baseline
@@ -82,10 +88,13 @@ Machine-readable FP contracts live in [`tests/benchmarks/fp_registry.toml`](../.
 
 ### Cross-reference workflow
 
+Canonical step-by-step adjudication: [Manual rule review playbook](manual-rule-review.md).
+
 1. Run Spellbook benchmark and inspect `tests/benchmarks/reports/external__spellbook.json`.
 2. Bucket noisy rules with `scripts/bucket_rule_diagnostics.py` (supports `--parse-input-filter`, `--join-audit`).
 3. Audit parse failures with `cargo run -p costguard-sql --bin audit-compiled-parse --features audit-bin -- MANIFEST.json --json` (items include `original_file_path`).
-4. Extract corpus fixtures, register in `fp_registry.toml`, and refresh baselines.
+4. Adjudicate findings (TP/FP), then extract corpus fixtures, register in `fp_registry.toml`, and refresh baselines.
+5. Confirm 44/44 census PASS: `python3 scripts/rule_tp_census.py --emit-evidence` — see [Rule TP coverage](rule-tp-coverage.md).
 
 ### Parse metric semantics
 
@@ -111,28 +120,15 @@ When an external benchmark surfaces a finding worth keeping:
 4. **Update** the relevant baseline with `--update-baseline`.
 5. **Record** the verdict in the table below.
 
-### False positive tracking template
+### Latest review pass (2026-06)
 
-| Rule | Repo | Verdict | Notes |
-| --- | --- | --- | --- |
-| SQLCOST005 | spellbook | fixed | `block_time`, `evt_block_time`, `block_date`, and related needles added |
-| SQLCOST004 | spellbook | partially fixed | schema YAML, nested `dbt_project.yml`, explicit `incremental_strategy: append`, and compiled Trino parsing reduce false positives |
-| SQLCOST004 | spellbook | investigate remaining | many incrementals still lack `unique_key` and explicit append strategy |
-| parse metrics | spellbook | improved (tier 1) | compile + Trino + model-scoped metrics: ~67% model parse failure rate (5423/8108) |
-| parse metrics | spellbook | improved (P0–P2) | five-subproject compile + Trino normalization + raw fallback: **12%** model parse failure rate (972/8108), `sql_parse_compiled_total` 8001 |
-| parse metrics | spellbook | improved (compiled parse) | Trino dialect + parse-only rewrites + Generic fallback: **`sql_parse_compiled_failures` 0/8001**; model-scoped **`sql_parse_failures` 0/8001** after pass 3 |
-| SQLCOST002 | jaffle-shop | true positive | repeated JSON extraction in staging |
-| SQLCOST012 | spellbook | fixed (2026-05 pass 2) | **804 → 88** after depth-0 FROM targeting (ignore inner CTE FROM comma FPs) |
-| SQLCOST005 | spellbook | fixed (2026-05 pass 2) | **247 → 1** after full-file `incremental_predicate` / config macro recognition |
-| SQLCOST016 | spellbook | fixed (2026-05) | **281 → 15** after staging exempt, date_trunc whitelist, compiled AST extraction; registry + corpus `partition_date_trunc_bound` |
-| SQLCOST017 | spellbook | fixed (2026-05 pass 3) | **1003 → 159** after time-bucket `date_trunc` joins, symmetric `date_trunc`/`coalesce`, and macro SQL reclassification |
-| SQLCOST019 | spellbook | fixed (2026-05) | **374 → 66** after whole-scope partition predicate check + CTE/JOIN ON corpus fixtures |
-| parse metrics | spellbook | high severity | **303 → 247** after pass 4 |
-| parse metrics | spellbook | model parse failures | **107 → 0** after excluding `macros/models/**/*.sql` from model-scoped parse metrics |
-| SQLCOST012 | spellbook | fixed (2026-05 pass 3) | **88 → 61** after date-spine cross join exempt + derived-subquery comma FP depth fix |
-| SQLCOST012 | spellbook | fixed (2026-05 pass 4) | **61 → 25** after GROUP BY/ORDER BY comma FP fix, explicit-JOIN tail bounds, and `date_ranges` spine exempt |
-| SQLCOST017 | spellbook | fixed (2026-05 pass 4) | **159 → 139** after null-safe `coalesce(left.col, right.col) = dim.col` join exempt |
-| SQLCOST016–019 | spellbook | gated | Spellbook baseline uses `max_diagnostics_by_rule` ceilings (counts may shrink, not grow); **smoke** gate runs on `push` to `main`, full Spellbook is manual dispatch |
+| Milestone | Outcome | Doc |
+| --- | --- | --- |
+| Spellbook top-250 cost triage | 250/250 registry TP on cost-ranked queue | [Spellbook top-10 cost review](spellbook-top10-cost-review.md) |
+| 44-rule census (4 repos) | 44/44 PASS | [Rule TP coverage](rule-tp-coverage.md) |
+| Manual review playbook | Canonical workflow | [Manual rule review](manual-rule-review.md) |
+
+Historical parse-metric and per-rule FP counts from 2025–2026 passes are archived in git history for `benchmark-calibration.md`; use the playbook for current triage procedure.
 
 ## PR replay testing
 
@@ -140,6 +136,8 @@ PR-mode behavior is covered by [`crates/costguard-core/tests/pr_replay.rs`](../.
 
 ## Related docs
 
+- [Manual rule review playbook](manual-rule-review.md)
+- [Rule TP coverage](rule-tp-coverage.md)
 - [Documentation book](../book/README.md)
 - [Spellbook stress test plan](spellbook-stress-test.md)
 - [PR check primary workflow](pr-check-primary-workflow.md)

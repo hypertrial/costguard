@@ -219,7 +219,7 @@ costguard scan /tmp/costguard-synthetic-10k --warehouse generic --fail-on critic
 
 ## `bucket_rule_diagnostics.py`
 
-Bucket per-file diagnostics for external-repo triage after running the Spellbook benchmark. Classifiers are registered for `SQLCOST012`, `SQLCOST016`, `SQLCOST017`, `SQLCOST019`, and `SQLCOST005`.
+Bucket per-file diagnostics for external-repo triage after running the Spellbook benchmark. **Nineteen rules** have dedicated regex/AST classifiers (`SQLCOST002`, `003`, `005`, `006`, `008`, `012`–`020`); all other rules fall through to bucket `other`. See [Manual rule review playbook](../../design/manual-rule-review.md#bucket-classifiers).
 
 ```bash
 python3 scripts/bucket_rule_diagnostics.py --repo spellbook --rule SQLCOST012
@@ -239,6 +239,46 @@ python3 scripts/bucket_rule_diagnostics.py --repo spellbook --rule SQLCOST017 \
 | `--json-out` | Write bucket report JSON |
 
 Requires a cached checkout with `target/manifest.json` from `benchmark_external_repo.py --repo spellbook`.
+
+## `rule_tp_census.py`
+
+Full-corpus per-rule TP/FP/unknown census across benchmark repos. PASS when each rule has **≥20 TP examples** or is **100% clean** (0 FP + 0 unknown). Infrastructure rules SQLCOST023–027 auto-pass.
+
+```bash
+python3 scripts/rule_tp_census.py --emit-evidence
+python3 scripts/rule_tp_census.py --repos spellbook data-infra --json
+python3 scripts/rule_tp_census.py --force-compile --emit-evidence
+```
+
+| Flag | Description |
+| --- | --- |
+| `--repos` | Repo names from `repos.toml` (default: all four) |
+| `--cache` | Benchmark cache root |
+| `--force-compile` | Bypass cached dbt manifest |
+| `--json` | Emit JSON report to stdout |
+| `--emit-evidence` | Write `tests/benchmarks/rule_tp_evidence.json` |
+
+Exit code `1` when any rule fails the pass bar. See [Rule TP coverage](../../design/rule-tp-coverage.md) and [Manual rule review](../../design/manual-rule-review.md).
+
+## `top_findings_review.py`
+
+Rank top-N cost findings with SQL context, bucket, and registry verdict. Used for cost-prioritized Spellbook triage loops.
+
+```bash
+python3 scripts/top_findings_review.py --repo spellbook --top 50
+python3 scripts/top_findings_review.py --repo spellbook --rule SQLCOST014 --top 20
+python3 scripts/top_findings_review.py --repo spellbook --top 10 --json
+```
+
+| Flag | Description |
+| --- | --- |
+| `--repo` | Repo name from `repos.toml` (default `spellbook`) |
+| `--top` | Number of findings to rank (default `10`) |
+| `--rule` | Filter to one rule id |
+| `--context` | SQL context lines around finding (default `12`) |
+| `--json` | Emit JSON instead of text |
+
+Requires `--cost` scan (enabled automatically). Rank key: `savings_p50_usd_per_month`, then `relative_index`.
 
 ## `build_eval_dataset.py`
 
@@ -376,5 +416,6 @@ python3 scripts/generate_rule_docs.py --check
 
 ## Related
 
+- [Manual rule review playbook](../../design/manual-rule-review.md)
 - [Benchmark tiers](../contributing/benchmark-tiers.md)
 - [Benchmark calibration](../../design/benchmark-calibration.md)

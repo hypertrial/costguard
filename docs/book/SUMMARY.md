@@ -38,3 +38,9 @@
 # Glossary
 
 - [Glossary](glossary.md)
+
+# Contributing
+
+- [Benchmark tiers](contributing/benchmark-tiers.md)
+- [Corpus fixtures](contributing/corpus-fixtures.md)
+- [Manual rule review](contributing/manual-rule-review.md)

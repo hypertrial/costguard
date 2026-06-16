@@ -34,7 +34,7 @@ cargo test -p costguard-core --test benchmark vendored_baselines_match
 
 ## Layer 3 — External
 
-Pinned clones defined in [`tests/benchmarks/repos.toml`](../../../tests/benchmarks/repos.toml).
+Pinned clones defined in [`tests/benchmarks/repos.toml`](../../../tests/benchmarks/repos.toml). Manual TP/FP adjudication on external findings uses the [Manual rule review playbook](../../design/manual-rule-review.md); outcome scoreboard: [Rule TP coverage](../../design/rule-tp-coverage.md).
 
 ```bash
 python3 scripts/benchmark_external_repo.py --repo jaffle-shop

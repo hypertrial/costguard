@@ -8,6 +8,7 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 - `scripts/rule_tp_census.py` — full-corpus per-rule TP/FP census across all benchmark repos with PASS bar (≥20 TP or 100% clean) and optional `tests/benchmarks/rule_tp_evidence.json` export.
 - Design doc: [Rule TP coverage](docs/design/rule-tp-coverage.md) — 44/44 rules PASS on spellbook + jaffle-shop + mattermost-warehouse + data-infra.
+- Design doc: [Manual rule review playbook](docs/design/manual-rule-review.md) — canonical workflow for adjudicating findings, registry entries, and census validation.
 - `scripts/top_findings_review.py` — rank top-N cost findings with SQL context, bucket, and registry verdict for Spellbook (or other repo) triage loops.
 - Binary-classification evaluation pipeline: frozen [`tests/benchmarks/eval_labels.toml`](tests/benchmarks/eval_labels.toml), [`scripts/build_eval_dataset.py`](scripts/build_eval_dataset.py), and [`scripts/eval_metrics.py`](scripts/eval_metrics.py) computing precision/recall/F1/MCC/PR-AUC/ROC-AUC with Wilson CIs (eval deps in [`requirements-eval.txt`](requirements-eval.txt)).
 - LLM-as-judge inter-rater reliability: [`scripts/build_llm_judge_labels.py`](scripts/build_llm_judge_labels.py) (local-only, llama-cpp-python), [`scripts/eval_irr.py`](scripts/eval_irr.py) (CI-safe κ validation), committed [`tests/benchmarks/llm_judge_labels.jsonl`](tests/benchmarks/llm_judge_labels.jsonl).

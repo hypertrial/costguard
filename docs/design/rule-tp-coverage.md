@@ -1,8 +1,36 @@
 # Rule TP coverage (all benchmark repos)
-Generated: 2026-06-16
-Corpus: spellbook (Trino), jaffle-shop (duckdb), mattermost-warehouse (Snowflake, raw), data-infra (BigQuery, raw).
-Pass bar: **20 recorded TP examples** OR **100% clean** (zero FP and zero unknown buckets).
+
+Generated: 2026-06-16  
+Corpus: spellbook (Trino), jaffle-shop (duckdb), mattermost-warehouse (Snowflake, raw), data-infra (BigQuery, raw).  
+Pass bar: **20 recorded TP examples** OR **100% clean** (zero FP and zero unknown buckets).  
 Tool: [`scripts/rule_tp_census.py`](../../scripts/rule_tp_census.py); evidence: [`tests/benchmarks/rule_tp_evidence.json`](../../tests/benchmarks/rule_tp_evidence.json).
+
+For the full manual review workflow (adjudication loop, registry contracts, bucket taxonomy), see [Manual rule review playbook](manual-rule-review.md).
+
+## Verification methodology
+
+Each rule was validated by:
+
+1. Scanning all four benchmark repos at pinned commits ([`tests/benchmarks/repos.toml`](../../tests/benchmarks/repos.toml)) with compiled manifests where available.
+2. Classifying every diagnostic into **TP**, **FP**, or **unknown** using [`scripts/bucket_rule_diagnostics.py`](../../scripts/bucket_rule_diagnostics.py) buckets and [`tests/benchmarks/fp_registry.toml`](../../tests/benchmarks/fp_registry.toml) verdicts (same logic as [`scripts/precision_triage.py`](../../scripts/precision_triage.py)).
+3. Recording up to 20 TP snippets per rule in evidence JSON for spot-check audits.
+4. Applying the pass bar: ≥20 TP **or** fully clean; infrastructure rules (`SQLCOST023`–`027`) excluded.
+
+Rules with **zero findings** in the four-repo scan pass as `vacuous_clean` when corpus `expect_rules` / `forbid_rules` and registry buckets prove the rule is wired correctly (e.g. SQLCOST021, SQLCOST043).
+
+## How to reproduce
+
+```bash
+# Requires cached checkouts (~/.cache/costguard/benchmarks/) and release costguard binary
+python3 scripts/rule_tp_census.py \
+  --repos spellbook jaffle-shop mattermost-warehouse data-infra \
+  --emit-evidence
+
+# Force dbt recompile if manifest stale
+python3 scripts/rule_tp_census.py --force-compile --emit-evidence
+```
+
+Exit code `0` means 44/44 PASS. Refresh this doc’s scoreboard after intentional rule or registry changes.
 
 ## Summary
 - **44/44 rules PASS**
@@ -60,7 +88,24 @@ Tool: [`scripts/rule_tp_census.py`](../../scripts/rule_tp_census.py); evidence: 
 - **SQLCOST043** (Snowflake merge pruning): no findings on mattermost-warehouse; recall corpus covers.
 - **SQLCOST028** (partition/cluster config): 171 TP on data-infra BigQuery marts.
 
-## Residual FP (pass via TP≥20)
-- **SQLCOST006**: 42 registry FP (tp>=20_with_residual_fp)
-- **SQLCOST012**: 20 registry FP (tp>=20_with_residual_fp)
-- **SQLCOST014**: 18 registry FP (tp>=20_with_residual_fp)
+## Vacuous and infrastructure rules
+
+| Pass reason | Meaning | Examples |
+| --- | --- | --- |
+| `vacuous_clean` | No findings in four-repo scan; corpus + registry prove rule behavior | SQLCOST009–011, SQLCOST021–022, SQLCOST032–035, SQLCOST043 |
+| `infrastructure_na` | SQLCOST023–027 — scan/parse/metadata markers, not cost anti-patterns | SQLCOST027 parse-failure markers counted but not behaviorally adjudicated |
+| `clean` | Fewer than 20 findings but 0 FP and 0 unknown | SQLCOST005, SQLCOST017, SQLCOST030–031, SQLCOST033, SQLCOST040, SQLCOST044 |
+
+## Residual FP and unknown (pass via TP≥20)
+
+Rules may PASS without zero FPs. Known debt as of 2026-06-16:
+
+| Rule | FP | Unknown | Likely buckets / follow-up |
+| --- | --- | --- | --- |
+| SQLCOST006 | 42 | 0 | `equality_join` on macro/Jinja SQL — extend macro skip or raw `ON` fallback |
+| SQLCOST008 | 0 | 6 | `blind_distinct` — extend GROUP BY dedup detection or add registry rows |
+| SQLCOST012 | 20 | 0 | Residual FP buckets after CTE-broadcast fix — inspect via `bucket_rule_diagnostics.py --rule SQLCOST012` |
+| SQLCOST014 | 18 | 0 | `other` on macro/homonym CTE templates — `/macros/` skip reduced but did not eliminate |
+| SQLCOST015 | 0 | 8 | Unclassified buckets — extend `classify_sqlcost015` or add registry TP/FP rows |
+
+Paydown workflow: [Manual rule review playbook — Residual FP policy](manual-rule-review.md#residual-fp-policy).

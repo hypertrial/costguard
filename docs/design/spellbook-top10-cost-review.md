@@ -1,5 +1,7 @@
 # Spellbook top-10 cost findings — manual review
 
+See [Manual rule review playbook](manual-rule-review.md) for the general adjudication workflow, registry contracts, and census pass bar.
+
 Generated: 2026-06-16  
 Scan: spellbook @ `e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738`, `cost=true`, `warehouse=trino`  
 Source: 10,809 diagnostics; 3,756 with `cost_estimate`; ranked by `savings_p50_usd_per_month` then `relative_index` (same as Costguard cost report).
