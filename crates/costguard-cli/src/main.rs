@@ -7,8 +7,8 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use costguard_core::{
-    apply_file_config, explain, load_config, rules, scan, validate_scan_config, OutputFormat,
-    ScanConfig, ScanRuntimeOverrides,
+    apply_file_config, explain, init_project, load_config, rules, scan, validate_scan_config,
+    InitOptions, OutputFormat, ScanConfig, ScanRuntimeOverrides,
 };
 use costguard_cost::{normalize_cost_export, CostExportFormat, NormalizeCostOptions};
 use costguard_output::{render, render_rules};
@@ -38,6 +38,7 @@ enum Command {
     Cost(CostArgs),
     Rules(RulesArgs),
     Policy(PolicyCommandArgs),
+    Init(InitArgs),
 }
 
 #[derive(Debug, Parser)]
@@ -242,6 +243,18 @@ struct RulesArgs {
     format: Option<FormatArg>,
 }
 
+#[derive(Debug, Parser)]
+struct InitArgs {
+    #[arg(long)]
+    warehouse: Option<String>,
+    #[arg(long)]
+    force: bool,
+    #[arg(long)]
+    no_workflow: bool,
+    #[arg(long)]
+    no_config: bool,
+}
+
 #[derive(Debug, Clone, Copy, ValueEnum)]
 enum FormatArg {
     Text,
@@ -309,7 +322,36 @@ fn run() -> Result<u8> {
             Ok(0)
         }
         Command::Policy(args) => run_policy_command(args.command),
+        Command::Init(args) => run_init_command(args),
     }
+}
+
+fn run_init_command(args: InitArgs) -> Result<u8> {
+    let root = std::env::current_dir().context("failed to resolve current directory")?;
+    let outcome = init_project(
+        &root,
+        &InitOptions {
+            warehouse: args.warehouse,
+            force: args.force,
+            no_workflow: args.no_workflow,
+            no_config: args.no_config,
+        },
+    )?;
+    if outcome.created.is_empty() && outcome.skipped.is_empty() {
+        println!("nothing to create (use --no-workflow / --no-config to narrow scope)");
+    } else {
+        println!("warehouse: {}", outcome.warehouse);
+        for path in &outcome.created {
+            println!("created {}", path.display());
+        }
+        for path in &outcome.skipped {
+            println!(
+                "skipped {} (already exists; use --force to overwrite)",
+                path.display()
+            );
+        }
+    }
+    Ok(0)
 }
 
 fn run_cost_command(command: CostCommand) -> Result<u8> {

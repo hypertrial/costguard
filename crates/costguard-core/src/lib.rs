@@ -12,6 +12,7 @@ mod dbt_graph;
 mod dbt_load;
 mod git;
 mod governance;
+mod init;
 mod pipeline;
 mod scan;
 mod scan_plan;
@@ -39,6 +40,7 @@ pub use costguard_sql::Platform;
 pub use costguard_sql::{
     CteFeature, ExpressionFeature, JoinFeature, ParseInput, SqlFeatures, WindowFeature,
 };
+pub use init::{detect_warehouse, init_project, InitOptions, InitOutcome};
 pub use scan::{explain, rules, scan};
 
 use costguard_dbt::DbtProject;

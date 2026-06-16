@@ -2,7 +2,7 @@
 
 Automated PR review is Costguard's primary workflow. The local CLI powers GitHub Actions, local debugging, and CI.
 
-For a zero-config local scan with no flags or config file, see [Local scan and explain](local-scan.md).
+For a zero-config local scan with no flags or config file, see [Local scan and explain](local-scan.md). Install with [Installation](installation.md); scaffold CI with `costguard init`.
 
 ## MVP command
 
@@ -57,11 +57,11 @@ Enterprise strict mode passes only configured governance values:
     policy-repository: acme/warehouse
 ```
 
-The Action does not install or compile dbt. Run `dbt compile` in a prior step so `target/manifest.json` is available when you want manifest-backed analysis.
+The Action does not install or compile dbt. See [Requirements](requirements.md) for manifest, git history, and compile guidance.
 
 Pair `fail-on: high` with `min-confidence: high` on macro-heavy dbt projects so PR gates keep AST-confirmed findings and ignore regex-only noise (for example SQLCOST012 comma joins detected without a successful parse).
 
-The Action defaults to `analysis-policy: standard`. Costguard auto-detects `target/manifest.json` when present; raw analysis still works without a manifest. Set `analysis-policy: strict` in the Action or committed `costguard.toml` when git-native governance requires manifest-backed analysis.
+The Action defaults to `analysis-policy: standard`. Set `analysis-policy: strict` in the Action or committed `costguard.toml` when git-native governance requires manifest-backed analysis. Manifest behavior: [Requirements](requirements.md).
 
 For dbt Cloud or private-package workflows, let your existing authenticated dbt job produce a manifest artifact, download it before this action, and set `manifest: target/manifest.json`. Costguard does not require warehouse credentials.
 
@@ -84,7 +84,7 @@ See [Output formats](../reference/output.md) for the JSON schema.
 
 For Jinja-heavy dbt models, run `dbt compile` in your existing CI job before Costguard. Costguard loads `compiled_code` from the manifest for parse metrics. When a finding is only available from compiled SQL and cannot be mapped back to raw source, JSON output marks it as `source_provenance: "compiled_unmapped"` and includes the compiled line and column.
 
-If `--manifest` is omitted, Costguard auto-loads `target/manifest.json` when that file exists in the scan root.
+See [Requirements](requirements.md) for the full manifest contract.
 
 ## Related
 

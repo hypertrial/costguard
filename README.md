@@ -6,26 +6,37 @@ One binary and one simple CI Action. `costguard pr` scans changed models against
 
 Generic SQL, Snowflake, BigQuery, and Trino scanning are production-ready; Databricks, Redshift, Postgres, and DuckDB support is preview.
 
-## Quick start
+## Install
 
-### Try it locally
+```bash
+curl -fsSL https://raw.githubusercontent.com/hypertrial/costguard/main/scripts/install.sh | sh
+```
+
+Pin a version: `... | sh -s -- v2.2.0`. Or build from source: `cargo install --git https://github.com/hypertrial/costguard --tag v2.2.0 costguard-cli`.
+
+See [Installation](docs/book/getting-started/installation.md) for pinned/airgapped manual install and Windows.
+
+## Run locally
 
 No config file or flags required. From your dbt project root:
 
 ```bash
-cd your-dbt-project
-costguard scan   # scans the whole project, auto-detects target/manifest.json
+costguard scan
 ```
 
-Add `--warehouse snowflake` (or `bigquery`, `trino`, etc.) for sharper dialect-specific parsing. Run `dbt compile` first when you want manifest-backed analysis on Jinja-heavy models.
+Add `--warehouse snowflake` (or `bigquery`, `trino`, etc.) for sharper dialect-specific parsing. See [Requirements](docs/book/getting-started/requirements.md) for manifest and compile guidance.
 
-### CI (GitHub Action)
+## Add to CI
 
-Pin the exact Action tag `@v2.2.0` or use the moving compatible major tag `@v2`. Release binaries are checksum-protected and include provenance attestations.
+From your dbt project root:
 
-**2.1 requirements:** Use baseline v3 and policy v2 with `identity_scheme: "semantic-v1"`. Older baseline and policy schemas are rejected at scan time. See [Compatibility policy](docs/book/reference/compatibility.md).
+```bash
+costguard init
+```
 
-Run Costguard after your existing dbt compile step so `target/manifest.json` is available when you want manifest-backed analysis.
+This writes `.github/workflows/costguard.yml` and a starter `costguard.toml` (best-effort warehouse detection from `dbt_project.yml` / `profiles.yml`). Commit the workflow, then open a PR.
+
+Or add the Action manually after your existing dbt compile step:
 
 ```yaml
 - uses: actions/checkout@v6
@@ -40,19 +51,15 @@ Run Costguard after your existing dbt compile step so `target/manifest.json` is 
     min-confidence: high
 ```
 
-Install an exact release binary by selecting one of `aarch64-apple-darwin`, `x86_64-apple-darwin`, or `x86_64-unknown-linux-gnu`:
+Pin the exact Action tag `@v2.2.0` or use the moving compatible major tag `@v2`. Release binaries are checksum-protected and include provenance attestations.
 
-```bash
-VERSION=v2.2.0
-TARGET=aarch64-apple-darwin
-curl -LO "https://github.com/hypertrial/costguard/releases/download/${VERSION}/costguard-${TARGET}.tar.gz"
-curl -LO "https://github.com/hypertrial/costguard/releases/download/${VERSION}/costguard-${TARGET}.tar.gz.sha256"
-shasum -a 256 -c "costguard-${TARGET}.tar.gz.sha256"
-tar -xzf "costguard-${TARGET}.tar.gz"
-./costguard --version
-```
+**2.1 requirements:** Use baseline v3 and policy v2 with `identity_scheme: "semantic-v1"`. Older baseline and policy schemas are rejected at scan time. See [Compatibility policy](docs/book/reference/compatibility.md).
 
-Windows x86-64 uses `costguard-x86_64-pc-windows-msvc.tar.gz` and contains `costguard.exe`. Every release also includes consolidated `SHA256SUMS`, native smoke receipts, and signed provenance.
+## Requirements
+
+Costguard reads **source files, git history, and (optionally) `target/manifest.json`**. It never connects to your warehouse and never needs credentials. The manifest is auto-detected when present; run `dbt compile` first only if you want compiled-SQL analysis on Jinja-heavy models.
+
+Full table: [Requirements](docs/book/getting-started/requirements.md).
 
 ## Documentation
 
@@ -68,6 +75,8 @@ mdbook serve
 
 | Topic | Link |
 | --- | --- |
+| Installation | [Installation](docs/book/getting-started/installation.md) |
+| Requirements | [Requirements](docs/book/getting-started/requirements.md) |
 | Local scan | [Local scan and explain](docs/book/getting-started/local-scan.md) |
 | PR check setup | [Quick start](docs/book/getting-started/quick-start.md) |
 | CLI and config | [Reference](docs/book/reference/cli.md) |
@@ -89,7 +98,7 @@ Use `install-mode: source` to build the checked-out Action code instead of downl
     min-confidence: high
 ```
 
-The Action does not install or compile dbt. It auto-detects `target/manifest.json` when present; raw analysis still works without a manifest.
+The Action does not install or compile dbt. See [Requirements](docs/book/getting-started/requirements.md) for manifest and git history needs.
 
 Only high-confidence, high-severity findings fail the PR by default. Pair `fail-on: high` with `min-confidence: high` on macro-heavy dbt repos.
 

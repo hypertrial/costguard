@@ -11,6 +11,7 @@ Source: `crates/costguard-cli/src/main.rs`
 | `pr` | Scan git-changed files against a base ref |
 | `cost` | Local cost prioritization summary (model-centric totals for ranking) |
 | `rules` | List registered rules |
+| `init` | Scaffold GitHub workflow and starter `costguard.toml` into a dbt project |
 | `policy` | Compile, sign, verify, resolve, or inspect signed policy |
 
 ## Shared flags
@@ -85,6 +86,19 @@ Invalid git bases and non-git directories fail the check instead of silently sca
 
 Finding baselines are written with `costguard scan --write-baseline` (baseline v3 with `identity_scheme: "semantic-v1"`).
 
+## `init`
+
+```bash
+costguard init [--warehouse PLATFORM] [--force] [--no-workflow] [--no-config]
+```
+
+Scaffolds Costguard into the current directory (typically a dbt project root):
+
+- `.github/workflows/costguard.yml` — PR check using the published GitHub Action
+- `costguard.toml` — starter config with detected or overridden `warehouse`
+
+Warehouse detection is best-effort: reads `dbt_project.yml` `profile`, then `profiles.yml` (project root or `~/.dbt/profiles.yml`) adapter `type`. Use `--warehouse` when detection fails. Existing files are skipped unless `--force`.
+
 ## `policy`
 
 ```bash
@@ -117,10 +131,7 @@ See [Output formats](output.md) for JSON field details.
 
 ## Manifest discovery
 
-When `--manifest` is not passed:
-
-1. Use `target/manifest.json` under the scan root if it exists
-2. Otherwise use a discovered `manifest.json` in the project tree
+When `--manifest` is not passed, Costguard auto-loads `target/manifest.json` when that file exists in the scan root. See [Requirements](../getting-started/requirements.md) for when a manifest is needed.
 
 Explicit `--manifest` paths must exist or the run exits with code `2`.
 

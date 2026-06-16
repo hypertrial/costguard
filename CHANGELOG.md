@@ -4,6 +4,12 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ## [Unreleased]
 
+### Added
+
+- `scripts/install.sh` — one-liner release installer for macOS and Linux (`curl | sh`).
+- `costguard init` — scaffolds `.github/workflows/costguard.yml` and starter `costguard.toml` with best-effort warehouse detection.
+- Documentation: [Installation](docs/book/getting-started/installation.md) and [Requirements](docs/book/getting-started/requirements.md); README restructured for install → run → CI onboarding.
+
 ### Changed
 
 - Cost estimate docs and human-readable output use canonical terms for current/post-fix/potential savings and addressable finding savings; cost summaries include advisory disclaimers and a grade-C caveat when no measured spend is mapped.

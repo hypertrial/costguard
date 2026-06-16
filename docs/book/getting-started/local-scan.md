@@ -1,8 +1,8 @@
 # Local scan and explain
 
-The fastest way to run Costguard on a dbt project is a bare `costguard scan` from the project root. No `costguard.toml`, no flags, and no warehouse credentials required. Costguard scans the entire working directory and auto-detects `target/manifest.json` when present.
+The fastest way to run Costguard on a dbt project is a bare `costguard scan` from the project root. No `costguard.toml`, no flags, and no warehouse credentials required.
 
-Use `explain` to debug a single file, or add flags to refine dialect, output format, and fail thresholds. See also [Quick start (PR check)](quick-start.md) for the CI workflow.
+See [Requirements](requirements.md) for manifest, git, and compile guidance. Use `explain` to debug a single file, or add flags to refine dialect, output format, and fail thresholds. See also [Quick start (PR check)](quick-start.md) for the CI workflow.
 
 ## Scan
 
@@ -10,7 +10,7 @@ Use `explain` to debug a single file, or add flags to refine dialect, output for
 costguard scan
 ```
 
-With no path arguments, Costguard scans the whole project root. With no `--manifest`, it auto-loads `target/manifest.json` when that file exists. The default dialect is `generic`; findings at or above `high` severity fail the run.
+With no path arguments, Costguard scans the whole project root. Findings at or above `high` severity fail the run. Manifest behavior: [Requirements](requirements.md).
 
 ### Refine with flags
 
@@ -24,10 +24,10 @@ costguard scan --warehouse trino --manifest target/manifest.json
 | Flag | Notes |
 | --- | --- |
 | `--warehouse` / `--dialect` | Sharper parsing for your warehouse. Recommended when you know the dialect. |
-| `--manifest` | Optional; auto-discovers `target/manifest.json` when present |
+| `--manifest` | Optional; see [Requirements](requirements.md) |
 | `--fail-on` | Exit code `1` when diagnostics meet or exceed this severity (default: `high`) |
 
-Run `dbt compile` before scanning when you want manifest-backed analysis on Jinja-heavy models.
+Run `dbt compile` before scanning when you want manifest-backed analysis on Jinja-heavy models. See [Requirements](requirements.md).
 
 ## Explain
 

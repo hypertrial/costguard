@@ -4,6 +4,25 @@ Helper scripts live under [`scripts/`](../../../scripts/) at the repository root
 
 For Spellbook and other external benchmarks, the script compiles subprojects and **merges** their manifests into `target/manifest.json` at the repo root before scanning. Run `dbt compile` in your own CI job before the Costguard Action; this helper is for benchmarks and local development only.
 
+## `install.sh`
+
+One-liner installer for macOS and Linux release binaries. Downloads a release tarball, verifies SHA256, and installs `costguard` to `/usr/local/bin` or `~/.local/bin`.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/hypertrial/costguard/main/scripts/install.sh | sh
+curl -fsSL .../install.sh | sh -s -- v2.2.0
+COSTGUARD_INSTALL_DIR="$HOME/.local/bin" curl -fsSL .../install.sh | sh
+```
+
+| Env var | Description |
+| --- | --- |
+| `COSTGUARD_VERSION` | Release tag (default `latest`) |
+| `COSTGUARD_INSTALL_DIR` | Install directory (default `/usr/local/bin` or `~/.local/bin`) |
+| `COSTGUARD_RELEASE_BASE_URL` | Override download base URL (used by tests) |
+| `COSTGUARD_REPO` | GitHub repo slug (default `hypertrial/costguard`) |
+
+See [Installation](../getting-started/installation.md).
+
 ## `dbt_compile_for_costguard.py`
 
 Shared dbt compile and manifest merge helper used by `benchmark_external_repo.py` and local Spellbook stress tests. Subproject compiles run in parallel when multiple `--compile-dirs` are provided (`COSTGUARD_DBT_COMPILE_JOBS=1` forces serial). Manifest outputs are cached per repo commit and packages fingerprint when `--cache-dir` is set from the benchmark script.
