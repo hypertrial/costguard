@@ -1,4 +1,6 @@
-# Costguard
+# Stop wasting money on bad SQL
+
+Costguard catches expensive dbt changes before they hit your warehouse.
 
 Costguard is a local, dbt-aware cost regression guardrail for git workflows.
 
