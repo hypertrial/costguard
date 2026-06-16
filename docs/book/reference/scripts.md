@@ -126,7 +126,7 @@ PR-equivalent local gate mirrored by the required `pr-gate` job in [`.github/wor
 ./scripts/ci_local.sh --precision
 ```
 
-The gate runs workspace dependency validation, `ruff check` on Python scripts, Rust fmt/clippy/rustdoc/build/test, Python unit tests (via `.venv-eval` so eval metrics tests can import numpy/scikit-learn), fp-registry and recall coverage checks, corpus classification metrics (`eval_metrics.py --split corpus`), vendored benchmarks, rule-doc sync, internal link validation, mdBook build, and `cargo deny` when installed.
+The gate runs workspace dependency validation, `ruff check` on Python scripts, Rust fmt/clippy/rustdoc/build/test, Python unit tests (via `.venv-eval` so eval metrics tests can import numpy/scikit-learn), fp-registry and recall coverage checks, corpus classification metrics (`eval_metrics.py --split corpus`), LLM judge IRR validation (`eval_irr.py`), vendored benchmarks, rule-doc sync, internal link validation, mdBook build, and `cargo deny` when installed.
 
 Unit tests:
 
@@ -277,6 +277,48 @@ python3 -m venv .venv-eval
 | `--json-out` | Write JSON report |
 
 The corpus split is hard-gated in `./scripts/ci_local.sh`. The real split runs behind `--precision`. See [Classification metrics](../../design/classification-metrics.md).
+
+## `build_llm_judge_labels.py`
+
+Local-only tool that runs a pinned Qwen3-30B-A3B GGUF judge (via llama-cpp-python + Metal) over spellbook findings and writes committed inter-rater labels. **Not run in CI.**
+
+Requires a local GGUF and `requirements-judge.txt`:
+
+```bash
+python3 -m venv .venv-judge
+.venv-judge/bin/pip install -r requirements-judge.txt
+export COSTGUARD_JUDGE_GGUF=/path/to/model.gguf
+.venv-judge/bin/python scripts/build_llm_judge_labels.py --model "$COSTGUARD_JUDGE_GGUF"
+python3 scripts/build_llm_judge_labels.py --dry-run
+```
+
+| Flag | Description |
+| --- | --- |
+| `--repo` | External repo (default `spellbook`) |
+| `--model` | Path to local GGUF (or set `COSTGUARD_JUDGE_GGUF`) |
+| `--cap` | Max findings per `(rule, bucket)` (default 50) |
+| `--seed` | Deterministic sampling seed (default 3407) |
+| `--context-tokens` | llama.cpp context size (default 32768) |
+| `--dry-run` | Enumerate capped candidates without loading the model |
+| `--out` | Output JSONL (default `tests/benchmarks/llm_judge_labels.jsonl`) |
+| `--manifest-out` | Manifest TOML (default `tests/benchmarks/llm_judge_manifest.toml`) |
+
+See [LLM judge IRR](../../design/llm-judge-irr.md).
+
+## `eval_irr.py`
+
+Validate committed LLM judge labels against the pinned manifest and recompute Cohen's κ (report-only; no κ floor gate). Runs in `./scripts/ci_local.sh` via `.venv-eval`:
+
+```bash
+.venv-eval/bin/python scripts/eval_irr.py
+.venv-eval/bin/python scripts/eval_irr.py --json-out tests/benchmarks/irr_report.json
+```
+
+| Flag | Description |
+| --- | --- |
+| `--labels` | Judge JSONL (default `tests/benchmarks/llm_judge_labels.jsonl`) |
+| `--manifest` | Judge manifest (default `tests/benchmarks/llm_judge_manifest.toml`) |
+| `--json-out` | Output report (default `tests/benchmarks/irr_report.json`) |
 
 ## `precision_triage.py`
 

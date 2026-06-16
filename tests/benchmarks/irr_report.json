@@ -1,0 +1,25 @@
+{
+  "generated_at": "2026-06-16T08:45:49+00:00",
+  "manifest": {
+    "judge_name": "costguard-local-llm-judge",
+    "judge_version": "v1",
+    "model_id": "Qwen3-30B-A3B-Instruct-2507",
+    "prompt_version": "irr_judge_v1",
+    "repo": "spellbook"
+  },
+  "counts": {
+    "total": 0,
+    "labeled_registry": 0,
+    "scorable_non_abstain": 0,
+    "abstain": 0
+  },
+  "overall": {
+    "kappa_binary_non_abstain": null,
+    "coverage": 0.0,
+    "abstain_rate": 0.0,
+    "disagreement_rate": null
+  },
+  "by_rule": {},
+  "top_disagreement_rules": [],
+  "disagreements": []
+}

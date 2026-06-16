@@ -1,0 +1,18 @@
+# Pinned LLM judge configuration for inter-rater reliability.
+# Regenerate labels with: python3 scripts/build_llm_judge_labels.py --model $COSTGUARD_JUDGE_GGUF
+
+judge_name = "costguard-local-llm-judge"
+judge_version = "v1"
+model_id = "Qwen3-30B-A3B-Instruct-2507"
+model_file_sha256 = ""
+quantization = "Q4_K_M"
+runtime = "llama.cpp"
+runtime_version = ""
+prompt_version = "irr_judge_v1"
+temperature = 0.0
+seed = 3407
+context_tokens = 32768
+max_new_tokens = 1
+cap = 50
+repo = "spellbook"
+sample_seed = 3407

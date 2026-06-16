@@ -33,6 +33,8 @@ Canonical terminology for Costguard documentation. Prefer these definitions in R
 | **FP registry** | Machine-readable false-positive contracts in `tests/benchmarks/fp_registry.toml` |
 | **Eval labels** | Frozen binary-classification dataset in `tests/benchmarks/eval_labels.toml`; seeded from corpus and fp_registry |
 | **Classification metrics** | Precision, recall, F1, MCC, PR-AUC, ROC-AUC from `scripts/eval_metrics.py` |
+| **LLM judge labels** | Committed second-rater verdicts in `tests/benchmarks/llm_judge_labels.jsonl`; built locally with `build_llm_judge_labels.py` |
+| **Inter-rater reliability (IRR)** | Agreement between registry labels and LLM judge; Cohen's κ from `scripts/eval_irr.py` on non-abstain items |
 | **Max-count ceiling** | External baseline `max_diagnostics_by_rule` — rule counts may shrink, not grow |
 
 ## Benchmark layers (canonical)

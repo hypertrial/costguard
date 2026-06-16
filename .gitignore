@@ -18,6 +18,7 @@ target
 .cache/
 __pycache__/
 .venv-eval/
+.cache/costguard/judge/
 /book/
 /design/
 /rules/

@@ -39,6 +39,7 @@ python3 scripts/recall_report.py
 # Corpus binary-classification metrics (precision/recall/F1/MCC/PR-AUC)
 python3 -m venv .venv-eval && .venv-eval/bin/pip install -r requirements-eval.txt
 .venv-eval/bin/python scripts/eval_metrics.py --split corpus
+.venv-eval/bin/python scripts/eval_irr.py
 
 # Sampled precision report (requires cached Spellbook checkout + manifest)
 python3 scripts/precision_triage.py --repo spellbook --sample-size 200

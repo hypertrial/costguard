@@ -83,7 +83,7 @@ Evaluate:
 
 1. Stratified sample fired findings and non-fired `(model, rule)` pairs from pinned external repos.
 2. Record per-finding labels keyed by `(repo@sha, path, line, rule, finding_id)`.
-3. Double-label a 10% subset; report Cohen's κ before promoting real-split gates from soft to hard.
+3. Double-label a 10% subset; report Cohen's κ before promoting real-split gates from soft to hard. See [LLM judge IRR](llm-judge-irr.md) for the automated local second-rater pipeline (`build_llm_judge_labels.py` + `eval_irr.py`).
 4. Replace bucket-template rows in `eval_labels.toml` with per-finding rows as labels mature.
 
 ## Related
@@ -92,3 +92,4 @@ Evaluate:
 - [`scripts/build_eval_dataset.py`](../../scripts/build_eval_dataset.py) — dataset seeding
 - [`scripts/recall_report.py`](../../scripts/recall_report.py) — corpus **coverage** gate (not operational recall)
 - [`scripts/precision_triage.py`](../../scripts/precision_triage.py) — legacy sampled precision workflow
+- [LLM judge IRR](llm-judge-irr.md) — local second-rater labels and Cohen's κ (`eval_irr.py`)

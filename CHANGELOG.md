@@ -7,7 +7,9 @@ All notable changes to Costguard are documented here. The project follows [Seman
 ### Added
 
 - Binary-classification evaluation pipeline: frozen [`tests/benchmarks/eval_labels.toml`](tests/benchmarks/eval_labels.toml), [`scripts/build_eval_dataset.py`](scripts/build_eval_dataset.py), and [`scripts/eval_metrics.py`](scripts/eval_metrics.py) computing precision/recall/F1/MCC/PR-AUC/ROC-AUC with Wilson CIs (eval deps in [`requirements-eval.txt`](requirements-eval.txt)).
+- LLM-as-judge inter-rater reliability: [`scripts/build_llm_judge_labels.py`](scripts/build_llm_judge_labels.py) (local-only, llama-cpp-python), [`scripts/eval_irr.py`](scripts/eval_irr.py) (CI-safe κ validation), committed [`tests/benchmarks/llm_judge_labels.jsonl`](tests/benchmarks/llm_judge_labels.jsonl).
 - Design doc: [Classification metrics](docs/design/classification-metrics.md).
+- Design doc: [LLM judge IRR](docs/design/llm-judge-irr.md).
 - `scripts/install.sh` — one-liner release installer for macOS and Linux (`curl | sh`).
 - `costguard init` — scaffolds `.github/workflows/costguard.yml` and starter `costguard.toml` with best-effort warehouse detection.
 - Documentation: [Installation](docs/book/getting-started/installation.md) and [Requirements](docs/book/getting-started/requirements.md); README restructured for install → run → CI onboarding.
