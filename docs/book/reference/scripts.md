@@ -126,7 +126,7 @@ PR-equivalent local gate mirrored by the required `pr-gate` job in [`.github/wor
 ./scripts/ci_local.sh --precision
 ```
 
-The gate runs workspace dependency validation, `ruff check` on Python scripts, Rust fmt/clippy/rustdoc/build/test, Python unit tests, fp-registry and recall coverage checks, vendored benchmarks, rule-doc sync, internal link validation, mdBook build, and `cargo deny` when installed.
+The gate runs workspace dependency validation, `ruff check` on Python scripts, Rust fmt/clippy/rustdoc/build/test, Python unit tests (via `.venv-eval` so eval metrics tests can import numpy/scikit-learn), fp-registry and recall coverage checks, corpus classification metrics (`eval_metrics.py --split corpus`), vendored benchmarks, rule-doc sync, internal link validation, mdBook build, and `cargo deny` when installed.
 
 Unit tests:
 
@@ -240,6 +240,44 @@ python3 scripts/bucket_rule_diagnostics.py --repo spellbook --rule SQLCOST017 \
 
 Requires a cached checkout with `target/manifest.json` from `benchmark_external_repo.py --repo spellbook`.
 
+## `build_eval_dataset.py`
+
+Seed or refresh the frozen binary-classification dataset at [`tests/benchmarks/eval_labels.toml`](../../../tests/benchmarks/eval_labels.toml).
+
+```bash
+python3 scripts/build_eval_dataset.py --write
+python3 scripts/build_eval_dataset.py --write --sample-negatives 200 --negative-repo spellbook
+```
+
+| Flag | Description |
+| --- | --- |
+| `--write` | Write `eval_labels.toml` |
+| `--out` | Output path (default `tests/benchmarks/eval_labels.toml`) |
+| `--sample-negatives` | Sample non-fired `(path, rule)` pairs from cached external repo |
+| `--negative-seed` | RNG seed for negative sampling |
+| `--negative-repo` | External repo for negative sampling (default `spellbook`) |
+
+## `eval_metrics.py`
+
+Compute binary-classification metrics (precision, recall, F1, MCC, balanced accuracy, PR-AUC, ROC-AUC, Wilson CIs) from the frozen label set. Requires eval dependencies:
+
+```bash
+python3 -m venv .venv-eval
+.venv-eval/bin/pip install -r requirements-eval.txt
+.venv-eval/bin/python scripts/eval_metrics.py --split corpus
+.venv-eval/bin/python scripts/eval_metrics.py --split real
+.venv-eval/bin/python scripts/eval_metrics.py --split all --json-out triage/eval.json
+```
+
+| Flag | Description |
+| --- | --- |
+| `--labels` | Label file (default `tests/benchmarks/eval_labels.toml`) |
+| `--split` | `corpus`, `real`, or `all` |
+| `--cache` | External benchmark cache root |
+| `--json-out` | Write JSON report |
+
+The corpus split is hard-gated in `./scripts/ci_local.sh`. The real split runs behind `--precision`. See [Classification metrics](../../design/classification-metrics.md).
+
 ## `precision_triage.py`
 
 Sample external-repo findings and compute precision against [`fp_registry.toml`](../../../tests/benchmarks/fp_registry.toml) bucket verdicts. Used for Spellbook governance readiness gates (≥90% high, ≥80% overall).
@@ -262,7 +300,7 @@ Exit code `1` when precision gates fail.
 
 ## `recall_report.py`
 
-Validate corpus recall coverage for behavioral rules (SQLCOST001–022 and SQLCOST028–044): at least two `expect_rules` cases and one `forbid_rules` case per rule in [`tests/fixtures/corpus/manifest.toml`](../../../tests/fixtures/corpus/manifest.toml).
+Validate corpus **coverage** for behavioral rules (SQLCOST001–022 and SQLCOST028–044): at least two `expect_rules` cases and one `forbid_rules` case per rule in [`tests/fixtures/corpus/manifest.toml`](../../../tests/fixtures/corpus/manifest.toml). This is not operational recall; use `eval_metrics.py` for precision/recall/MCC/F1.
 
 ```bash
 python3 scripts/recall_report.py

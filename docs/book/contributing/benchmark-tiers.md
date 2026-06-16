@@ -17,9 +17,11 @@ Deterministic mini dbt projects under [`tests/fixtures/corpus/`](../../../tests/
 
 ```bash
 cargo test -p costguard-core --test corpus
+python3 -m venv .venv-eval && .venv-eval/bin/pip install -r requirements-eval.txt
+.venv-eval/bin/python scripts/eval_metrics.py --split corpus
 ```
 
-Register cases in [`tests/fixtures/corpus/manifest.toml`](../../../tests/fixtures/corpus/manifest.toml).
+Register cases in [`tests/fixtures/corpus/manifest.toml`](../../../tests/fixtures/corpus/manifest.toml). Frozen classification labels live in [`tests/benchmarks/eval_labels.toml`](../../../tests/benchmarks/eval_labels.toml); regenerate with `python3 scripts/build_eval_dataset.py --write`. See [Classification metrics](../../design/classification-metrics.md).
 
 ## Layer 2 — Vendored
 

@@ -28,9 +28,20 @@ require_tool() {
   fi
 }
 
+eval_python() {
+  if [ ! -x "${ROOT}/.venv-eval/bin/python" ]; then
+    echo "+ python3 -m venv .venv-eval"
+    python3 -m venv "${ROOT}/.venv-eval"
+    echo "+ .venv-eval/bin/pip install -r requirements-eval.txt"
+    "${ROOT}/.venv-eval/bin/pip" install -q -r "${ROOT}/requirements-eval.txt"
+  fi
+  echo "${ROOT}/.venv-eval/bin/python"
+}
+
 require_tool ruff
 require_tool mdbook
 require_tool cargo-deny
+EVAL_PY="$(eval_python)"
 run python3 scripts/validate_workspace_deps.py
 run ruff check scripts .github/actions/costguard/scripts
 run cargo fmt --check
@@ -38,9 +49,10 @@ run cargo clippy --locked --all-targets --all-features -- -D warnings
 RUSTDOCFLAGS="-D warnings" run cargo doc --workspace --no-deps --locked
 run cargo build --release --locked -p costguard-cli
 run python3 scripts/verify_release_assets.py
-run python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+run "$EVAL_PY" -m unittest discover -s scripts/tests -p 'test_*.py'
 run python3 scripts/validate_fp_registry.py
 run python3 scripts/recall_report.py
+run "$EVAL_PY" scripts/eval_metrics.py --split corpus
 COSTGUARD_BUILD_PROFILE=release run python3 scripts/benchmark_external_repo.py --all-vendored
 run python3 scripts/generate_rule_docs.py --check
 run python3 scripts/check_docs.py
@@ -57,6 +69,8 @@ if [ "$PRECISION_GATE" -eq 1 ]; then
   SPELLBOOK_CACHE="${HOME}/.cache/costguard/benchmarks/spellbook"
   if [ -f "${SPELLBOOK_CACHE}/target/manifest.json" ]; then
     run python3 scripts/precision_triage.py --repo spellbook --sample-size 200
+    EVAL_PY="${EVAL_PY:-$(eval_python)}"
+    run "$EVAL_PY" scripts/eval_metrics.py --split real
   else
     echo "ERROR: spellbook cache missing; precision gate cannot run" >&2
     exit 2

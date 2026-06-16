@@ -1,0 +1,2316 @@
+# Frozen binary-classification labels for Costguard rule evaluation.
+# Regenerate with: python3 scripts/build_eval_dataset.py --write
+
+[meta]
+version = 1
+generated_by = "build_eval_dataset.py"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST001"
+path = "recall_select_star_plain"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_select_star_plain"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST001"
+path = "recall_select_star_qualified"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_select_star_qualified"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST001"
+path = "recall_select_star_staging_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_select_star_staging_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST002"
+path = "recall_repeated_json_jinja"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_repeated_json_jinja"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST002"
+path = "recall_single_file_json_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_single_file_json_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST002"
+path = "repeated_json"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case repeated_json"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST003"
+path = "recall_repeated_regex_jinja"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_repeated_regex_jinja"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST003"
+path = "recall_repeated_regex_plain"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_repeated_regex_plain"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST003"
+path = "recall_single_regex_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_single_regex_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST004"
+path = "config_precedence_conflict"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case config_precedence_conflict"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST004"
+path = "incremental_append"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case incremental_append"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST004"
+path = "incremental_dbt_project"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case incremental_dbt_project"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST004"
+path = "incremental_yaml_config"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case incremental_yaml_config"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST004"
+path = "recall_incremental_no_key_inline"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_incremental_no_key_inline"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST004"
+path = "recall_incremental_no_key_yaml"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_incremental_no_key_yaml"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST005"
+path = "compiled_manifest_parse"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case compiled_manifest_parse"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST005"
+path = "incremental_block_time"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case incremental_block_time"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST005"
+path = "incremental_config_predicates"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case incremental_config_predicates"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST005"
+path = "incremental_date"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case incremental_date"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST005"
+path = "incremental_key"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case incremental_key"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST005"
+path = "incremental_missing"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case incremental_missing"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST005"
+path = "macro_heavy"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case macro_heavy"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST005"
+path = "manifest_graph"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case manifest_graph"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST005"
+path = "recall_incremental_missing_id_predicate"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_incremental_missing_id_predicate"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST005"
+path = "repeated_json"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case repeated_json"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST005"
+path = "spellbook_compiled_parse"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case spellbook_compiled_parse"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST005"
+path = "trino_parse"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case trino_parse"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST006"
+path = "recall_equality_join_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_equality_join_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST006"
+path = "recall_unbounded_join_cross_like"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_unbounded_join_cross_like"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST006"
+path = "recall_unbounded_join_plain"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_unbounded_join_plain"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST007"
+path = "recall_order_by_jinja"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_order_by_jinja"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST007"
+path = "recall_order_by_limited_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_order_by_limited_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST007"
+path = "recall_order_by_plain"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_order_by_plain"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST008"
+path = "recall_distinct_grouped_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_distinct_grouped_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST008"
+path = "recall_distinct_jinja"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_distinct_jinja"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST008"
+path = "recall_distinct_plain"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_distinct_plain"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST009"
+path = "recall_normalization_jinja"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_normalization_jinja"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST009"
+path = "recall_normalization_repeated"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_normalization_repeated"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST009"
+path = "recall_normalization_single_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_normalization_single_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST010"
+path = "recall_python_apply"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_python_apply"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST010"
+path = "recall_python_iterrows"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_python_iterrows"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST010"
+path = "recall_python_vectorized_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_python_vectorized_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST011"
+path = "macro_heavy"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case macro_heavy"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST011"
+path = "recall_source_mart_second"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_source_mart_second"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST011"
+path = "recall_source_via_ref_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_source_via_ref_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST012"
+path = "ast_shape"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case ast_shape"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST012"
+path = "cross_join_comma"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case cross_join_comma"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST012"
+path = "cross_join_date_ranges"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case cross_join_date_ranges"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST012"
+path = "cross_join_date_spine"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case cross_join_date_spine"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST012"
+path = "cross_join_string"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case cross_join_string"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST012"
+path = "cross_join_subquery_fp"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case cross_join_subquery_fp"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST012"
+path = "cross_join_unnest"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case cross_join_unnest"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST012"
+path = "cte_inner_from"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case cte_inner_from"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST012"
+path = "macro_group_by_not_comma"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case macro_group_by_not_comma"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST013"
+path = "recall_window_no_partition"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_window_no_partition"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST013"
+path = "recall_window_no_partition_jinja"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_window_no_partition_jinja"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST013"
+path = "recall_window_partitioned_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_window_partitioned_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST014"
+path = "recall_repeated_cte_jinja"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_repeated_cte_jinja"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST014"
+path = "recall_repeated_cte_plain"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_repeated_cte_plain"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST014"
+path = "recall_single_cte_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_single_cte_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST015"
+path = "recall_cross_file_expensive_a"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_cross_file_expensive_a"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST015"
+path = "recall_cross_file_expensive_b"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_cross_file_expensive_b"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST015"
+path = "recall_cross_file_expensive_c"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_cross_file_expensive_c"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST016"
+path = "compiled_ast_fallback"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case compiled_ast_fallback"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST016"
+path = "partition_date_trunc_bound"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case partition_date_trunc_bound"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST016"
+path = "recall_non_sargable_date"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_non_sargable_date"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST016"
+path = "recall_non_sargable_jinja"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_non_sargable_jinja"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST016"
+path = "recall_sargable_range_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_sargable_range_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST017"
+path = "coalesce_null_safe_join"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case coalesce_null_safe_join"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST017"
+path = "join_key_date_trunc_minute"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case join_key_date_trunc_minute"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST017"
+path = "join_key_staging"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case join_key_staging"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST017"
+path = "join_key_symmetric_lower"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case join_key_symmetric_lower"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST017"
+path = "join_key_wrapped"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case join_key_wrapped"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST017"
+path = "recall_join_key_trim"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_join_key_trim"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST018"
+path = "recall_union_all_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_union_all_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST018"
+path = "recall_union_jinja"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_union_jinja"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST018"
+path = "recall_union_plain"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_union_plain"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST019"
+path = "incremental_source_cte_bound"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case incremental_source_cte_bound"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST019"
+path = "incremental_source_join_on_bound"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case incremental_source_join_on_bound"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST019"
+path = "recall_incremental_source_bounded_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_incremental_source_bounded_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST019"
+path = "recall_incremental_unbounded_source"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_incremental_unbounded_source"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST019"
+path = "recall_incremental_unbounded_source_jinja"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_incremental_unbounded_source_jinja"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST020"
+path = "recall_count_distinct_jinja"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_count_distinct_jinja"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST020"
+path = "recall_count_distinct_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_count_distinct_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST020"
+path = "recall_count_distinct_plain"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_count_distinct_plain"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST021"
+path = "recall_bq_wildcard_bounded_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_bq_wildcard_bounded_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST021"
+path = "recall_bq_wildcard_jinja"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_bq_wildcard_jinja"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST021"
+path = "recall_bq_wildcard_plain"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_bq_wildcard_plain"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST022"
+path = "recall_python_collect"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_python_collect"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST022"
+path = "recall_python_local_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_python_local_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST022"
+path = "recall_python_to_pandas"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_python_to_pandas"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST023"
+path = "metadata_only"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case metadata_only"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST024"
+path = "yaml_parse_error"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case yaml_parse_error"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST025"
+path = "dbt_project_ambiguous"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case dbt_project_ambiguous"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST028"
+path = "recall_missing_partition_plain"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_missing_partition_plain"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST028"
+path = "recall_missing_partition_yaml"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_missing_partition_yaml"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST028"
+path = "recall_partition_cluster_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_partition_cluster_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST029"
+path = "recall_full_refresh_incremental"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_full_refresh_incremental"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST029"
+path = "recall_incremental_config_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_incremental_config_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST029"
+path = "recall_sync_all_columns"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_sync_all_columns"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST030"
+path = "recall_correlated_subquery_jinja"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_correlated_subquery_jinja"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST030"
+path = "recall_correlated_subquery_plain"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_correlated_subquery_plain"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST030"
+path = "recall_uncorrelated_subquery_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_uncorrelated_subquery_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST031"
+path = "recall_leading_wildcard_like_jinja"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_leading_wildcard_like_jinja"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST031"
+path = "recall_leading_wildcard_like_plain"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_leading_wildcard_like_plain"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST031"
+path = "recall_trailing_wildcard_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_trailing_wildcard_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST032"
+path = "recall_and_partition_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_and_partition_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST032"
+path = "recall_or_partition_jinja"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_or_partition_jinja"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST032"
+path = "recall_or_partition_plain"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_or_partition_plain"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST033"
+path = "recall_pattern_join_equality_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_pattern_join_equality_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST033"
+path = "recall_pattern_join_jinja"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_pattern_join_jinja"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST033"
+path = "recall_pattern_join_plain"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_pattern_join_plain"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST034"
+path = "recall_scalar_subquery_jinja"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_scalar_subquery_jinja"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST034"
+path = "recall_scalar_subquery_join_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_scalar_subquery_join_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST034"
+path = "recall_scalar_subquery_plain"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_scalar_subquery_plain"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST035"
+path = "recall_cross_catalog_jinja"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_cross_catalog_jinja"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST035"
+path = "recall_cross_catalog_plain"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_cross_catalog_plain"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST035"
+path = "recall_same_catalog_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_same_catalog_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST036"
+path = "recall_row_explosion_jinja"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_row_explosion_jinja"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST036"
+path = "recall_row_explosion_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_row_explosion_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST036"
+path = "recall_row_explosion_plain"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_row_explosion_plain"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST037"
+path = "recall_in_subquery_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_in_subquery_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST037"
+path = "recall_not_in_subquery_jinja"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_not_in_subquery_jinja"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST037"
+path = "recall_not_in_subquery_plain"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_not_in_subquery_plain"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST038"
+path = "recall_fan_out_join_jinja"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_fan_out_join_jinja"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST038"
+path = "recall_fan_out_join_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_fan_out_join_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST038"
+path = "recall_fan_out_join_plain"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_fan_out_join_plain"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST039"
+path = "recall_heavy_view_jinja"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_heavy_view_jinja"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST039"
+path = "recall_heavy_view_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_heavy_view_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST039"
+path = "recall_heavy_view_plain"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_heavy_view_plain"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST040"
+path = "recall_table_incremental_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_table_incremental_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST040"
+path = "recall_table_should_incremental_jinja"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_table_should_incremental_jinja"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST040"
+path = "recall_table_should_incremental_plain"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_table_should_incremental_plain"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST041"
+path = "recall_bounded_window_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_bounded_window_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST041"
+path = "recall_unbounded_window_jinja"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_unbounded_window_jinja"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST041"
+path = "recall_unbounded_window_plain"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_unbounded_window_plain"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST042"
+path = "recall_bq_missing_partition_jinja"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_bq_missing_partition_jinja"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST042"
+path = "recall_bq_missing_partition_plain"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_bq_missing_partition_plain"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST042"
+path = "recall_bq_partition_filter_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_bq_partition_filter_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST043"
+path = "recall_merge_no_pruning_jinja"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_merge_no_pruning_jinja"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST043"
+path = "recall_merge_no_pruning_plain"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_merge_no_pruning_plain"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST043"
+path = "recall_merge_pruning_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_merge_pruning_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST044"
+path = "recall_non_recursive_cte_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_non_recursive_cte_ok"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST044"
+path = "recall_recursive_cte_jinja"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_recursive_cte_jinja"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST044"
+path = "recall_recursive_cte_plain"
+y_true = 1
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "expect_rules from case recall_recursive_cte_plain"
+
+[[label]]
+repo = "jaffle-shop"
+sha = "08ef1d578de5b55f226aae34f30d7077df8e9f35"
+rule = "SQLCOST002"
+path = "__bucket__:repeated_json"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "repeated JSON extraction in one file is a true positive"
+
+[[label]]
+repo = "jaffle-shop"
+sha = "08ef1d578de5b55f226aae34f30d7077df8e9f35"
+rule = "SQLCOST012"
+path = "__bucket__:comma_join"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "legacy comma join between dbt refs is a true positive"
+
+[[label]]
+repo = "jaffle-shop"
+sha = "08ef1d578de5b55f226aae34f30d7077df8e9f35"
+rule = "SQLCOST012"
+path = "__bucket__:cross_join_explicit"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "explicit cross join in downstream model is a true positive"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST002"
+path = "__bucket__:other"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "residual repeated JSON extraction findings are true positives"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST002"
+path = "__bucket__:repeated_json"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "repeated JSON extraction patterns are valid cost signals"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST003"
+path = "__bucket__:other"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "residual repeated regex findings are true positives"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST003"
+path = "__bucket__:repeated_regex"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "repeated regex operations are valid cost signals"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST004"
+path = "__bucket__:append_strategy"
+y_true = 0
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "append-only incrementals exempt from unique_key requirement"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST004"
+path = "__bucket__:dbt_project_unique_key"
+y_true = 0
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "nested dbt_project.yml folder defaults provide unique_key"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST004"
+path = "__bucket__:yaml_unique_key"
+y_true = 0
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "unique_key from schema YAML satisfies incremental safety"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST005"
+path = "__bucket__:block_time_predicate"
+y_true = 0
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "block_time and related partition columns exempt incremental predicate rule"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST005"
+path = "__bucket__:config_predicate"
+y_true = 0
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "dbt incremental_predicates config and incremental_predicate macro satisfy merge pruning"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST005"
+path = "__bucket__:date_predicate"
+y_true = 0
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "updated_at-style predicates satisfy incremental bound requirement"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST005"
+path = "__bucket__:date_trunc_present"
+y_true = 0
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "date_trunc incremental predicates satisfy pruning requirements"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST005"
+path = "__bucket__:missing_predicate"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "incremental without pruning predicate is a true positive"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST005"
+path = "__bucket__:unique_key_predicate"
+y_true = 0
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "incremental models with bounded key predicates are exempt"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST006"
+path = "__bucket__:equality_join"
+y_true = 0
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "equality join predicates should not fire unbounded join rule"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST006"
+path = "__bucket__:non_equality_join"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "inequality join predicates are true positives in recall corpus"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST006"
+path = "__bucket__:other"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "residual unbounded join findings remain true positives"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST008"
+path = "__bucket__:blind_distinct"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "SELECT DISTINCT in downstream models is a valid cost signal"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST008"
+path = "__bucket__:distinct_with_group_by"
+y_true = 0
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "GROUP BY deduplication should not fire blind DISTINCT rule"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST012"
+path = "__bucket__:comma_join"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "legacy comma joins in Spellbook downstream models are valid cost signals"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST012"
+path = "__bucket__:cross_join_explicit"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "explicit cross joins in Spellbook downstream models are valid high-severity cost signals"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST012"
+path = "__bucket__:cross_join_unnest"
+y_true = 0
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "UNNEST and table-function cross joins are intentional in Spellbook"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST012"
+path = "__bucket__:date_spine_cross_join"
+y_true = 0
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "cross join to date spine CTEs is intentional for incremental windows"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST012"
+path = "__bucket__:group_by_comma_fp"
+y_true = 0
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "explicit JOIN macros must not treat GROUP BY commas as comma joins"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST012"
+path = "__bucket__:other"
+y_true = 0
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "residual cross join findings from subquery shapes are false positives"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST012"
+path = "__bucket__:string_literal_fp"
+y_true = 0
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "CROSS JOIN text inside string literals must not fire"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST012"
+path = "__bucket__:subquery_comma_fp"
+y_true = 0
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "comma after derived subquery is not a cross join"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST013"
+path = "__bucket__:empty_partition_by"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "window functions without PARTITION BY are valid cost signals"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST013"
+path = "__bucket__:other"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "residual unpartitioned window findings are true positives"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST014"
+path = "__bucket__:other"
+y_true = 0
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "single-use CTEs should not fire repeated CTE rule"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST014"
+path = "__bucket__:repeated_cte_ref"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "repeated CTE references indicate reuse worth reviewing"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST015"
+path = "__bucket__:json_expression"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "cross-file expensive expression reuse is a valid project-level signal"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST015"
+path = "__bucket__:normalization_expression"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "cross-file normalization reuse is a valid project-level signal"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST015"
+path = "__bucket__:other"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "residual cross-file expensive expression findings are true positives"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST015"
+path = "__bucket__:single_file_guard"
+y_true = 0
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "single-file JSON extraction should not fire cross-file expensive expression rule"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST016"
+path = "__bucket__:date_trunc_filter"
+y_true = 0
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "bounded date_trunc comparison on partition column is acceptable"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST017"
+path = "__bucket__:cast_on_key"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "asymmetric function-wrapped join key remains a true positive"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST017"
+path = "__bucket__:date_trunc_join"
+y_true = 0
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "minute/hour/day bucket columns joined to date_trunc on event time are acceptable"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST017"
+path = "__bucket__:lower_trim"
+y_true = 0
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "normalization in staging models is expected"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST017"
+path = "__bucket__:other"
+y_true = 0
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "residual join normalization findings after calibration are false positives"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST017"
+path = "__bucket__:symmetric_normalize"
+y_true = 0
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "symmetric lower/upper normalization on both join sides is acceptable"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST018"
+path = "__bucket__:other"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "residual UNION findings without ALL are true positives"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST018"
+path = "__bucket__:union_without_all"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "UNION without ALL in staging paths is a valid cost signal"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST019"
+path = "__bucket__:block_time_in_incremental"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "block_time predicates adjacent to incremental source reads remain true positives in Spellbook triage"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST019"
+path = "__bucket__:block_time_in_source_scope"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "partition predicate in JOIN ON still warrants review but is treated as true positive in Spellbook triage"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST019"
+path = "__bucket__:macro_wrapped"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "incremental source reads wrapped in macros remain true positives in Spellbook triage"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST019"
+path = "__bucket__:no_where_on_source"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "incremental source reads without local partition predicate are true positives"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST019"
+path = "__bucket__:other"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "residual incremental source-bound findings default to true positives in Spellbook triage"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST020"
+path = "__bucket__:count_distinct"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "COUNT(DISTINCT ...) in downstream models is a valid cost signal"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST029"
+path = "__bucket__:other"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "full-refresh-heavy incremental configs are valid cost signals"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST030"
+path = "__bucket__:other"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "correlated subqueries are valid high-severity cost signals"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST031"
+path = "__bucket__:other"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "leading-wildcard LIKE predicates are valid cost signals"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST033"
+path = "__bucket__:other"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "pattern-matching join predicates are valid high-severity cost signals"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST035"
+path = "__bucket__:other"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "cross-catalog joins are valid cost signals on Trino/Databricks"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST036"
+path = "__bucket__:other"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "row-exploding unnest plus dedup is a valid high-severity cost signal"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST037"
+path = "__bucket__:other"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "NOT IN subqueries are valid high-severity cost signals"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST038"
+path = "__bucket__:other"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "fan-out joins on non-unique keys are valid high-severity cost signals"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST039"
+path = "__bucket__:other"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "heavily referenced views are valid medium-severity cost signals"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST040"
+path = "__bucket__:other"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "append-only table models with date columns are valid medium-severity cost signals"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST041"
+path = "__bucket__:other"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "unbounded window frames are valid medium-severity cost signals"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST042"
+path = "__bucket__:other"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "BigQuery models without partition filters are valid medium-severity cost signals"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST043"
+path = "__bucket__:other"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "Snowflake merge models without target pruning are valid medium-severity cost signals"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST044"
+path = "__bucket__:other"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "recursive CTEs are valid medium-severity cost signals"

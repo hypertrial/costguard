@@ -17,6 +17,7 @@ target
 
 .cache/
 __pycache__/
+.venv-eval/
 /book/
 /design/
 /rules/

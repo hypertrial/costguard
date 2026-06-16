@@ -6,6 +6,8 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ### Added
 
+- Binary-classification evaluation pipeline: frozen [`tests/benchmarks/eval_labels.toml`](tests/benchmarks/eval_labels.toml), [`scripts/build_eval_dataset.py`](scripts/build_eval_dataset.py), and [`scripts/eval_metrics.py`](scripts/eval_metrics.py) computing precision/recall/F1/MCC/PR-AUC/ROC-AUC with Wilson CIs (eval deps in [`requirements-eval.txt`](requirements-eval.txt)).
+- Design doc: [Classification metrics](docs/design/classification-metrics.md).
 - `scripts/install.sh` — one-liner release installer for macOS and Linux (`curl | sh`).
 - `costguard init` — scaffolds `.github/workflows/costguard.yml` and starter `costguard.toml` with best-effort warehouse detection.
 - Documentation: [Installation](docs/book/getting-started/installation.md) and [Requirements](docs/book/getting-started/requirements.md); README restructured for install → run → CI onboarding.

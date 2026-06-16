@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Report corpus recall coverage and gate on minimum positive/negative contracts."""
+"""Report corpus recall coverage and gate on minimum positive/negative contracts.
+
+This is a coverage gate (>=2 expect and >=1 forbid corpus cases per rule), not
+operational recall. Real recall/MCC/F1 metrics live in scripts/eval_metrics.py.
+"""
 
 from __future__ import annotations
 
@@ -87,7 +91,8 @@ def main() -> int:
     report = build_report(args.rules, coverage)
 
     print(
-        f"Recall coverage gate: {len(args.rules)} rules, "
+        "Recall coverage gate (not operational recall; see eval_metrics.py): "
+        f"{len(args.rules)} rules, "
         f">= {MIN_EXPECT_CASES} expect and >= {MIN_FORBID_CASES} forbid each"
     )
     for rule in args.rules:

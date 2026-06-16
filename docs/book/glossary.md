@@ -31,6 +31,8 @@ Canonical terminology for Costguard documentation. Prefer these definitions in R
 | **`sql_parse_other_*`** | Parse metrics for non-model SQL (macros, tests, etc.) |
 | **Feature extraction mode** | AST-based shape features when SQL parses; regex fallback otherwise (`feature_extraction_used_ast`) |
 | **FP registry** | Machine-readable false-positive contracts in `tests/benchmarks/fp_registry.toml` |
+| **Eval labels** | Frozen binary-classification dataset in `tests/benchmarks/eval_labels.toml`; seeded from corpus and fp_registry |
+| **Classification metrics** | Precision, recall, F1, MCC, PR-AUC, ROC-AUC from `scripts/eval_metrics.py` |
 | **Max-count ceiling** | External baseline `max_diagnostics_by_rule` — rule counts may shrink, not grow |
 
 ## Benchmark layers (canonical)
