@@ -27,6 +27,8 @@ See [Installation](../getting-started/installation.md).
 
 Shared dbt compile and manifest merge helper used by `benchmark_external_repo.py` and local Spellbook stress tests. Subproject compiles run in parallel when multiple `--compile-dirs` are provided (`COSTGUARD_DBT_COMPILE_JOBS=1` forces serial). Manifest outputs are cached per repo commit and packages fingerprint when `--cache-dir` is set from the benchmark script.
 
+Benchmark repos configure compile via [`tests/benchmarks/repos.toml`](../../../tests/benchmarks/repos.toml): `compile_dbt = true` on all four external repos; `compile_best_effort = true` on mattermost-warehouse and data-infra reuses an existing manifest when offline Snowflake/BigQuery compile fails.
+
 ```bash
 python3 scripts/dbt_compile_for_costguard.py \
   --checkout . \

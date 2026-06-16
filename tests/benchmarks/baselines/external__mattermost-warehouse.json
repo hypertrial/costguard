@@ -1,0 +1,70 @@
+{
+  "commit": "61af2424d790a8f83267f2b9ee12589fd32bcfa9",
+  "kind": "external",
+  "max_rss_bytes": 101089280,
+  "metrics": {
+    "counts": {
+      "manifest": 0,
+      "other": 0,
+      "python": 1,
+      "sql": 240,
+      "yaml": 61
+    },
+    "dbt_project_parse_failures": 0,
+    "diagnostics_by_rule": {
+      "SQLCOST002": 12,
+      "SQLCOST003": 9,
+      "SQLCOST004": 25,
+      "SQLCOST005": 10,
+      "SQLCOST006": 2,
+      "SQLCOST008": 9,
+      "SQLCOST013": 8,
+      "SQLCOST014": 84,
+      "SQLCOST015": 11,
+      "SQLCOST018": 9,
+      "SQLCOST019": 56,
+      "SQLCOST027": 235,
+      "SQLCOST030": 1,
+      "SQLCOST031": 4,
+      "SQLCOST033": 5,
+      "SQLCOST037": 7,
+      "SQLCOST039": 2,
+      "SQLCOST041": 1
+    },
+    "diagnostics_by_severity": {
+      "high": 104,
+      "info": 235,
+      "low": 84,
+      "med": 67
+    },
+    "metadata_only_scan": false,
+    "metadata_warnings": 0,
+    "new_findings": 490,
+    "sql_parse_compiled_failures": 0,
+    "sql_parse_compiled_total": 0,
+    "sql_parse_failures": 235,
+    "sql_parse_other_failures": 5,
+    "sql_parse_other_total": 5,
+    "sql_parse_total": 235,
+    "yaml_parse_failures": 0
+  },
+  "runtime_max_ms": 136,
+  "runtime_median_ms": 135,
+  "runtime_samples_ms": [
+    135,
+    131,
+    136
+  ],
+  "target": "external/mattermost-warehouse",
+  "thresholds": {
+    "max_diagnostics_by_rule": {},
+    "max_parse_failure_delta": 50,
+    "max_parse_failure_rate": 1.0,
+    "max_rss_bytes": 1073741824,
+    "max_runtime_max_ms": 2136,
+    "max_runtime_median_ms": 1135,
+    "max_sql_parse_compiled_failures": 0
+  },
+  "version": 2,
+  "warehouse": "snowflake"
+}

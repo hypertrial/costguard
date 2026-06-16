@@ -61,6 +61,8 @@ flowchart TD
    ```
    Default cache: `~/.cache/costguard/benchmarks/{repo}/`. Pins are in [`tests/benchmarks/repos.toml`](../../tests/benchmarks/repos.toml).
 
+   All four benchmark repos now set `compile_dbt = true`. Spellbook and jaffle-shop compile offline with dummy Trino/DuckDB profiles. **mattermost-warehouse** and **data-infra** set `compile_best_effort = true`: when Snowflake/BigQuery auth fails offline, the harness reuses any existing `target/manifest.json` instead of aborting the scan. Prefer compiled SQL for adjudication; reserve `class = "exempt"` for genuine repo idioms, not regex-only artifacts masked because compile was disabled.
+
 2. **Read compiled SQL**, not raw Jinja, for dbt models. All triage scripts use `read_sql_for_diagnostic()` — manifest `compiled_code` when available.
 
 3. **Rule rubric** for the rule under review: [`docs/rules/SQLCOST*.md`](../rules/).
@@ -309,6 +311,12 @@ Work completed in two phases; full narratives are linked, not duplicated here.
 - **Doc:** [Rule TP coverage](rule-tp-coverage.md)
 - **Fixes:** SQLCOST016 range-only `date()` exempt; SQLCOST017 coalesce/time-bucket joins; SQLCOST001/004/005/007/028 registry `other` buckets; platform rules on data-infra (SQLCOST028, SQLCOST042)
 - **Outcome:** 44/44 PASS; evidence in [`tests/benchmarks/rule_tp_evidence.json`](../../tests/benchmarks/rule_tp_evidence.json)
+
+### Phase 3 — Root-cause FP reduction (compile + SQLCOST006)
+
+- **Harness:** `compile_dbt = true` for mattermost-warehouse and data-infra; `compile_best_effort` tolerant compile in [`scripts/dbt_compile_for_costguard.py`](../../scripts/dbt_compile_for_costguard.py)
+- **Rule fixes:** SQLCOST006 emits `confidence: low` on regex-only extraction; symmetric coalesce/cast equality keys in AST; subquery join `ON` detection after balanced `(`…`)`
+- **Outcome:** SQLCOST006 total 99→98, exempt 32→31; 44/44 census PASS
 
 ### Optional second rater
 

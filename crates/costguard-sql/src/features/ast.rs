@@ -1,6 +1,7 @@
 use super::join_heuristics::{has_equality_predicate, is_date_spine_table};
 use super::join_predicates::{
-    expr_column_name, function_name, join_predicate_has_function_on_key, FunctionArgListExt,
+    expr_column_name, function_name, is_symmetric_wrapped_join_equality,
+    join_predicate_has_function_on_key, FunctionArgListExt,
 };
 use super::subquery::{
     extract_correlated_subqueries_in_expr, extract_not_in_subqueries_in_expr,
@@ -519,6 +520,9 @@ fn join_equality_keys(expr: &Expr) -> Vec<String> {
             op: BinaryOperator::Eq,
             right,
         } => {
+            if is_symmetric_wrapped_join_equality(left, right) {
+                return vec!["wrapped_equality".into()];
+            }
             let mut keys = Vec::new();
             if let Some(key) = expr_column_name(left) {
                 keys.push(key);

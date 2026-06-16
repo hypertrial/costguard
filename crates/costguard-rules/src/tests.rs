@@ -1,6 +1,6 @@
 use crate::{ProjectIndexes, RuleContext, RuleOverrides, RuleRegistry};
 use costguard_dbt::extract_sql_features;
-use costguard_diagnostics::{apply_suppressions, LineIndex};
+use costguard_diagnostics::{apply_suppressions, Confidence, LineIndex};
 use costguard_scanner::{FileKind, ProjectFile};
 use costguard_sql::Platform;
 use costguard_sql::{analyze_sql, SqlDocument};
@@ -26,7 +26,10 @@ fn python_file(path: &str, text: &str) -> ProjectFile {
     }
 }
 
-fn run_for_file(file: &ProjectFile, docs: &[SqlDocument]) -> Vec<String> {
+fn run_diagnostics_for_file(
+    file: &ProjectFile,
+    docs: &[SqlDocument],
+) -> Vec<costguard_diagnostics::Diagnostic> {
     let registry = RuleRegistry::default_rules();
     let indexes = ProjectIndexes::from_sql_documents(docs);
     let sql = docs.iter().find(|doc| doc.path == file.path);
@@ -40,6 +43,10 @@ fn run_for_file(file: &ProjectFile, docs: &[SqlDocument]) -> Vec<String> {
         overrides: &RuleOverrides::default(),
     });
     apply_suppressions(&file.text, diagnostics)
+}
+
+fn run_for_file(file: &ProjectFile, docs: &[SqlDocument]) -> Vec<String> {
+    run_diagnostics_for_file(file, docs)
         .into_iter()
         .map(|diagnostic| diagnostic.rule_id)
         .collect()
@@ -473,6 +480,49 @@ fn dbt_macros_path_skips_unbounded_join_rule() {
     let doc = analyze(&file);
     let ids = run_for_file(&file, &[doc]);
     assert!(!ids.contains(&"SQLCOST006".to_string()));
+}
+
+#[test]
+fn coalesce_cast_both_sides_equality_join_is_not_unbounded() {
+    let file = sql_file(
+        "models/marts/fct.sql",
+        "select * from orders o join users u on coalesce(o.user_id, 0) = coalesce(u.user_id, 0)",
+    );
+    let doc = analyze(&file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(!ids.contains(&"SQLCOST006".to_string()));
+}
+
+#[test]
+fn regex_only_unbounded_join_emits_low_confidence() {
+    let file = sql_file(
+        "models/marts/fct.sql",
+        "{{ not_parsable }} select * from a join b",
+    );
+    let doc = analyze(&file);
+    assert!(!doc.feature_extraction_used_ast);
+    let diagnostics = run_diagnostics_for_file(&file, &[doc]);
+    let sqlcost006 = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.rule_id == "SQLCOST006")
+        .expect("expected SQLCOST006");
+    assert_eq!(sqlcost006.confidence, Confidence::Low);
+}
+
+#[test]
+fn ast_equality_join_emits_medium_confidence_when_rule_fires() {
+    let file = sql_file(
+        "models/marts/fct.sql",
+        "select * from a join b on a.id > b.id",
+    );
+    let doc = analyze(&file);
+    assert!(doc.feature_extraction_used_ast);
+    let diagnostics = run_diagnostics_for_file(&file, &[doc]);
+    let sqlcost006 = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.rule_id == "SQLCOST006")
+        .expect("expected SQLCOST006");
+    assert_eq!(sqlcost006.confidence, Confidence::Medium);
 }
 
 #[test]

@@ -1601,6 +1601,28 @@ weight = 1.0
 notes = "expect_rules from case recall_recursive_cte_plain"
 
 [[label]]
+repo = "data-infra"
+sha = "5d9dd8849fa0a4830d33e6783a4d152f35fdc71f"
+rule = "SQLCOST006"
+path = "__bucket__:equality_join"
+y_true = 0
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "equality join predicates should not fire unbounded join rule"
+
+[[label]]
+repo = "data-infra"
+sha = "5d9dd8849fa0a4830d33e6783a4d152f35fdc71f"
+rule = "SQLCOST015"
+path = "__bucket__:regex_expression"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "cross-file regex expression reuse is a valid project-level signal"
+
+[[label]]
 repo = "jaffle-shop"
 sha = "08ef1d578de5b55f226aae34f30d7077df8e9f35"
 rule = "SQLCOST002"
@@ -1632,6 +1654,28 @@ split = "real"
 source = "seed:fp_registry"
 weight = 1.0
 notes = "explicit cross join in downstream model is a true positive"
+
+[[label]]
+repo = "mattermost-warehouse"
+sha = "61af2424d790a8f83267f2b9ee12589fd32bcfa9"
+rule = "SQLCOST006"
+path = "__bucket__:equality_join"
+y_true = 0
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "equality join predicates should not fire unbounded join rule"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST001"
+path = "__bucket__:other"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "SELECT * in downstream models is a valid cost signal"
 
 [[label]]
 repo = "spellbook"
@@ -1703,6 +1747,17 @@ notes = "nested dbt_project.yml folder defaults provide unique_key"
 repo = "spellbook"
 sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
 rule = "SQLCOST004"
+path = "__bucket__:other"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "residual incremental unique_key findings are true positives"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST004"
 path = "__bucket__:yaml_unique_key"
 y_true = 0
 split = "real"
@@ -1769,6 +1824,17 @@ notes = "incremental without pruning predicate is a true positive"
 repo = "spellbook"
 sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
 rule = "SQLCOST005"
+path = "__bucket__:other"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "residual incremental predicate findings default to true positives"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST005"
 path = "__bucket__:unique_key_predicate"
 y_true = 0
 split = "real"
@@ -1812,6 +1878,17 @@ notes = "residual unbounded join findings remain true positives"
 [[label]]
 repo = "spellbook"
 sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST007"
+path = "__bucket__:other"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "ORDER BY in models without LIMIT is a valid cost signal"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
 rule = "SQLCOST008"
 path = "__bucket__:blind_distinct"
 y_true = 1
@@ -1830,6 +1907,17 @@ split = "real"
 source = "seed:fp_registry"
 weight = 1.0
 notes = "GROUP BY deduplication should not fire blind DISTINCT rule"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST008"
+path = "__bucket__:other"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "residual DISTINCT findings in macro templates default to true positives"
 
 [[label]]
 repo = "spellbook"
@@ -2000,6 +2088,17 @@ notes = "residual cross-file expensive expression findings are true positives"
 repo = "spellbook"
 sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
 rule = "SQLCOST015"
+path = "__bucket__:regex_expression"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "cross-file regex expression reuse is a valid project-level signal"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST015"
 path = "__bucket__:single_file_guard"
 y_true = 0
 split = "real"
@@ -2028,6 +2127,17 @@ split = "real"
 source = "seed:fp_registry"
 weight = 1.0
 notes = "asymmetric function-wrapped join key remains a true positive"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST017"
+path = "__bucket__:coalesce_key"
+y_true = 0
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "coalesce null-safe join keys in staging or enrichment paths are acceptable"
 
 [[label]]
 repo = "spellbook"
@@ -2160,6 +2270,17 @@ split = "real"
 source = "seed:fp_registry"
 weight = 1.0
 notes = "COUNT(DISTINCT ...) in downstream models is a valid cost signal"
+
+[[label]]
+repo = "spellbook"
+sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
+rule = "SQLCOST028"
+path = "__bucket__:other"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "mart models missing partition or cluster config are valid cost signals"
 
 [[label]]
 repo = "spellbook"

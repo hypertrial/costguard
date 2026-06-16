@@ -42,10 +42,11 @@ def write_dummy_profiles(
     profile_name: str,
     target: str,
     profile_type: str,
+    force: bool = False,
 ) -> None:
     profiles_dir.mkdir(parents=True, exist_ok=True)
     profiles_file = profiles_dir / "profiles.yml"
-    if profiles_file.exists():
+    if profiles_file.exists() and not force:
         return
     credentials = {
         "bigquery": """      method: oauth
@@ -209,6 +210,7 @@ def compile_dbt_project(
     profiles_rel: str = ".",
     continue_on_deps_failure: bool = True,
     dbt_vars: str = "",
+    best_effort: bool = False,
 ) -> Path:
     if not (project_dir / "dbt_project.yml").exists():
         raise SystemExit(f"compile enabled but no dbt_project.yml in {project_dir}")
@@ -225,6 +227,7 @@ def compile_dbt_project(
             profile_name=profile_name,
             target=target,
             profile_type=profile_type,
+            force=resolved_profiles_dir.name == ".costguard-profiles",
         )
 
     env = os.environ.copy()
@@ -245,7 +248,16 @@ def compile_dbt_project(
         else:
             raise SystemExit(message)
 
-    compile_cmd = [str(dbt), "compile", "--project-dir", str(project_dir), "--target", target]
+    compile_cmd = [
+        str(dbt),
+        "compile",
+        "--project-dir",
+        str(project_dir),
+        "--target",
+        target,
+        "--no-introspect",
+        "--no-populate-cache",
+    ]
     if dbt_vars.strip():
         compile_cmd.extend(["--vars", dbt_vars])
     compile_proc = subprocess.run(
@@ -256,13 +268,20 @@ def compile_dbt_project(
         text=True,
         check=False,
     )
+    manifest = project_dir / "target" / "manifest.json"
     if compile_proc.returncode != 0:
+        if best_effort and manifest.is_file():
+            print(
+                f"warning: dbt compile failed for {project_dir} "
+                f"(exit {compile_proc.returncode}); using existing manifest",
+                file=sys.stderr,
+            )
+            return manifest
         raise SystemExit(
             f"dbt compile failed for {project_dir} (exit {compile_proc.returncode}):\n"
             f"{compile_proc.stderr.strip()}"
         )
 
-    manifest = project_dir / "target" / "manifest.json"
     if not manifest.exists():
         raise SystemExit(f"dbt compile succeeded but manifest missing at {manifest}")
     return manifest
@@ -348,7 +367,7 @@ def compile_jobs(count: int) -> int:
     return max(1, min(count, os.cpu_count() or 4, 5))
 
 
-def _compile_subproject_worker(args: tuple[str, str, str, str, str, str, str, bool, str]) -> tuple[str, str]:
+def _compile_subproject_worker(args: tuple[str, str, str, str, str, str, str, bool, str, bool]) -> tuple[str, str]:
     (
         checkout_s,
         rel,
@@ -359,6 +378,7 @@ def _compile_subproject_worker(args: tuple[str, str, str, str, str, str, str, bo
         profiles_rel,
         continue_on_deps_failure,
         dbt_vars,
+        best_effort,
     ) = args
     checkout = Path(checkout_s)
     project_dir = (checkout / rel).resolve()
@@ -373,6 +393,7 @@ def _compile_subproject_worker(args: tuple[str, str, str, str, str, str, str, bo
         profiles_rel=profiles_rel,
         continue_on_deps_failure=continue_on_deps_failure,
         dbt_vars=dbt_vars,
+        best_effort=best_effort,
     )
     return rel, str(manifest)
 
@@ -388,6 +409,7 @@ def compile_subprojects_parallel(
     profiles_rel: str,
     continue_on_deps_failure: bool,
     dbt_vars: str,
+    best_effort: bool = False,
 ) -> list[tuple[Path, str]]:
     profiles_dir_s = str(profiles_dir) if profiles_dir is not None else ""
     worker_args = [
@@ -401,6 +423,7 @@ def compile_subprojects_parallel(
             profiles_rel,
             continue_on_deps_failure,
             dbt_vars,
+            best_effort,
         )
         for rel in compile_dirs
     ]
@@ -454,6 +477,7 @@ def compile_dbt_for_costguard(
     constraints_file: Path | None = None,
     dbt_vars: str = "",
     use_existing_manifest: bool = False,
+    best_effort: bool = False,
 ) -> tuple[Path, str]:
     resolved_profile_type = profile_type or profile_type_from_adapter(adapter_package)
     dirs = compile_dirs or []
@@ -468,7 +492,6 @@ def compile_dbt_for_costguard(
         and cache_dir is not None
         and repo_name
         and commit
-        and dirs
     ):
         packages_fp = packages_fingerprint(
             checkout,
@@ -502,6 +525,7 @@ def compile_dbt_for_costguard(
             profiles_rel=profiles_rel,
             continue_on_deps_failure=continue_on_deps_failure,
             dbt_vars=dbt_vars,
+            best_effort=best_effort,
         )
         merge_manifests(entries, manifest_out)
     else:
@@ -516,6 +540,7 @@ def compile_dbt_for_costguard(
             profiles_rel=profiles_rel,
             continue_on_deps_failure=continue_on_deps_failure,
             dbt_vars=dbt_vars,
+            best_effort=best_effort,
         )
         try:
             project_rel = str(resolved_project.relative_to(checkout))
@@ -526,7 +551,7 @@ def compile_dbt_for_costguard(
         else:
             write_json(manifest_out, json.loads(manifest.read_text(encoding="utf-8")))
 
-    if cache_dir is not None and repo_name and commit and dirs:
+    if cache_dir is not None and repo_name and commit:
         packages_fp = packages_fingerprint(
             checkout,
             dirs,
@@ -560,22 +585,39 @@ def compile_dbt_repo(
     if smoke:
         compile_dirs = repo.get("smoke_compile_dirs") or compile_dirs
 
+    if compile_dirs:
+        project_dir = (checkout / compile_dirs[0]).resolve()
+    else:
+        project_dir = (checkout / repo.get("dbt_project_dir", ".")).resolve()
+    manifest_out = checkout / "target" / "manifest.json"
+    if manifest_out.is_file() and not force_compile:
+        return "existing"
+    profiles_dir = checkout / ".costguard-profiles"
+    profile_name = read_dbt_profile_name(project_dir)
+    write_dummy_profiles(
+        profiles_dir,
+        profile_name=profile_name,
+        target=repo.get("dbt_target", "dev"),
+        profile_type=repo.get("dbt_profile_type", "generic"),
+        force=True,
+    )
+
     _, compile_cache = compile_dbt_for_costguard(
         checkout,
         compile_dirs=compile_dirs,
-        project_dir=(checkout / repo.get("dbt_project_dir", ".")).resolve()
-        if not compile_dirs
-        else None,
-        manifest_out=checkout / "target" / "manifest.json",
+        project_dir=project_dir if not compile_dirs else None,
+        manifest_out=manifest_out,
         adapter_package=repo.get("dbt_adapter", "dbt-trino"),
         profile_type=repo.get("dbt_profile_type"),
         target=repo.get("dbt_target", "dev"),
+        profiles_dir=profiles_dir,
         profiles_rel=repo.get("dbt_profiles_dir", "."),
         cache_dir=cache_dir,
         repo_name=repo["name"],
         commit=repo["commit"],
         force_compile=force_compile,
         cache_scope="smoke" if smoke else "",
+        best_effort=bool(repo.get("compile_best_effort", False)),
     )
     return compile_cache
 

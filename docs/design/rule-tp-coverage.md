@@ -1,7 +1,7 @@
 # Rule TP coverage (all benchmark repos)
 
 Generated: 2026-06-16  
-Corpus: spellbook (Trino), jaffle-shop (duckdb), mattermost-warehouse (Snowflake, raw), data-infra (BigQuery, raw).  
+Corpus: spellbook (Trino), jaffle-shop (duckdb), mattermost-warehouse (Snowflake), data-infra (BigQuery). All four repos set `compile_dbt = true`; Snowflake/BigQuery use `compile_best_effort = true` when offline dummy profiles cannot reach the warehouse.  
 Pass bar: **≤100 cost-ranked examples per rule** (100% if fewer) with **0 `fp_bug` + 0 `unknown`** in the examined sample.  
 Tool: [`scripts/rule_tp_census.py`](../../scripts/rule_tp_census.py); evidence: [`tests/benchmarks/rule_tp_evidence.json`](../../tests/benchmarks/rule_tp_evidence.json).
 
@@ -43,30 +43,30 @@ Exit code `0` means 44/44 PASS. Refresh this doc's scoreboard after intentional 
 | SQLCOST001 | 441 | 100 | 100 | 0 | 0 | 0 | sampled_100_of_441 |
 | SQLCOST002 | 396 | 100 | 100 | 0 | 0 | 0 | sampled_100_of_396 |
 | SQLCOST003 | 32 | 32 | 32 | 0 | 0 | 0 | fully_examined |
-| SQLCOST004 | 60 | 60 | 60 | 0 | 0 | 0 | fully_examined |
-| SQLCOST005 | 2 | 2 | 2 | 0 | 0 | 0 | fully_examined |
-| SQLCOST006 | 99 | 99 | 67 | 32 | 0 | 0 | fully_examined |
-| SQLCOST007 | 58 | 58 | 58 | 0 | 0 | 0 | fully_examined |
+| SQLCOST004 | 85 | 85 | 85 | 0 | 0 | 0 | fully_examined |
+| SQLCOST005 | 12 | 12 | 12 | 0 | 0 | 0 | fully_examined |
+| SQLCOST006 | 98 | 98 | 67 | 31 | 0 | 0 | fully_examined |
+| SQLCOST007 | 57 | 57 | 57 | 0 | 0 | 0 | fully_examined |
 | SQLCOST008 | 443 | 100 | 100 | 0 | 0 | 0 | sampled_100_of_443 |
 | SQLCOST009 | 0 | 0 | 0 | 0 | 0 | 0 | vacuous_clean |
 | SQLCOST010 | 0 | 0 | 0 | 0 | 0 | 0 | vacuous_clean |
 | SQLCOST011 | 0 | 0 | 0 | 0 | 0 | 0 | vacuous_clean |
 | SQLCOST012 | 40 | 40 | 20 | 20 | 0 | 0 | fully_examined |
 | SQLCOST013 | 223 | 100 | 100 | 0 | 0 | 0 | sampled_100_of_223 |
-| SQLCOST014 | 602 | 100 | 96 | 4 | 0 | 0 | sampled_100_of_602 |
+| SQLCOST014 | 601 | 100 | 96 | 4 | 0 | 0 | sampled_100_of_601 |
 | SQLCOST015 | 346 | 100 | 100 | 0 | 0 | 0 | sampled_100_of_346 |
 | SQLCOST016 | 0 | 0 | 0 | 0 | 0 | 0 | vacuous_clean |
 | SQLCOST017 | 3 | 3 | 3 | 0 | 0 | 0 | fully_examined |
 | SQLCOST018 | 378 | 100 | 100 | 0 | 0 | 0 | sampled_100_of_378 |
-| SQLCOST019 | 67 | 67 | 67 | 0 | 0 | 0 | fully_examined |
+| SQLCOST019 | 123 | 100 | 100 | 0 | 0 | 0 | sampled_100_of_123 |
 | SQLCOST020 | 22 | 22 | 22 | 0 | 0 | 0 | fully_examined |
 | SQLCOST021 | 0 | 0 | 0 | 0 | 0 | 0 | vacuous_clean |
 | SQLCOST022 | 0 | 0 | 0 | 0 | 0 | 0 | vacuous_clean |
-| SQLCOST023 | 2 | 2 | 0 | 0 | 0 | 2 | infrastructure_na |
+| SQLCOST023 | 0 | 0 | 0 | 0 | 0 | 0 | infrastructure_na |
 | SQLCOST024 | 0 | 0 | 0 | 0 | 0 | 0 | infrastructure_na |
 | SQLCOST025 | 0 | 0 | 0 | 0 | 0 | 0 | infrastructure_na |
 | SQLCOST026 | 1 | 1 | 0 | 0 | 0 | 1 | infrastructure_na |
-| SQLCOST027 | 598 | 100 | 0 | 0 | 0 | 100 | infrastructure_na |
+| SQLCOST027 | 599 | 100 | 0 | 0 | 0 | 100 | infrastructure_na |
 | SQLCOST028 | 171 | 100 | 100 | 0 | 0 | 0 | sampled_100_of_171 |
 | SQLCOST029 | 114 | 100 | 100 | 0 | 0 | 0 | sampled_100_of_114 |
 | SQLCOST030 | 7 | 7 | 7 | 0 | 0 | 0 | fully_examined |
@@ -77,8 +77,8 @@ Exit code `0` means 44/44 PASS. Refresh this doc's scoreboard after intentional 
 | SQLCOST035 | 0 | 0 | 0 | 0 | 0 | 0 | vacuous_clean |
 | SQLCOST036 | 193 | 100 | 100 | 0 | 0 | 0 | sampled_100_of_193 |
 | SQLCOST037 | 78 | 78 | 78 | 0 | 0 | 0 | fully_examined |
-| SQLCOST038 | 2021 | 100 | 100 | 0 | 0 | 0 | sampled_100_of_2021 |
-| SQLCOST039 | 71 | 71 | 71 | 0 | 0 | 0 | fully_examined |
+| SQLCOST038 | 2022 | 100 | 100 | 0 | 0 | 0 | sampled_100_of_2022 |
+| SQLCOST039 | 74 | 74 | 74 | 0 | 0 | 0 | fully_examined |
 | SQLCOST040 | 12 | 12 | 12 | 0 | 0 | 0 | fully_examined |
 | SQLCOST041 | 62 | 62 | 62 | 0 | 0 | 0 | fully_examined |
 | SQLCOST042 | 604 | 100 | 100 | 0 | 0 | 0 | sampled_100_of_604 |
@@ -106,7 +106,7 @@ Rules may PASS with `exempt > 0` when registry rows use `class = "exempt"` for r
 
 | Rule | Exempt (in sample) | Typical buckets |
 | --- | --- | --- |
-| SQLCOST006 | 32 | `equality_join` (subquery joins with distant `ON` clauses) |
+| SQLCOST006 | 31 | `equality_join` (residual regex-only / Jinja-heavy joins; AST + subquery-`ON` detection reduced mattermost FPs) |
 | SQLCOST012 | 20 | `cross_join_unnest`, `date_spine_cross_join`, `group_by_comma_fp`, … |
 | SQLCOST014 | 4 | `other` (single-use CTE homonyms) |
 

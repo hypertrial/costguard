@@ -1,7 +1,7 @@
 {
   "commit": "5d9dd8849fa0a4830d33e6783a4d152f35fdc71f",
   "kind": "external",
-  "max_rss_bytes": 170819584,
+  "max_rss_bytes": 240779264,
   "metrics": {
     "counts": {
       "manifest": 0,
@@ -12,35 +12,39 @@
     },
     "dbt_project_parse_failures": 0,
     "diagnostics_by_rule": {
-      "SQLCOST001": 922,
-      "SQLCOST002": 20,
+      "SQLCOST001": 434,
+      "SQLCOST002": 4,
       "SQLCOST003": 6,
       "SQLCOST004": 59,
       "SQLCOST005": 1,
-      "SQLCOST006": 148,
-      "SQLCOST007": 140,
-      "SQLCOST008": 34,
-      "SQLCOST012": 15,
+      "SQLCOST006": 57,
+      "SQLCOST007": 56,
+      "SQLCOST008": 29,
+      "SQLCOST012": 14,
       "SQLCOST013": 90,
-      "SQLCOST014": 135,
-      "SQLCOST015": 90,
-      "SQLCOST018": 24,
-      "SQLCOST020": 50,
-      "SQLCOST023": 1,
+      "SQLCOST014": 93,
+      "SQLCOST015": 5,
+      "SQLCOST018": 13,
+      "SQLCOST020": 21,
       "SQLCOST027": 363,
       "SQLCOST028": 171,
       "SQLCOST029": 1,
-      "SQLCOST033": 2
+      "SQLCOST033": 2,
+      "SQLCOST036": 10,
+      "SQLCOST039": 2,
+      "SQLCOST040": 12,
+      "SQLCOST041": 6,
+      "SQLCOST042": 604
     },
     "diagnostics_by_severity": {
-      "high": 297,
-      "info": 364,
-      "low": 275,
-      "med": 1336
+      "high": 266,
+      "info": 363,
+      "low": 149,
+      "med": 1275
     },
-    "metadata_only_scan": true,
-    "metadata_warnings": 1,
-    "new_findings": 2272,
+    "metadata_only_scan": false,
+    "metadata_warnings": 0,
+    "new_findings": 2053,
     "sql_parse_compiled_failures": 0,
     "sql_parse_compiled_total": 0,
     "sql_parse_failures": 363,
@@ -49,12 +53,12 @@
     "sql_parse_total": 635,
     "yaml_parse_failures": 0
   },
-  "runtime_max_ms": 261,
-  "runtime_median_ms": 250,
+  "runtime_max_ms": 331,
+  "runtime_median_ms": 323,
   "runtime_samples_ms": [
-    261,
-    241,
-    250
+    306,
+    331,
+    323
   ],
   "target": "external/data-infra",
   "thresholds": {

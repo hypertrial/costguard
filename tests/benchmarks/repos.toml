@@ -44,7 +44,9 @@ required = false
 url = "https://github.com/mattermost/mattermost-data-warehouse.git"
 commit = "61af2424d790a8f83267f2b9ee12589fd32bcfa9"
 warehouse = "snowflake"
-compile_dbt = false
+# compile_best_effort: offline dummy profile; keeps partial manifest if warehouse auth fails
+compile_dbt = true
+compile_best_effort = true
 dbt_adapter = "dbt-snowflake"
 dbt_profile_type = "snowflake"
 dbt_project_dir = "transform/snowflake-dbt"
@@ -59,7 +61,9 @@ required = false
 url = "https://github.com/cal-itp/data-infra.git"
 commit = "5d9dd8849fa0a4830d33e6783a4d152f35fdc71f"
 warehouse = "bigquery"
-compile_dbt = false
+# compile_best_effort: offline dummy profile; keeps partial manifest if ADC auth fails
+compile_dbt = true
+compile_best_effort = true
 dbt_adapter = "dbt-bigquery"
 dbt_profile_type = "bigquery"
 dbt_project_dir = "warehouse"

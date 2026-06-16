@@ -1,5 +1,9 @@
 use sqlparser::ast::{BinaryOperator, Expr, Function, FunctionArg, FunctionArguments};
 
+pub(crate) fn is_symmetric_wrapped_join_equality(left: &Expr, right: &Expr) -> bool {
+    is_symmetric_normalization_eq(left, right) || is_symmetric_hash_eq(left, right)
+}
+
 pub(crate) fn join_predicate_has_function_on_key(expr: &Expr) -> bool {
     match expr {
         Expr::BinaryOp {

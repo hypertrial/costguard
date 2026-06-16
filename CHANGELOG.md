@@ -20,6 +20,8 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ### Changed
 
+- **Benchmark compile**: all four repos in [`tests/benchmarks/repos.toml`](tests/benchmarks/repos.toml) set `compile_dbt = true`. mattermost-warehouse and data-infra use `compile_best_effort = true` with offline dummy Snowflake/BigQuery profiles. [`scripts/dbt_compile_for_costguard.py`](scripts/dbt_compile_for_costguard.py) reuses existing manifests on compile failure, extends manifest cache to single-project repos, and passes `--no-introspect --no-populate-cache` for offline compile attempts.
+- SQLCOST006: `confidence: low` when feature extraction is regex-only; symmetric coalesce/cast/hash equality keys in AST; subquery join `ON` detection after balanced parenthesis scan (reduces distant-`ON` false positives).
 - **FP-elimination census**: `rule_tp_census.py` now cost-ranks up to 100 findings per rule (100% if fewer) and passes only when the examined sample has 0 `fp_bug` and 0 `unknown`. Registry `verdict = "fp"` rows require `class = "exempt"` or `"bug"`. Evidence JSON exports `examined`, `exempt`, `fp_bug`, and `examined_examples`.
 - SQLCOST006: extended raw-text `ON … =` fallback window for subquery joins; skip `dbt_macros/` paths.
 - SQLCOST008: skip blind-DISTINCT rule for dbt macro paths.
