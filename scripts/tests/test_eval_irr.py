@@ -27,16 +27,19 @@ from llm_judge_lib import (  # noqa: E402
     JudgeManifest,
     JudgeRecord,
     RuleMetadata,
+    build_grouped_messages,
     build_grouped_prompt,
+    build_messages,
     build_prompt,
     cache_key,
     candidate_sort_key,
-    decide_verdict,
     load_judge_records,
     load_manifest,
+    messages_sha256,
     pack_sql,
     pack_sql_for_file,
     parse_grouped_verdicts,
+    verdict_from_letter,
     write_judge_records,
     write_manifest,
 )
@@ -69,7 +72,7 @@ def sample_record(**overrides: object) -> JudgeRecord:
         "model_sha256": "modelsha",
         "cache_key": "",
         "created_at": "2026-06-16T00:00:00+00:00",
-        "logprobs": {"A": -2.0, "B": -0.4, "C": -1.8},
+        "logprobs": {},
         "rule_description_sha": "ruledesc",
         "sql_sha": "sqlsha",
         "finding_span": "12:1-12",
@@ -107,15 +110,23 @@ def make_candidate(path: str, rule: str, line: int) -> CandidateFinding:
 
 
 class JudgeLibTests(unittest.TestCase):
-    def test_decide_verdict_margin_abstains(self) -> None:
-        verdict, reason = decide_verdict(-1.0, -1.2, "A")
+    def test_verdict_from_letter_c_abstains(self) -> None:
+        verdict, reason = verdict_from_letter("C")
         self.assertEqual(verdict, "unsure")
-        self.assertEqual(reason, "logprob_margin")
+        self.assertEqual(reason, "model_unsure")
 
-    def test_decide_verdict_clear_winner(self) -> None:
-        verdict, reason = decide_verdict(-0.2, -2.0, "A")
+    def test_verdict_from_letter_maps_tp_fp(self) -> None:
+        verdict, reason = verdict_from_letter("A")
         self.assertEqual(verdict, "tp")
         self.assertIsNone(reason)
+        verdict, reason = verdict_from_letter("B")
+        self.assertEqual(verdict, "fp")
+        self.assertIsNone(reason)
+
+    def test_messages_sha256_stable(self) -> None:
+        digest = messages_sha256("system", "user")
+        self.assertEqual(len(digest), 64)
+        self.assertEqual(digest, messages_sha256("system", "user"))
 
     def test_cache_key_differs_by_mode(self) -> None:
         shared = {
@@ -131,6 +142,26 @@ class JudgeLibTests(unittest.TestCase):
         prefix = cache_key(**shared, mode=MODE_PREFIX)
         grouped = cache_key(**shared, mode=MODE_GROUPED)
         self.assertNotEqual(prefix, grouped)
+
+    def test_build_messages_sql_before_rule(self) -> None:
+        meta = RuleMetadata(
+            rule_id="SQLCOST012",
+            title="Cross join",
+            description="Detects cross joins",
+            rubric="Allow UNNEST patterns.",
+        )
+        _system, user = build_messages(
+            meta,
+            dialect="trino",
+            line=10,
+            span="10:1-10",
+            message="cross join detected",
+            sql="select 1",
+        )
+        sql_idx = user.index("SQL:")
+        rule_idx = user.index("Rule ID:")
+        self.assertLess(sql_idx, rule_idx)
+        self.assertIn("Return exactly one letter", user)
 
     def test_build_prompt_sql_before_rule(self) -> None:
         meta = RuleMetadata(
@@ -150,7 +181,6 @@ class JudgeLibTests(unittest.TestCase):
         sql_idx = prompt.index("SQL:")
         rule_idx = prompt.index("Rule ID:")
         self.assertLess(sql_idx, rule_idx)
-        self.assertIn("Verdict:", prompt)
         self.assertNotIn("cross_join_unnest", prompt)
 
     def test_pack_sql_for_file_unions_windows(self) -> None:
@@ -206,6 +236,16 @@ class JudgeLibTests(unittest.TestCase):
         capped = cap_candidates(items, cap=50, seed=3407)
         self.assertEqual(capped[0].diagnostic["path"], "a.sql")
 
+    def test_build_grouped_messages_includes_indices(self) -> None:
+        meta = RuleMetadata("SQLCOST012", "Cross join", "desc", "rubric")
+        _system, user = build_grouped_messages(
+            [FindingPromptInput(0, meta, 10, "10:1-10", "msg")],
+            dialect="trino",
+            sql="select 1",
+        )
+        self.assertIn("Finding index: 0", user)
+        self.assertIn("JSON array", user)
+
     def test_build_grouped_prompt_includes_indices(self) -> None:
         meta = RuleMetadata("SQLCOST012", "Cross join", "desc", "rubric")
         prompt = build_grouped_prompt(
@@ -214,7 +254,6 @@ class JudgeLibTests(unittest.TestCase):
             sql="select 1",
         )
         self.assertIn("Finding index: 0", prompt)
-        self.assertIn("Verdicts:", prompt)
 
     def test_pack_sql_truncates_large_input(self) -> None:
         sql = "\n".join(f"select {idx} from t" for idx in range(5000))
@@ -244,7 +283,7 @@ class EvalIrrTests(unittest.TestCase):
                 registry_verdict="tp",
                 llm_verdict="tp",
                 label_token="A",
-                logprobs={"A": -0.1, "B": -2.0, "C": -2.0},
+                logprobs={},
             ),
         ]
         report = build_report(records, manifest)
@@ -287,9 +326,10 @@ class EvalIrrTests(unittest.TestCase):
             model_file_sha256="abc123",
             n_batch=2048,
             n_ubatch=512,
-            sql_token_target=2000,
+            sql_token_target=8000,
             mode=MODE_PREFIX,
-            context_tokens=16384,
+            context_tokens=32768,
+            flash_attn=True,
         )
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "manifest.toml"
@@ -297,7 +337,9 @@ class EvalIrrTests(unittest.TestCase):
             loaded = load_manifest(path)
         self.assertEqual(loaded.model_file_sha256, "abc123")
         self.assertEqual(loaded.n_batch, 2048)
-        self.assertEqual(loaded.context_tokens, 16384)
+        self.assertEqual(loaded.context_tokens, 32768)
+        self.assertEqual(loaded.sql_token_target, 8000)
+        self.assertTrue(loaded.flash_attn)
         self.assertEqual(loaded.mode, MODE_PREFIX)
         self.assertEqual(loaded.prompt_version, PROMPT_VERSION)
 

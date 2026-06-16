@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-06-16T08:55:55+00:00",
+  "generated_at": "2026-06-16T17:12:22+00:00",
   "manifest": {
     "judge_name": "costguard-local-llm-judge",
     "judge_version": "v1",
     "model_id": "Qwen3-30B-A3B-Instruct-2507",
-    "prompt_version": "irr_judge_v1",
+    "prompt_version": "irr_judge_v2",
     "repo": "spellbook"
   },
   "counts": {

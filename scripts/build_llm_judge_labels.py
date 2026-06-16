@@ -34,6 +34,7 @@ from eval_lib import (  # noqa: E402
 from llm_judge_lib import (  # noqa: E402
     DEFAULT_CAP,
     DEFAULT_CONTEXT_TOKENS,
+    DEFAULT_FLASH_ATTN,
     DEFAULT_LABELS_JSONL,
     DEFAULT_MANIFEST,
     DEFAULT_MAX_NEW_TOKENS,
@@ -53,20 +54,21 @@ from llm_judge_lib import (  # noqa: E402
     JudgeRecord,
     LlamaJudge,
     RuleMetadata,
-    build_grouped_prompt,
-    build_prompt,
+    build_grouped_messages,
+    build_messages,
     cache_key,
     candidate_sort_key,
-    decide_verdict,
     finding_id_for_diagnostic,
     finding_span,
     load_judge_records,
     load_rule_metadata,
+    messages_sha256,
     pack_sql_for_file,
     prompt_version_for_mode,
     runtime_version,
-    sha256_text,
     utc_now_iso,
+    verdict_from_letter,
+    verify_gguf_chat_template,
     write_judge_records,
     write_manifest,
 )
@@ -312,7 +314,7 @@ def judge_file_prefix(
             continue
 
         if file_ctx.too_large:
-            prompt = build_prompt(
+            system, user = build_messages(
                 rule_meta,
                 dialect=dialect,
                 line=line,
@@ -331,14 +333,14 @@ def judge_file_prefix(
                     runtime_ver=runtime_ver,
                     llm_verdict="unsure",
                     label_token="C",
-                    logprobs={"A": -100.0, "B": -100.0, "C": 0.0},
+                    logprobs={},
                     abstention_reason="unsure_due_to_context_limit",
-                    input_sha256=sha256_text(prompt),
+                    input_sha256=messages_sha256(system, user),
                 )
             )
             continue
 
-        prompt = build_prompt(
+        system, user = build_messages(
             rule_meta,
             dialect=dialect,
             line=line,
@@ -346,8 +348,8 @@ def judge_file_prefix(
             message=message,
             sql=file_ctx.sql,
         )
-        letter, logprobs = judge.judge(prompt, max_tokens=manifest.max_new_tokens)
-        llm_verdict, abstention_reason = decide_verdict(logprobs["A"], logprobs["B"], letter)
+        letter = judge.judge(system, user, max_tokens=manifest.max_new_tokens)
+        llm_verdict, abstention_reason = verdict_from_letter(letter)
         if file_ctx.truncated and llm_verdict in {"tp", "fp"} and abstention_reason is None:
             llm_verdict = "unsure"
             abstention_reason = "context_truncated"
@@ -362,9 +364,9 @@ def judge_file_prefix(
                 runtime_ver=runtime_ver,
                 llm_verdict=llm_verdict,
                 label_token=letter,
-                logprobs=logprobs,
+                logprobs={},
                 abstention_reason=abstention_reason,
-                input_sha256=sha256_text(prompt),
+                input_sha256=messages_sha256(system, user),
             )
         )
     return records
@@ -408,8 +410,8 @@ def judge_file_grouped(
             )
         )
 
-    prompt = build_grouped_prompt(prompt_inputs, dialect=dialect, sql=file_ctx.sql)
-    input_sha256 = sha256_text(prompt)
+    system, user = build_grouped_messages(prompt_inputs, dialect=dialect, sql=file_ctx.sql)
+    input_sha256 = messages_sha256(system, user)
 
     uncached: list[tuple[int, CandidateFinding, RuleMetadata]] = []
     records_by_index: dict[int, JudgeRecord] = {}
@@ -436,11 +438,10 @@ def judge_file_grouped(
             uncached.append((index, candidate, rule_meta))
 
     if uncached:
-        letters = judge.judge_grouped(prompt, len(file_ctx.candidates))
+        letters = judge.judge_grouped(system, user, len(file_ctx.candidates))
         for index, candidate, rule_meta in uncached:
             letter = letters[index]
-            llm_verdict = "unsure" if letter == "C" else ("tp" if letter == "A" else "fp")
-            abstention_reason = "grouped_unsure" if letter == "C" else None
+            llm_verdict, abstention_reason = verdict_from_letter(letter)
             records_by_index[index] = make_record(
                 candidate,
                 file_ctx=file_ctx,
@@ -476,6 +477,12 @@ def main() -> int:
     parser.add_argument("--n-ubatch", type=int, default=DEFAULT_N_UBATCH)
     parser.add_argument("--sql-token-target", type=int, default=DEFAULT_SQL_TOKEN_TARGET)
     parser.add_argument(
+        "--rule-id",
+        action="append",
+        default=[],
+        help="Limit to rule ID(s); repeatable (e.g. --rule-id SQLCOST012)",
+    )
+    parser.add_argument(
         "--grouped",
         action="store_true",
         help="One LLM call per file with JSON verdict array (no logprob margin)",
@@ -499,6 +506,13 @@ def main() -> int:
         args.labels,
     )
     capped = cap_candidates(candidates, cap=args.cap, seed=args.seed)
+    if args.rule_id:
+        allowed = set(args.rule_id)
+        capped = [
+            item
+            for item in capped
+            if str(item.diagnostic.get("rule_id", "")) in allowed
+        ]
     print(f"Collected {len(candidates)} findings; capped to {len(capped)} ({args.cap}/bucket)")
 
     if args.dry_run:
@@ -511,6 +525,8 @@ def main() -> int:
     assert model_path is not None
     if not model_path.exists():
         raise SystemExit(f"model file not found: {model_path}")
+
+    verify_gguf_chat_template(model_path)
 
     model_sha256 = file_sha256(model_path)
     manifest = JudgeManifest(
@@ -533,6 +549,7 @@ def main() -> int:
         n_ubatch=args.n_ubatch,
         sql_token_target=args.sql_token_target,
         mode=mode,
+        flash_attn=DEFAULT_FLASH_ATTN,
     )
 
     existing = load_judge_records(args.out)
@@ -544,6 +561,7 @@ def main() -> int:
         seed=manifest.seed,
         n_batch=manifest.n_batch,
         n_ubatch=manifest.n_ubatch,
+        flash_attn=manifest.flash_attn,
     )
 
     file_contexts = build_file_contexts(

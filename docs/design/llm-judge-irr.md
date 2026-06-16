@@ -20,11 +20,12 @@ Shared helpers live in `scripts/llm_judge_lib.py`.
 
 | Component | Choice |
 | --- | --- |
-| Runtime | **llama-cpp-python**, Metal (`n_gpu_layers=-1`) |
+| Runtime | **llama-cpp-python**, Metal (`n_gpu_layers=-1`), `flash_attn=true` |
 | Model | **Qwen3-30B-A3B-Instruct-2507**, Q4_K_M GGUF |
-| Context | **16384** tokens default (32768 only when needed) |
+| Context | **32768** tokens default |
 | Batch | `n_batch=2048`, `n_ubatch=512` |
-| SQL target | **~2000 tokens** per file (`sql_token_target`) |
+| SQL target | **~8000 tokens** per file (`sql_token_target`) |
+| Prompting | **ChatML** via `create_chat_completion` (GGUF embedded template) |
 | Output | Single constrained token: `A` / `B` / `C` (default mode) |
 | Sampling | `temperature=0`, fixed seed `3407`, concurrency **1** |
 
@@ -40,7 +41,7 @@ The bottleneck is **prompt prefill**, not decode. On an M4 Air 32 GB with Qwen3-
 | Short decode | 20–45 tokens/sec |
 | Verdict output | ~0.05–0.3 sec |
 
-For ~3,700 spellbook findings with sane packed prompts (~700–2000 tokens/file):
+For ~1,200 spellbook findings with sane packed prompts (~2–8k tokens/file):
 
 | Strategy | Expected runtime |
 | --- | --- |
@@ -48,20 +49,20 @@ For ~3,700 spellbook findings with sane packed prompts (~700–2000 tokens/file)
 | `--grouped`: one call per file | **1–6 hours** |
 | Naive per-finding full compiled SQL | **12–55+ hours** |
 
-### Default mode (`mode = prefix`, prompt `irr_judge_v1`)
+### Default mode (`mode = prefix`, prompt `irr_judge_v2`)
 
 1. Group capped findings by SQL file (`path`).
 2. Build **one shared SQL context per file** via deterministic union excerpt packing.
-3. Sort findings by `(path, rule, line)` so consecutive calls share the `system + SQL` prefix.
-4. Reuse KV cache (`LlamaRAMCache`) across per-finding `A/B/C` calls with logprobs + logprob-margin abstention.
+3. Sort findings by `(path, rule, line)` so consecutive calls share the `system + SQL` chat prefix.
+4. Reuse KV cache (`LlamaRAMCache`) across per-finding `A/B/C` calls via `create_chat_completion`.
 
-### Grouped mode (`--grouped`, prompt `irr_judge_v1+grouped`)
+### Grouped mode (`--grouped`, prompt `irr_judge_v2+grouped`)
 
-One LLM call per file returns a JSON verdict array for all findings in that file. Faster prefill amortization, but **no per-finding logprobs** — abstention only when the model emits `C` (`abstention_reason=grouped_unsure`).
+One LLM call per file returns a JSON verdict array for all findings in that file. Faster prefill amortization; abstention when the model emits `C` (`abstention_reason=model_unsure`).
 
 ## Judging strategy
 
-The model is **not** asked for free-form rationale. Default mode uses one-token classification:
+The model is **not** asked for free-form rationale. Default mode uses one-token classification via GBNF grammar:
 
 | Token | Verdict |
 | --- | --- |
@@ -69,22 +70,24 @@ The model is **not** asked for free-form rationale. Default mode uses one-token 
 | `B` | false positive |
 | `C` | unsure |
 
-**Logprob-margin abstention (default mode only):** if `abs(logp_A - logp_B) < 0.5`, the verdict is forced to `unsure`. Do not map `unsure` to `fp` when computing κ.
+**Abstention:** when the model emits `C`, verdict is `unsure` with `abstention_reason=model_unsure`. Truncated SQL contexts also force `unsure` (`context_truncated`). Do not map `unsure` to `fp` when computing κ.
+
+The v2 prompt defaults to **B (false positive)** when the rule's failure condition is not clearly met — countering confirm-bias from v1's raw completion mode.
 
 Prompt versions:
 
 | Mode | `prompt_version` |
 | --- | --- |
-| Default (prefix reuse) | `irr_judge_v1` |
-| Grouped JSON | `irr_judge_v1+grouped` |
+| Default (prefix reuse) | `irr_judge_v2` |
+| Grouped JSON | `irr_judge_v2+grouped` |
 
-The prompt puts **SQL before per-finding rule context** so the shared prefix is stable across findings in a file. It **excludes** registry bucket names, existing `y_true`, and triage rationale.
+The user message puts **SQL before per-finding rule context** so the shared prefix is stable across findings in a file. It **excludes** registry bucket names, existing `y_true`, and triage rationale.
 
 ## SQL context packing
 
 Deterministic, no LLM summarization. Per **file** (not per finding):
 
-1. Full SQL if within `sql_token_target` (~2000 tokens).
+1. Full SQL if within `sql_token_target` (~8000 tokens).
 2. Else: deduped union of finding line ± 40, containing CTE/model blocks, referenced CTE definitions.
 3. If still too large: all findings in that file record `unsure_due_to_context_limit`.
 
@@ -95,6 +98,7 @@ Budget uses a chars/token heuristic (`sql_token_target * 3`).
 - Repo: **spellbook** (default)
 - Granularity: per fired finding
 - Cap: **50 findings per (rule, bucket)**, deterministic seed **3407**
+- Optional `--rule-id` filter for fast iteration on specific rules
 - `registry_verdict` from committed real-split labels (`eval_labels.toml`)
 
 ## Cache key
@@ -134,7 +138,12 @@ export COSTGUARD_JUDGE_GGUF=/path/to/Qwen3-30B-A3B-Instruct-2507-Q4_K_M.gguf
 # Default: per-file SQL + KV prefix reuse (recommended overnight run)
 .venv-judge/bin/python scripts/build_llm_judge_labels.py --model "$COSTGUARD_JUDGE_GGUF"
 
-# Faster: one JSON call per file (no logprob margin)
+# Fast iteration on one rule
+.venv-judge/bin/python scripts/build_llm_judge_labels.py \
+  --model "$COSTGUARD_JUDGE_GGUF" --rule-id SQLCOST012 --cap 10 \
+  --out /tmp/judge_subset.jsonl --manifest-out /tmp/judge_subset_manifest.toml
+
+# Faster: one JSON call per file
 .venv-judge/bin/python scripts/build_llm_judge_labels.py --model "$COSTGUARD_JUDGE_GGUF" --grouped
 
 # CI-safe validation + κ (uses .venv-eval)

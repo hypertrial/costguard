@@ -19,8 +19,8 @@ DEFAULT_MANIFEST = ROOT / "tests" / "benchmarks" / "llm_judge_manifest.toml"
 DEFAULT_IRR_REPORT = ROOT / "tests" / "benchmarks" / "irr_report.json"
 RULE_GUIDES = ROOT / "docs" / "rules"
 
-PROMPT_VERSION = "irr_judge_v1"
-PROMPT_VERSION_GROUPED = "irr_judge_v1+grouped"
+PROMPT_VERSION = "irr_judge_v2"
+PROMPT_VERSION_GROUPED = "irr_judge_v2+grouped"
 MODE_PREFIX = "prefix"
 MODE_GROUPED = "grouped"
 JUDGE_NAME = "costguard-local-llm-judge"
@@ -29,13 +29,13 @@ DEFAULT_MODEL_ID = "Qwen3-30B-A3B-Instruct-2507"
 DEFAULT_QUANT = "Q4_K_M"
 DEFAULT_RUNTIME = "llama.cpp"
 DEFAULT_SEED = 3407
-DEFAULT_CONTEXT_TOKENS = 16384
+DEFAULT_CONTEXT_TOKENS = 32768
 DEFAULT_N_BATCH = 2048
 DEFAULT_N_UBATCH = 512
-DEFAULT_SQL_TOKEN_TARGET = 2000
+DEFAULT_SQL_TOKEN_TARGET = 8000
 DEFAULT_MAX_NEW_TOKENS = 1
 DEFAULT_CAP = 50
-DEFAULT_MARGIN = 0.5
+DEFAULT_FLASH_ATTN = True
 DEFAULT_SPAN_LINES = 40
 DEFAULT_KV_CACHE_CAPACITY = 2
 
@@ -48,28 +48,31 @@ letter ::= "A" | "B" | "C"
 """
 
 SYSTEM_PROMPT = """\
-You are an independent SQL performance-review rater.
-You are not evaluating whether Costguard fired correctly.
-You are deciding whether the described rule truly applies to this SQL.
-Do not assume the finding is correct because it was provided.
+You are an independent SQL performance-review adjudicator.
+You are NOT evaluating whether Costguard fired correctly.
+You decide whether the described rule truly applies to the SQL shown.
+Static-analysis findings are frequently false positives.
+Default to B (false positive) when the rule's failure condition is not clearly met in the SQL or evidence is insufficient.
+Use C (unsure) only when the SQL needed to judge is genuinely missing from the context.
 Do not use prior labels, registry buckets, or Costguard implementation details.\
 """
 
 DECISION_SUFFIX = """\
-Return exactly one letter.
+First identify the rule's failure condition silently, then decide:
+A = true positive ONLY if the SQL clearly exhibits the rule's failure condition.
+B = false positive if the finding is not applicable, is harmless, or evidence is insufficient.
+C = unsure ONLY if the SQL context is genuinely insufficient to judge.
 
-A = true positive: the SQL finding is genuinely applicable under the rule.
-B = false positive: the finding is not actually applicable, is harmless, or the rule evidence is insufficient.
-C = unsure: the SQL/rule context is ambiguous or insufficient.
-
-Verdict:"""
+Return exactly one letter (A, B, or C). No explanation.\
+"""
 
 GROUPED_DECISION_SUFFIX = """\
-For each finding below, return one verdict letter (A/B/C) per finding.
+For each finding below, identify the rule's failure condition silently, then decide one letter per finding.
 Return a JSON array only, e.g. [{"index":0,"verdict":"A"},{"index":1,"verdict":"B"}].
-A = true positive, B = false positive, C = unsure.
-
-Verdicts:"""
+A = true positive ONLY if the SQL clearly exhibits the rule's failure condition.
+B = false positive if not applicable, harmless, or evidence is insufficient.
+C = unsure ONLY if the SQL context is genuinely insufficient to judge.\
+"""
 
 
 @dataclass
@@ -187,6 +190,7 @@ class JudgeManifest:
     n_ubatch: int = DEFAULT_N_UBATCH
     sql_token_target: int = DEFAULT_SQL_TOKEN_TARGET
     mode: str = MODE_PREFIX
+    flash_attn: bool = DEFAULT_FLASH_ATTN
 
     def to_toml(self) -> str:
         lines = [
@@ -212,6 +216,7 @@ class JudgeManifest:
             f"n_ubatch = {self.n_ubatch}",
             f"sql_token_target = {self.sql_token_target}",
             f'mode = "{self.mode}"',
+            f"flash_attn = {'true' if self.flash_attn else 'false'}",
             "",
         ]
         return "\n".join(lines)
@@ -261,17 +266,33 @@ def cache_key(
     return sha256_text(material)
 
 
-def decide_verdict(
-    logp_a: float,
-    logp_b: float,
-    generated_letter: str,
-    *,
-    margin: float = DEFAULT_MARGIN,
-) -> tuple[str, str | None]:
-    """Return (llm_verdict, abstention_reason)."""
-    if abs(logp_a - logp_b) < margin:
-        return "unsure", "logprob_margin"
-    return LABEL_TOKEN_TO_VERDICT.get(generated_letter, "unsure"), None
+def verdict_from_letter(letter: str) -> tuple[str, str | None]:
+    """Return (llm_verdict, abstention_reason) from a model letter."""
+    normalized = letter.strip().upper()[:1]
+    if normalized == "C":
+        return "unsure", "model_unsure"
+    verdict = LABEL_TOKEN_TO_VERDICT.get(normalized, "unsure")
+    if verdict == "unsure":
+        return verdict, "model_unsure"
+    return verdict, None
+
+
+def messages_sha256(system: str, user: str) -> str:
+    return sha256_text(f"{system}\0{user}")
+
+
+def verify_gguf_chat_template(model_path: Path) -> None:
+    """Assert the GGUF embeds a chat template (ChatML for Qwen3)."""
+    try:
+        from llama_cpp import Llama  # type: ignore[import-not-found]
+    except ImportError as exc:  # pragma: no cover - local-only dep
+        raise SystemExit(
+            "llama-cpp-python is required for build_llm_judge_labels.py; "
+            "install with: pip install -r requirements-judge.txt"
+        ) from exc
+    model = Llama(model_path=str(model_path), vocab_only=True, verbose=False)
+    if "tokenizer.chat_template" not in model.metadata:
+        raise SystemExit(f"GGUF missing tokenizer.chat_template: {model_path}")
 
 
 def fetch_rules_json() -> list[dict[str, str]]:
@@ -340,7 +361,7 @@ def _finding_suffix_parts(
     return parts
 
 
-def build_prompt(
+def build_messages(
     rule_meta: RuleMetadata,
     *,
     dialect: str,
@@ -348,7 +369,7 @@ def build_prompt(
     span: str,
     message: str,
     sql: str,
-) -> str:
+) -> tuple[str, str]:
     suffix_parts = _finding_suffix_parts(
         rule_meta,
         dialect=dialect,
@@ -358,15 +379,16 @@ def build_prompt(
     )
     suffix_parts.append(DECISION_SUFFIX)
     suffix = "\n\n".join(suffix_parts)
-    return f"{SYSTEM_PROMPT}\n\nSQL:\n{sql}\n\n{suffix}"
+    user = f"SQL:\n{sql}\n\n{suffix}"
+    return SYSTEM_PROMPT, user
 
 
-def build_grouped_prompt(
+def build_grouped_messages(
     findings: list[FindingPromptInput],
     *,
     dialect: str,
     sql: str,
-) -> str:
+) -> tuple[str, str]:
     blocks: list[str] = []
     for item in findings:
         parts = _finding_suffix_parts(
@@ -379,7 +401,38 @@ def build_grouped_prompt(
         )
         blocks.append("\n\n".join(parts))
     findings_text = "\n\n---\n\n".join(blocks)
-    return f"{SYSTEM_PROMPT}\n\nSQL:\n{sql}\n\nFindings:\n{findings_text}\n\n{GROUPED_DECISION_SUFFIX}"
+    user = f"SQL:\n{sql}\n\nFindings:\n{findings_text}\n\n{GROUPED_DECISION_SUFFIX}"
+    return SYSTEM_PROMPT, user
+
+
+def build_prompt(
+    rule_meta: RuleMetadata,
+    *,
+    dialect: str,
+    line: int,
+    span: str,
+    message: str,
+    sql: str,
+) -> str:
+    system, user = build_messages(
+        rule_meta,
+        dialect=dialect,
+        line=line,
+        span=span,
+        message=message,
+        sql=sql,
+    )
+    return f"{system}\n\n{user}"
+
+
+def build_grouped_prompt(
+    findings: list[FindingPromptInput],
+    *,
+    dialect: str,
+    sql: str,
+) -> str:
+    system, user = build_grouped_messages(findings, dialect=dialect, sql=sql)
+    return f"{system}\n\n{user}"
 
 
 def _estimate_char_budget(token_target: int) -> int:
@@ -598,6 +651,7 @@ def load_manifest(path: Path | None = None) -> JudgeManifest:
         n_ubatch=int(data.get("n_ubatch", DEFAULT_N_UBATCH)),
         sql_token_target=int(data.get("sql_token_target", DEFAULT_SQL_TOKEN_TARGET)),
         mode=mode,
+        flash_attn=bool(data.get("flash_attn", DEFAULT_FLASH_ATTN)),
     )
 
 
@@ -614,26 +668,6 @@ def runtime_version() -> str:
     return getattr(llama_cpp, "__version__", "unknown")
 
 
-def extract_label_logprobs(logprobs_payload: dict[str, Any] | None) -> dict[str, float]:
-    result = {"A": -100.0, "B": -100.0, "C": -100.0}
-    if not logprobs_payload:
-        return result
-    top = logprobs_payload.get("top_logprobs") or []
-    if top:
-        for token_map in top:
-            for token, logprob in token_map.items():
-                letter = token.strip().upper()
-                if letter in result:
-                    result[letter] = float(logprob)
-    tokens = logprobs_payload.get("tokens") or []
-    token_logprobs = logprobs_payload.get("token_logprobs") or []
-    for token, logprob in zip(tokens, token_logprobs, strict=False):
-        letter = str(token).strip().upper()
-        if letter in result and logprob is not None:
-            result[letter] = float(logprob)
-    return result
-
-
 class LlamaJudge:
     """Lazy llama-cpp-python wrapper (import only when instantiated)."""
 
@@ -646,17 +680,23 @@ class LlamaJudge:
         n_gpu_layers: int = -1,
         n_batch: int = DEFAULT_N_BATCH,
         n_ubatch: int = DEFAULT_N_UBATCH,
+        flash_attn: bool = DEFAULT_FLASH_ATTN,
     ) -> None:
         try:
             from llama_cpp import Llama  # type: ignore[import-not-found]
             from llama_cpp.llama_cache import (
                 LlamaRAMCache,  # type: ignore[import-not-found]
             )
+            from llama_cpp.llama_grammar import (
+                LlamaGrammar,  # type: ignore[import-not-found]
+            )
         except ImportError as exc:  # pragma: no cover - local-only dep
             raise SystemExit(
                 "llama-cpp-python is required for build_llm_judge_labels.py; "
                 "install with: pip install -r requirements-judge.txt"
             ) from exc
+        self._seed = seed
+        self._label_grammar = LlamaGrammar.from_string(LABEL_GRAMMAR.strip())
         self._llm = Llama(
             model_path=str(model_path),
             n_ctx=n_ctx,
@@ -665,36 +705,45 @@ class LlamaJudge:
             seed=seed,
             n_gpu_layers=n_gpu_layers,
             logits_all=False,
+            flash_attn=flash_attn,
             verbose=False,
         )
         # ponytail: small RAM cache (~1-2 KV states); upgrade path is disk cache
         self._llm.set_cache(LlamaRAMCache(capacity_bytes=256 * 1024 * 1024))
 
-    def judge(self, prompt: str, *, max_tokens: int = DEFAULT_MAX_NEW_TOKENS) -> tuple[str, dict[str, float]]:
-        output = self._llm(
-            prompt,
+    def judge(self, system: str, user: str, *, max_tokens: int = DEFAULT_MAX_NEW_TOKENS) -> str:
+        output = self._llm.create_chat_completion(
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
             max_tokens=max_tokens,
             temperature=0.0,
             top_p=1.0,
-            logprobs=True,
-            top_logprobs=8,
-            grammar=LABEL_GRAMMAR,
+            seed=self._seed,
+            grammar=self._label_grammar,
         )
         choice = output["choices"][0]
-        letter = str(choice.get("text", "")).strip().upper()[:1] or "C"
-        logprobs = extract_label_logprobs(choice.get("logprobs"))
-        return letter, logprobs
+        message = choice.get("message") or {}
+        letter = str(message.get("content", "")).strip().upper()[:1] or "C"
+        return letter
 
-    def judge_grouped(self, prompt: str, n: int) -> list[str]:
+    def judge_grouped(self, system: str, user: str, n: int) -> list[str]:
         max_tokens = max(32, min(512, 12 * n))
-        output = self._llm(
-            prompt,
+        output = self._llm.create_chat_completion(
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
             max_tokens=max_tokens,
             temperature=0.0,
             top_p=1.0,
+            seed=self._seed,
+            response_format={"type": "json_object"},
         )
         choice = output["choices"][0]
-        text = str(choice.get("text", ""))
+        message = choice.get("message") or {}
+        text = str(message.get("content", ""))
         return parse_grouped_verdicts(text, n)
 
 

@@ -16,7 +16,8 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ### Changed
 
-- LLM judge build tool: per-file SQL context packing with KV prefix reuse (default), optional `--grouped` one-call-per-file mode, default `n_ctx=16384`, and tunable batch/SQL token targets for M4 Air performance.
+- LLM judge v2: ChatML `create_chat_completion` (fixes instruct-model confirm-bias), anti-FP prompt, `n_ctx=32768`, `sql_token_target=8000`, model-chosen `C` abstention (drops logprob margin), `--rule-id` filter, `flash_attn=true`.
+- LLM judge build tool: per-file SQL context packing with KV prefix reuse (default), optional `--grouped` one-call-per-file mode, and tunable batch/SQL token targets for M4 Air performance.
 - Folded `costguard-git` into `costguard-core` and `costguard-platform` into `costguard-sql` (11 workspace crates).
 
 ### Removed
