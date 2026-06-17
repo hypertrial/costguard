@@ -152,7 +152,7 @@ def diagnostic_score(diagnostic: dict[str, Any]) -> float:
         "model_monthly_p50_usd",
     ):
         value = cost.get(key)
-        if isinstance(value, (int, float)) and value > 0:
+        if isinstance(value, int | float) and value > 0:
             return float(value)
     return severity_confidence_score(diagnostic)
 

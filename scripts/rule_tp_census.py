@@ -54,10 +54,10 @@ def snippet_for(sql: str, line: int, *, width: int = 240) -> str:
 def savings_key(diagnostic: dict[str, Any]) -> float:
     cost = diagnostic.get("cost_estimate") or {}
     savings = cost.get("savings_p50_usd_per_month")
-    if isinstance(savings, (int, float)):
+    if isinstance(savings, int | float):
         return float(savings)
     rel = cost.get("relative_index")
-    if isinstance(rel, (int, float)):
+    if isinstance(rel, int | float):
         return float(rel)
     return 0.0
 
