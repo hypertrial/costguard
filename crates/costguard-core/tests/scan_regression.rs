@@ -1,8 +1,11 @@
+#[path = "common/mod.rs"]
+mod common;
+
+use common::run_git;
 use costguard_core::{scan, ParseInput, Platform, ScanConfig, ScanResult};
 use costguard_diagnostics::Severity;
 use serde_json::json;
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::PathBuf;
 
 #[test]
 fn full_and_pr_scans_preserve_results_and_compiled_selection() {
@@ -40,13 +43,13 @@ fn full_and_pr_scans_preserve_results_and_compiled_selection() {
     )
     .expect("write manifest");
 
-    git(root, &["init"]);
-    git(root, &["checkout", "-b", "main"]);
-    git(root, &["config", "user.email", "costguard@example.com"]);
-    git(root, &["config", "user.name", "Costguard Test"]);
-    git(root, &["add", "."]);
-    git(root, &["commit", "-m", "initial"]);
-    git(root, &["checkout", "-b", "feature"]);
+    run_git(root, &["init"]);
+    run_git(root, &["checkout", "-b", "main"]);
+    run_git(root, &["config", "user.email", "costguard@example.com"]);
+    run_git(root, &["config", "user.name", "Costguard Test"]);
+    run_git(root, &["add", "."]);
+    run_git(root, &["commit", "-m", "initial"]);
+    run_git(root, &["checkout", "-b", "feature"]);
 
     let raw = "{% set cols = ['id'] %} select {{ cols | join(', ') }} from raw.events\n";
     for name in ["alpha", "beta"] {
@@ -104,18 +107,4 @@ fn diagnostic_signature(result: &ScanResult) -> Vec<(PathBuf, usize, usize, Stri
             )
         })
         .collect()
-}
-
-fn git(root: &Path, args: &[&str]) {
-    let output = Command::new("git")
-        .args(args)
-        .current_dir(root)
-        .output()
-        .expect("run git");
-    assert!(
-        output.status.success(),
-        "git {} failed: {}",
-        args.join(" "),
-        String::from_utf8_lossy(&output.stderr)
-    );
 }

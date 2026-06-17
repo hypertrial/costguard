@@ -23,6 +23,7 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ### Changed
 
+- Documentation: corrected rule-count prose from 44 to 45 SQLCOST rules; clarified that the cost-pattern census covers `SQLCOST001`–`SQLCOST044` (`SQLCOST045` validated by integration tests). `scripts/check_docs.py` now asserts `N SQLCOST rules` claims match `docs/rules/SQLCOST*.md` count.
 - **SQLCOST012** — comma joins on parsed files now emit `confidence: medium` (regex-derived); AST-confirmed `CROSS JOIN` stays `high`; regex-only stays `low`.
 - Missing/stale manifest guidance now names `dbt compile` remediation (SQLCOST023, SQLCOST045, strict `manifest_required` / `manifest_stale` violations). Local scan docs add a `dbt compile && costguard scan` iteration recipe.
 - **Benchmark compile**: all four repos in [`tests/benchmarks/repos.toml`](tests/benchmarks/repos.toml) set `compile_dbt = true`. mattermost-warehouse and data-infra use `compile_best_effort = true` with offline dummy Snowflake/BigQuery profiles. [`scripts/dbt_compile_for_costguard.py`](scripts/dbt_compile_for_costguard.py) reuses existing manifests on compile failure, extends manifest cache to single-project repos, and passes `--no-introspect --no-populate-cache` for offline compile attempts.

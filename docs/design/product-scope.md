@@ -12,7 +12,7 @@ These capabilities are production-ready or actively maintained as part of the cu
 | --- | --- |
 | **PR check workflow** | `costguard pr`, composite GitHub Action, `costguard init` scaffolding |
 | **Local scan and explain** | `costguard scan`, `costguard explain` for developer debugging |
-| **44 SQLCOST rules** | Severity and confidence are the enforcement contract |
+| **45 SQLCOST rules** | Severity and confidence are the enforcement contract |
 | **Multi-warehouse parsing** | Generic SQL, Snowflake, BigQuery, Trino (GA); Databricks, Redshift, Postgres, DuckDB (preview) |
 | **Advisory cost estimates** | Local priors and offline inputs only — never a live bill |
 | **Governance** | Baseline v3, signed policy v2, semantic finding identity (`semantic-v1`), suppressions |

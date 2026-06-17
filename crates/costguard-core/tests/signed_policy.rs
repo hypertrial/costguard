@@ -1,9 +1,13 @@
+#[path = "common/mod.rs"]
+mod common;
+
 use chrono::Utc;
+use common::{write_managed_policy_bundle, write_managed_scan_model};
 use costguard_core::{scan, FindingBaseline, ScanConfig, SignedPolicyConfig};
 use costguard_diagnostics::Severity;
 use costguard_policy::{
-    generate_key, sign_policy, DeclarativeRule, PolicyDocumentV2, PolicyException,
-    PolicyPermissions, PolicyScope, Predicate, RulePolicy, ScopeKind, TrustStoreV1, TrustedKeyV1,
+    generate_key, sign_policy, PolicyDocumentV2, PolicyException, PolicyPermissions, PolicyScope,
+    RulePolicy, ScopeKind, TrustStoreV1,
 };
 use costguard_protocol::{
     EnforcementMode, EnforcementOutcome, SignedDocumentV1, IDENTITY_SCHEME_SEMANTIC_V1,
@@ -20,75 +24,22 @@ fn managed_scan_custom(
     configure: impl FnOnce(&TempDir, &mut ScanConfig),
 ) -> anyhow::Result<costguard_core::ScanResult> {
     let temp = TempDir::new().unwrap();
-    let model_dir = temp.path().join("models/marts");
-    fs::create_dir_all(&model_dir).unwrap();
-    fs::write(
-        model_dir.join("orders.sql"),
-        "-- costguard: disable-file=SQLCOST001\nselect * from raw.orders\n",
-    )
-    .unwrap();
-
-    let now = Utc::now();
-    let mut policy = PolicyDocumentV2 {
-        schema_version: costguard_protocol::POLICY_SCHEMA_VERSION,
-        id: "org-default".into(),
-        version: "2026.06".into(),
-        organization: "acme".into(),
-        issued_at: (now - chrono::Duration::minutes(1)).to_rfc3339(),
-        expires_at: (now + chrono::Duration::days(30)).to_rfc3339(),
-        identity_scheme: IDENTITY_SCHEME_SEMANTIC_V1.into(),
+    write_managed_scan_model(temp.path());
+    let policy_files = write_managed_policy_bundle(
+        temp.path(),
+        enforcement,
         permissions,
-        scopes: vec![PolicyScope {
-            id: "org-default".into(),
-            kind: ScopeKind::Organization,
-            selector: "acme".into(),
-            priority: 0,
-            enforcement,
-            rules: BTreeMap::new(),
-            custom_rules: vec![DeclarativeRule {
-                id: "acme/mart-select".into(),
-                severity: Severity::High,
-                confidence: costguard_diagnostics::Confidence::High,
-                enforcement: EnforcementMode::Block,
-                message: "Mart SQL requires policy review.".into(),
-                risk: None,
-                suggestion: None,
-                cost_multiplier: Some(1.25),
-                predicate: Predicate::Glob {
-                    field: "path".into(),
-                    pattern: "models/marts/**".into(),
-                },
-            }],
-            exceptions: vec![],
-        }],
-    };
-    mutate_policy(&mut policy);
-    let key = generate_key("root-2026", now).unwrap();
-    let mut signed = sign_policy(&policy, &key).unwrap();
-    let mut trust = TrustStoreV1 {
-        version: 1,
-        keys: vec![TrustedKeyV1 {
-            key_id: key.key_id,
-            algorithm: key.algorithm,
-            public_key: key.public_key,
-            valid_from: (now - chrono::Duration::days(1)).to_rfc3339(),
-            valid_until: (now + chrono::Duration::days(365)).to_rfc3339(),
-            revoked: false,
-        }],
-    };
-    mutate_signed(&mut signed, &mut trust);
-    let bundle = temp.path().join("policy.json");
-    let trust_store = temp.path().join("trust.json");
-    fs::write(&bundle, serde_json::to_vec_pretty(&signed).unwrap()).unwrap();
-    fs::write(&trust_store, serde_json::to_vec_pretty(&trust).unwrap()).unwrap();
+        mutate_policy,
+        mutate_signed,
+    );
 
     let mut config = ScanConfig {
         root: temp.path().to_path_buf(),
         paths: vec![temp.path().join("models")],
         fail_on: Some(Severity::Medium),
         signed_policy: SignedPolicyConfig {
-            bundle_path: Some(bundle),
-            trust_store_path: Some(trust_store),
+            bundle_path: Some(policy_files.bundle_path),
+            trust_store_path: Some(policy_files.trust_store_path),
             organization: Some("acme".into()),
             repository: Some("acme/warehouse".into()),
             required: true,
@@ -338,7 +289,7 @@ fn path_scoped_rule_overrides_apply_per_file_not_globally() {
     let signed = sign_policy(&policy, &key).unwrap();
     let trust = TrustStoreV1 {
         version: 1,
-        keys: vec![TrustedKeyV1 {
+        keys: vec![costguard_policy::TrustedKeyV1 {
             key_id: key.key_id.clone(),
             algorithm: key.algorithm.clone(),
             public_key: key.public_key.clone(),

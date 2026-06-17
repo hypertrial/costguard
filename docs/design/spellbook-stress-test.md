@@ -1,5 +1,7 @@
 # Dune Spellbook Stress Test Plan
 
+**Status:** Point-in-time snapshot. **Last validated:** 2026-06-16.
+
 Dune Spellbook (`duneanalytics/spellbook`) is the primary public-real stress test for `costguard`.
 
 Primary repo: <https://github.com/duneanalytics/spellbook>

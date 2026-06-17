@@ -1,5 +1,7 @@
 # Spellbook top-10 cost findings — manual review
 
+**Status:** Point-in-time snapshot. **Last validated:** 2026-06-16.
+
 See [Manual rule review playbook](manual-rule-review.md) for the general adjudication workflow, registry contracts, and census pass bar.
 
 Generated: 2026-06-16  

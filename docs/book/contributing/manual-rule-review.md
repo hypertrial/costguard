@@ -1,23 +1,25 @@
 # Manual rule review
 
-Costguard’s 44 rules are validated on real dbt projects through **manual adjudication**: humans read compiled SQL, classify findings into buckets, and record TP/FP verdicts in machine-readable artifacts that CI enforces.
+Costguard validates rules on real dbt projects through **manual adjudication**: humans read compiled SQL, classify findings into buckets, and record TP/FP verdicts in machine-readable artifacts that CI enforces.
+
+## Canonical guide
+
+The full workflow, artifact contracts, bucket taxonomy, decision tree, and census methodology live in the design playbook — that document is the source of truth:
+
+**[Manual rule review playbook](../../design/manual-rule-review.md)**
+
+Outcome scoreboard (44/44 PASS as of 2026-06-16, cost-ranked ≤100 sample; `SQLCOST045` excluded — see census note in linked doc):
+
+**[Rule TP coverage](../../design/rule-tp-coverage.md)**
 
 ## When to use this
+
+See the canonical guide for when manual review is required. Common triggers:
 
 - Tuning a rule after external benchmark feedback
 - Clearing unknown buckets from a census run
 - Cost-prioritized triage on Spellbook (or another pinned repo)
 - Onboarding reviewers before editing [`fp_registry.toml`](../../../tests/benchmarks/fp_registry.toml)
-
-## Canonical guide
-
-Full workflow, artifact contracts, bucket taxonomy, and decision tree:
-
-**[Manual rule review playbook](../../design/manual-rule-review.md)**
-
-Outcome scoreboard (44/44 PASS as of 2026-06-16, cost-ranked ≤100 sample):
-
-**[Rule TP coverage](../../design/rule-tp-coverage.md)**
 
 ## Command cheat sheet
 

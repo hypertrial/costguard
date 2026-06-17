@@ -1,5 +1,7 @@
 # Benchmark calibration workflow
 
+**Status:** Living reference. **Last validated:** 2026-06-16.
+
 Costguard uses a **four-layer** benchmark model for realistic dbt project analysis. See the [Glossary — Benchmark layers](../book/glossary.md#benchmark-layers-canonical) for canonical definitions and legacy tier mapping.
 
 1. **Corpus regression** (`tests/fixtures/corpus/`) — fast, deterministic rule contracts in normal CI.

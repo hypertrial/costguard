@@ -1,28 +1,11 @@
+#[path = "common/mod.rs"]
+mod common;
+
+use common::{copy_dir_all, fixture, run_git};
 use costguard_core::{scan, ScanConfig};
 use costguard_diagnostics::Severity;
 use std::fs;
 use std::path::PathBuf;
-use std::process::Command;
-
-fn fixture(name: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/fixtures/corpus")
-        .join(name)
-}
-
-fn run_git(cwd: &PathBuf, args: &[&str]) {
-    let status = Command::new("git")
-        .args(args)
-        .current_dir(cwd)
-        .status()
-        .expect("run git");
-    assert!(
-        status.success(),
-        "git {} failed in {}",
-        args.join(" "),
-        cwd.display()
-    );
-}
 
 #[test]
 fn pr_mode_scopes_changed_files_and_emits_incremental_rule() {
@@ -69,19 +52,4 @@ fn pr_mode_scopes_changed_files_and_emits_incremental_rule() {
             .any(|diagnostic| diagnostic.rule_id == "SQLCOST005"),
         "expected SQLCOST005 on edited incremental model"
     );
-}
-
-fn copy_dir_all(source: &PathBuf, destination: &PathBuf) -> std::io::Result<()> {
-    fs::create_dir_all(destination)?;
-    for entry in fs::read_dir(source)? {
-        let entry = entry?;
-        let file_type = entry.file_type()?;
-        let target = destination.join(entry.file_name());
-        if file_type.is_dir() {
-            copy_dir_all(&entry.path(), &target)?;
-        } else {
-            fs::copy(entry.path(), target)?;
-        }
-    }
-    Ok(())
 }

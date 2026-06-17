@@ -26,6 +26,8 @@ JSON_OUTPUT_SCHEMA_CLAIM_RE = re.compile(
 )
 BASELINE_SCHEMA_CLAIM_RE = re.compile(r"(?i)baseline schema v(\d+)")
 POLICY_SCHEMA_CLAIM_RE = re.compile(r"(?i)policy schema v(\d+)")
+RULE_COUNT_CLAIM_RE = re.compile(r"(\d+)\s+SQLCOST rules")
+RULE_GUIDES_DIR = ROOT / "docs" / "rules"
 
 
 def slug(value: str) -> str:
@@ -107,6 +109,26 @@ def check_version_claims() -> list[str]:
     return errors
 
 
+def rule_guide_count() -> int:
+    return len(list(RULE_GUIDES_DIR.glob("SQLCOST*.md")))
+
+
+def check_rule_count_claims() -> list[str]:
+    current = rule_guide_count()
+    errors: list[str] = []
+    for source in markdown_files():
+        text = source.read_text(encoding="utf-8")
+        for match in RULE_COUNT_CLAIM_RE.finditer(text):
+            claimed = int(match.group(1))
+            if claimed != current:
+                rel = source.relative_to(ROOT)
+                errors.append(
+                    f"{rel}: {claimed} SQLCOST rules does not match "
+                    f"{current} per-rule guides in docs/rules/"
+                )
+    return errors
+
+
 def check_output_schema_claims() -> list[str]:
     current = output_schema_version()
     errors: list[str] = []
@@ -140,6 +162,7 @@ def main() -> int:
     args = parser.parse_args()
     errors: list[str] = []
     errors.extend(check_version_claims())
+    errors.extend(check_rule_count_claims())
     errors.extend(check_output_schema_claims())
     external_urls: set[str] = set()
     for source in markdown_files():

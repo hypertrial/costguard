@@ -1,26 +1,11 @@
+#[path = "common/mod.rs"]
+mod common;
+
+use common::{repo_root, run_git};
 use costguard_core::{apply_file_config, load_config, scan, ScanConfig};
 use costguard_sql::Platform;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
-
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
-
-fn run_git(root: &Path, args: &[&str]) {
-    let output = Command::new("git")
-        .args(args)
-        .current_dir(root)
-        .output()
-        .expect("run git");
-    assert!(
-        output.status.success(),
-        "git {} failed:\n{}",
-        args.join(" "),
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
 
 fn write_cost_repo(root: &Path, manifest: &str) {
     fs::create_dir_all(root.join("models/marts")).expect("models");
