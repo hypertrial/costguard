@@ -14,7 +14,7 @@ Costguard follows semantic versioning for the `2.x` line. `v0.1.0` was the only 
 
 Minor releases may add optional JSON fields, configuration keys, commands, flags, rules, or diagnostics. Consumers must ignore unknown additive JSON fields. Removing or renaming stable fields, changing an existing rule to detect a materially different condition, or reusing a rule ID requires a major release.
 
-The moving `v2` Action tag may advance only to compatible stable `2.x` releases. Use exact `v2.2.0` when immutable behavior is required.
+The moving `v2` Action tag may advance only to compatible stable `2.x` releases. Use exact `v2.3.0` when immutable behavior is required.
 
 Preview warehouse dialects may receive parser and rule refinements in minor releases. Production-supported dialects retain the stable contracts above.
 

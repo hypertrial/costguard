@@ -4,6 +4,8 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-06-17
+
 ### Added
 
 - Design doc: [Product scope](docs/design/product-scope.md) — formalizes MVP in-scope/out-of-scope capabilities and adds a user-facing, opt-in, fully-offline LLM judge MVP (advisory only; reuses `scripts/llm_judge_lib.py`; never gates CI).
@@ -20,6 +22,7 @@ All notable changes to Costguard are documented here. The project follows [Seman
 - `scripts/install.sh` — one-liner release installer for macOS and Linux (`curl | sh`).
 - `costguard init` — scaffolds `.github/workflows/costguard.yml` and starter `costguard.toml` with best-effort warehouse detection.
 - Documentation: [Installation](docs/book/getting-started/installation.md) and [Requirements](docs/book/getting-started/requirements.md); README restructured for install → run → CI onboarding.
+- Documentation: [Troubleshooting](docs/book/getting-started/troubleshooting.md) guide; book nav fixes for architecture, releasing, and dependencies pages.
 
 ### Changed
 

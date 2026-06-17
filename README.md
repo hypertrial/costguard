@@ -1,5 +1,10 @@
 # Stop wasting money on bad SQL
 
+[![CI](https://img.shields.io/github/actions/workflow/status/hypertrial/costguard/ci.yml?branch=main)](https://github.com/hypertrial/costguard/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/hypertrial/costguard)](https://github.com/hypertrial/costguard/releases)
+[![License: MIT](https://img.shields.io/github/license/hypertrial/costguard)](LICENSE)
+[![Docs](https://img.shields.io/badge/docs-mdBook-blue)](docs/book/README.md)
+
 Costguard catches expensive dbt changes before they hit your warehouse.
 
 Costguard is a local, dbt-aware cost regression guardrail for git workflows.
@@ -14,7 +19,7 @@ Generic SQL, Snowflake, BigQuery, and Trino scanning are production-ready; Datab
 curl -fsSL https://raw.githubusercontent.com/hypertrial/costguard/main/scripts/install.sh | sh
 ```
 
-Pin a version: `... | sh -s -- v2.2.0`. Or build from source: `cargo install --git https://github.com/hypertrial/costguard --tag v2.2.0 costguard-cli`.
+Pin a version: `... | sh -s -- v2.3.0`. Or build from source: `cargo install --git https://github.com/hypertrial/costguard --tag v2.3.0 costguard-cli`.
 
 See [Installation](docs/book/getting-started/installation.md) for pinned/airgapped manual install and Windows.
 
@@ -45,7 +50,7 @@ Or add the Action manually after your existing dbt compile step:
   with:
     fetch-depth: 0
 - run: dbt compile --target dev
-- uses: hypertrial/costguard/.github/actions/costguard@v2.2.0
+- uses: hypertrial/costguard/.github/actions/costguard@v2.3.0
   with:
     base: origin/main
     warehouse: snowflake
@@ -53,7 +58,7 @@ Or add the Action manually after your existing dbt compile step:
     min-confidence: high
 ```
 
-Pin the exact Action tag `@v2.2.0` or use the moving compatible major tag `@v2`. Release binaries are checksum-protected and include provenance attestations.
+Pin the exact Action tag `@v2.3.0` or use the moving compatible major tag `@v2`. Release binaries are checksum-protected and include provenance attestations.
 
 **2.1 requirements:** Use baseline v3 and policy v2 with `identity_scheme: "semantic-v1"`. Older baseline and policy schemas are rejected at scan time. See [Compatibility policy](docs/book/reference/compatibility.md).
 
@@ -80,6 +85,7 @@ mdbook serve
 | Installation | [Installation](docs/book/getting-started/installation.md) |
 | Requirements | [Requirements](docs/book/getting-started/requirements.md) |
 | Local scan | [Local scan and explain](docs/book/getting-started/local-scan.md) |
+| Troubleshooting | [Troubleshooting](docs/book/getting-started/troubleshooting.md) |
 | PR check setup | [Quick start](docs/book/getting-started/quick-start.md) |
 | CLI and config | [Reference](docs/book/reference/cli.md) |
 | Rule catalog | [Rules](docs/book/rules/index.md) |
@@ -105,6 +111,25 @@ The Action does not install or compile dbt. See [Requirements](docs/book/getting
 Only high-confidence, high-severity findings fail the PR by default. Pair `fail-on: high` with `min-confidence: high` on macro-heavy dbt repos.
 
 See [Quick start (PR check)](docs/book/getting-started/quick-start.md) for inputs and workflow guidance.
+
+## Example output
+
+```text
+$ costguard pr --base origin/main --warehouse snowflake --fail-on high --min-confidence high
+
+HIGH SQLCOST006 models/marts/fct_orders.sql:42:12
+  Unbounded join risk: no equality predicate on join keys
+  confidence: high
+
+HIGH SQLCOST014 models/staging/stg_events.sql:18:5
+  Repeated CTE reference may multiply work
+  confidence: high
+
+2 findings (2 high, 0 medium, 0 low)
+exit code: 1
+```
+
+Use `--format github` for workflow annotations or `--format markdown` for PR comments.
 
 ## What it detects
 
@@ -156,4 +181,6 @@ Full schema: [Configuration](docs/book/reference/configuration.md).
 
 ## Status
 
-`v2.2.0` adds observation-based cost inputs, corrected savings counterfactual, and JSON schema v4 cost reporting. `v2.1.0` added semantic finding identity (`semantic-v1`), baseline v3, policy v2, and PR context reporting. Generic SQL, Snowflake, BigQuery, and Trino are supported; Databricks, Redshift, Postgres, and DuckDB remain preview. Cost estimates are advisory, warehouse connectivity is out of scope, and manifest-backed analysis requires the caller's dbt compile step. See the [support policy](SUPPORT.md), [compatibility policy](docs/book/reference/compatibility.md), and [security policy](SECURITY.md).
+`v2.3.0` adds stale-manifest detection (`SQLCOST045`), `costguard init`, the `install.sh` one-liner, `--min-confidence-filter`, and broad false-positive fixes across join and shape rules. `v2.2.0` added observation-based cost inputs, corrected savings counterfactual, and JSON schema v4 cost reporting. `v2.1.0` added semantic finding identity (`semantic-v1`), baseline v3, policy v2, and PR context reporting. Generic SQL, Snowflake, BigQuery, and Trino are supported; Databricks, Redshift, Postgres, and DuckDB remain preview. Cost estimates are advisory, warehouse connectivity is out of scope, and manifest-backed analysis requires the caller's dbt compile step. See the [support policy](SUPPORT.md), [compatibility policy](docs/book/reference/compatibility.md), and [security policy](SECURITY.md).
+
+Licensed under [MIT](LICENSE). Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).

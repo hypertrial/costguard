@@ -71,7 +71,7 @@ def git(root: Path, *args: str) -> None:
 
 class ActionConsumerTest(unittest.TestCase):
     def test_floating_major_action_uses_exact_workspace_release(self) -> None:
-        self.assertEqual(load_driver_module().action_release_version(), "v2.2.0")
+        self.assertEqual(load_driver_module().action_release_version(), "v2.3.0")
 
     def test_release_install_from_local_server(self) -> None:
         binary = ROOT / "target" / "release" / "costguard"
@@ -95,7 +95,7 @@ class ActionConsumerTest(unittest.TestCase):
             github_path = root / "github-path"
             with file_server(root) as base_url:
                 completed = run_driver(
-                    ["install", "--mode", "release", "--version", "v2.2.0"],
+                    ["install", "--mode", "release", "--version", "v2.3.0"],
                     env={
                         "COSTGUARD_RELEASE_BASE_URL": base_url,
                         "RUNNER_TEMP": str(root / "runner"),
