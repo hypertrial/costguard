@@ -32,9 +32,9 @@ require_tool() {
 
 eval_python() {
   if [ ! -x "${ROOT}/.venv-eval/bin/python" ]; then
-    echo "+ python3 -m venv .venv-eval"
+    echo "+ python3 -m venv .venv-eval" >&2
     python3 -m venv "${ROOT}/.venv-eval"
-    echo "+ .venv-eval/bin/pip install -r requirements-eval.txt"
+    echo "+ .venv-eval/bin/pip install -r requirements-eval.txt" >&2
     "${ROOT}/.venv-eval/bin/pip" install -q -r "${ROOT}/requirements-eval.txt"
   fi
   echo "${ROOT}/.venv-eval/bin/python"
