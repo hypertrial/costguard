@@ -18,7 +18,7 @@ from typing import Any
 
 def read_dbt_profile_name(project_dir: Path) -> str:
     text = (project_dir / "dbt_project.yml").read_text(encoding="utf-8")
-    match = re.search(r"^profile:\s*['\"]?(\w+)['\"]?", text, re.MULTILINE)
+    match = re.search(r"^profile:\s*['\"]?([\w-]+)['\"]?", text, re.MULTILINE)
     return match.group(1) if match else "costguard"
 
 

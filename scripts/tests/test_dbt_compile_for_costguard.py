@@ -42,6 +42,15 @@ class DbtCompileHelpersTest(unittest.TestCase):
         )
         self.assertEqual(read_dbt_profile_name(project), "my_profile")
 
+    def test_read_dbt_profile_name_allows_hyphens(self) -> None:
+        project = self._temp_dir() / "proj"
+        project.mkdir()
+        (project / "dbt_project.yml").write_text(
+            'name: demo\nprofile: "spellbook-local"\n',
+            encoding="utf-8",
+        )
+        self.assertEqual(read_dbt_profile_name(project), "spellbook-local")
+
     def test_write_dummy_profiles(self) -> None:
         for profile_type in [
             "bigquery",
