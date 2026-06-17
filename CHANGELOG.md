@@ -6,6 +6,7 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ### Added
 
+- Design doc: [Product scope](docs/design/product-scope.md) — formalizes MVP in-scope/out-of-scope capabilities and adds a user-facing, opt-in, fully-offline LLM judge MVP (advisory only; reuses `scripts/llm_judge_lib.py`; never gates CI).
 - **`min_confidence_filter`** — opt-in output filter (`[output].min_confidence_filter` / `--min-confidence-filter`) that omits findings below `min_confidence` from emitted diagnostics, not just the CI exit gate.
 - **SQLCOST045** — stale dbt manifest detection when `target/manifest.json` is older than modified model SQL files; fails closed under `--analysis-policy strict`.
 - `scripts/rule_tp_census.py` — cost-ranked FP-elimination census (≤100 examples/rule, 0 fp_bug + 0 unknown pass bar) with optional `tests/benchmarks/rule_tp_evidence.json` export and `--rule` / `--sample-cap` flags.

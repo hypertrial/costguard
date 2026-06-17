@@ -1,5 +1,7 @@
 # LLM-as-judge inter-rater reliability
 
+> **Note:** This doc covers the **internal IRR benchmark judge** (calibration against `fp_registry.toml`). For the **user-facing, opt-in advisory judge MVP**, see [Product scope](product-scope.md#llm-judge-mvp-in-scope-early).
+
 Costguard's frozen `eval_labels.toml` real split is seeded from `fp_registry.toml` bucket verdicts — effectively a single human/registry rater. This pipeline adds a **local LLM second rater** and measures agreement with Cohen's κ.
 
 The judge **never runs in CI**. Developers run the build tool locally, commit the cached JSONL labels, and CI only validates consistency and recomputes κ.
