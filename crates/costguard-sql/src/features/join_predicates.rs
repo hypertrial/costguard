@@ -247,6 +247,7 @@ pub(crate) fn function_name(function: &Function) -> String {
         .name
         .0
         .last()
+        .and_then(|part| part.as_ident())
         .map(|ident| ident.value.to_ascii_lowercase())
         .unwrap_or_default()
 }
