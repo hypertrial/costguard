@@ -43,6 +43,8 @@ python3 scripts/benchmark_external_repo.py --repo spellbook --smoke
 python3 scripts/benchmark_external_repo.py --repo nba-monte-carlo
 python3 scripts/benchmark_external_repo.py --repo nba-monte-carlo --smoke
 python3 scripts/benchmark_external_repo.py --repo tuva
+python3 scripts/benchmark_external_repo.py --repo ol-data-platform
+python3 scripts/benchmark_external_repo.py --repo ol-data-platform --smoke
 python3 scripts/benchmark_external_repo.py --repo data-infra  # manual observational
 ```
 
@@ -57,6 +59,7 @@ GitHub Actions workflows are optional `workflow_dispatch` mirrors. The local rel
 | External: jaffle-shop | `generic` | `critical` |
 | External: nba-monte-carlo | `duckdb` | `critical` |
 | External: tuva | `duckdb` | `critical` |
+| External: ol-data-platform | `trino` | `critical` |
 | External: data-infra (manual observational) | `bigquery` | `critical` |
 | Vendored harness | `generic` | `critical` |
 | This repo PR workflow | `generic` | `high` |

@@ -110,3 +110,19 @@ smoke_scan_paths = ["warehouse/models/mart"]
 scan_paths = ["warehouse"]
 fail_on = "critical"
 max_parse_failure_rate = 0.5
+
+[[repo]]
+name = "ol-data-platform"
+url = "https://github.com/mitodl/ol-data-platform.git"
+commit = "e20b9148d0142b548f498d17ad4f229f357846f7"
+warehouse = "trino"
+# compile_best_effort: offline dummy trino profile; keeps partial manifest if introspective macros fail
+compile_dbt = true
+compile_best_effort = true
+dbt_adapter = "dbt-trino"
+dbt_profile_type = "trino"
+dbt_project_dir = "src/ol_dbt"
+scan_paths = ["src/ol_dbt"]
+smoke_scan_paths = ["src/ol_dbt/models/staging"]
+fail_on = "critical"
+max_parse_failure_rate = 0.5

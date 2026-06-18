@@ -160,6 +160,8 @@ python3 scripts/benchmark_external_repo.py --repo spellbook --smoke
 python3 scripts/benchmark_external_repo.py --repo nba-monte-carlo
 python3 scripts/benchmark_external_repo.py --repo nba-monte-carlo --smoke
 python3 scripts/benchmark_external_repo.py --repo tuva
+python3 scripts/benchmark_external_repo.py --repo ol-data-platform
+python3 scripts/benchmark_external_repo.py --repo ol-data-platform --smoke
 python3 scripts/benchmark_external_repo.py --repo data-infra  # manual observational
 
 # Refresh baselines after intentional rule tuning
@@ -169,6 +171,8 @@ python3 scripts/benchmark_external_repo.py --repo spellbook --smoke --update-bas
 python3 scripts/benchmark_external_repo.py --repo nba-monte-carlo --update-baseline
 python3 scripts/benchmark_external_repo.py --repo nba-monte-carlo --smoke --update-baseline
 python3 scripts/benchmark_external_repo.py --repo tuva --update-baseline
+python3 scripts/benchmark_external_repo.py --repo ol-data-platform --update-baseline
+python3 scripts/benchmark_external_repo.py --repo ol-data-platform --smoke --update-baseline
 ```
 
 Common flags:
