@@ -40,8 +40,10 @@ Pinned clones defined in [`tests/benchmarks/repos.toml`](../../../tests/benchmar
 python3 scripts/benchmark_external_repo.py --repo jaffle-shop
 python3 scripts/benchmark_external_repo.py --repo spellbook
 python3 scripts/benchmark_external_repo.py --repo spellbook --smoke
-python3 scripts/benchmark_external_repo.py --repo data-infra
-python3 scripts/benchmark_external_repo.py --repo data-infra --smoke
+python3 scripts/benchmark_external_repo.py --repo nba-monte-carlo
+python3 scripts/benchmark_external_repo.py --repo nba-monte-carlo --smoke
+python3 scripts/benchmark_external_repo.py --repo tuva
+python3 scripts/benchmark_external_repo.py --repo data-infra  # manual observational
 ```
 
 GitHub Actions workflows are optional `workflow_dispatch` mirrors. The local release gate is authoritative and runs the full pinned repositories.
@@ -52,8 +54,10 @@ GitHub Actions workflows are optional `workflow_dispatch` mirrors. The local rel
 | --- | --- | --- |
 | PR examples / MVP | `snowflake` (illustrative) | `high` |
 | External: spellbook | `trino` | `critical` |
-| External: data-infra | `bigquery` | `critical` |
 | External: jaffle-shop | `generic` | `critical` |
+| External: nba-monte-carlo | `duckdb` | `critical` |
+| External: tuva | `duckdb` | `critical` |
+| External: data-infra (manual observational) | `bigquery` | `critical` |
 | Vendored harness | `generic` | `critical` |
 | This repo PR workflow | `generic` | `high` |
 

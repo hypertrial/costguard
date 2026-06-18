@@ -27,7 +27,7 @@ See [Installation](../getting-started/installation.md).
 
 Shared dbt compile and manifest merge helper used by `benchmark_external_repo.py` and local Spellbook stress tests. Subproject compiles run in parallel when multiple `--compile-dirs` are provided (`COSTGUARD_DBT_COMPILE_JOBS=1` forces serial). Manifest outputs are cached per repo commit and packages fingerprint when `--cache-dir` is set from the benchmark script.
 
-Benchmark repos configure compile via [`tests/benchmarks/repos.toml`](../../../tests/benchmarks/repos.toml): `compile_dbt = true` on all four external repos; `compile_best_effort = true` on mattermost-warehouse and data-infra reuses an existing manifest when offline Snowflake/BigQuery compile fails.
+Benchmark repos configure compile via [`tests/benchmarks/repos.toml`](../../../tests/benchmarks/repos.toml): required external repos compile dbt with dummy offline profiles by default; repo configs may pass `dbt_vars`, `dbt_env`, an existing `dbt_profiles_dir`, and per-repo cache/introspection flags. Tuva compiles its upstream `integration_tests` consumer project with `dbt_preserve_manifest_paths = true` so the scan still targets package source paths. Repos with deterministic offline dbt compile failures use `compile_best_effort = true` to reuse an existing generated or checked-in manifest.
 
 ```bash
 python3 scripts/dbt_compile_for_costguard.py \
@@ -79,7 +79,7 @@ python3 scripts/release_check.py --version 2.0.0
 
 ## `verify_ci_history.py`
 
-Release qualification helper used by `release.yml`. For the exact release SHA it requires the latest three completed `ci.yml` runs to be one push and two workflow dispatches, all successful, with successful `pr-gate`, `scale`, `spellbook-smoke`, and `data-infra-smoke` jobs.
+Release qualification helper used by `release.yml`. For the exact release SHA it requires the latest three completed `ci.yml` runs to be one push and two workflow dispatches, all successful, with successful `pr-gate`, `scale`, `spellbook-smoke`, and `nba-monte-carlo-smoke` jobs.
 
 ## `verify_release_assets.py`
 
@@ -124,7 +124,7 @@ PR-equivalent local gate mirrored by the required `pr-gate` job in [`.github/wor
 ```bash
 ./scripts/ci_local.sh
 ./scripts/ci_local.sh --spellbook-smoke
-./scripts/ci_local.sh --data-infra-smoke
+./scripts/ci_local.sh --nba-monte-carlo-smoke
 ./scripts/ci_local.sh --precision
 ```
 
@@ -157,15 +157,18 @@ python3 scripts/benchmark_external_repo.py --fixture real_world/jaffle_snippets
 python3 scripts/benchmark_external_repo.py --repo jaffle-shop
 python3 scripts/benchmark_external_repo.py --repo spellbook
 python3 scripts/benchmark_external_repo.py --repo spellbook --smoke
-python3 scripts/benchmark_external_repo.py --repo data-infra
-python3 scripts/benchmark_external_repo.py --repo data-infra --smoke
+python3 scripts/benchmark_external_repo.py --repo nba-monte-carlo
+python3 scripts/benchmark_external_repo.py --repo nba-monte-carlo --smoke
+python3 scripts/benchmark_external_repo.py --repo tuva
+python3 scripts/benchmark_external_repo.py --repo data-infra  # manual observational
 
 # Refresh baselines after intentional rule tuning
 python3 scripts/benchmark_external_repo.py --fixture real_world/jaffle_snippets --update-baseline
 python3 scripts/benchmark_external_repo.py --repo spellbook --update-baseline
 python3 scripts/benchmark_external_repo.py --repo spellbook --smoke --update-baseline
-python3 scripts/benchmark_external_repo.py --repo data-infra --update-baseline
-python3 scripts/benchmark_external_repo.py --repo data-infra --smoke --update-baseline
+python3 scripts/benchmark_external_repo.py --repo nba-monte-carlo --update-baseline
+python3 scripts/benchmark_external_repo.py --repo nba-monte-carlo --smoke --update-baseline
+python3 scripts/benchmark_external_repo.py --repo tuva --update-baseline
 ```
 
 Common flags:

@@ -8,8 +8,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 
+import dbt_compile_for_costguard as dbt_compile_module  # noqa: E402
 from dbt_compile_for_costguard import (  # noqa: E402
     compile_dbt_for_costguard,
+    compile_dbt_repo,
     manifest_cache_path,
     merge_manifests,
     packages_fingerprint,
@@ -178,8 +180,10 @@ class DbtCompileHelpersTest(unittest.TestCase):
         dbt = tmp / "dbt"
         dbt.write_text(
             "#!/usr/bin/env python3\n"
+            "import os\n"
             "import pathlib, sys\n"
             "pathlib.Path('dbt-args.txt').write_text(' '.join(sys.argv[1:]))\n"
+            "pathlib.Path('dbt-env.txt').write_text(os.environ.get('COSTGUARD_DBT_FLAG', ''))\n"
             "if sys.argv[1] == 'compile':\n"
             "    pathlib.Path(sys.argv[sys.argv.index('--project-dir') + 1], 'target').mkdir(exist_ok=True)\n"
             "    pathlib.Path(sys.argv[sys.argv.index('--project-dir') + 1], 'target', 'manifest.json').write_text('{\"nodes\": {}}')\n",
@@ -196,9 +200,118 @@ class DbtCompileHelpersTest(unittest.TestCase):
             target="dev",
             dbt_vars="{days: 7}",
             continue_on_deps_failure=False,
+            dbt_env={"COSTGUARD_DBT_FLAG": "enabled"},
+            no_introspect=False,
+            no_populate_cache=False,
+            threads=1,
         )
 
-        self.assertIn("--vars {days: 7}", (tmp / "dbt-args.txt").read_text(encoding="utf-8"))
+        args = (tmp / "dbt-args.txt").read_text(encoding="utf-8")
+        self.assertIn("--vars {days: 7}", args)
+        self.assertIn("--threads 1", args)
+        self.assertNotIn("--no-introspect", args)
+        self.assertNotIn("--no-populate-cache", args)
+        self.assertEqual((tmp / "dbt-env.txt").read_text(encoding="utf-8"), "enabled")
+
+    def test_compile_repo_passes_dbt_vars_and_scopes_cache(self) -> None:
+        tmp = self._temp_dir()
+        checkout = tmp / "checkout"
+        checkout.mkdir()
+        project = checkout / "integration_tests"
+        project.mkdir()
+        (project / "dbt_project.yml").write_text("name: demo\nprofile: default\n", encoding="utf-8")
+        profiles = project / "profiles" / "duckdb"
+        profiles.mkdir(parents=True)
+        captured = {}
+
+        original = dbt_compile_module.compile_dbt_for_costguard
+
+        def fake_compile_dbt_for_costguard(_checkout: Path, **kwargs):
+            captured.update(kwargs)
+            return kwargs["manifest_out"], "miss"
+
+        try:
+            dbt_compile_module.compile_dbt_for_costguard = fake_compile_dbt_for_costguard
+            state = compile_dbt_repo(
+                checkout,
+                {
+                    "name": "tuva",
+                    "commit": "a" * 40,
+                    "compile_dbt": True,
+                    "dbt_adapter": "dbt-duckdb",
+                    "dbt_profile_type": "duckdb",
+                    "dbt_project_dir": "integration_tests",
+                    "dbt_profiles_dir": "integration_tests/profiles/duckdb",
+                    "dbt_target": "ci",
+                    "dbt_preserve_manifest_paths": True,
+                    "dbt_env": {"DBT_MOTHERDUCK_CI_PATH": "costguard.duckdb"},
+                    "dbt_no_introspect": False,
+                    "dbt_no_populate_cache": False,
+                    "dbt_threads": 1,
+                    "dbt_vars": "{claims_enabled: true}",
+                    "dbt_manifest_path": "docs/manifest.json",
+                },
+                cache_dir=tmp / "cache",
+            )
+        finally:
+            dbt_compile_module.compile_dbt_for_costguard = original
+
+        self.assertEqual(state, "miss")
+        self.assertEqual(captured["dbt_vars"], "{claims_enabled: true}")
+        self.assertIn("vars:{claims_enabled: true}", captured["cache_scope"])
+        self.assertIn("project:integration_tests", captured["cache_scope"])
+        self.assertIn("preserve-manifest-paths:true", captured["cache_scope"])
+        self.assertIn("profiles:integration_tests/profiles/duckdb", captured["cache_scope"])
+        self.assertIn("no-introspect:False", captured["cache_scope"])
+        self.assertIn("no-populate-cache:False", captured["cache_scope"])
+        self.assertIn("threads:1", captured["cache_scope"])
+        self.assertIn("env:DBT_MOTHERDUCK_CI_PATH=costguard.duckdb", captured["cache_scope"])
+        self.assertEqual(captured["project_dir"], project.resolve())
+        self.assertEqual(captured["profiles_dir"], profiles.resolve())
+        self.assertEqual(captured["target"], "ci")
+        self.assertTrue(captured["preserve_manifest_paths"])
+        self.assertFalse(captured["no_introspect"])
+        self.assertFalse(captured["no_populate_cache"])
+        self.assertEqual(captured["threads"], 1)
+        self.assertEqual(captured["dbt_env"], {"DBT_MOTHERDUCK_CI_PATH": "costguard.duckdb"})
+        self.assertEqual(captured["project_manifest"], (checkout / "docs" / "manifest.json").resolve())
+
+    def test_compile_for_costguard_passes_project_manifest(self) -> None:
+        tmp = self._temp_dir()
+        checkout = tmp / "checkout"
+        checkout.mkdir()
+        manifest = checkout / "docs" / "manifest.json"
+        manifest.parent.mkdir()
+        manifest.write_text('{"nodes": {}, "sources": {}, "exposures": {}}', encoding="utf-8")
+        output = checkout / "target" / "manifest.json"
+        captured = {}
+
+        original_dbt_tools = dbt_compile_module.dbt_tools
+        original_compile_project = dbt_compile_module.compile_dbt_project
+
+        def fake_dbt_tools(*_args, **_kwargs):
+            return tmp, tmp / "dbt"
+
+        def fake_compile_dbt_project(_checkout: Path, _project_dir: Path, **kwargs):
+            captured.update(kwargs)
+            return manifest
+
+        try:
+            dbt_compile_module.dbt_tools = fake_dbt_tools
+            dbt_compile_module.compile_dbt_project = fake_compile_dbt_project
+            result, state = compile_dbt_for_costguard(
+                checkout,
+                project_manifest=manifest,
+                manifest_out=output,
+                adapter_package="dbt-duckdb",
+            )
+        finally:
+            dbt_compile_module.dbt_tools = original_dbt_tools
+            dbt_compile_module.compile_dbt_project = original_compile_project
+
+        self.assertEqual(result, output)
+        self.assertEqual(state, "miss")
+        self.assertEqual(captured["manifest_path"], manifest)
 
     def _temp_dir(self) -> Path:
         import tempfile

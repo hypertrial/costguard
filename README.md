@@ -143,9 +143,11 @@ python3 scripts/benchmark_external_repo.py --all-vendored
 python3 scripts/build_benchmark_evidence.py
 python3 scripts/generate_precision_tiers.py
 python3 scripts/benchmark_external_repo.py --repo spellbook --smoke
-python3 scripts/benchmark_external_repo.py --repo data-infra --smoke
+python3 scripts/benchmark_external_repo.py --repo nba-monte-carlo --smoke
 python3 scripts/benchmark_external_repo.py --repo spellbook   # full gate (manual / baseline refresh)
-python3 scripts/benchmark_external_repo.py --repo data-infra    # full gate (manual / baseline refresh)
+python3 scripts/benchmark_external_repo.py --repo nba-monte-carlo
+python3 scripts/benchmark_external_repo.py --repo tuva
+python3 scripts/benchmark_external_repo.py --repo data-infra    # manual observational
 cargo test -p costguard-core --test corpus
 ```
 

@@ -5,13 +5,13 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 SPELLBOOK_SMOKE=0
-DATA_INFRA_SMOKE=0
+NBA_MONTE_CARLO_SMOKE=0
 PRECISION_GATE=0
 CENSUS_GATE=0
 for arg in "$@"; do
   case "$arg" in
     --spellbook-smoke) SPELLBOOK_SMOKE=1 ;;
-    --data-infra-smoke) DATA_INFRA_SMOKE=1 ;;
+    --nba-monte-carlo-smoke) NBA_MONTE_CARLO_SMOKE=1 ;;
     --precision) PRECISION_GATE=1 ;;
     --census) CENSUS_GATE=1 ;;
     *) echo "unknown argument: $arg" >&2; exit 2 ;;
@@ -67,8 +67,8 @@ run cargo test --workspace --all-targets --locked
 if [ "$SPELLBOOK_SMOKE" -eq 1 ]; then
   COSTGUARD_BUILD_PROFILE=release run python3 scripts/benchmark_external_repo.py --repo spellbook --smoke
 fi
-if [ "$DATA_INFRA_SMOKE" -eq 1 ]; then
-  COSTGUARD_BUILD_PROFILE=release run python3 scripts/benchmark_external_repo.py --repo data-infra --smoke
+if [ "$NBA_MONTE_CARLO_SMOKE" -eq 1 ]; then
+  COSTGUARD_BUILD_PROFILE=release run python3 scripts/benchmark_external_repo.py --repo nba-monte-carlo --smoke
 fi
 if [ "$PRECISION_GATE" -eq 1 ]; then
   SPELLBOOK_CACHE="${HOME}/.cache/costguard/benchmarks/spellbook"

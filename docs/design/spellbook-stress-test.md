@@ -142,7 +142,9 @@ Add focused rule/regression cases under [`tests/fixtures/corpus/`](../../tests/f
 Secondary repos integrated or planned after Spellbook:
 
 - Mattermost data warehouse (observational): <https://github.com/mattermost/mattermost-data-warehouse/tree/master/transform/snowflake-dbt>
-- Cal-ITP data infrastructure (observational, BigQuery): <https://github.com/cal-itp/data-infra/> — dbt project in `warehouse/`, smoke scans `warehouse/models/mart`
+- NBA Monte Carlo (required, DuckDB): <https://github.com/matsonj/nba-monte-carlo> — dbt project in `transform/`, smoke scans NBA models and macros
+- Tuva (required, DuckDB): <https://github.com/tuva-health/tuva> — package scan with `integration_tests` as the compile consumer
+- Cal-ITP data infrastructure (observational, BigQuery): <https://github.com/cal-itp/data-infra/> — dbt project in `warehouse/`, manual scan only
 - dbt Jaffle Shop smoke test: <https://github.com/dbt-labs/jaffle-shop>
 - Public dbt corpus: <https://github.com/InfuseAI/awesome-public-dbt-projects>
 
@@ -152,7 +154,6 @@ Use the same benchmark harness as Spellbook:
 
 ```bash
 python3 scripts/benchmark_external_repo.py --repo data-infra
-python3 scripts/benchmark_external_repo.py --repo data-infra --smoke
 ```
 
-Pinned commit and scan paths are in [`tests/benchmarks/repos.toml`](../../tests/benchmarks/repos.toml). Unlike Spellbook, `dbt-bigquery compile` requires Application Default Credentials, so the benchmark runs as a metadata-only raw scan (`compile_dbt = false`) and is observational (`required = false`). Push CI runs the smoke profile via the `data-infra-smoke` job in [`ci.yml`](../../.github/workflows/ci.yml).
+Pinned commit and scan paths are in [`tests/benchmarks/repos.toml`](../../tests/benchmarks/repos.toml). The benchmark is observational (`required = false`) and stays manual; push CI no longer runs a data-infra smoke job.

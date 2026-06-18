@@ -211,6 +211,11 @@ def compile_dbt_project(
     continue_on_deps_failure: bool = True,
     dbt_vars: str = "",
     best_effort: bool = False,
+    manifest_path: Path | None = None,
+    dbt_env: dict[str, str] | None = None,
+    no_introspect: bool = True,
+    no_populate_cache: bool = True,
+    threads: int | None = None,
 ) -> Path:
     if not (project_dir / "dbt_project.yml").exists():
         raise SystemExit(f"compile enabled but no dbt_project.yml in {project_dir}")
@@ -232,6 +237,8 @@ def compile_dbt_project(
 
     env = os.environ.copy()
     env["DBT_PROFILES_DIR"] = str(resolved_profiles_dir)
+    if dbt_env:
+        env.update(dbt_env)
 
     deps = subprocess.run(
         [str(dbt), "deps", "--project-dir", str(project_dir)],
@@ -255,9 +262,13 @@ def compile_dbt_project(
         str(project_dir),
         "--target",
         target,
-        "--no-introspect",
-        "--no-populate-cache",
     ]
+    if no_introspect:
+        compile_cmd.append("--no-introspect")
+    if no_populate_cache:
+        compile_cmd.append("--no-populate-cache")
+    if threads is not None:
+        compile_cmd.extend(["--threads", str(threads)])
     if dbt_vars.strip():
         compile_cmd.extend(["--vars", dbt_vars])
     compile_proc = subprocess.run(
@@ -268,7 +279,7 @@ def compile_dbt_project(
         text=True,
         check=False,
     )
-    manifest = project_dir / "target" / "manifest.json"
+    manifest = manifest_path or (project_dir / "target" / "manifest.json")
     if compile_proc.returncode != 0:
         if best_effort and manifest.is_file():
             print(
@@ -367,7 +378,7 @@ def compile_jobs(count: int) -> int:
     return max(1, min(count, os.cpu_count() or 4, 5))
 
 
-def _compile_subproject_worker(args: tuple[str, str, str, str, str, str, str, bool, str, bool]) -> tuple[str, str]:
+def _compile_subproject_worker(args: tuple[Any, ...]) -> tuple[str, str]:
     (
         checkout_s,
         rel,
@@ -379,6 +390,10 @@ def _compile_subproject_worker(args: tuple[str, str, str, str, str, str, str, bo
         continue_on_deps_failure,
         dbt_vars,
         best_effort,
+        dbt_env,
+        no_introspect,
+        no_populate_cache,
+        threads,
     ) = args
     checkout = Path(checkout_s)
     project_dir = (checkout / rel).resolve()
@@ -394,6 +409,10 @@ def _compile_subproject_worker(args: tuple[str, str, str, str, str, str, str, bo
         continue_on_deps_failure=continue_on_deps_failure,
         dbt_vars=dbt_vars,
         best_effort=best_effort,
+        dbt_env=dbt_env,
+        no_introspect=no_introspect,
+        no_populate_cache=no_populate_cache,
+        threads=threads,
     )
     return rel, str(manifest)
 
@@ -410,6 +429,10 @@ def compile_subprojects_parallel(
     continue_on_deps_failure: bool,
     dbt_vars: str,
     best_effort: bool = False,
+    dbt_env: dict[str, str] | None = None,
+    no_introspect: bool = True,
+    no_populate_cache: bool = True,
+    threads: int | None = None,
 ) -> list[tuple[Path, str]]:
     profiles_dir_s = str(profiles_dir) if profiles_dir is not None else ""
     worker_args = [
@@ -424,6 +447,10 @@ def compile_subprojects_parallel(
             continue_on_deps_failure,
             dbt_vars,
             best_effort,
+            dbt_env,
+            no_introspect,
+            no_populate_cache,
+            threads,
         )
         for rel in compile_dirs
     ]
@@ -459,6 +486,7 @@ def compile_dbt_for_costguard(
     checkout: Path,
     *,
     project_dir: Path | None = None,
+    project_manifest: Path | None = None,
     compile_dirs: list[str] | None = None,
     manifest_out: Path,
     adapter_package: str = "dbt-trino",
@@ -478,6 +506,11 @@ def compile_dbt_for_costguard(
     dbt_vars: str = "",
     use_existing_manifest: bool = False,
     best_effort: bool = False,
+    preserve_manifest_paths: bool = False,
+    dbt_env: dict[str, str] | None = None,
+    no_introspect: bool = True,
+    no_populate_cache: bool = True,
+    threads: int | None = None,
 ) -> tuple[Path, str]:
     resolved_profile_type = profile_type or profile_type_from_adapter(adapter_package)
     dirs = compile_dirs or []
@@ -526,6 +559,10 @@ def compile_dbt_for_costguard(
             continue_on_deps_failure=continue_on_deps_failure,
             dbt_vars=dbt_vars,
             best_effort=best_effort,
+            dbt_env=dbt_env,
+            no_introspect=no_introspect,
+            no_populate_cache=no_populate_cache,
+            threads=threads,
         )
         merge_manifests(entries, manifest_out)
     else:
@@ -541,12 +578,17 @@ def compile_dbt_for_costguard(
             continue_on_deps_failure=continue_on_deps_failure,
             dbt_vars=dbt_vars,
             best_effort=best_effort,
+            manifest_path=project_manifest,
+            dbt_env=dbt_env,
+            no_introspect=no_introspect,
+            no_populate_cache=no_populate_cache,
+            threads=threads,
         )
         try:
             project_rel = str(resolved_project.relative_to(checkout))
         except ValueError:
             project_rel = ""
-        if project_rel and project_rel != ".":
+        if project_rel and project_rel != "." and not preserve_manifest_paths:
             merge_manifests([(manifest, project_rel)], manifest_out)
         else:
             write_json(manifest_out, json.loads(manifest.read_text(encoding="utf-8")))
@@ -589,23 +631,49 @@ def compile_dbt_repo(
         project_dir = (checkout / compile_dirs[0]).resolve()
     else:
         project_dir = (checkout / repo.get("dbt_project_dir", ".")).resolve()
+    project_manifest = None
+    if repo.get("dbt_manifest_path"):
+        project_manifest = (checkout / str(repo["dbt_manifest_path"])).resolve()
     manifest_out = checkout / "target" / "manifest.json"
     if manifest_out.is_file() and not force_compile:
         return "existing"
-    profiles_dir = checkout / ".costguard-profiles"
-    profile_name = read_dbt_profile_name(project_dir)
-    write_dummy_profiles(
-        profiles_dir,
-        profile_name=profile_name,
-        target=repo.get("dbt_target", "dev"),
-        profile_type=repo.get("dbt_profile_type", "generic"),
-        force=True,
+    if repo.get("dbt_profiles_dir"):
+        profiles_dir = (checkout / str(repo["dbt_profiles_dir"])).resolve()
+    else:
+        profiles_dir = checkout / ".costguard-profiles"
+        profile_name = read_dbt_profile_name(project_dir)
+        write_dummy_profiles(
+            profiles_dir,
+            profile_name=profile_name,
+            target=repo.get("dbt_target", "dev"),
+            profile_type=repo.get("dbt_profile_type", "generic"),
+            force=True,
+        )
+    dbt_vars = repo.get("dbt_vars", "")
+    dbt_env = {str(key): str(value) for key, value in repo.get("dbt_env", {}).items()}
+    cache_scope = "smoke" if smoke else ""
+    if dbt_vars:
+        cache_scope = f"{cache_scope}\nvars:{dbt_vars}"
+    if not compile_dirs:
+        cache_scope = f"{cache_scope}\nproject:{repo.get('dbt_project_dir', '.')}"
+    if repo.get("dbt_preserve_manifest_paths", False):
+        cache_scope = f"{cache_scope}\npreserve-manifest-paths:true"
+    if repo.get("dbt_profiles_dir"):
+        cache_scope = f"{cache_scope}\nprofiles:{repo['dbt_profiles_dir']}"
+    cache_scope = (
+        f"{cache_scope}\nno-introspect:{bool(repo.get('dbt_no_introspect', True))}"
+        f"\nno-populate-cache:{bool(repo.get('dbt_no_populate_cache', True))}"
     )
+    if repo.get("dbt_threads") is not None:
+        cache_scope = f"{cache_scope}\nthreads:{int(repo['dbt_threads'])}"
+    for key, value in sorted(dbt_env.items()):
+        cache_scope = f"{cache_scope}\nenv:{key}={value}"
 
     _, compile_cache = compile_dbt_for_costguard(
         checkout,
         compile_dirs=compile_dirs,
         project_dir=project_dir if not compile_dirs else None,
+        project_manifest=project_manifest if not compile_dirs else None,
         manifest_out=manifest_out,
         adapter_package=repo.get("dbt_adapter", "dbt-trino"),
         profile_type=repo.get("dbt_profile_type"),
@@ -616,8 +684,14 @@ def compile_dbt_repo(
         repo_name=repo["name"],
         commit=repo["commit"],
         force_compile=force_compile,
-        cache_scope="smoke" if smoke else "",
+        cache_scope=cache_scope,
+        dbt_vars=dbt_vars,
         best_effort=bool(repo.get("compile_best_effort", False)),
+        preserve_manifest_paths=bool(repo.get("dbt_preserve_manifest_paths", False)),
+        dbt_env=dbt_env,
+        no_introspect=bool(repo.get("dbt_no_introspect", True)),
+        no_populate_cache=bool(repo.get("dbt_no_populate_cache", True)),
+        threads=int(repo["dbt_threads"]) if repo.get("dbt_threads") is not None else None,
     )
     return compile_cache
 

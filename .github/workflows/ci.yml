@@ -100,7 +100,7 @@ jobs:
           path: tests/benchmarks/reports/external__spellbook_smoke.json
           if-no-files-found: error
 
-  data-infra-smoke:
+  nba-monte-carlo-smoke:
     if: github.event_name != 'pull_request'
     needs: pr-gate
     runs-on: ubuntu-24.04
@@ -117,11 +117,11 @@ jobs:
       - run: chmod +x target/release/costguard
       - env:
           COSTGUARD_BUILD_PROFILE: release
-        run: python scripts/benchmark_external_repo.py --repo data-infra --smoke
-      - name: Upload data-infra smoke report
+        run: python scripts/benchmark_external_repo.py --repo nba-monte-carlo --smoke
+      - name: Upload NBA Monte Carlo smoke report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: data-infra-smoke-report
-          path: tests/benchmarks/reports/external__data-infra_smoke.json
+          name: nba-monte-carlo-smoke-report
+          path: tests/benchmarks/reports/external__nba-monte-carlo_smoke.json
           if-no-files-found: error

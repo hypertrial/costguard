@@ -128,13 +128,14 @@ def main() -> int:
         tag, commit = require_release_tag(version)
         require_release_tools()
 
-    run(["./scripts/ci_local.sh", "--spellbook-smoke", "--data-infra-smoke"] if not args.skip_external else ["./scripts/ci_local.sh"])
+    run(["./scripts/ci_local.sh", "--spellbook-smoke", "--nba-monte-carlo-smoke"] if not args.skip_external else ["./scripts/ci_local.sh"])
     run([sys.executable, "scripts/scale_check.py"])
     run([sys.executable, "scripts/support_matrix.py", "--verify"])
     if not args.skip_external:
         run([sys.executable, "scripts/benchmark_external_repo.py", "--repo", "jaffle-shop", "--force-compile"])
         run([sys.executable, "scripts/benchmark_external_repo.py", "--repo", "spellbook", "--force-compile"])
-        run([sys.executable, "scripts/benchmark_external_repo.py", "--repo", "data-infra"])
+        run([sys.executable, "scripts/benchmark_external_repo.py", "--repo", "nba-monte-carlo", "--force-compile"])
+        run([sys.executable, "scripts/benchmark_external_repo.py", "--repo", "tuva", "--force-compile"])
     if not args.skip_external_links:
         run([sys.executable, "scripts/check_docs.py", "--external"])
     if not args.development:

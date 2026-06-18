@@ -1,6 +1,6 @@
 # Benchmark evidence
 
-Public snapshot of Costguard precision/recall evidence from real dbt benchmark repos (Spellbook, jaffle-shop, mattermost-warehouse, data-infra) and the corpus regression suite.
+Public snapshot of Costguard precision/recall evidence from real dbt benchmark repos and the corpus regression suite.
 
 Snapshot: [`tests/benchmarks/evidence/v2.4.json`](../../../tests/benchmarks/evidence/v2.4.json) (generated 2026-06-18).
 

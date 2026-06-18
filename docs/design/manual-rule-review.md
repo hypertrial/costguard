@@ -61,7 +61,7 @@ flowchart TD
    ```
    Default cache: `~/.cache/costguard/benchmarks/{repo}/`. Pins are in [`tests/benchmarks/repos.toml`](../../tests/benchmarks/repos.toml).
 
-   All four benchmark repos now set `compile_dbt = true`. Spellbook and jaffle-shop compile offline with dummy Trino/DuckDB profiles. **mattermost-warehouse** and **data-infra** set `compile_best_effort = true`: when Snowflake/BigQuery auth fails offline, the harness reuses any existing `target/manifest.json` instead of aborting the scan. Prefer compiled SQL for adjudication; reserve `class = "exempt"` for genuine repo idioms, not regex-only artifacts masked because compile was disabled.
+   The rule-review census repos set `compile_dbt = true`. Spellbook and jaffle-shop compile offline with dummy Trino/DuckDB profiles. **mattermost-warehouse** and **data-infra** set `compile_best_effort = true`: when Snowflake/BigQuery auth fails offline, the harness reuses any existing `target/manifest.json` instead of aborting the scan. The broader support matrix also includes required NBA Monte Carlo and Tuva external benchmarks. Prefer compiled SQL for adjudication; reserve `class = "exempt"` for genuine repo idioms, not regex-only artifacts masked because compile was disabled.
 
 2. **Read compiled SQL**, not raw Jinja, for dbt models. All triage scripts use `read_sql_for_diagnostic()` — manifest `compiled_code` when available.
 
@@ -348,7 +348,7 @@ python3 scripts/precision_triage.py --repo spellbook --sample-size 200
 .venv-eval/bin/python scripts/eval_metrics.py --split real
 ```
 
-Full local gate: `./scripts/ci_local.sh` (add `--precision`, `--spellbook-smoke`, `--data-infra-smoke` as needed).
+Full local gate: `./scripts/ci_local.sh` (add `--precision`, `--spellbook-smoke`, `--nba-monte-carlo-smoke` as needed).
 
 ## Why diagnostic counts can rise after FP fixes
 

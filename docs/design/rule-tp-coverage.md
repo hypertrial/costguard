@@ -1,7 +1,7 @@
-# Rule TP coverage (all benchmark repos)
+# Rule TP coverage (review census repos)
 
 Generated: 2026-06-16  
-Corpus: spellbook (Trino), jaffle-shop (duckdb), mattermost-warehouse (Snowflake), data-infra (BigQuery). All four repos set `compile_dbt = true`; Snowflake/BigQuery use `compile_best_effort = true` when offline dummy profiles cannot reach the warehouse.  
+Review census corpus: spellbook (Trino), jaffle-shop (duckdb), mattermost-warehouse (Snowflake), data-infra (BigQuery). These census repos set `compile_dbt = true`; Snowflake/BigQuery use `compile_best_effort = true` when offline dummy profiles cannot reach the warehouse. The broader support matrix also includes required NBA Monte Carlo and Tuva external benchmarks.  
 Pass bar: **≤100 cost-ranked examples per rule** (100% if fewer) with **0 `fp_bug` + 0 `unknown`** in the examined sample.  
 Tool: [`scripts/rule_tp_census.py`](../../scripts/rule_tp_census.py); evidence: [`tests/benchmarks/rule_tp_evidence.json`](../../tests/benchmarks/rule_tp_evidence.json).
 

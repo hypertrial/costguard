@@ -39,6 +39,45 @@ max_parse_failure_rate = 0.35
 cost = true
 
 [[repo]]
+name = "nba-monte-carlo"
+url = "https://github.com/matsonj/nba-monte-carlo.git"
+commit = "494dbe6a1f0adec64b4557014c3995c1f0f7f7af"
+warehouse = "duckdb"
+compile_dbt = true
+compile_best_effort = true
+dbt_adapter = "dbt-duckdb"
+dbt_profile_type = "duckdb"
+dbt_project_dir = "transform"
+dbt_manifest_path = "docs/manifest.json"
+smoke_scan_paths = ["transform/models/nba", "transform/macros"]
+scan_paths = ["transform"]
+fail_on = "critical"
+max_parse_failure_rate = 0.35
+
+[[repo]]
+name = "tuva"
+url = "https://github.com/tuva-health/tuva.git"
+commit = "434ff3ff70cd1cac53ba80e8291273b668bf281a"
+warehouse = "duckdb"
+compile_dbt = true
+compile_best_effort = true
+dbt_adapter = "dbt-duckdb"
+dbt_profile_type = "duckdb"
+dbt_project_dir = "integration_tests"
+dbt_profiles_dir = "integration_tests/profiles/duckdb"
+dbt_target = "ci"
+dbt_preserve_manifest_paths = true
+dbt_env = { DBT_MOTHERDUCK_CI_PATH = "costguard.duckdb" }
+dbt_no_introspect = false
+dbt_no_populate_cache = false
+dbt_threads = 1
+dbt_vars = "{claims_enabled: true, clinical_enabled: true, provider_attribution_enabled: true, semantic_layer_enabled: true, enable_data_quality: true, disable_dbt_invocation_autoupload: true}"
+scan_paths = ["models", "macros", "snapshots", "tests"]
+fail_on = "critical"
+max_parse_failure_rate = 0.35
+max_sql_parse_compiled_failures = 3
+
+[[repo]]
 name = "mattermost-warehouse"
 required = false
 url = "https://github.com/mattermost/mattermost-data-warehouse.git"

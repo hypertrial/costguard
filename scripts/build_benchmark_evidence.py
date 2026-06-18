@@ -178,7 +178,7 @@ python3 scripts/build_benchmark_evidence.py
             "# Benchmark evidence",
             "",
             "Public snapshot of Costguard precision/recall evidence from real dbt benchmark repos "
-            "(Spellbook, jaffle-shop, mattermost-warehouse, data-infra) and the corpus regression suite.",
+            "and the corpus regression suite.",
             "",
             f"Snapshot: [`tests/benchmarks/evidence/v2.4.json`](../../../tests/benchmarks/evidence/v2.4.json) "
             f"(generated {snapshot['generated_at']}).",

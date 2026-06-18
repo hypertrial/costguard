@@ -385,8 +385,9 @@ def run_external(
             "max_rss_bytes": report["max_rss_bytes"],
             "thresholds": {
                 "max_parse_failure_delta": existing_thresholds.get("max_parse_failure_delta", 50),
-                "max_sql_parse_compiled_failures": existing_thresholds.get(
-                    "max_sql_parse_compiled_failures", 0
+                "max_sql_parse_compiled_failures": repo.get(
+                    "max_sql_parse_compiled_failures",
+                    existing_thresholds.get("max_sql_parse_compiled_failures", 0),
                 ),
                 "max_diagnostics_by_rule": existing_thresholds.get(
                     "max_diagnostics_by_rule", {}

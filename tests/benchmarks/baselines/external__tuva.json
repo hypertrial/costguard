@@ -1,0 +1,73 @@
+{
+  "commit": "434ff3ff70cd1cac53ba80e8291273b668bf281a",
+  "kind": "external",
+  "max_rss_bytes": 278970368,
+  "metrics": {
+    "counts": {
+      "manifest": 0,
+      "other": 0,
+      "python": 0,
+      "sql": 1250,
+      "yaml": 45
+    },
+    "dbt_project_parse_failures": 0,
+    "diagnostics_by_rule": {
+      "SQLCOST001": 138,
+      "SQLCOST002": 5,
+      "SQLCOST003": 1,
+      "SQLCOST004": 1,
+      "SQLCOST006": 8,
+      "SQLCOST007": 155,
+      "SQLCOST008": 270,
+      "SQLCOST009": 1,
+      "SQLCOST011": 1,
+      "SQLCOST012": 69,
+      "SQLCOST013": 49,
+      "SQLCOST014": 141,
+      "SQLCOST015": 7,
+      "SQLCOST017": 16,
+      "SQLCOST018": 26,
+      "SQLCOST020": 22,
+      "SQLCOST027": 487,
+      "SQLCOST031": 5,
+      "SQLCOST037": 1,
+      "SQLCOST039": 54,
+      "SQLCOST040": 1
+    },
+    "diagnostics_by_severity": {
+      "high": 39,
+      "info": 487,
+      "low": 297,
+      "med": 635
+    },
+    "metadata_only_scan": false,
+    "metadata_warnings": 0,
+    "new_findings": 1458,
+    "sql_parse_compiled_failures": 3,
+    "sql_parse_compiled_total": 698,
+    "sql_parse_failures": 487,
+    "sql_parse_other_failures": 63,
+    "sql_parse_other_total": 68,
+    "sql_parse_total": 1182,
+    "yaml_parse_failures": 0
+  },
+  "runtime_max_ms": 462,
+  "runtime_median_ms": 453,
+  "runtime_samples_ms": [
+    453,
+    462,
+    449
+  ],
+  "target": "external/tuva",
+  "thresholds": {
+    "max_diagnostics_by_rule": {},
+    "max_parse_failure_delta": 50,
+    "max_parse_failure_rate": 0.4120135363790186,
+    "max_rss_bytes": 1073741824,
+    "max_runtime_max_ms": 2432,
+    "max_runtime_median_ms": 1430,
+    "max_sql_parse_compiled_failures": 3
+  },
+  "version": 2,
+  "warehouse": "duckdb"
+}

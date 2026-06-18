@@ -20,6 +20,8 @@ cargo test -p costguard-core --test benchmark vendored_baselines_match
 python3 scripts/benchmark_external_repo.py --repo jaffle-shop
 python3 scripts/benchmark_external_repo.py --repo spellbook
 python3 scripts/benchmark_external_repo.py --repo spellbook --smoke
+python3 scripts/benchmark_external_repo.py --repo nba-monte-carlo --smoke
+python3 scripts/benchmark_external_repo.py --repo tuva
 
 # Force recompile (bypass manifest cache)
 python3 scripts/benchmark_external_repo.py --repo spellbook --force-compile
@@ -59,8 +61,8 @@ python3 scripts/benchmark_external_repo.py --repo spellbook --update-baseline
 
 GitHub Actions:
 
-- **Push to `main`:** [`benchmark.yml`](../../.github/workflows/benchmark.yml) runs **Spellbook smoke** (`tokens` subproject + `dbt_macros`) only. Vendored baselines run in [`ci.yml`](../../.github/workflows/ci.yml).
-- **Manual:** run the **benchmark** workflow (`workflow_dispatch`) with target `vendored`, `jaffle-shop`, `spellbook-smoke`, `spellbook`, `precision`, or `all`. Full Spellbook (five subprojects) is **dispatch-only**. The `precision` target runs full Spellbook plus `precision_triage.py` gates.
+- **Push to `main`:** [`ci.yml`](../../.github/workflows/ci.yml) runs Spellbook and NBA Monte Carlo smoke jobs after the PR gate. Vendored baselines run in the PR gate.
+- **Manual:** run the **benchmark** workflow (`workflow_dispatch`) for the full support matrix. Full Spellbook (five subprojects) and Tuva are not push smoke jobs. The `precision` target runs full Spellbook plus `precision_triage.py` gates.
 
 Benchmark scripts build the CLI in **release** mode by default (`COSTGUARD_BUILD_PROFILE=release`). dbt manifests are cached under `{cache}/manifests/{repo}/{commit}/{packages_fp}/` and skipped on warm runs unless `--force-compile` is passed.
 
