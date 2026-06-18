@@ -5,7 +5,7 @@ use crate::volume::{lookup_keys, model_identity, VolumeContext};
 use crate::CostInputs;
 use costguard_dbt::{DbtModel, DbtProject};
 use costguard_diagnostics::CostGrade;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -72,6 +72,8 @@ pub struct PrCostImpact {
     pub net: CostFigure,
     pub efficiency: CostFigure,
     pub volume: CostFigure,
+    /// Total monthly cost of downstream models affected by changed models (additive advisory).
+    pub blast_radius: CostFigure,
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize)]
@@ -380,10 +382,49 @@ pub fn compute_realized_savings(
     }
 }
 
+pub fn compute_blast_radius(
+    index: &ModelCostIndex,
+    downstream_ids: &HashMap<String, Vec<String>>,
+    changed_paths: &[PathBuf],
+    config: &CostConfig,
+) -> CostFigure {
+    let has_pricing = price_per_byte(config).is_some();
+    let mut seen_downstream = HashSet::new();
+    let mut costs = Vec::new();
+
+    for path in changed_paths {
+        let Some(model_id) = index.by_path.get(path) else {
+            continue;
+        };
+        let Some(ids) = downstream_ids.get(model_id) else {
+            continue;
+        };
+        for id in ids {
+            if !seen_downstream.insert(id.clone()) {
+                continue;
+            }
+            if let Some(entry) = index.models.get(id) {
+                costs.push(entry.monthly_cost);
+            }
+        }
+    }
+
+    if costs.is_empty() {
+        return CostFigure {
+            basis: "downstream-blast-radius".into(),
+            ..Default::default()
+        };
+    }
+
+    let total = sum_lognormals(&costs);
+    CostFigure::from_estimate(total, config, "downstream-blast-radius", has_pricing)
+}
+
 pub fn compute_pr_impact(
     head_summary: &ProjectCostSummary,
     base_summary: &ProjectCostSummary,
     config: &CostConfig,
+    blast_radius: CostFigure,
 ) -> PrCostImpact {
     let has_pricing = price_per_byte(config).is_some();
 
@@ -408,6 +449,7 @@ pub fn compute_pr_impact(
         net: CostFigure::from_estimate(net_est, config, "pr-net", has_pricing),
         efficiency: CostFigure::from_estimate(efficiency_est, config, "pr-efficiency", has_pricing),
         volume: CostFigure::from_estimate(volume_est, config, "pr-volume", has_pricing),
+        blast_radius,
     }
 }
 

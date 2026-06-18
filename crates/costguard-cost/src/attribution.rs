@@ -41,12 +41,14 @@ pub struct CostAttributionContext<'a> {
     pub dbt: Option<&'a DbtProject>,
     pub features_by_path: &'a HashMap<PathBuf, ModelFeatureSummary>,
     pub downstream_counts: &'a HashMap<String, usize>,
+    pub downstream_ids: &'a HashMap<String, Vec<String>>,
     pub exposure_counts: &'a HashMap<String, usize>,
 }
 
-pub fn build_downstream_counts(dbt: &DbtProject) -> HashMap<String, usize> {
-    // ponytail: stop at 15 descendants — fan_out_factor() saturates there; recompute if formula changes
-    const MAX_DOWNSTREAM: usize = 15;
+// ponytail: stop at 15 descendants — fan_out_factor() saturates there; recompute if formula changes
+const MAX_DOWNSTREAM: usize = 15;
+
+fn build_reverse_dependencies(dbt: &DbtProject) -> HashMap<String, Vec<String>> {
     let mut reverse: HashMap<String, Vec<String>> = HashMap::new();
     for model in dbt.models.values() {
         let dependent = model_identity(model);
@@ -66,26 +68,44 @@ pub fn build_downstream_counts(dbt: &DbtProject) -> HashMap<String, usize> {
             }
         }
     }
+    reverse
+}
 
-    let mut counts = HashMap::new();
-    for model in dbt.models.values() {
-        let id = model_identity(model);
-        let mut seen = HashSet::new();
-        let mut stack = reverse.get(&id).cloned().unwrap_or_default();
-        while let Some(node) = stack.pop() {
-            if !seen.insert(node.clone()) {
-                continue;
-            }
-            if seen.len() >= MAX_DOWNSTREAM {
-                break;
-            }
-            if let Some(next) = reverse.get(&node) {
-                stack.extend(next.iter().cloned());
-            }
+fn collect_downstream_ids(reverse: &HashMap<String, Vec<String>>, root_id: &str) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut stack = reverse.get(root_id).cloned().unwrap_or_default();
+    while let Some(node) = stack.pop() {
+        if !seen.insert(node.clone()) {
+            continue;
         }
-        counts.insert(id, seen.len());
+        if seen.len() >= MAX_DOWNSTREAM {
+            break;
+        }
+        if let Some(next) = reverse.get(&node) {
+            stack.extend(next.iter().cloned());
+        }
     }
-    counts
+    let mut ids: Vec<String> = seen.into_iter().collect();
+    ids.sort();
+    ids
+}
+
+pub fn build_downstream_ids(dbt: &DbtProject) -> HashMap<String, Vec<String>> {
+    let reverse = build_reverse_dependencies(dbt);
+    dbt.models
+        .values()
+        .map(|model| {
+            let id = model_identity(model);
+            (id.clone(), collect_downstream_ids(&reverse, &id))
+        })
+        .collect()
+}
+
+pub fn build_downstream_counts(dbt: &DbtProject) -> HashMap<String, usize> {
+    build_downstream_ids(dbt)
+        .into_iter()
+        .map(|(id, ids)| (id, ids.len()))
+        .collect()
 }
 
 pub fn build_exposure_counts(dbt: &DbtProject) -> HashMap<String, usize> {
@@ -124,7 +144,6 @@ pub fn attribute_findings(
     }
 
     let price = price_per_byte(ctx.config);
-    let pricing = pricing_label(&ctx.config.pricing);
     let has_pricing = price.is_some();
     let volume_ctx = VolumeContext {
         config: ctx.config,
@@ -161,6 +180,8 @@ pub fn attribute_findings(
                     current_cost_p50_usd_per_month: None,
                     post_fix_cost_p50_usd_per_month: None,
                     unestimated_reason: Some(reason),
+                    downstream_model_count: None,
+                    downstream_monthly_p50_usd: None,
                 });
             }
             continue;
@@ -257,8 +278,7 @@ pub fn attribute_findings(
     }
 
     let per_model = apply_per_model_caps(&mut pending);
-    let (savings_p10, savings_p50, savings_p90) =
-        apply_attributions(diagnostics, &pending, ctx.config, &pricing, has_pricing);
+    let (savings_p10, savings_p50, savings_p90) = apply_attributions(diagnostics, &pending, ctx);
 
     // ponytail: project_current matches summarize_project_costs (all indexed models);
     // per_model caps cover only models with findings — savings outside the index are minor.
@@ -352,13 +372,41 @@ fn apply_per_model_caps(pending: &mut [PendingAttribution]) -> Vec<(Estimate, Es
     per_model
 }
 
+fn downstream_monthly_cost(
+    model_id: &str,
+    ctx: &CostAttributionContext<'_>,
+) -> (usize, Option<f64>) {
+    let ids = ctx
+        .downstream_ids
+        .get(model_id)
+        .map(Vec::as_slice)
+        .unwrap_or(&[]);
+    let count = ids.len();
+    if count == 0 {
+        return (0, None);
+    }
+    let costs: Vec<Estimate> = ids
+        .iter()
+        .filter_map(|id| ctx.model_index.models.get(id))
+        .map(|entry| entry.monthly_cost)
+        .collect();
+    if costs.is_empty() {
+        return (count, None);
+    }
+    let total = sum_lognormals(&costs);
+    let has_pricing = price_per_byte(ctx.config).is_some();
+    let p50 = has_pricing.then(|| round_sig2(total.median()));
+    (count, p50)
+}
+
 fn apply_attributions(
     diagnostics: &mut [Diagnostic],
     pending: &[PendingAttribution],
-    config: &CostConfig,
-    pricing: &str,
-    has_pricing: bool,
+    ctx: &CostAttributionContext<'_>,
 ) -> (f64, f64, f64) {
+    let config = ctx.config;
+    let pricing = pricing_label(&config.pricing);
+    let has_pricing = price_per_byte(config).is_some();
     let mut savings_estimates = Vec::new();
 
     for item in pending {
@@ -412,6 +460,8 @@ fn apply_attributions(
             cap_note
         );
 
+        let (downstream_count, downstream_p50) = downstream_monthly_cost(&item.model_id, ctx);
+
         diagnostics[item.diagnostic_index].cost_estimate = Some(CostEstimate {
             relative_index,
             grade: item.grade,
@@ -425,6 +475,8 @@ fn apply_attributions(
             current_cost_p50_usd_per_month: model_monthly_p50,
             post_fix_cost_p50_usd_per_month: post_fix_p50,
             unestimated_reason: None,
+            downstream_model_count: (downstream_count > 0).then_some(downstream_count),
+            downstream_monthly_p50_usd: downstream_p50,
         });
         savings_estimates.push(savings);
     }
@@ -541,6 +593,7 @@ mod tests {
                 compiled_line: None,
                 compiled_column: None,
                 cost_estimate: None,
+                rule_precision_tier: None,
             },
             Diagnostic {
                 governance: Default::default(),
@@ -559,6 +612,7 @@ mod tests {
                 compiled_line: None,
                 compiled_column: None,
                 cost_estimate: None,
+                rule_precision_tier: None,
             },
         ];
         let mut summary = summarize_project_costs(&index, &config);
@@ -568,6 +622,7 @@ mod tests {
             dbt: Some(&dbt),
             features_by_path: &HashMap::new(),
             downstream_counts: &HashMap::new(),
+            downstream_ids: &HashMap::new(),
             exposure_counts: &HashMap::new(),
         };
         attribute_findings(&mut diagnostics, &ctx, &mut summary);
@@ -603,6 +658,7 @@ mod tests {
             compiled_line: None,
             compiled_column: None,
             cost_estimate: None,
+            rule_precision_tier: None,
         }
     }
 
@@ -640,6 +696,7 @@ mod tests {
             dbt: Some(&dbt),
             features_by_path: &HashMap::new(),
             downstream_counts: &HashMap::new(),
+            downstream_ids: &HashMap::new(),
             exposure_counts: &HashMap::new(),
         };
         attribute_findings(&mut diagnostics, &ctx, &mut summary);
@@ -653,6 +710,66 @@ mod tests {
             potential > 0.0,
             "potential {potential} current {current} post_fix {post_fix}"
         );
+    }
+
+    #[test]
+    fn downstream_cost_propagates_through_lineage() {
+        let mut config = CostConfig {
+            enabled: true,
+            ..CostConfig::default()
+        };
+        config.pricing = crate::config::CostPricingSection {
+            model: Some("scan".into()),
+            usd_per_tb: Some(6.25),
+            usd_per_credit: None,
+            tb_per_credit_hour: None,
+        };
+        let mut dbt = DbtProject::default();
+        for (id, name, path, deps) in [
+            ("model.pkg.a", "a", "models/a.sql", Vec::<String>::new()),
+            (
+                "model.pkg.b",
+                "b",
+                "models/b.sql",
+                vec!["model.pkg.a".into()],
+            ),
+            (
+                "model.pkg.c",
+                "c",
+                "models/c.sql",
+                vec!["model.pkg.b".into()],
+            ),
+        ] {
+            dbt.graph.depends_on.insert(id.into(), deps);
+            dbt.models.insert(
+                id.into(),
+                DbtModel {
+                    unique_id: Some(id.into()),
+                    node_id: Some(id.into()),
+                    name: name.into(),
+                    path: Some(PathBuf::from(path)),
+                    ..DbtModel::default()
+                },
+            );
+        }
+        let index = build_model_cost_index(&config, Some(&dbt), &CostInputs::default());
+        let downstream_ids = build_downstream_ids(&dbt);
+        let mut diagnostics = vec![sample_diagnostic("SQLCOST014", 1)];
+        diagnostics[0].path = PathBuf::from("models/a.sql");
+        let mut summary = summarize_project_costs(&index, &config);
+        let ctx = CostAttributionContext {
+            config: &config,
+            model_index: &index,
+            dbt: Some(&dbt),
+            features_by_path: &HashMap::new(),
+            downstream_counts: &build_downstream_counts(&dbt),
+            downstream_ids: &downstream_ids,
+            exposure_counts: &HashMap::new(),
+        };
+        attribute_findings(&mut diagnostics, &ctx, &mut summary);
+        let cost = diagnostics[0].cost_estimate.as_ref().expect("cost");
+        assert_eq!(cost.downstream_model_count, Some(2));
+        assert!(cost.downstream_monthly_p50_usd.unwrap_or(0.0) > 0.0);
     }
 
     fn linear_chain_dbt(len: usize) -> DbtProject {

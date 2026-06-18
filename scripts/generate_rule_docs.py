@@ -7,12 +7,14 @@ import argparse
 import json
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 OUTPUT = ROOT / "docs" / "book" / "rules" / "index.md"
 RULE_GUIDES = ROOT / "docs" / "rules"
+PRECISION_TIERS = ROOT / "tests" / "benchmarks" / "precision_tiers.toml"
 GENERATED_START = "<!-- generated:rules:start -->"
 GENERATED_END = "<!-- generated:rules:end -->"
 
@@ -33,27 +35,37 @@ def fetch_rules() -> list[dict[str, str]]:
     return json.loads(proc.stdout)
 
 
-def render_table(rules: list[dict[str, str]]) -> str:
+def load_precision_tiers() -> dict[str, str]:
+    if not PRECISION_TIERS.exists():
+        return {}
+    data = tomllib.loads(PRECISION_TIERS.read_text(encoding="utf-8"))
+    return {entry["id"]: entry["tier"] for entry in data.get("rule", [])}
+
+
+def render_table(rules: list[dict[str, str]], tiers: dict[str, str]) -> str:
     lines = [
-        "| Severity | Rule | Name | Guide |",
-        "| --- | --- | --- | --- |",
+        "| Severity | Rule | Name | Measured precision | Guide |",
+        "| --- | --- | --- | --- | --- |",
     ]
     for rule in rules:
         rule_id = rule["id"]
         severity = rule.get("severity", "unknown")
         name = rule.get("name", "")
+        tier = tiers.get(rule_id, "—")
         guide = f"[{rule_id}](../../rules/{rule_id}.md)"
-        lines.append(f"| {severity} | `{rule_id}` | {name} | {guide} |")
+        lines.append(f"| {severity} | `{rule_id}` | {name} | {tier} | {guide} |")
     return "\n".join(lines)
 
 
-def render_details(rules: list[dict[str, str]]) -> str:
+def render_details(rules: list[dict[str, str]], tiers: dict[str, str]) -> str:
     blocks: list[str] = []
     for rule in rules:
         rule_id = rule["id"]
         blocks.append(f"### `{rule_id}` — {rule.get('name', '')}")
         blocks.append("")
         blocks.append(f"**Severity:** {rule.get('severity', 'unknown')}")
+        if tier := tiers.get(rule_id):
+            blocks.append(f"**Measured precision tier:** {tier}")
         blocks.append("")
         blocks.append(rule.get("description", ""))
         blocks.append("")
@@ -62,14 +74,14 @@ def render_details(rules: list[dict[str, str]]) -> str:
     return "\n".join(blocks)
 
 
-def build_document(rules: list[dict[str, str]]) -> str:
+def build_document(rules: list[dict[str, str]], tiers: dict[str, str]) -> str:
     generated = "\n".join(
         [
-            render_table(rules),
+            render_table(rules, tiers),
             "",
             "## Descriptions",
             "",
-            render_details(rules),
+            render_details(rules, tiers),
         ]
     )
     return "\n".join(
@@ -127,7 +139,8 @@ def main() -> None:
     args = parser.parse_args()
 
     rules = fetch_rules()
-    document = build_document(rules)
+    tiers = load_precision_tiers()
+    document = build_document(rules, tiers)
     generated = document[document.find(GENERATED_START) : document.find(GENERATED_END) + len(GENERATED_END)]
 
     if args.check:

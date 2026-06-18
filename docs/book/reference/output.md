@@ -31,9 +31,9 @@ Structured scan result:
 | `analysis` | Always | Completeness report: `policy`, `passed`, and optional `violations` with `code`, `message`, `observed`, and `allowed` |
 | `metrics` | Always | Scan counters including parse metrics (see [Parse metrics](parse-metrics.md)) |
 | `cost` | `[cost]` enabled | Project cost summary: current/post-fix/potential savings, addressable finding savings (deduplicated), top models, grade mix, disclaimer (see [Cost estimates](cost-estimates.md)) |
-| `diagnostics` | Always | Gated findings on changed files in PR mode; full scan findings otherwise. Each entry includes `rule_id`, `severity`, `message`, `path`, `line`, `confidence`, and governance fields (`finding_id`, `evidence_key`); optional `cost_estimate` when `[cost]` is enabled (`p50_usd_per_month` is **savings**, not model total); compiled-only unmapped findings include `source_provenance`, `compiled_line`, and `compiled_column` |
+| `diagnostics` | Always | Gated findings on changed files in PR mode; full scan findings otherwise. Each entry includes `rule_id`, `severity`, `message`, `path`, `line`, `confidence`, and governance fields (`finding_id`, `evidence_key`); optional advisory `rule_precision_tier` (measured benchmark tier, does not gate CI); optional `cost_estimate` when `[cost]` is enabled (`p50_usd_per_month` is **savings**, not model total; may include `downstream_model_count` and `downstream_monthly_p50_usd`); compiled-only unmapped findings include `source_provenance`, `compiled_line`, and `compiled_column` |
 | `files` | Always | Per-model parse metadata (`parse_input`, `parsed_raw`, `parsed_compiled`, `feature_extraction_used_ast`) |
-| `pr_summary` | PR mode | Changed files, optional downstream blast radius |
+| `pr_summary` | PR mode | Changed files, affected downstream models/exposures, recommended `dbt build --select` |
 | `context` | PR mode | Nonblocking full-project report (see below) |
 
 ### PR `context` report

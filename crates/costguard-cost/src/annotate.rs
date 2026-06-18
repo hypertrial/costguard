@@ -1,6 +1,6 @@
 use crate::attribution::{
-    attribute_findings, build_downstream_counts, build_exposure_counts, CostAttributionContext,
-    ModelFeatureSummary,
+    attribute_findings, build_downstream_counts, build_downstream_ids, build_exposure_counts,
+    CostAttributionContext, ModelFeatureSummary,
 };
 use crate::catalog::{load_catalog, CatalogStats};
 use crate::config::CostConfig;
@@ -127,6 +127,7 @@ pub fn run_cost_analysis(
     let mut summary = summarize_project_costs(&model_index, config);
 
     let downstream_counts = dbt.map(build_downstream_counts).unwrap_or_default();
+    let downstream_ids = dbt.map(build_downstream_ids).unwrap_or_default();
     let exposure_counts = dbt.map(build_exposure_counts).unwrap_or_default();
     let ctx = CostAttributionContext {
         config,
@@ -134,6 +135,7 @@ pub fn run_cost_analysis(
         dbt,
         features_by_path,
         downstream_counts: &downstream_counts,
+        downstream_ids: &downstream_ids,
         exposure_counts: &exposure_counts,
     };
     attribute_findings(diagnostics, &ctx, &mut summary);
@@ -198,6 +200,7 @@ mod tests {
             compiled_line: None,
             compiled_column: None,
             cost_estimate: None,
+            rule_precision_tier: None,
         }];
         let inputs = CostInputs::default();
         let summary =

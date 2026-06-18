@@ -154,6 +154,7 @@ pub(crate) fn append_cost_summary(output: &mut String, summary: Option<&ProjectC
         append_cost_figure_line(output, "  PR impact (net)", &pr.net);
         append_cost_figure_line(output, "    efficiency", &pr.efficiency);
         append_cost_figure_line(output, "    volume", &pr.volume);
+        append_cost_figure_line(output, "    blast radius (downstream)", &pr.blast_radius);
     }
     if let Some(realized) = &summary.realized_savings {
         append_cost_figure_line(output, "  Realized savings", &realized.realized);
@@ -257,6 +258,7 @@ pub(crate) fn append_cost_summary_markdown(
     );
     if let Some(pr) = &summary.pr_impact {
         append_cost_figure_markdown(output, "PR impact (net)", &pr.net);
+        append_cost_figure_markdown(output, "Blast radius (downstream)", &pr.blast_radius);
     }
     if let Some(realized) = &summary.realized_savings {
         append_cost_figure_markdown(output, "Realized savings", &realized.realized);
@@ -435,6 +437,7 @@ mod tests {
                 compiled_line: None,
                 compiled_column: None,
                 cost_estimate: None,
+                rule_precision_tier: None,
             }]
         } else {
             Vec::new()

@@ -289,6 +289,9 @@ pub fn apply_file_config(mut config: ScanConfig, file_config: FileConfig) -> Res
     if let Some(cost) = file_config.cost {
         config.cost = Some(CostConfig::from_section(cost)?);
     }
+    if let Some(cost) = config.cost.as_mut() {
+        cost.warehouse = costguard_cost::Warehouse::parse(&config.platform.to_string());
+    }
     if let Some(analysis) = file_config.analysis {
         if let Some(policy) = analysis.policy {
             config.analysis.policy = policy.parse().map_err(anyhow::Error::msg)?;
@@ -400,6 +403,9 @@ impl ScanRuntimeOverrides {
         }
         if let Some(value) = &self.policy_repository {
             config.signed_policy.repository = Some(value.clone());
+        }
+        if let Some(cost) = config.cost.as_mut() {
+            cost.warehouse = costguard_cost::Warehouse::parse(&config.platform.to_string());
         }
         Ok(())
     }

@@ -1,5 +1,5 @@
 use crate::catalog::CatalogStats;
-use crate::config::{parse_bytes_spec, CostConfig, CostSourceOverride};
+use crate::config::{parse_bytes_spec, CostConfig, CostSourceOverride, Warehouse};
 use crate::observations::{lookup_observed_cost, ObservationStats};
 use crate::query_history::QueryHistoryStats;
 use crate::Estimate;
@@ -99,7 +99,7 @@ impl VolumeContext<'_> {
         if let Some(catalog) = self.catalog {
             if let Some(bytes) = catalog_bytes_for_model(catalog, model) {
                 let mut est = bytes;
-                est = apply_dbt_scan_priors(model, est);
+                est = apply_dbt_scan_priors(model, est, self.config.warehouse);
                 if apply_incremental {
                     est = self.apply_incremental(model, est);
                 }
@@ -113,7 +113,7 @@ impl VolumeContext<'_> {
 
         let prior_bytes = self.config.default_table_size.default_bytes();
         let mut est = Estimate::from_point(prior_bytes, Some(0.8));
-        est = apply_dbt_scan_priors(model, est);
+        est = apply_dbt_scan_priors(model, est, self.config.warehouse);
         if apply_incremental {
             est = self.apply_incremental(model, est);
         }
@@ -184,7 +184,7 @@ impl VolumeContext<'_> {
             if let Some(source) = self.config.sources.get(&key) {
                 if let Some(bytes) = source_bytes_estimate(source) {
                     let runs = self.runs_for_model(model);
-                    let mut est = apply_dbt_scan_priors(model, bytes);
+                    let mut est = apply_dbt_scan_priors(model, bytes, self.config.warehouse);
                     if apply_incremental {
                         est = self.apply_incremental(model, est);
                     }
@@ -238,10 +238,33 @@ fn should_apply_incremental_discount(model: &DbtModel) -> bool {
     model.unique_key.is_some()
 }
 
-fn apply_dbt_scan_priors(model: &DbtModel, bytes: Estimate) -> Estimate {
+fn apply_dbt_scan_priors(model: &DbtModel, bytes: Estimate, warehouse: Warehouse) -> Estimate {
     let mut factor = 1.0_f64;
-    if model.partition_by.is_some() || model.cluster_by.is_some() {
-        factor *= 0.7;
+    match warehouse {
+        Warehouse::BigQuery => {
+            if model.partition_by.is_some() {
+                factor *= 0.5;
+            } else if model.cluster_by.is_some() {
+                factor *= 0.7;
+            }
+        }
+        Warehouse::Snowflake => {
+            if model.cluster_by.is_some() {
+                factor *= 0.8;
+            } else if model.partition_by.is_some() {
+                factor *= 0.75;
+            }
+        }
+        Warehouse::Databricks => {
+            if model.partition_by.is_some() || model.cluster_by.is_some() {
+                factor *= 0.75;
+            }
+        }
+        _ => {
+            if model.partition_by.is_some() || model.cluster_by.is_some() {
+                factor *= 0.7;
+            }
+        }
     }
     if model.materialized.as_deref() == Some("view") {
         factor *= 0.5;
@@ -341,6 +364,21 @@ pub fn model_identity(model: &DbtModel) -> String {
 mod tests {
     use super::*;
     use costguard_dbt::DbtModel;
+
+    #[test]
+    fn warehouse_priors_differ_for_bigquery_vs_snowflake() {
+        let model = DbtModel {
+            name: "fct".into(),
+            partition_by: Some("dt".into()),
+            ..DbtModel::default()
+        };
+        let base = Estimate::from_point(100.0, Some(0.5));
+        let bq = apply_dbt_scan_priors(&model, base, Warehouse::BigQuery);
+        let sf = apply_dbt_scan_priors(&model, base, Warehouse::Snowflake);
+        assert!((bq.median() - 50.0).abs() < 0.01);
+        assert!((sf.median() - 75.0).abs() < 0.01);
+        assert!(bq.median() < sf.median());
+    }
 
     #[test]
     fn size_prior_when_no_inputs() {

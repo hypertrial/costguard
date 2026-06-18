@@ -4,6 +4,19 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-06-18
+
+### Added
+
+- **Lineage cost propagation** — per-finding `downstream_model_count` and `downstream_monthly_p50_usd` sum real downstream model costs from the manifest DAG (capped at 15 descendants); PR `pr_impact.blast_radius` reports total downstream monthly cost of changed models (additive advisory).
+- **Warehouse-specific cost priors** — BigQuery, Snowflake, and Databricks partition/cluster scan discounts in `costguard-cost` (generic warehouses unchanged at 0.7×); wired from scan `platform`.
+- **Measured precision tiers** — committed `tests/benchmarks/precision_tiers.toml` and advisory `rule_precision_tier` on JSON findings (does not affect CI gating); rule catalog adds a measured precision column.
+- **Public benchmark evidence** — `scripts/build_benchmark_evidence.py`, committed `tests/benchmarks/evidence/v2.4.json`, and [Benchmark evidence](docs/book/reference/benchmarks.md) mdBook page.
+
+### Changed
+
+- Non-breaking release: JSON output schema remains **v4**; baseline v3 and policy v2 unchanged. Severity + confidence remain the enforcement contract.
+
 ## [2.3.0] - 2026-06-17
 
 ### Added

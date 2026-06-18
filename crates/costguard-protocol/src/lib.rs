@@ -9,6 +9,10 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+mod precision_tiers;
+
+pub use precision_tiers::precision_tier;
+
 pub const POLICY_SCHEMA_VERSION: u8 = 2;
 pub const BASELINE_SCHEMA_VERSION: u8 = 3;
 pub const IDENTITY_SCHEME_SEMANTIC_V1: &str = "semantic-v1";

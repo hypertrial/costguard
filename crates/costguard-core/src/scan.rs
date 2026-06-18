@@ -22,7 +22,8 @@ use crate::{
 };
 use anyhow::{Context, Result};
 use costguard_cost::{
-    compute_pr_impact, run_cost_analysis, summarize_features, CostInputs, ModelFeatureSummary,
+    build_downstream_ids, compute_blast_radius, compute_pr_impact, run_cost_analysis,
+    summarize_features, CostAnalysisResult, CostInputs, ModelFeatureSummary,
 };
 use costguard_dbt::{
     compiled_code_by_model_path, extract_sql_features, parse_manifest_text, DbtProject,
@@ -175,18 +176,47 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
         config.min_confidence_filter,
     );
 
+    for diagnostic in &mut diagnostics {
+        if let Some(tier) = costguard_protocol::precision_tier(&diagnostic.rule_id) {
+            diagnostic.rule_precision_tier = Some(tier.to_string());
+        }
+    }
+
     let features_by_path = feature_summaries_by_path(&union_sql_documents);
-    let mut cost_summary =
+    let cost_analysis =
         run_optional_cost(config, &root, &project, &mut diagnostics, &features_by_path)?;
+    let mut cost_summary = cost_analysis
+        .as_ref()
+        .map(|analysis| analysis.summary.clone());
 
     if plan.pr_mode {
-        if let (Some(summary), Some(cost_config)) = (cost_summary.as_mut(), config.cost.as_ref()) {
+        if let (Some(summary), Some(analysis), Some(cost_config)) = (
+            cost_summary.as_mut(),
+            cost_analysis.as_ref(),
+            config.cost.as_ref(),
+        ) {
             if cost_config.enabled {
                 if let Some(base_summary) =
                     run_base_branch_cost(config, &root, &plan, project.dbt.as_ref())?
                 {
-                    summary.pr_impact =
-                        Some(compute_pr_impact(summary, &base_summary, cost_config));
+                    let downstream_ids = project
+                        .dbt
+                        .as_ref()
+                        .map(build_downstream_ids)
+                        .unwrap_or_default();
+                    let changed_paths: Vec<PathBuf> = plan.changed_paths.iter().cloned().collect();
+                    let blast_radius = compute_blast_radius(
+                        &analysis.model_index,
+                        &downstream_ids,
+                        &changed_paths,
+                        cost_config,
+                    );
+                    summary.pr_impact = Some(compute_pr_impact(
+                        summary,
+                        &base_summary,
+                        cost_config,
+                        blast_radius,
+                    ));
                 }
             }
         }
@@ -356,20 +386,17 @@ fn run_optional_cost(
     project: &Project,
     diagnostics: &mut [costguard_diagnostics::Diagnostic],
     features_by_path: &HashMap<PathBuf, ModelFeatureSummary>,
-) -> Result<Option<costguard_cost::ProjectCostSummary>> {
+) -> Result<Option<CostAnalysisResult>> {
     if let Some(cost_config) = &config.cost {
         if cost_config.enabled {
             let inputs = CostInputs::load(root, cost_config)?;
-            return Ok(Some(
-                run_cost_analysis(
-                    cost_config,
-                    project.dbt.as_ref(),
-                    &inputs,
-                    diagnostics,
-                    features_by_path,
-                )
-                .summary,
-            ));
+            return Ok(Some(run_cost_analysis(
+                cost_config,
+                project.dbt.as_ref(),
+                &inputs,
+                diagnostics,
+                features_by_path,
+            )));
         }
     }
     Ok(None)

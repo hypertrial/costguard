@@ -300,6 +300,7 @@ mod tests {
             compiled_line: None,
             compiled_column: None,
             cost_estimate: None,
+            rule_precision_tier: None,
         };
         diagnostic.assign_identity(evidence);
         diagnostic

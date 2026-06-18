@@ -26,7 +26,7 @@ Use the published composite action after your existing dbt compile step:
   with:
     fetch-depth: 0
 - run: dbt compile --target dev
-- uses: hypertrial/costguard/.github/actions/costguard@v2.3.0
+- uses: hypertrial/costguard/.github/actions/costguard@v2.4.0
   with:
     base: origin/main
     warehouse: snowflake
@@ -42,7 +42,7 @@ For Costguard contributor workflows that need to run the checked-out source inst
     install-mode: source
 ```
 
-Core inputs: `base`, `warehouse`, `manifest`, `fail-on`, and `baseline`. The Action also supports `min-confidence`, `format`, `analysis-policy`, optional cost flags, and signed-policy inputs. Pin `@v2.3.0` for immutable behavior or use `@v2` for compatible stable updates.
+Core inputs: `base`, `warehouse`, `manifest`, `fail-on`, and `baseline`. The Action also supports `min-confidence`, `format`, `analysis-policy`, optional cost flags, and signed-policy inputs. Pin `@v2.4.0` for immutable behavior or use `@v2` for compatible stable updates.
 
 Costguard 2.1 requires baseline v3 and policy v2 with `identity_scheme: "semantic-v1"`. See [Compatibility policy](../reference/compatibility.md).
 

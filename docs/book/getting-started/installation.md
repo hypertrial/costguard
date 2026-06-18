@@ -11,7 +11,7 @@ curl -fsSL https://raw.githubusercontent.com/hypertrial/costguard/main/scripts/i
 Pin a release:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hypertrial/costguard/main/scripts/install.sh | sh -s -- v2.3.0
+curl -fsSL https://raw.githubusercontent.com/hypertrial/costguard/main/scripts/install.sh | sh -s -- v2.4.0
 ```
 
 Install to a custom directory:
@@ -27,7 +27,7 @@ The script downloads a release tarball, verifies its SHA256 checksum, and instal
 Requires a Rust toolchain:
 
 ```bash
-cargo install --git https://github.com/hypertrial/costguard --tag v2.3.0 costguard-cli
+cargo install --git https://github.com/hypertrial/costguard --tag v2.4.0 costguard-cli
 ```
 
 ## Pinned / airgapped manual install
@@ -35,7 +35,7 @@ cargo install --git https://github.com/hypertrial/costguard --tag v2.3.0 costgua
 Select one of `aarch64-apple-darwin`, `x86_64-apple-darwin`, or `x86_64-unknown-linux-gnu`:
 
 ```bash
-VERSION=v2.3.0
+VERSION=v2.4.0
 TARGET=aarch64-apple-darwin
 curl -LO "https://github.com/hypertrial/costguard/releases/download/${VERSION}/costguard-${TARGET}.tar.gz"
 curl -LO "https://github.com/hypertrial/costguard/releases/download/${VERSION}/costguard-${TARGET}.tar.gz.sha256"

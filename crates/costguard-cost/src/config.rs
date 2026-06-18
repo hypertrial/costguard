@@ -2,6 +2,34 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Warehouse {
+    #[default]
+    Generic,
+    Snowflake,
+    BigQuery,
+    Trino,
+    Databricks,
+    Redshift,
+    Postgres,
+    DuckDb,
+}
+
+impl Warehouse {
+    pub fn parse(value: &str) -> Self {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "snowflake" => Self::Snowflake,
+            "bigquery" => Self::BigQuery,
+            "trino" | "presto" => Self::Trino,
+            "databricks" => Self::Databricks,
+            "redshift" => Self::Redshift,
+            "postgres" | "postgresql" => Self::Postgres,
+            "duckdb" => Self::DuckDb,
+            _ => Self::Generic,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CostSection {
@@ -107,6 +135,7 @@ impl TableSizeClass {
 #[derive(Debug, Clone)]
 pub struct CostConfig {
     pub enabled: bool,
+    pub warehouse: Warehouse,
     pub interval: f64,
     pub default_runs_per_month: f64,
     pub default_table_size: TableSizeClass,
@@ -124,6 +153,7 @@ impl Default for CostConfig {
     fn default() -> Self {
         Self {
             enabled: false,
+            warehouse: Warehouse::Generic,
             interval: 0.80,
             default_runs_per_month: 30.0,
             default_table_size: TableSizeClass::Medium,
@@ -160,6 +190,7 @@ impl CostConfig {
             .unwrap_or(TableSizeClass::Medium);
         let config = Self {
             enabled: section.enabled.unwrap_or(true),
+            warehouse: Warehouse::Generic,
             interval: section.interval.unwrap_or(0.80),
             default_runs_per_month: section.default_runs_per_month.unwrap_or(30.0),
             default_table_size,

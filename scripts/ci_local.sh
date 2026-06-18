@@ -58,6 +58,8 @@ run "$EVAL_PY" scripts/eval_metrics.py --split corpus
 run "$EVAL_PY" scripts/eval_irr.py
 COSTGUARD_BUILD_PROFILE=release run python3 scripts/benchmark_external_repo.py --all-vendored
 run python3 scripts/generate_rule_docs.py --check
+run python3 scripts/generate_precision_tiers.py --check
+run python3 scripts/build_benchmark_evidence.py --check
 run python3 scripts/check_docs.py
 run mdbook build
 run cargo deny check

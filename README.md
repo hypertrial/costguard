@@ -19,7 +19,7 @@ Generic SQL, Snowflake, BigQuery, and Trino scanning are production-ready; Datab
 curl -fsSL https://raw.githubusercontent.com/hypertrial/costguard/main/scripts/install.sh | sh
 ```
 
-Pin a version: `... | sh -s -- v2.3.0`. Or build from source: `cargo install --git https://github.com/hypertrial/costguard --tag v2.3.0 costguard-cli`.
+Pin a version: `... | sh -s -- v2.4.0`. Or build from source: `cargo install --git https://github.com/hypertrial/costguard --tag v2.4.0 costguard-cli`.
 
 See [Installation](docs/book/getting-started/installation.md) for pinned/airgapped manual install and Windows.
 
@@ -50,7 +50,7 @@ Or add the Action manually after your existing dbt compile step:
   with:
     fetch-depth: 0
 - run: dbt compile --target dev
-- uses: hypertrial/costguard/.github/actions/costguard@v2.3.0
+- uses: hypertrial/costguard/.github/actions/costguard@v2.4.0
   with:
     base: origin/main
     warehouse: snowflake
@@ -58,7 +58,7 @@ Or add the Action manually after your existing dbt compile step:
     min-confidence: high
 ```
 
-Pin the exact Action tag `@v2.3.0` or use the moving compatible major tag `@v2`. Release binaries are checksum-protected and include provenance attestations.
+Pin the exact Action tag `@v2.4.0` or use the moving compatible major tag `@v2`. Release binaries are checksum-protected and include provenance attestations.
 
 **2.1 requirements:** Use baseline v3 and policy v2 with `identity_scheme: "semantic-v1"`. Older baseline and policy schemas are rejected at scan time. See [Compatibility policy](docs/book/reference/compatibility.md).
 
@@ -90,6 +90,7 @@ mdbook serve
 | CLI and config | [Reference](docs/book/reference/cli.md) |
 | Rule catalog | [Rules](docs/book/rules/index.md) |
 | Benchmarks | [Benchmark tiers](docs/book/contributing/benchmark-tiers.md) |
+| Benchmark evidence | [Measured precision/recall](docs/book/reference/benchmarks.md) |
 | Terminology | [Glossary](docs/book/glossary.md) |
 
 ## GitHub Action
@@ -139,6 +140,8 @@ Costguard ships **45 SQLCOST rules** for incremental safety, join risk, warehous
 
 ```bash
 python3 scripts/benchmark_external_repo.py --all-vendored
+python3 scripts/build_benchmark_evidence.py
+python3 scripts/generate_precision_tiers.py
 python3 scripts/benchmark_external_repo.py --repo spellbook --smoke
 python3 scripts/benchmark_external_repo.py --repo data-infra --smoke
 python3 scripts/benchmark_external_repo.py --repo spellbook   # full gate (manual / baseline refresh)
@@ -181,6 +184,6 @@ Full schema: [Configuration](docs/book/reference/configuration.md).
 
 ## Status
 
-`v2.3.0` adds stale-manifest detection (`SQLCOST045`), `costguard init`, the `install.sh` one-liner, `--min-confidence-filter`, and broad false-positive fixes across join and shape rules. `v2.2.0` added observation-based cost inputs, corrected savings counterfactual, and JSON schema v4 cost reporting. `v2.1.0` added semantic finding identity (`semantic-v1`), baseline v3, policy v2, and PR context reporting. Generic SQL, Snowflake, BigQuery, and Trino are supported; Databricks, Redshift, Postgres, and DuckDB remain preview. Cost estimates are advisory, warehouse connectivity is out of scope, and manifest-backed analysis requires the caller's dbt compile step. See the [support policy](SUPPORT.md), [compatibility policy](docs/book/reference/compatibility.md), and [security policy](SECURITY.md).
+`v2.4.0` adds lineage-aware downstream cost propagation (`downstream_monthly_p50_usd`, `pr_impact.blast_radius`), warehouse-specific cost priors (Snowflake/BigQuery/Databricks), committed [benchmark evidence](docs/book/reference/benchmarks.md) and measured precision tiers (`rule_precision_tier` advisory field). Non-breaking: JSON schema v4, baseline v3, and policy v2 unchanged. `v2.3.0` added stale-manifest detection (`SQLCOST045`), `costguard init`, the `install.sh` one-liner, `--min-confidence-filter`, and broad false-positive fixes across join and shape rules. `v2.2.0` added observation-based cost inputs, corrected savings counterfactual, and JSON schema v4 cost reporting. `v2.1.0` added semantic finding identity (`semantic-v1`), baseline v3, policy v2, and PR context reporting. Generic SQL, Snowflake, BigQuery, and Trino are supported; Databricks, Redshift, Postgres, and DuckDB remain preview. Cost estimates are advisory, warehouse connectivity is out of scope, and manifest-backed analysis requires the caller's dbt compile step. See the [support policy](SUPPORT.md), [compatibility policy](docs/book/reference/compatibility.md), and [security policy](SECURITY.md).
 
 Licensed under [MIT](LICENSE). Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).

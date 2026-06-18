@@ -31,6 +31,7 @@
 - [Platforms and warehouses](reference/platforms.md)
 - [Compatibility policy](reference/compatibility.md)
 - [Cost estimates](reference/cost-estimates.md)
+- [Benchmark evidence](reference/benchmarks.md)
 
 # Rules
 

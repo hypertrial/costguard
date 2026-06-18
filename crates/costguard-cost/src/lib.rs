@@ -24,12 +24,13 @@ pub use annotate::{
     CostInputs,
 };
 pub use attribution::{
-    build_downstream_counts, build_exposure_counts, summarize_features, ModelFeatureSummary,
+    build_downstream_counts, build_downstream_ids, build_exposure_counts, summarize_features,
+    ModelFeatureSummary,
 };
 pub use catalog::CatalogStats;
 pub use config::{
     CostConfig, CostInputsSection, CostModelOverride, CostPricingSection, CostRuleOverride,
-    CostSection, CostSourceOverride, TableSizeClass,
+    CostSection, CostSourceOverride, TableSizeClass, Warehouse,
 };
 pub use estimate::{
     annual_from_monthly, combined_multiplier, excess_multiplier, format_usd, format_usd_interval,
@@ -40,9 +41,9 @@ pub use import::{
     normalize_cost_export, validate_cost_bundle, CostExportFormat, NormalizeCostOptions,
 };
 pub use model_cost::{
-    build_model_cost_index, compute_pr_impact, compute_realized_savings, lookup_model_entry,
-    summarize_project_costs, CostFigure, CoverageMetrics, ModelCostEntry, ModelCostIndex,
-    PrCostImpact, ProjectCostSummary, RealizedSavings, TopModelCost,
+    build_model_cost_index, compute_blast_radius, compute_pr_impact, compute_realized_savings,
+    lookup_model_entry, summarize_project_costs, CostFigure, CoverageMetrics, ModelCostEntry,
+    ModelCostIndex, PrCostImpact, ProjectCostSummary, RealizedSavings, TopModelCost,
 };
 pub use multipliers::{
     is_cost_bearing_rule, is_infrastructure_rule, rule_multiplier, unestimated_reason,

@@ -314,6 +314,84 @@ fn pr_impact_sql_edit_changes_efficiency_not_full_reintroduction() {
 }
 
 #[test]
+fn pr_impact_reports_blast_radius_for_downstream_chain() {
+    let tempdir = tempfile::tempdir().expect("tempdir");
+    let root = tempdir.path();
+    let chain_manifest = r#"{
+  "metadata": {
+    "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v12.json",
+    "project_name": "test"
+  },
+  "nodes": {
+    "model.test.a": {
+      "resource_type": "model",
+      "name": "a",
+      "package_name": "test",
+      "original_file_path": "models/marts/a.sql",
+      "path": "marts/a.sql",
+      "config": { "materialized": "table", "partition_by": "id" },
+      "depends_on": { "nodes": ["source.test.raw.events"] }
+    },
+    "model.test.b": {
+      "resource_type": "model",
+      "name": "b",
+      "package_name": "test",
+      "original_file_path": "models/marts/b.sql",
+      "path": "marts/b.sql",
+      "config": { "materialized": "table", "partition_by": "id" },
+      "depends_on": { "nodes": ["model.test.a"] }
+    }
+  },
+  "sources": {
+    "source.test.raw.events": {
+      "resource_type": "source",
+      "source_name": "raw",
+      "name": "events",
+      "identifier": "events"
+    }
+  }
+}"#;
+    write_cost_repo(root, chain_manifest);
+    fs::write(
+        root.join("models/marts/a.sql"),
+        "{{ config(materialized='table', partition_by='id') }}\nselect 1 as id\n",
+    )
+    .expect("write a");
+    fs::write(
+        root.join("models/marts/b.sql"),
+        "{{ config(materialized='table', partition_by='id') }}\nselect * from {{ ref('a') }}\n",
+    )
+    .expect("write b");
+
+    run_git(root, &["init"]);
+    run_git(root, &["config", "user.email", "costguard@example.com"]);
+    run_git(root, &["config", "user.name", "Costguard Test"]);
+    run_git(root, &["add", "."]);
+    run_git(root, &["commit", "-m", "initial"]);
+
+    fs::write(
+        root.join("models/marts/a.sql"),
+        "{{ config(materialized='table', partition_by='id') }}\nselect * from {{ source('raw', 'events') }}\n",
+    )
+    .expect("write risky a");
+
+    let result = scan_pr(root, "HEAD");
+    let impact = result
+        .cost_summary
+        .as_ref()
+        .and_then(|summary| summary.pr_impact.as_ref())
+        .expect("pr impact");
+    let blast = impact
+        .blast_radius
+        .monthly_p50
+        .expect("blast radius should have downstream cost");
+    assert!(
+        blast > 0.0,
+        "changed upstream should expose downstream spend"
+    );
+}
+
+#[test]
 fn pr_impact_manifest_config_change_shifts_base_cost() {
     let tempdir = tempfile::tempdir().expect("tempdir");
     let root = tempdir.path();

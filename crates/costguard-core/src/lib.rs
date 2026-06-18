@@ -238,6 +238,7 @@ mod tests {
             compiled_line: None,
             compiled_column: None,
             cost_estimate: None,
+            rule_precision_tier: None,
         }
     }
 
@@ -306,6 +307,8 @@ mod tests {
             current_cost_p50_usd_per_month: None,
             post_fix_cost_p50_usd_per_month: None,
             unestimated_reason: None,
+            downstream_model_count: None,
+            downstream_monthly_p50_usd: None,
         });
         let result = result_with(vec![diag]);
         assert!(!result.should_fail(None, None, Some(600.0), None));

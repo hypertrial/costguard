@@ -137,6 +137,9 @@ pub struct Diagnostic {
     pub compiled_column: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cost_estimate: Option<CostEstimate>,
+    /// Advisory measured benchmark precision tier (does not affect CI gating).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rule_precision_tier: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -194,6 +197,10 @@ pub struct CostEstimate {
     pub post_fix_cost_p50_usd_per_month: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unestimated_reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub downstream_model_count: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub downstream_monthly_p50_usd: Option<f64>,
 }
 
 impl Diagnostic {
@@ -238,6 +245,7 @@ impl Diagnostic {
             compiled_line,
             compiled_column,
             cost_estimate: None,
+            rule_precision_tier: None,
         }
     }
 

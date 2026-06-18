@@ -21,7 +21,8 @@ Canonical term definitions: [Glossary — Cost estimate terms](../glossary.md#co
 | `post_fix_cost_p50_usd_per_month` | **Post-fix cost per finding** — that model's modeled monthly cost after fixing this finding |
 | `unestimated_reason` | Present when a cost-bearing rule has no multiplier (instead of silent skip) |
 | `grade` | Input provenance: **A** (observations or query history), **B** (catalog/config), **C** (size priors) |
-| `basis` | Human-readable derivation string |
+| `downstream_model_count` | Transitive downstream dbt models (max 15) for lineage-aware cost context |
+| `downstream_monthly_p50_usd` | Sum of downstream models' monthly p50 cost (priced mode; advisory) |
 
 > **v2 semantics:** `p50_usd_per_month` on findings means **estimated savings**, not total model cost. Use `model_monthly_p50_usd` for the model baseline.
 
@@ -36,7 +37,7 @@ When `[cost]` is enabled, scan output includes a `cost` block (JSON) or **Cost s
 | `post_fix_cost` | **Post-fix cost** — counterfactual cost if all current findings were fixed |
 | `potential_savings` | **Potential savings** — `current_cost − post_fix_cost` (top-down, per model) |
 | `coverage` | **Coverage** — mapped-spend fraction, observation age, rules estimated/unestimated |
-| `pr_impact` | **PR impact** — base vs head delta in PR mode (`introduced`, `avoided`, `net`, `efficiency`, `volume`) |
+| `pr_impact` | **PR impact** — base vs head delta in PR mode (`introduced`, `avoided`, `net`, `efficiency`, `volume`, `blast_radius`) |
 | `realized_savings` | **Realized savings** — before/after observation bundles (`observations_before` + `observations_after`) |
 | `project_gb_months` | Sum of model scan volumes in GB-months |
 | `savings_p50_usd` | **Addressable finding savings (deduplicated)** — bottom-up sum of per-finding savings; gates `fail_on_monthly_delta` |
@@ -126,7 +127,7 @@ JSON schema version is **4** with an optional top-level `cost` object (v3 consum
 ## GitHub Action
 
 ```yaml
-- uses: hypertrial/costguard/.github/actions/costguard@v2.3.0
+- uses: hypertrial/costguard/.github/actions/costguard@v2.4.0
   with:
     cost: "true"
     fail-on-cost-delta: "500"

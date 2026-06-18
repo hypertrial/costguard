@@ -24,8 +24,16 @@ Base bytes resolve in priority order:
 
 Adjustments before pricing (catalog, config source, and size prior only — not measured observations or query history):
 
-- **Partition/cluster priors**: models with `partition_by` or `cluster_by` scale effective scan by 0.7×
-- **Views**: materialized `view` models scale by 0.5×
+Adjustments before pricing (catalog, config source, and size prior only — not measured observations or query history). Priors are warehouse-specific:
+
+| Warehouse | Partition | Cluster | Notes |
+| --- | --- | --- | --- |
+| BigQuery | 0.5× | 0.7× | Strong partition pruning on `partition_by` |
+| Snowflake | 0.75× | 0.8× | Clustering depth not modeled; `cluster_by` only |
+| Databricks | 0.75× | 0.75× | File-skipping prior (ponytail: no shuffle model) |
+| Generic / other | 0.7× | 0.7× | Combined partition or cluster presence |
+
+- **Views**: materialized `view` models scale by 0.5× (all warehouses)
 - **Incrementals**: models with `materialized=incremental` and a `unique_key` scale by `incremental_fraction` (default 5%), preserving lognormal σ
 - **Full refresh**: incrementals with `full_refresh=true` skip the incremental discount
 - **Unbounded incremental findings** (SQLCOST004/005/019/029): attribution uses full bytes (no incremental discount)
