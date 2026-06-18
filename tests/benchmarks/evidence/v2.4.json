@@ -165,7 +165,7 @@
   "generated_at": "2026-06-18",
   "headline": {
     "high_severity_sampled_precision": 0.9980879541108987,
-    "overall_sampled_precision": 0.9706806282722513,
+    "overall_sampled_precision": 0.971853425385024,
     "rules_passing_census": 44,
     "rules_total": 45,
     "tier_counts": {
@@ -227,14 +227,14 @@
       "tp": 11
     },
     {
-      "examined": 75,
+      "examined": 38,
       "pass": true,
       "rule_id": "SQLCOST006",
-      "sampled_precision": 0.7866666666666666,
+      "sampled_precision": 0.868421052631579,
       "severity": "medium",
       "tier": "verified-medium",
-      "total": 75,
-      "tp": 59
+      "total": 38,
+      "tp": 33
     },
     {
       "examined": 57,
@@ -287,13 +287,13 @@
       "tp": 0
     },
     {
-      "examined": 69,
+      "examined": 66,
       "pass": true,
       "rule_id": "SQLCOST012",
-      "sampled_precision": 0.7101449275362319,
+      "sampled_precision": 0.7424242424242424,
       "severity": "medium",
       "tier": "verified-medium",
-      "total": 69,
+      "total": 66,
       "tp": 49
     },
     {
@@ -337,14 +337,14 @@
       "tp": 0
     },
     {
-      "examined": 21,
+      "examined": 34,
       "pass": true,
       "rule_id": "SQLCOST017",
-      "sampled_precision": 0.42857142857142855,
+      "sampled_precision": 0.3235294117647059,
       "severity": "medium",
       "tier": "verified-low",
-      "total": 21,
-      "tp": 9
+      "total": 34,
+      "tp": 11
     },
     {
       "examined": 100,
@@ -553,7 +553,7 @@
       "sampled_precision": 1.0,
       "severity": "high",
       "tier": "verified-high",
-      "total": 420,
+      "total": 447,
       "tp": 100
     },
     {

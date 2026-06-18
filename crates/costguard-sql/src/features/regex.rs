@@ -512,16 +512,30 @@ fn function_on_join_key(predicate: &str) -> bool {
     {
         return false;
     }
-    let parts: Vec<&str> = lower.split(" and ").collect();
+    let parts: Vec<&str> = and_split_regex().split(&lower).collect();
     if parts.is_empty() {
         return function_on_join_key_regex().is_match(predicate);
     }
     parts.iter().any(|part| {
         let part = part.trim();
-        !is_coalesce_null_safe_join_predicate(part)
-            && !is_coalesce_join_predicate(part)
-            && function_on_join_key_regex().is_match(part)
+        part.split(" or ").any(|term| {
+            let term = term.trim();
+            if !has_equality_predicate(term) {
+                return false;
+            }
+            !is_symmetric_normalization_predicate(term)
+                && !is_time_bucket_join_predicate(term)
+                && !is_single_side_normalization_predicate(term)
+                && !is_coalesce_null_safe_join_predicate(term)
+                && !is_coalesce_join_predicate(term)
+                && function_on_join_key_regex().is_match(term)
+        })
     })
+}
+
+fn and_split_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    cached_regex(&RE, r"(?i)\band\b")
 }
 
 fn is_coalesce_join_predicate(predicate: &str) -> bool {
@@ -586,25 +600,74 @@ fn is_time_bucket_join_predicate(predicate: &str) -> bool {
 }
 
 fn is_symmetric_normalization_predicate(predicate: &str) -> bool {
-    for func in [
-        "lower",
-        "upper",
-        "trim",
-        "ltrim",
-        "rtrim",
-        "date_trunc",
-        "coalesce",
-        "cast",
-    ] {
-        let pattern = format!(r"{func}\s*\([^)]+\)\s*=\s*{func}\s*\(");
-        if Regex::new(&pattern)
-            .map(|re| re.is_match(predicate))
-            .unwrap_or(false)
+    let Some((left, right)) = split_equality(predicate) else {
+        return false;
+    };
+    let left_chain = normalization_wrapper_chain(left.trim());
+    !left_chain.is_empty() && left_chain == normalization_wrapper_chain(right.trim())
+}
+
+fn split_equality(predicate: &str) -> Option<(&str, &str)> {
+    let bytes = predicate.as_bytes();
+    for (idx, byte) in bytes.iter().enumerate() {
+        if *byte != b'=' {
+            continue;
+        }
+        let prev = idx.checked_sub(1).and_then(|prev| bytes.get(prev)).copied();
+        let next = bytes.get(idx + 1).copied();
+        if matches!(prev, Some(b'<') | Some(b'>') | Some(b'!') | Some(b'='))
+            || matches!(next, Some(b'>') | Some(b'='))
         {
-            return true;
+            continue;
+        }
+        return Some((&predicate[..idx], &predicate[idx + 1..]));
+    }
+    None
+}
+
+fn normalization_wrapper_chain(mut expr: &str) -> Vec<&str> {
+    let mut chain = Vec::new();
+    while let Some((name, inner)) = outer_function_call(expr) {
+        if !matches!(
+            name,
+            "lower" | "upper" | "trim" | "ltrim" | "rtrim" | "date_trunc" | "coalesce" | "cast"
+        ) {
+            break;
+        }
+        chain.push(name);
+        expr = inner.trim();
+    }
+    chain
+}
+
+fn outer_function_call(expr: &str) -> Option<(&str, &str)> {
+    let open = expr.find('(')?;
+    let name = expr[..open].trim();
+    if name.is_empty()
+        || !name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphabetic() || byte == b'_')
+    {
+        return None;
+    }
+    let mut depth = 0usize;
+    for (idx, ch) in expr[open..].char_indices() {
+        match ch {
+            '(' => depth += 1,
+            ')' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    let close = open + idx;
+                    if expr[close + 1..].trim().is_empty() {
+                        return Some((name, &expr[open + 1..close]));
+                    }
+                    return None;
+                }
+            }
+            _ => {}
         }
     }
-    false
+    None
 }
 
 fn extract_ctes(text: &str, line_index: &costguard_diagnostics::LineIndex) -> Vec<CteFeature> {

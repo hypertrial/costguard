@@ -1,0 +1,1684 @@
+{
+  "repos": [
+    "spellbook",
+    "jaffle-shop",
+    "mattermost-warehouse",
+    "data-infra"
+  ],
+  "primary_sample_cap": 100,
+  "per_bucket_cap": 10,
+  "rules": {
+    "SQLCOST014": {
+      "total": 938,
+      "primary_examined": 100,
+      "tail_total": 838,
+      "supplemental_examined": 37,
+      "tp": 20,
+      "exempt": 17,
+      "fp_bug": 0,
+      "unknown": 0,
+      "pass": true,
+      "infrastructure": false,
+      "bucket_counts": {
+        "data-infra:other": 7,
+        "data-infra:repeated_cte_ref": 10,
+        "spellbook:other": 10,
+        "spellbook:repeated_cte_ref": 10
+      },
+      "examples": [
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/mart/payments/fct_payments_aggregations.sql",
+          "line": 62,
+          "bucket": "other",
+          "label": "exempt",
+          "savings": 2.3,
+          "snippet": "COALESCE(micropayments.aggregation_id, authorisations.aggregation_id, settlements.aggregation_id) AS aggregation_id,"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/mart/payments/reliability/v2_payments_reliability_weekly_unlabeled_routes.sql",
+          "line": 9,
+          "bucket": "other",
+          "label": "exempt",
+          "savings": 1.9,
+          "snippet": "SELECT * FROM {{ ref('payments_tests_weekly_date_spine') }}"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/mart/payments/reliability/v2_payments_reliability_weekly_unlabeled_routes_enghouse.sql",
+          "line": 32,
+          "bucket": "other",
+          "label": "exempt",
+          "savings": 1.9,
+          "snippet": "count_rides.n_null_rides,"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/mart/transit_database/dim_provider_gtfs_data.sql",
+          "line": 189,
+          "bucket": "other",
+          "label": "exempt",
+          "savings": 1.4,
+          "snippet": "LEFT JOIN datasets AS sched"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/mart/gtfs/dim_attributions.sql",
+          "line": 40,
+          "bucket": "other",
+          "label": "exempt",
+          "savings": 1.3,
+          "snippet": "make_dim.attribution_id,"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/mart/gtfs/dim_stops.sql",
+          "line": 58,
+          "bucket": "other",
+          "label": "exempt",
+          "savings": 1.3,
+          "snippet": "fill_in_tz.feed_key,"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/mart/gtfs/fct_trip_updates_trip_summaries.sql",
+          "line": 25,
+          "bucket": "other",
+          "label": "exempt",
+          "savings": 1.3,
+          "snippet": "input_table = 'trip_updates',"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/tests/staging/payments/littlepay/test_micropayment_device_transactions.sql",
+          "line": 14,
+          "bucket": "repeated_cte_ref",
+          "label": "tp",
+          "savings": 4.2,
+          "snippet": "select * from {{ ref('int_payments__cleaned_micropayment_device_transactions') }}"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/tests/staging/payments/littlepay/test_micropayment_transaction_time_order.sql",
+          "line": 8,
+          "bucket": "repeated_cte_ref",
+          "label": "tp",
+          "savings": 4.2,
+          "snippet": "SELECT * FROM {{ ref('int_payments__filtered_micropayments') }}"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/gtfs/int_gtfs_schedule__daily_scheduled_service_index.sql",
+          "line": 7,
+          "bucket": "repeated_cte_ref",
+          "label": "tp",
+          "savings": 3.4,
+          "snippet": "FROM {{ ref('fct_daily_schedule_feeds') }}"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/gtfs_quality/guidelines_checks/int_gtfs_quality__lead_time.sql",
+          "line": 47,
+          "bucket": "repeated_cte_ref",
+          "label": "tp",
+          "savings": 3.4,
+          "snippet": "INNER JOIN feed_version_history t3"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/gtfs_quality/guidelines_checks/int_gtfs_quality__trip_planners.sql",
+          "line": 22,
+          "bucket": "repeated_cte_ref",
+          "label": "tp",
+          "savings": 3.4,
+          "snippet": "FROM service_checks"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/gtfs_quality/int_gtfs_quality__daily_assessment_candidate_entities.sql",
+          "line": 102,
+          "bucket": "repeated_cte_ref",
+          "label": "tp",
+          "savings": 3.4,
+          "snippet": "FROM initial_assessed"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/gtfs_quality/int_gtfs_quality__guideline_checks_long.sql",
+          "line": 65,
+          "bucket": "repeated_cte_ref",
+          "label": "tp",
+          "savings": 3.4,
+          "snippet": "{{ dbt_utils.generate_surrogate_key(['unioned.key', 'date', 'check']) }} AS key,"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/ntd_validation/int_ntd_rr20_service_1alldata.sql",
+          "line": 51,
+          "bucket": "repeated_cte_ref",
+          "label": "tp",
+          "savings": 3.4,
+          "snippet": "service_this_year.organization,"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/payments/int_payments__refunds_to_aggregations.sql",
+          "line": 26,
+          "bucket": "repeated_cte_ref",
+          "label": "tp",
+          "savings": 3.4,
+          "snippet": "FROM summarize_by_type"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/transit_database/dimensions/int_transit_database__gtfs_service_data_dim.sql",
+          "line": 24,
+          "bucket": "repeated_cte_ref",
+          "label": "tp",
+          "savings": 3.4,
+          "snippet": "dim.name,"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/maker/ethereum/maker_ethereum_accounting.sql",
+          "line": 300,
+          "bucket": "other",
+          "label": "exempt",
+          "savings": 3.4,
+          "snippet": ", dao_wallet.wallet_label LIKE '% Keepers' as is_keeper"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/ethereum/ethereum_network_upgrades.sql",
+          "line": 18,
+          "bucket": "other",
+          "label": "exempt",
+          "savings": 2.7,
+          "snippet": ", (7, 'Byzantium', 'Byzantium', 4370000, ARRAY[140,658,196,197,198,211,214,100,649], 'Privacy and smart contract upgrades', NULL, true, NULL, NULL, NULL)"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/op/retropgf/optimism/op_retropgf_optimism_round2_recipients.sql",
+          "line": 28,
+          "bucket": "other",
+          "label": "exempt",
+          "savings": 2.5,
+          "snippet": "FROM (SELECT * FROM attestations where key_mapped = 'retropgf.round-2.name') nm"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/_sector/labels/addresses/dex/persona/smart_dex_traders/ethereum/labels_smart_dex_traders_ethereum.sql",
+          "line": 119,
+          "bucket": "other",
+          "label": "exempt",
+          "savings": 2.3,
+          "snippet": "from swappers_address_only"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/dex/models/_projects/oneinch/outside/oneinch_lop_own_trades.sql",
+          "line": 18,
+          "bucket": "other",
+          "label": "exempt",
+          "savings": 1.6,
+          "snippet": "-- evt_index is numbered over ALL limits fills, before the venue-settled exclusion:"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/_projects/safe/balances/safe_optimism_balances.sql",
+          "line": 16,
+          "bucket": "other",
+          "label": "exempt",
+          "savings": 0.27,
+          "snippet": "-- Capture all safes from a reference table"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/dex/models/automated_trades/dex_automated_trades_unmapped.sql",
+          "line": 16,
+          "bucket": "other",
+          "label": "exempt",
+          "savings": 0.27,
+          "snippet": "dexs.*"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/dex/models/_projects/odos/avalanche_c/odos_avalanche_c_trades.sql",
+          "line": 65,
+          "bucket": "other",
+          "label": "exempt",
+          "savings": 0.19,
+          "snippet": "TRY_CAST(date_trunc('DAY', dexs.block_time) as date) as block_date,"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/dex/models/trades/blast/platforms/blasterswap_blast_base_trades.sql",
+          "line": 52,
+          "bucket": "other",
+          "label": "exempt",
+          "savings": 0.19,
+          "snippet": "dexs.blockchain,"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/thorchain/silver/thorchain_silver_swaps.sql",
+          "line": 3,
+          "bucket": "other",
+          "label": "exempt",
+          "savings": 0.16,
+          "snippet": "alias = 'swaps',"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/_sector/labels/addresses/dex/usage/trader_dex_diversity/labels_trader_dex_diversity.sql",
+          "line": 4,
+          "bucket": "repeated_cte_ref",
+          "label": "tp",
+          "savings": 5.3,
+          "snippet": "alias = 'trader_dex_diversity'"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/_sector/labels/addresses/dex/usage/trader_frequencies/labels_trader_frequencies.sql",
+          "line": 4,
+          "bucket": "repeated_cte_ref",
+          "label": "tp",
+          "savings": 5.3,
+          "snippet": "alias = 'trader_frequencies'"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/frax_finance/bnb/frax_finance_bnb_bribes.sql",
+          "line": 145,
+          "bucket": "repeated_cte_ref",
+          "label": "tp",
+          "savings": 5.3,
+          "snippet": "join c_info_as_per_nader b on a.contract_name = b.contract_name"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/rocketpool/rocketpool_minipool_created_destroyed.sql",
+          "line": 29,
+          "bucket": "repeated_cte_ref",
+          "label": "tp",
+          "savings": 5.3,
+          "snippet": "created.minipool,"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/rocketpool/rocketpool_minipool_deposit_vacant.sql",
+          "line": 30,
+          "bucket": "repeated_cte_ref",
+          "label": "tp",
+          "savings": 5.3,
+          "snippet": "deposits"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/rocketpool/rocketpool_minipool_queue.sql",
+          "line": 10,
+          "bucket": "repeated_cte_ref",
+          "label": "tp",
+          "savings": 5.3,
+          "snippet": "select minipool"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/tests/sharky/solana/sharky_solana_assert_samples.sql",
+          "line": 18,
+          "bucket": "repeated_cte_ref",
+          "label": "tp",
+          "savings": 5.3,
+          "snippet": "when test_data.amount = sharky_events.amount_original"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/dex/models/_projects/balancer_cowswap_amm/arbitrum/labels_balancer_cowswap_amm_pools_arbitrum.sql",
+          "line": 32,
+          "bucket": "repeated_cte_ref",
+          "label": "tp",
+          "savings": 5.3,
+          "snippet": "SELECT events.block_number"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/dex/models/_projects/balancer_cowswap_amm/base/labels_balancer_cowswap_amm_pools_base.sql",
+          "line": 32,
+          "bucket": "repeated_cte_ref",
+          "label": "tp",
+          "savings": 5.3,
+          "snippet": "SELECT events.block_number"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/dex/models/_projects/balancer_cowswap_amm/ethereum/labels_balancer_cowswap_amm_pools_ethereum.sql",
+          "line": 32,
+          "bucket": "repeated_cte_ref",
+          "label": "tp",
+          "savings": 5.3,
+          "snippet": "SELECT events.block_number"
+        }
+      ]
+    },
+    "SQLCOST001": {
+      "total": 441,
+      "primary_examined": 100,
+      "tail_total": 341,
+      "supplemental_examined": 10,
+      "tp": 10,
+      "exempt": 0,
+      "fp_bug": 0,
+      "unknown": 0,
+      "pass": true,
+      "infrastructure": false,
+      "bucket_counts": {
+        "data-infra:other": 10
+      },
+      "examples": [
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/gtfs_quality/guidelines_checks/int_gtfs_quality__feed_aggregator.sql",
+          "line": 3,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 1.9,
+          "snippet": "*,"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/gtfs_quality/guidelines_checks/int_gtfs_quality__rt_https.sql",
+          "line": 3,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 1.9,
+          "snippet": "*"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/gtfs_quality/int_gtfs_quality__outcome_validator_versions.sql",
+          "line": 4,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 1.9,
+          "snippet": "SELECT *"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/gtfs_quality/int_gtfs_quality__schedule_validation_severities.sql",
+          "line": 4,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 1.9,
+          "snippet": "SELECT *"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/payments/int_payments__micropayments_to_aggregations.sql",
+          "line": 50,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 1.9,
+          "snippet": "SELECT * FROM int_payments__micropayments_to_aggregations"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/mart/payments/indexes/payments_tests_daily_date_spine.sql",
+          "line": 12,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 1.9,
+          "snippet": "SELECT * FROM {{ ref('fct_payments_rides_v2') }}"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/mart/payments/indexes/payments_tests_weekly_date_spine.sql",
+          "line": 12,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 1.9,
+          "snippet": "SELECT * FROM {{ ref('fct_payments_rides_v2') }}"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/mart/payments/indexes/payments_tests_weekly_date_spine_enghouse.sql",
+          "line": 12,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 1.9,
+          "snippet": "SELECT * FROM {{ ref('fct_payments_rides_enghouse') }}"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/tests/mart/gtfs_quality/test_fct_daily_schedule_validation_notices_one_version_per_date_feed.sql",
+          "line": 2,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 1.9,
+          "snippet": "SELECT * FROM {{ ref('fct_daily_schedule_feed_validation_notices') }}"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/ntd_assets/int_ntd__asset_inventory_time_series_active_fleet.sql",
+          "line": 67,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 1.8,
+          "snippet": "SELECT * FROM int_ntd__asset_inventory_time_series_active_fleet"
+        }
+      ]
+    },
+    "SQLCOST002": {
+      "total": 396,
+      "primary_examined": 100,
+      "tail_total": 296,
+      "supplemental_examined": 18,
+      "tp": 18,
+      "exempt": 0,
+      "fp_bug": 0,
+      "unknown": 0,
+      "pass": true,
+      "infrastructure": false,
+      "bucket_counts": {
+        "spellbook:other": 8,
+        "spellbook:repeated_json": 10
+      },
+      "examples": [
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/nexusmutual/ethereum/capital_pool/nexusmutual_ethereum_swap_order_placed.sql",
+          "line": 22,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 0.2,
+          "snippet": "from_hex(json_query(eo.\"order\", 'lax $.sellToken' omit quotes)) as sell_token,"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/nexusmutual/ethereum/claims/nexusmutual_ethereum_claims_v2.sql",
+          "line": 38,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 0.2,
+          "snippet": "cast(json_query(output_claim, 'lax $.assessmentId') as int) as assessment_id,"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/solana/models/hivemapper/hivemapper_solana_rewards.sql",
+          "line": 44,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 0.2,
+          "snippet": "when contains(tx.log_messages,'Program log: Memo (len 12): \"Map Coverage\"') then 'map coverage'"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/nexusmutual/ethereum/capital_pool/nexusmutual_ethereum_swap_order_closed.sql",
+          "line": 47,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 0.14,
+          "snippet": "from_hex(json_query(\"order\", 'lax $.sellToken' omit quotes)) as sell_token,"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/dex/models/_projects/odos/avalanche_c/odos_avalanche_c_trades.sql",
+          "line": 53,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 0.14,
+          "snippet": "WHEN CAST(data_value:tokenAddress as string) IN ('0', 'O', '0x0000000000000000000000000000000000000000')"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/solana/models/jupiter/jupiter_v6_solana_swapsevent_aggregator_swaps.sql",
+          "line": 135,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 0.1,
+          "snippet": ", REPLACE(REPLACE(json_extract_scalar(CAST(evt AS VARCHAR), '$.SwapEventV2.input_mint'), 'PublicKey(', ''), ')', '') AS input_mint"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/solana/models/tokens/solana/tokens_solana_nft.sql",
+          "line": 106,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 0.1,
+          "snippet": ", json_value(args, 'strict $.tokenStandard.TokenStandard') as token_standard"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/nexusmutual/ethereum/staking/base/nexusmutual_ethereum_base_staking_pools.sql",
+          "line": 64,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 0.067,
+          "snippet": "coalesce(cast(json_query(t.json, 'lax $.productId') as int), -1) as product_id,"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/_projects/polymarket/polygon/polymarket_polygon_markets.sql",
+          "line": 92,
+          "bucket": "repeated_json",
+          "label": "tp",
+          "savings": 0.2,
+          "snippet": "when coalesce(json_value(data_decoded, 'lax $.title' null on error), json_value(data_decoded, 'lax $.question' null on error)) is not null"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/jarvis_network/polygon/jarvis_network_polygon_all_transactions.sql",
+          "line": 59,
+          "bucket": "repeated_json",
+          "label": "tp",
+          "savings": 0.2,
+          "snippet": "CAST(JSON_EXTRACT_SCALAR(mintvalues,'$.numTokens')  AS UINT256) AS jfiat_token_amount,"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/dex/models/trades/ethereum/platforms/ekubo_v1_ethereum_base_trades.sql",
+          "line": 62,
+          "bucket": "repeated_json",
+          "label": "tp",
+          "savings": 0.2,
+          "snippet": "WHEN isToken1 = TRUE THEN cast(JSON_EXTRACT(poolKey, '$.token0') as varchar)"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/hourly_spellbook/models/_sector/nft/trades/chains/blast/platforms/fantasy_blast_base_trades.sql",
+          "line": 18,
+          "bucket": "repeated_json",
+          "label": "tp",
+          "savings": 0.2,
+          "snippet": ", CAST(JSON_EXTRACT_SCALAR(sell, '$.tokenId') AS UINT256) AS nft_token_id"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/hourly_spellbook/models/_sector/nft/trades/chains/ethereum/platforms/zora_v1_ethereum_base_trades.sql",
+          "line": 28,
+          "bucket": "repeated_json",
+          "label": "tp",
+          "savings": 0.2,
+          "snippet": ", from_hex(JSON_EXTRACT_SCALAR(bf.bid, '$.bidder')) AS buyer"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/hourly_spellbook/models/_sector/nft/trades/chains/ethereum/platforms/zora_v3_ethereum_base_trades.sql",
+          "line": 16,
+          "bucket": "repeated_json",
+          "label": "tp",
+          "savings": 0.2,
+          "snippet": ", CAST(JSON_EXTRACT_SCALAR(a, '$.tokenId') as uint256) AS nft_token_id"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/hourly_spellbook/models/_sector/nft/trades/chains/polygon/platforms/dew_polygon_base_trades.sql",
+          "line": 33,
+          "bucket": "repeated_json",
+          "label": "tp",
+          "savings": 0.2,
+          "snippet": ", try(cast(json_extract_scalar(fees[1],'$.percentage') as double)) AS royalty_fee_percentage"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/hourly_spellbook/models/_sector/nft/trades/chains/polygon/platforms/fractal_polygon_base_trades.sql",
+          "line": 22,
+          "bucket": "repeated_json",
+          "label": "tp",
+          "savings": 0.2,
+          "snippet": "from_hex(JSON_EXTRACT_SCALAR(listing,'$.tokenOwner')) AS tokenOwner,"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/hourly_spellbook/models/_sector/nft/trades/chains/zksync/platforms/kreatorland_zksync_base_trades.sql",
+          "line": 19,
+          "bucket": "repeated_json",
+          "label": "tp",
+          "savings": 0.2,
+          "snippet": "json_extract_scalar(consideration[1], '$.itemType') AS cons_item_type_1"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/hourly_spellbook/models/_sector/perpetual/projects/dip_exchange/dip_exchange_v1_base_perpetual_trades.sql",
+          "line": 58,
+          "bucket": "repeated_json",
+          "label": "tp",
+          "savings": 0.2,
+          "snippet": "TRY_CAST(JSON_EXTRACT_SCALAR(pnl, '$.abs') AS DOUBLE)/1e30 AS pnl"
+        }
+      ]
+    },
+    "SQLCOST015": {
+      "total": 346,
+      "primary_examined": 100,
+      "tail_total": 246,
+      "supplemental_examined": 16,
+      "tp": 16,
+      "exempt": 0,
+      "fp_bug": 0,
+      "unknown": 0,
+      "pass": true,
+      "infrastructure": false,
+      "bucket_counts": {
+        "spellbook:json_expression": 10,
+        "spellbook:other": 3,
+        "spellbook:regex_expression": 3
+      },
+      "examples": [
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/dex/models/_projects/bebop/zksync/bebop_jam_zksync_trades.sql",
+          "line": 22,
+          "bucket": "json_expression",
+          "label": "tp",
+          "savings": 0.16,
+          "snippet": "JSON_EXTRACT_SCALAR(ex.\"order\", '$.expiry') AS expiry,"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/hourly_spellbook/models/_project/gmx/event/arbitrum/gmx_v2_arbitrum_claim_funds_claimed.sql",
+          "line": 97,
+          "bucket": "json_expression",
+          "label": "tp",
+          "savings": 0.16,
+          "snippet": "json_query(data, 'lax $.uintItems' OMIT QUOTES) AS uint_items,"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/hourly_spellbook/models/_project/gmx/event/arbitrum/gmx_v2_arbitrum_claim_funds_deposited.sql",
+          "line": 97,
+          "bucket": "json_expression",
+          "label": "tp",
+          "savings": 0.16,
+          "snippet": "json_query(data, 'lax $.uintItems' OMIT QUOTES) AS uint_items,"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/hourly_spellbook/models/_project/gmx/event/arbitrum/gmx_v2_arbitrum_claim_funds_transferred.sql",
+          "line": 97,
+          "bucket": "json_expression",
+          "label": "tp",
+          "savings": 0.16,
+          "snippet": "json_query(data, 'lax $.uintItems' OMIT QUOTES) AS uint_items,"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/hourly_spellbook/models/_project/gmx/event/arbitrum/gmx_v2_arbitrum_claim_funds_withdrawn.sql",
+          "line": 97,
+          "bucket": "json_expression",
+          "label": "tp",
+          "savings": 0.16,
+          "snippet": "json_query(data, 'lax $.uintItems' OMIT QUOTES) AS uint_items,"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/hourly_spellbook/models/_project/gmx/event/arbitrum/gmx_v2_arbitrum_claim_terms_removed.sql",
+          "line": 97,
+          "bucket": "json_expression",
+          "label": "tp",
+          "savings": 0.16,
+          "snippet": "json_query(data, 'lax $.uintItems' OMIT QUOTES) AS uint_items"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/hourly_spellbook/models/_project/gmx/event/arbitrum/gmx_v2_arbitrum_claim_terms_set.sql",
+          "line": 97,
+          "bucket": "json_expression",
+          "label": "tp",
+          "savings": 0.16,
+          "snippet": "json_query(data, 'lax $.uintItems' OMIT QUOTES) AS uint_items,"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/hourly_spellbook/models/_project/gmx/event/arbitrum/gmx_v2_arbitrum_claimable_collateral_updated.sql",
+          "line": 102,
+          "bucket": "json_expression",
+          "label": "tp",
+          "savings": 0.16,
+          "snippet": "json_query(data, 'lax $.addressItems' OMIT QUOTES) AS address_items,"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/hourly_spellbook/models/_project/gmx/event/arbitrum/gmx_v2_arbitrum_claimable_funding_updated.sql",
+          "line": 102,
+          "bucket": "json_expression",
+          "label": "tp",
+          "savings": 0.16,
+          "snippet": "json_query(data, 'lax $.addressItems' OMIT QUOTES) AS address_items,"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/hourly_spellbook/models/_project/gmx/event/arbitrum/gmx_v2_arbitrum_clear_pending_action.sql",
+          "line": 96,
+          "bucket": "json_expression",
+          "label": "tp",
+          "savings": 0.16,
+          "snippet": "json_query(data, 'lax $.bytes32Items' OMIT QUOTES) AS bytes32_items,"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/solana/models/tokens/solana/tokens_solana_nft.sql",
+          "line": 106,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 0.11,
+          "snippet": ", json_value(args, 'strict $.tokenStandard.TokenStandard') as token_standard"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/ton/tokens_ton_net_transfers_daily.sql",
+          "line": 29,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 0.1,
+          "snippet": "jp.token_address = '0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE' -- USDT"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/ton/tokens_ton_net_transfers_daily_asset.sql",
+          "line": 34,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 0.1,
+          "snippet": "when jp.token_address = '0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE' -- USDT"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/sui/tvl/supply/sui_tvl_supply_gold.sql",
+          "line": 37,
+          "bucket": "regex_expression",
+          "label": "tp",
+          "savings": 0.14,
+          "snippet": "regexp_replace("
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/sui/tvl/lending/sui_tvl_lending_pools_gold.sql",
+          "line": 35,
+          "bucket": "regex_expression",
+          "label": "tp",
+          "savings": 0.09,
+          "snippet": "regexp_replace("
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/sui/tvl/dex/sui_tvl_dex_pools_gold.sql",
+          "line": 164,
+          "bucket": "regex_expression",
+          "label": "tp",
+          "savings": 0.056,
+          "snippet": "regexp_replace("
+        }
+      ]
+    },
+    "SQLCOST038": {
+      "total": 447,
+      "primary_examined": 100,
+      "tail_total": 347,
+      "supplemental_examined": 10,
+      "tp": 10,
+      "exempt": 0,
+      "fp_bug": 0,
+      "unknown": 0,
+      "pass": true,
+      "infrastructure": false,
+      "bucket_counts": {
+        "spellbook:other": 10
+      },
+      "examples": [
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/boost/boost_claimed.sql",
+          "line": 132,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 0.33,
+          "snippet": "left join {{ source('prices','usd') }} p"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/chainlink/arbitrum/chainlink_arbitrum_vrf_gas_daily.sql",
+          "line": 66,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 0.33,
+          "snippet": "FULL OUTER JOIN vrf_gas_reverted_daily reverted ON"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/chainlink/arbitrum/chainlink_arbitrum_vrf_request_daily.sql",
+          "line": 31,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 0.33,
+          "snippet": "FULL OUTER JOIN {{ ref('chainlink_arbitrum_vrf_reverted_transactions') }} reverted ON"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/chainlink/arbitrum/chainlink_arbitrum_vrf_reward_daily.sql",
+          "line": 37,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 0.33,
+          "snippet": "LEFT JOIN link_usd_daily lud ON lud.date_start = vrf_daily.date_start"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/chainlink/avalanche_c/chainlink_avalanche_c_automation_reward_daily.sql",
+          "line": 38,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 0.33,
+          "snippet": "LEFT JOIN link_usd_daily lud ON lud.date_start = automation_performed_daily.date_start"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/chainlink/avalanche_c/chainlink_avalanche_c_vrf_gas_daily.sql",
+          "line": 66,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 0.33,
+          "snippet": "FULL OUTER JOIN vrf_gas_reverted_daily reverted ON"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/chainlink/avalanche_c/chainlink_avalanche_c_vrf_request_daily.sql",
+          "line": 31,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 0.33,
+          "snippet": "FULL OUTER JOIN {{ ref('chainlink_avalanche_c_vrf_reverted_transactions') }} reverted ON"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/chainlink/avalanche_c/chainlink_avalanche_c_vrf_reward_daily.sql",
+          "line": 37,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 0.33,
+          "snippet": "LEFT JOIN link_usd_daily lud ON lud.date_start = vrf_daily.date_start"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/chainlink/bnb/chainlink_bnb_automation_reward_daily.sql",
+          "line": 38,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 0.33,
+          "snippet": "LEFT JOIN link_usd_daily lud ON lud.date_start = automation_performed_daily.date_start"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/chainlink/bnb/chainlink_bnb_vrf_gas_daily.sql",
+          "line": 66,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 0.33,
+          "snippet": "FULL OUTER JOIN vrf_gas_reverted_daily reverted ON"
+        }
+      ]
+    },
+    "SQLCOST042": {
+      "total": 604,
+      "primary_examined": 100,
+      "tail_total": 504,
+      "supplemental_examined": 10,
+      "tp": 10,
+      "exempt": 0,
+      "fp_bug": 0,
+      "unknown": 0,
+      "pass": true,
+      "infrastructure": false,
+      "bucket_counts": {
+        "data-infra:other": 10
+      },
+      "examples": [
+        {
+          "repo": "data-infra",
+          "path": "warehouse/tests/staging/payments/littlepay/test_micropayment_transaction_time_order.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 4.6,
+          "snippet": "{{ config(store_failures = true) }}"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/gtfs_quality/guidelines_checks/int_gtfs_quality__include_tts.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 4.3,
+          "snippet": "WITH guideline_index AS ("
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/gtfs_quality/guidelines_checks/int_gtfs_quality__feed_aggregator.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 4.1,
+          "snippet": "WITH guideline_index AS ("
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/gtfs_quality/guidelines_checks/int_gtfs_quality__rt_https.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 4.1,
+          "snippet": "WITH guideline_index AS ("
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/gtfs_quality/int_gtfs_quality__outcome_validator_versions.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 4.1,
+          "snippet": "{{ config(materialized='table') }}"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/gtfs_quality/int_gtfs_quality__schedule_validation_severities.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 4.1,
+          "snippet": "{{ config(materialized='table') }}"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/payments/int_payments__micropayments_to_aggregations.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 4.1,
+          "snippet": "{{"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/mart/payments/indexes/payments_tests_daily_date_spine.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 4.1,
+          "snippet": "{{ config(materialized='ephemeral') }}"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/mart/payments/indexes/payments_tests_weekly_date_spine.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 4.1,
+          "snippet": "{{ config(materialized='ephemeral') }}"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/mart/payments/indexes/payments_tests_weekly_date_spine_enghouse.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 4.1,
+          "snippet": "{{ config(materialized='ephemeral') }}"
+        }
+      ]
+    },
+    "SQLCOST007": {
+      "total": 57,
+      "primary_examined": 57,
+      "tail_total": 0,
+      "supplemental_examined": 0,
+      "tp": 0,
+      "exempt": 0,
+      "fp_bug": 0,
+      "unknown": 0,
+      "pass": true,
+      "infrastructure": false,
+      "bucket_counts": {},
+      "examples": []
+    },
+    "SQLCOST008": {
+      "total": 194,
+      "primary_examined": 100,
+      "tail_total": 94,
+      "supplemental_examined": 20,
+      "tp": 20,
+      "exempt": 0,
+      "fp_bug": 0,
+      "unknown": 0,
+      "pass": true,
+      "infrastructure": false,
+      "bucket_counts": {
+        "data-infra:blind_distinct": 10,
+        "spellbook:blind_distinct": 10
+      },
+      "examples": [
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/mart/gtfs_audit/dim_gtfs_schedule_validation_notices.sql",
+          "line": 4,
+          "bucket": "blind_distinct",
+          "label": "tp",
+          "savings": 1.8,
+          "snippet": "SELECT DISTINCT"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/mart/gtfs_audit/dim_gtfs_schedule_validation_outcomes.sql",
+          "line": 4,
+          "bucket": "blind_distinct",
+          "label": "tp",
+          "savings": 1.8,
+          "snippet": "SELECT DISTINCT"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/mart/gtfs_quality/fct_implemented_checks.sql",
+          "line": 10,
+          "bucket": "blind_distinct",
+          "label": "tp",
+          "savings": 1.8,
+          "snippet": "SELECT DISTINCT"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/mart/tides_audit/dim_tides_trips_performed_outcomes.sql",
+          "line": 4,
+          "bucket": "blind_distinct",
+          "label": "tp",
+          "savings": 1.8,
+          "snippet": "SELECT DISTINCT"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/mart/tides_audit/dim_tides_vehicle_locations_outcomes.sql",
+          "line": 4,
+          "bucket": "blind_distinct",
+          "label": "tp",
+          "savings": 1.8,
+          "snippet": "SELECT DISTINCT"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/staging/gtfs/stg_gtfs_schedule__unzip_outcomes.sql",
+          "line": 9,
+          "bucket": "blind_distinct",
+          "label": "tp",
+          "savings": 1.7,
+          "snippet": "SELECT DISTINCT"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/ntd_validation/int_ntd_rr20_service_3ratios_wide.sql",
+          "line": 84,
+          "bucket": "blind_distinct",
+          "label": "tp",
+          "savings": 1.6,
+          "snippet": "select distinct cph.organization,"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/payments/int_payments__refunds_deduped.sql",
+          "line": 75,
+          "bucket": "blind_distinct",
+          "label": "tp",
+          "savings": 1.6,
+          "snippet": "SELECT DISTINCT retrieval_reference_number,"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/mart/gtfs/fct_vehicle_positions_trip_summaries.sql",
+          "line": 26,
+          "bucket": "blind_distinct",
+          "label": "tp",
+          "savings": 1.5,
+          "snippet": "SELECT DISTINCT"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/mart/gtfs/fct_scheduled_trips.sql",
+          "line": 44,
+          "bucket": "blind_distinct",
+          "label": "tp",
+          "savings": 1.4,
+          "snippet": "SELECT DISTINCT"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/_sector/labels/addresses/dex/persona/arbitrage_traders/ethereum/labels_arbitrage_traders_ethereum.sql",
+          "line": 51,
+          "bucket": "blind_distinct",
+          "label": "tp",
+          "savings": 1.5,
+          "snippet": "SELECT"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/op/token_distributions/optimism/op_token_distributions_optimism_other_tags.sql",
+          "line": 11,
+          "bucket": "blind_distinct",
+          "label": "tp",
+          "savings": 1.4,
+          "snippet": "SELECT distinct address, address_name"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/relay/relay_token_transfers.sql",
+          "line": 265,
+          "bucket": "blind_distinct",
+          "label": "tp",
+          "savings": 1.4,
+          "snippet": "SELECT DISTINCT *"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/nexusmutual/ethereum/claims/nexusmutual_ethereum_claims_paid.sql",
+          "line": 25,
+          "bucket": "blind_distinct",
+          "label": "tp",
+          "savings": 1.3,
+          "snippet": "select distinct"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/pools/optimism/balancer_optimism_gauge_mappings.sql",
+          "line": 13,
+          "bucket": "blind_distinct",
+          "label": "tp",
+          "savings": 0.2,
+          "snippet": "SELECT distinct"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/_projects/opensea/solana/opensea_solana_token_trades.sql",
+          "line": 14,
+          "bucket": "blind_distinct",
+          "label": "tp",
+          "savings": 0.2,
+          "snippet": "SELECT DISTINCT(tx_id) AS tx_id"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/_projects/polymarket/polygon/polymarket_polygon_market_addresses.sql",
+          "line": 13,
+          "bucket": "blind_distinct",
+          "label": "tp",
+          "savings": 0.2,
+          "snippet": "select distinct"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/_sector/airdrops/ethereum/projects/etherfi_ethereum_airdrop_claims.sql",
+          "line": 22,
+          "bucket": "blind_distinct",
+          "label": "tp",
+          "savings": 0.2,
+          "snippet": "SELECT DISTINCT 'ethereum' AS blockchain"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/curvefi/optimism/curvefi_optimism_gauge_mappings.sql",
+          "line": 14,
+          "bucket": "blind_distinct",
+          "label": "tp",
+          "savings": 0.2,
+          "snippet": "SELECT distinct"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/rocketpool/rocketpool_minipool_balance_distribution.sql",
+          "line": 11,
+          "bucket": "blind_distinct",
+          "label": "tp",
+          "savings": 0.2,
+          "snippet": "select distinct"
+        }
+      ]
+    },
+    "SQLCOST027": {
+      "total": 7650,
+      "primary_examined": 100,
+      "tail_total": 7550,
+      "supplemental_examined": 31,
+      "tp": 0,
+      "exempt": 0,
+      "fp_bug": 0,
+      "unknown": 31,
+      "pass": true,
+      "infrastructure": true,
+      "bucket_counts": {
+        "data-infra:other": 10,
+        "jaffle-shop:other": 1,
+        "mattermost-warehouse:other": 10,
+        "spellbook:other": 10
+      },
+      "examples": [
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/transit_database/dimensions/int_transit_database__organizations_dim.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{ config(materialized='table') }}"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/transit_database/dimensions/int_transit_database__products_dim.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{ config(materialized='table') }}"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/transit_database/dimensions/int_transit_database__properties_and_features_dim.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{ config(materialized='table') }}"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/transit_database/dimensions/int_transit_database__service_components_dim.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{ config(materialized='table') }}"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/transit_database/dimensions/int_transit_database__services_dim.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{ config(materialized='table') }}"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/transit_database/dimensions/int_transit_database__tts_services_dim.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{ config(materialized='table') }}"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/transit_database/int_transit_database__service_components_unnested.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{ config(materialized='ephemeral') }}"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/transit_database/int_transit_database__transit_data_quality_issues.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{ config(materialized='table') }}"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/intermediate/transit_database/int_transit_database__urls_to_gtfs_datasets.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{ config(materialized='table') }}"
+        },
+        {
+          "repo": "data-infra",
+          "path": "warehouse/models/mart/audit/fct_bigquery_data_access.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{ config("
+        },
+        {
+          "repo": "jaffle-shop",
+          "path": "models/marts/metricflow_time_spine.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "-- metricflow_time_spine.sql"
+        },
+        {
+          "repo": "mattermost-warehouse",
+          "path": "transform/snowflake-dbt/models/bizops/nightly/raw_warehouse_columns_hist.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{config({"
+        },
+        {
+          "repo": "mattermost-warehouse",
+          "path": "transform/snowflake-dbt/models/bizops/nightly/snowflake_amortized_rates.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{config({"
+        },
+        {
+          "repo": "mattermost-warehouse",
+          "path": "transform/snowflake-dbt/models/bizops/nightly/snowflake_warehouse_cost.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{config({"
+        },
+        {
+          "repo": "mattermost-warehouse",
+          "path": "transform/snowflake-dbt/models/blapi/addresses.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{config({"
+        },
+        {
+          "repo": "mattermost-warehouse",
+          "path": "transform/snowflake-dbt/models/blapi/cloud_subscriptions.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{config({"
+        },
+        {
+          "repo": "mattermost-warehouse",
+          "path": "transform/snowflake-dbt/models/blapi/credit_cards.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{config({"
+        },
+        {
+          "repo": "mattermost-warehouse",
+          "path": "transform/snowflake-dbt/models/blapi/customers_blapi.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{config({"
+        },
+        {
+          "repo": "mattermost-warehouse",
+          "path": "transform/snowflake-dbt/models/blapi/customers_with_cloud_subs.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{config({"
+        },
+        {
+          "repo": "mattermost-warehouse",
+          "path": "transform/snowflake-dbt/models/blapi/customers_with_freemium_subs.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{"
+        },
+        {
+          "repo": "mattermost-warehouse",
+          "path": "transform/snowflake-dbt/models/blapi/customers_with_onprem_subs.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{config({"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/_blockchains/near/near_bridge_omni.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{ config("
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/_blockchains/near/near_fact_intents.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{ config("
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/_blockchains/near/v1_signer/near_v1_signer_users.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/_dev/daily_spellbook_dev_table.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{ config("
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/_dev/daily_spellbook_dev_view.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{ config("
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/_metrics/dune_index/metrics_dune_index_daily.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{ config("
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/_metrics/dune_index/metrics_dune_index_stats.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{ config("
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/_metrics/fees/chains/bitcoin/metrics_bitcoin_gas_fees_daily.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{ config("
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/_metrics/fees/chains/evm/metrics_abstract_gas_fees_daily.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{% set blockchain = 'abstract' %}"
+        },
+        {
+          "repo": "spellbook",
+          "path": "dbt_subprojects/daily_spellbook/models/_metrics/fees/chains/evm/metrics_apechain_gas_fees_daily.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{% set blockchain = 'apechain' %}"
+        }
+      ],
+      "parse_failure_summary": [
+        {
+          "signature": "SQL parse failed",
+          "source_pattern": "jinja_template",
+          "count": 4505,
+          "examples": [
+            {
+              "repo": "data-infra",
+              "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__service_alerts_day_map_grouping.sql",
+              "line": 1,
+              "bucket": "other",
+              "label": "unknown",
+              "savings": 0.0,
+              "snippet": "{{"
+            },
+            {
+              "repo": "data-infra",
+              "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__service_alerts_trip_day_map_grouping.sql",
+              "line": 1,
+              "bucket": "other",
+              "label": "unknown",
+              "savings": 0.0,
+              "snippet": "{{"
+            },
+            {
+              "repo": "data-infra",
+              "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__trip_updates_trip_day_map_grouping.sql",
+              "line": 1,
+              "bucket": "other",
+              "label": "unknown",
+              "savings": 0.0,
+              "snippet": "{{"
+            }
+          ]
+        },
+        {
+          "signature": "SQL parse failed",
+          "source_pattern": "dbt_config_wrapper",
+          "count": 3007,
+          "examples": [
+            {
+              "repo": "data-infra",
+              "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__daily_url_index.sql",
+              "line": 1,
+              "bucket": "other",
+              "label": "unknown",
+              "savings": 0.0,
+              "snippet": "{{ config(materialized='table', event_time='dt') }}"
+            },
+            {
+              "repo": "data-infra",
+              "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__distinct_download_configs.sql",
+              "line": 1,
+              "bucket": "other",
+              "label": "unknown",
+              "savings": 0.0,
+              "snippet": "{{ config("
+            },
+            {
+              "repo": "data-infra",
+              "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__service_alerts_fully_unnested.sql",
+              "line": 1,
+              "bucket": "other",
+              "label": "unknown",
+              "savings": 0.0,
+              "snippet": "{{ config(event_time='dt') }}"
+            }
+          ]
+        },
+        {
+          "signature": "SQL parse failed",
+          "source_pattern": "sql_parse_failure",
+          "count": 135,
+          "examples": [
+            {
+              "repo": "data-infra",
+              "path": "warehouse/models/intermediate/gtfs_quality/int_gtfs_quality__guideline_checks_long.sql",
+              "line": 1,
+              "bucket": "other",
+              "label": "unknown",
+              "savings": 0.0,
+              "snippet": "-- TODO: this will replace int_gtfs_quality__guideline_checks once ready"
+            },
+            {
+              "repo": "data-infra",
+              "path": "warehouse/models/intermediate/ntd_validation/int_ntd_a10_facilitiesdata.sql",
+              "line": 1,
+              "bucket": "other",
+              "label": "unknown",
+              "savings": 0.0,
+              "snippet": "---------"
+            },
+            {
+              "repo": "data-infra",
+              "path": "warehouse/models/intermediate/ntd_validation/int_ntd_rr20_financial_fare_revenues.sql",
+              "line": 1,
+              "bucket": "other",
+              "label": "unknown",
+              "savings": 0.0,
+              "snippet": "-- need fare rev and upt for each year."
+            }
+          ]
+        },
+        {
+          "signature": "SQL parse failed",
+          "source_pattern": "compiled_sql_parser_gap",
+          "count": 3,
+          "examples": [
+            {
+              "repo": "data-infra",
+              "path": "warehouse/models/intermediate/gtfs/int_gtfs_datasets.sql",
+              "line": 1,
+              "bucket": "other",
+              "label": "unknown",
+              "savings": 0.0,
+              "snippet": "WITH dim AS ("
+            },
+            {
+              "repo": "data-infra",
+              "path": "warehouse/models/intermediate/gtfs_quality/int_gtfs_quality__schedule_validator_rule_details_unioned.sql",
+              "line": 1,
+              "bucket": "other",
+              "label": "unknown",
+              "savings": 0.0,
+              "snippet": "WITH unioned AS ("
+            },
+            {
+              "repo": "data-infra",
+              "path": "warehouse/models/staging/gtfs/stg_gtfs_schedule__file_parse_outcomes.sql",
+              "line": 1,
+              "bucket": "other",
+              "label": "unknown",
+              "savings": 0.0,
+              "snippet": "WITH unioned_outcomes AS ("
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "summary": {
+    "total_rules": 9,
+    "passing": 9,
+    "failing": 0,
+    "failing_rules": []
+  }
+}

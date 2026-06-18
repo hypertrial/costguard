@@ -20,7 +20,7 @@ fn join_has_clear_equality(join: &JoinFeature, file_text: &str, used_ast: bool) 
     }
     if join.predicate.as_ref().is_some_and(|predicate| {
         let lower = predicate.to_ascii_lowercase();
-        lower.contains('=') || lower.starts_with("using(")
+        lower.contains('=') || lower.starts_with("using(") || lower.starts_with("using (")
     }) {
         return true;
     }
@@ -149,7 +149,12 @@ fn skip_optional_alias(text: &str, idx: usize) -> usize {
 
 fn on_snippet_has_equality(text: &str) -> bool {
     let lower = text.to_ascii_lowercase();
-    if lower.trim_start().starts_with("using(") || lower.contains(" using(") {
+    let trimmed = lower.trim_start();
+    if trimmed.starts_with("using(")
+        || trimmed.starts_with("using (")
+        || lower.contains(" using(")
+        || lower.contains(" using (")
+    {
         return true;
     }
     for (idx, _) in lower.match_indices(" on ") {

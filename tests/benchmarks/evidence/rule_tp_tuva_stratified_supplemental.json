@@ -1,0 +1,603 @@
+{
+  "repos": [
+    "tuva"
+  ],
+  "primary_sample_cap": 100,
+  "per_bucket_cap": 10,
+  "rules": {
+    "SQLCOST007": {
+      "total": 155,
+      "primary_examined": 100,
+      "tail_total": 55,
+      "supplemental_examined": 10,
+      "tp": 10,
+      "exempt": 0,
+      "fp_bug": 0,
+      "unknown": 0,
+      "pass": true,
+      "infrastructure": false,
+      "bucket_counts": {
+        "tuva:other": 10
+      },
+      "examples": [
+        {
+          "repo": "tuva",
+          "path": "models/data_marts/ahrq_measures/pqi/intermediate/ahrq_measures__int_pqi_03_exclusions.sql",
+          "line": 11,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 2.2,
+          "snippet": ", cast('2026-06-18 15:20:04.636683+00:00' as timestamp) as tuva_last_run"
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_marts/ahrq_measures/pqi/intermediate/ahrq_measures__int_pqi_14_exclusions.sql",
+          "line": 11,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 2.2,
+          "snippet": ", cast('2026-06-18 15:20:04.636683+00:00' as timestamp) as tuva_last_run"
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_marts/normalize/normalize__all_unmapped.sql",
+          "line": 23,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 2.2,
+          "snippet": ", {{ dbt.listagg(measure=\"distinct i.domain\", delimiter_text=\"', '\", order_by_clause=\"order by i.domain\" )}} as domains -- noqa"
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_quality/legacy/intermediate/data_quality__acute_inpatient_prevalence.sql",
+          "line": 21,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 2.0,
+          "snippet": ",row_number() over (order by count(*) desc) as rank_nbr"
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_marts/fhir_preprocessing/intermediate/fhir_preprocessing__int_pharmacy_claim_supporting_info.sql",
+          "line": 69,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 1.9,
+          "snippet": "order by eob_supporting_info_category_code"
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_quality/dqi/intermediate/concepts/primary_keys/data_quality__primary_keys_patient_patient_id.sql",
+          "line": 51,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 1.9,
+          "snippet": "order by drill_down_key) as row_number_value"
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_quality/dqi/intermediate/concepts/primary_keys/data_quality__primary_keys_practitioner_practitioner_id.sql",
+          "line": 49,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 1.9,
+          "snippet": "order by drill_down_key) as row_number_value"
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_quality/dqi/intermediate/concepts/primary_keys/data_quality__primary_keys_procedure_procedure_id.sql",
+          "line": 49,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 1.9,
+          "snippet": "order by drill_down_key) as row_number_value"
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_marts/readmissions/intermediate/readmissions__readmission_crude.sql",
+          "line": 37,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 1.7,
+          "snippet": ")"
+        },
+        {
+          "repo": "tuva",
+          "path": "models/claims_preprocessing/encounters/intermediate/encounters__orphaned_claims.sql",
+          "line": 34,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 1.6,
+          "snippet": "from cte"
+        }
+      ]
+    },
+    "SQLCOST008": {
+      "total": 270,
+      "primary_examined": 100,
+      "tail_total": 170,
+      "supplemental_examined": 14,
+      "tp": 14,
+      "exempt": 0,
+      "fp_bug": 0,
+      "unknown": 0,
+      "pass": true,
+      "infrastructure": false,
+      "bucket_counts": {
+        "tuva:blind_distinct": 10,
+        "tuva:other": 4
+      },
+      "examples": [
+        {
+          "repo": "tuva",
+          "path": "models/data_quality/dqi/intermediate/atomic_checks/claims/eligibility/data_quality__eligibility_original_reason_entitlement_code.sql",
+          "line": 7,
+          "bucket": "blind_distinct",
+          "label": "tp",
+          "savings": 4.0,
+          "snippet": "select distinct"
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_quality/dqi/intermediate/atomic_checks/claims/eligibility/data_quality__eligibility_payer.sql",
+          "line": 7,
+          "bucket": "blind_distinct",
+          "label": "tp",
+          "savings": 4.0,
+          "snippet": "select distinct"
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_quality/dqi/intermediate/atomic_checks/claims/eligibility/data_quality__eligibility_payer_type.sql",
+          "line": 7,
+          "bucket": "blind_distinct",
+          "label": "tp",
+          "savings": 4.0,
+          "snippet": "select distinct"
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_quality/dqi/intermediate/atomic_checks/claims/eligibility/data_quality__eligibility_person_id.sql",
+          "line": 7,
+          "bucket": "blind_distinct",
+          "label": "tp",
+          "savings": 4.0,
+          "snippet": "select distinct"
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_quality/dqi/intermediate/atomic_checks/claims/eligibility/data_quality__eligibility_phone.sql",
+          "line": 7,
+          "bucket": "blind_distinct",
+          "label": "tp",
+          "savings": 4.0,
+          "snippet": "select distinct"
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_quality/dqi/intermediate/atomic_checks/claims/eligibility/data_quality__eligibility_plan.sql",
+          "line": 7,
+          "bucket": "blind_distinct",
+          "label": "tp",
+          "savings": 4.0,
+          "snippet": "select distinct"
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_quality/dqi/intermediate/atomic_checks/claims/eligibility/data_quality__eligibility_race.sql",
+          "line": 7,
+          "bucket": "blind_distinct",
+          "label": "tp",
+          "savings": 4.0,
+          "snippet": "select distinct -- to bring to claim_ID grain"
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_quality/dqi/intermediate/atomic_checks/claims/eligibility/data_quality__eligibility_start_date.sql",
+          "line": 7,
+          "bucket": "blind_distinct",
+          "label": "tp",
+          "savings": 4.0,
+          "snippet": "select distinct"
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_quality/dqi/intermediate/atomic_checks/claims/eligibility/data_quality__eligibility_state.sql",
+          "line": 7,
+          "bucket": "blind_distinct",
+          "label": "tp",
+          "savings": 4.0,
+          "snippet": "select distinct"
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_quality/dqi/intermediate/atomic_checks/claims/eligibility/data_quality__eligibility_zip_code.sql",
+          "line": 7,
+          "bucket": "blind_distinct",
+          "label": "tp",
+          "savings": 4.0,
+          "snippet": "select distinct -- to bring to claim_ID grain"
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_marts/chronic_conditions/intermediate/chronic_conditions__cms_chronic_conditions_all.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 1.8,
+          "snippet": ""
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_marts/chronic_conditions/intermediate/chronic_conditions__cms_chronic_conditions_hiv_aids.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 1.8,
+          "snippet": "with  __dbt__cte__cms_chronic_conditions__stg_core__condition as ("
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_marts/chronic_conditions/intermediate/chronic_conditions__cms_chronic_conditions_oud.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 1.8,
+          "snippet": "with  __dbt__cte__cms_chronic_conditions__stg_core__condition as ("
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_marts/readmissions/intermediate/readmissions__encounter_overlap.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "tp",
+          "savings": 1.2,
+          "snippet": ""
+        }
+      ]
+    },
+    "SQLCOST014": {
+      "total": 141,
+      "primary_examined": 100,
+      "tail_total": 41,
+      "supplemental_examined": 13,
+      "tp": 10,
+      "exempt": 3,
+      "fp_bug": 0,
+      "unknown": 0,
+      "pass": true,
+      "infrastructure": false,
+      "bucket_counts": {
+        "tuva:other": 3,
+        "tuva:repeated_cte_ref": 10
+      },
+      "examples": [
+        {
+          "repo": "tuva",
+          "path": "models/data_marts/chronic_conditions/intermediate/chronic_conditions__cms_chronic_conditions_all.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "exempt",
+          "savings": 2.4,
+          "snippet": ""
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_marts/chronic_conditions/intermediate/chronic_conditions__cms_chronic_conditions_hiv_aids.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "exempt",
+          "savings": 2.4,
+          "snippet": "with  __dbt__cte__cms_chronic_conditions__stg_core__condition as ("
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_marts/chronic_conditions/intermediate/chronic_conditions__cms_chronic_conditions_oud.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "exempt",
+          "savings": 2.4,
+          "snippet": "with  __dbt__cte__cms_chronic_conditions__stg_core__condition as ("
+        },
+        {
+          "repo": "tuva",
+          "path": "models/claims_preprocessing/encounters/intermediate/inpatient_hospice/inpatient_hospice__generate_encounter_id.sql",
+          "line": 1,
+          "bucket": "repeated_cte_ref",
+          "label": "tp",
+          "savings": 2.8,
+          "snippet": ""
+        },
+        {
+          "repo": "tuva",
+          "path": "models/claims_preprocessing/encounters/intermediate/inpatient_long_term/inpatient_long_term__generate_encounter_id.sql",
+          "line": 1,
+          "bucket": "repeated_cte_ref",
+          "label": "tp",
+          "savings": 2.8,
+          "snippet": ""
+        },
+        {
+          "repo": "tuva",
+          "path": "models/claims_preprocessing/encounters/intermediate/inpatient_psych/inpatient_psych__generate_encounter_id.sql",
+          "line": 1,
+          "bucket": "repeated_cte_ref",
+          "label": "tp",
+          "savings": 2.8,
+          "snippet": ""
+        },
+        {
+          "repo": "tuva",
+          "path": "models/claims_preprocessing/encounters/intermediate/inpatient_rehab/inpatient_rehab__generate_encounter_id.sql",
+          "line": 1,
+          "bucket": "repeated_cte_ref",
+          "label": "tp",
+          "savings": 2.8,
+          "snippet": ""
+        },
+        {
+          "repo": "tuva",
+          "path": "models/claims_preprocessing/encounters/intermediate/inpatient_snf/inpatient_snf__generate_encounter_id.sql",
+          "line": 1,
+          "bucket": "repeated_cte_ref",
+          "label": "tp",
+          "savings": 2.8,
+          "snippet": ""
+        },
+        {
+          "repo": "tuva",
+          "path": "models/claims_preprocessing/encounters/intermediate/inpatient_substance_use/inpatient_substance_use__generate_encounter_id.sql",
+          "line": 1,
+          "bucket": "repeated_cte_ref",
+          "label": "tp",
+          "savings": 2.8,
+          "snippet": ""
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_marts/fhir_preprocessing/intermediate/fhir_preprocessing__int_pharmacy_claim_eob.sql",
+          "line": 56,
+          "bucket": "repeated_cte_ref",
+          "label": "tp",
+          "savings": 2.8,
+          "snippet": ", eligibility.eligibility_id"
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_marts/quality_measures/intermediate/cqm438_statin_therapy_for_patients_with_cardiovascular_disease/quality_measures__int_cqm438_exclusions.sql",
+          "line": 1,
+          "bucket": "repeated_cte_ref",
+          "label": "tp",
+          "savings": 2.8,
+          "snippet": "with exclusion_codes as ("
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_marts/quality_measures/intermediate/cqm438_statin_therapy_for_patients_with_cardiovascular_disease/quality_measures__int_cqm438_numerator.sql",
+          "line": 1,
+          "bucket": "repeated_cte_ref",
+          "label": "tp",
+          "savings": 2.8,
+          "snippet": ""
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_marts/cms_hcc/intermediate/cms_hcc__int_eligible_conditions.sql",
+          "line": 1,
+          "bucket": "repeated_cte_ref",
+          "label": "tp",
+          "savings": 2.6,
+          "snippet": ""
+        }
+      ]
+    },
+    "SQLCOST027": {
+      "total": 484,
+      "primary_examined": 100,
+      "tail_total": 384,
+      "supplemental_examined": 10,
+      "tp": 0,
+      "exempt": 0,
+      "fp_bug": 0,
+      "unknown": 10,
+      "pass": true,
+      "infrastructure": true,
+      "bucket_counts": {
+        "tuva:other": 10
+      },
+      "examples": [
+        {
+          "repo": "tuva",
+          "path": "models/data_quality/dqi/intermediate/atomic_checks/claims/eligibility/data_quality__eligibility_person_id.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{ config("
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_quality/dqi/intermediate/atomic_checks/claims/eligibility/data_quality__eligibility_phone.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{ config("
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_quality/dqi/intermediate/atomic_checks/claims/eligibility/data_quality__eligibility_plan.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{ config("
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_quality/dqi/intermediate/atomic_checks/claims/eligibility/data_quality__eligibility_race.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{ config("
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_quality/dqi/intermediate/atomic_checks/claims/eligibility/data_quality__eligibility_start_date.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{ config("
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_quality/dqi/intermediate/atomic_checks/claims/eligibility/data_quality__eligibility_state.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{ config("
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_quality/dqi/intermediate/atomic_checks/claims/eligibility/data_quality__eligibility_zip_code.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{ config("
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_quality/dqi/intermediate/atomic_checks/claims/medical/data_quality__claim_allowed_amount.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{ config("
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_quality/dqi/intermediate/atomic_checks/claims/medical/data_quality__claim_charge_amount.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{ config("
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_quality/dqi/intermediate/atomic_checks/claims/medical/data_quality__claim_claim_id.sql",
+          "line": 1,
+          "bucket": "other",
+          "label": "unknown",
+          "savings": 0.0,
+          "snippet": "{{ config("
+        }
+      ],
+      "parse_failure_summary": [
+        {
+          "signature": "SQL parse failed",
+          "source_pattern": "dbt_config_wrapper",
+          "count": 459,
+          "examples": [
+            {
+              "repo": "tuva",
+              "path": "models/data_marts/fhir_preprocessing/final/fhir_preprocessing__condition.sql",
+              "line": 1,
+              "bucket": "other",
+              "label": "unknown",
+              "savings": 0.0,
+              "snippet": "{{ config("
+            },
+            {
+              "repo": "tuva",
+              "path": "models/data_marts/fhir_preprocessing/final/fhir_preprocessing__coverage.sql",
+              "line": 1,
+              "bucket": "other",
+              "label": "unknown",
+              "savings": 0.0,
+              "snippet": "{{ config("
+            },
+            {
+              "repo": "tuva",
+              "path": "models/data_marts/fhir_preprocessing/final/fhir_preprocessing__explanation_of_benefit.sql",
+              "line": 1,
+              "bucket": "other",
+              "label": "unknown",
+              "savings": 0.0,
+              "snippet": "{{ config("
+            }
+          ]
+        },
+        {
+          "signature": "SQL parse failed",
+          "source_pattern": "jinja_template",
+          "count": 23,
+          "examples": [
+            {
+              "repo": "tuva",
+              "path": "models/data_marts/benchmarks/post_predict/benchmarks__predict_inpatient.sql",
+              "line": 1,
+              "bucket": "other",
+              "label": "unknown",
+              "savings": 0.0,
+              "snippet": "{{"
+            },
+            {
+              "repo": "tuva",
+              "path": "models/data_marts/benchmarks/post_predict/benchmarks__predict_inpatient_prospective.sql",
+              "line": 1,
+              "bucket": "other",
+              "label": "unknown",
+              "savings": 0.0,
+              "snippet": "{{"
+            },
+            {
+              "repo": "tuva",
+              "path": "models/data_marts/benchmarks/post_predict/benchmarks__predict_member_month.sql",
+              "line": 1,
+              "bucket": "other",
+              "label": "unknown",
+              "savings": 0.0,
+              "snippet": "{{"
+            }
+          ]
+        },
+        {
+          "signature": "SQL parse failed",
+          "source_pattern": "sql_parse_failure",
+          "count": 2,
+          "examples": [
+            {
+              "repo": "tuva",
+              "path": "models/data_marts/metadata/tuva_invocations.sql",
+              "line": 1,
+              "bucket": "other",
+              "label": "unknown",
+              "savings": 0.0,
+              "snippet": "-- This model is used to create a table with the invocation metadata for the Tuva package."
+            },
+            {
+              "repo": "tuva",
+              "path": "models/data_quality/legacy/data_quality__testing_summary.sql",
+              "line": 1,
+              "bucket": "other",
+              "label": "unknown",
+              "savings": 0.0,
+              "snippet": "/* TO POPULATE RECORDS IN THIS TABLE, MAKE SURE TO RUN \"dbt test\" command after a full run and seed is completed*/"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "summary": {
+    "total_rules": 4,
+    "passing": 4,
+    "failing": 0,
+    "failing_rules": []
+  }
+}

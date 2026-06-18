@@ -46,6 +46,22 @@ class ClassifierRegistryTests(unittest.TestCase):
         sql = "select * from a join b on lower(a.email) = lower(b.email)"
         self.assertEqual(classify_sqlcost017(sql), "symmetric_normalize")
 
+    def test_sqlcost017_cast_join_wins_over_unrelated_date_trunc(self) -> None:
+        sql = """
+        select date_trunc('day', t.block_time) as block_day
+        from trades t
+        join pool_tokens p on t.token_id = cast(p.token_id as int256)
+        """
+        self.assertEqual(classify_sqlcost017(sql), "cast_on_key")
+
+    def test_sqlcost017_date_trunc_join_wins_over_cast_wrapper(self) -> None:
+        sql = """
+        select *
+        from trades t
+        join prices p on cast(date_trunc('day', t.block_time) as date) = p.day
+        """
+        self.assertEqual(classify_sqlcost017(sql), "date_trunc_join")
+
     def test_sqlcost016_date_trunc(self) -> None:
         sql = "select * from t where date_trunc('day', block_time) >= current_date"
         self.assertEqual(classify_sqlcost016(sql), "date_trunc_filter")

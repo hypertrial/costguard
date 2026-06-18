@@ -159,9 +159,9 @@
       "examined_examples": []
     },
     "SQLCOST012": {
-      "total": 2,
-      "examined": 2,
-      "tp": 2,
+      "total": 3,
+      "examined": 3,
+      "tp": 3,
       "exempt": 0,
       "fp_bug": 0,
       "unknown": 0,
@@ -182,6 +182,18 @@
           "message": "Cross join detected without an explicit allow comment.",
           "savings": 7.0,
           "snippet": "cross join"
+        },
+        {
+          "repo": "nba-monte-carlo",
+          "path": "transform/models/nba/prep/nba_results_by_team.sql",
+          "line": 10,
+          "bucket": "comma_join",
+          "verdict": "tp",
+          "class": null,
+          "label": "tp",
+          "message": "Cross join detected without an explicit allow comment.",
+          "savings": 7.0,
+          "snippet": "type"
         },
         {
           "repo": "nba-monte-carlo",

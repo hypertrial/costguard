@@ -256,6 +256,7 @@ python3 scripts/rule_tp_census.py --emit-evidence
 python3 scripts/rule_tp_census.py --repos spellbook data-infra --json
 python3 scripts/rule_tp_census.py --rule SQLCOST012 --sample-cap 50
 python3 scripts/rule_tp_census.py --force-compile --emit-evidence
+python3 scripts/rule_tp_census.py --emit-stratified-evidence
 ```
 
 | Flag | Description |
@@ -267,6 +268,9 @@ python3 scripts/rule_tp_census.py --force-compile --emit-evidence
 | `--force-compile` | Bypass cached dbt manifest |
 | `--json` | Emit JSON report to stdout |
 | `--emit-evidence` | Write `tests/benchmarks/rule_tp_evidence.json` |
+| `--emit-stratified-evidence [path]` | Write supplemental tail evidence grouped by repo and bucket after the primary cost-ranked sample |
+| `--supplemental-rules` | Rule ids for supplemental evidence (default: high-volume review targets plus `SQLCOST027`) |
+| `--supplemental-per-bucket-cap` | Max supplemental findings per repo/bucket (default: 10) |
 
 Exit code `1` when any rule fails the pass bar. See [Rule TP coverage](../../design/rule-tp-coverage.md) and [Manual rule review](../../design/manual-rule-review.md).
 

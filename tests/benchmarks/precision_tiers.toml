@@ -29,7 +29,7 @@ notes = "11/12 sampled TP (92%)"
 [[rule]]
 id = "SQLCOST006"
 tier = "verified-medium"
-notes = "59/75 sampled TP (79%)"
+notes = "33/38 sampled TP (87%)"
 
 [[rule]]
 id = "SQLCOST007"
@@ -59,7 +59,7 @@ notes = "vacuous_clean"
 [[rule]]
 id = "SQLCOST012"
 tier = "verified-medium"
-notes = "49/69 sampled TP (71%)"
+notes = "49/66 sampled TP (74%)"
 
 [[rule]]
 id = "SQLCOST013"
@@ -84,7 +84,7 @@ notes = "vacuous_clean"
 [[rule]]
 id = "SQLCOST017"
 tier = "verified-low"
-notes = "9/21 sampled TP (43%)"
+notes = "11/34 sampled TP (32%)"
 
 [[rule]]
 id = "SQLCOST018"

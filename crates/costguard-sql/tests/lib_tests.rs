@@ -667,6 +667,80 @@ fn coalesce_null_safe_join_is_not_function_wrapped_key() {
 }
 
 #[test]
+fn regex_nested_symmetric_lower_trim_join_is_not_function_wrapped_key() {
+    let text = "{{ not_parsable }} select * from elig e join ansi a on e.state = a.state or trim(lower(e.state)) = trim(lower(a.ansi_fips_state_name))";
+    let index = LineIndex::new(text);
+    let doc = analyze_test_sql(
+        PathBuf::from("models/marts/fct.sql"),
+        text,
+        Platform::Trino,
+        &index,
+        None,
+        true,
+    );
+    assert!(!doc.feature_extraction_used_ast);
+    assert!(!doc
+        .features
+        .joins
+        .iter()
+        .any(|join| join.function_on_join_key));
+}
+
+#[test]
+fn regex_join_with_equality_and_range_keeps_equality() {
+    let text = "{{ not_parsable }} select * from markets m join existing e on m.token_id = e.token_id and e.day >= cast(m.start_time as date)";
+    let index = LineIndex::new(text);
+    let doc = analyze_test_sql(
+        PathBuf::from("models/marts/fct.sql"),
+        text,
+        Platform::Trino,
+        &index,
+        None,
+        true,
+    );
+    assert!(!doc.feature_extraction_used_ast);
+    let join = doc.features.joins.first().expect("join");
+    assert!(join.has_equality);
+    assert!(!join.function_on_join_key);
+}
+
+#[test]
+fn regex_join_with_equality_and_upper_range_keeps_key_clean() {
+    let text = "{{ not_parsable }} select * from balances b left join locks l on l.provider = b.provider and l.updated_at <= cast(to_unixtime(b.day) + 86400 as uint256)";
+    let index = LineIndex::new(text);
+    let doc = analyze_test_sql(
+        PathBuf::from("models/marts/fct.sql"),
+        text,
+        Platform::Trino,
+        &index,
+        None,
+        true,
+    );
+    assert!(!doc.feature_extraction_used_ast);
+    let join = doc.features.joins.first().expect("join");
+    assert!(join.has_equality);
+    assert!(!join.function_on_join_key);
+}
+
+#[test]
+fn regex_join_with_newline_range_filter_keeps_key_clean() {
+    let text = "{{ not_parsable }} select * from all_tx inner join tx on all_tx.tx_hash = tx.hash\n\n{% if not is_incremental() %}\nAND tx.block_time >= cast('2020-01-01' as date)\n{% endif %}";
+    let index = LineIndex::new(text);
+    let doc = analyze_test_sql(
+        PathBuf::from("models/marts/fct.sql"),
+        text,
+        Platform::Trino,
+        &index,
+        None,
+        true,
+    );
+    assert!(!doc.feature_extraction_used_ast);
+    let join = doc.features.joins.first().expect("join");
+    assert!(join.has_equality);
+    assert!(!join.function_on_join_key);
+}
+
+#[test]
 fn cross_join_date_ranges_is_not_flagged() {
     let text = "select t.hash from transactions t cross join date_ranges dr where t.block_time between dr.start_time and dr.end_time";
     let index = LineIndex::new(text);
@@ -683,6 +757,34 @@ fn cross_join_date_ranges_is_not_flagged() {
         .joins
         .iter()
         .any(|join| join.kind == JoinKind::Cross));
+}
+
+#[test]
+fn cross_join_generated_date_ranges_are_not_flagged() {
+    for table in [
+        "create_date_range",
+        "create_week_range",
+        "create_month_range",
+        "clean_month_range",
+    ] {
+        let text = format!("select t.hash from transactions t cross join {table} dr");
+        let index = LineIndex::new(&text);
+        let doc = analyze_test_sql(
+            PathBuf::from("models/marts/fct.sql"),
+            &text,
+            Platform::Trino,
+            &index,
+            None,
+            true,
+        );
+        assert!(
+            !doc.features
+                .joins
+                .iter()
+                .any(|join| join.kind == JoinKind::Cross),
+            "expected {table} to be treated as a date-spine helper"
+        );
+    }
 }
 
 #[test]
@@ -721,6 +823,26 @@ fn string_literal_cross_join_is_not_flagged_when_sql_parses() {
         .joins
         .iter()
         .any(|join| matches!(join.kind, JoinKind::Cross | JoinKind::Comma)));
+}
+
+#[test]
+fn regex_comma_join_ignores_from_in_string_literals() {
+    let text = "{{ not_parsable }} select * from real_table where note = 'from a, b'";
+    let index = LineIndex::new(text);
+    let doc = analyze_test_sql(
+        PathBuf::from("models/marts/fct.sql"),
+        text,
+        Platform::Generic,
+        &index,
+        None,
+        true,
+    );
+    assert!(!doc.feature_extraction_used_ast);
+    assert!(!doc
+        .features
+        .joins
+        .iter()
+        .any(|join| join.kind == JoinKind::Comma));
 }
 
 #[test]

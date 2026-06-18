@@ -12,9 +12,11 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from rule_tp_census import (  # noqa: E402
     adjudication_label,
+    parse_failure_source_pattern,
     pass_reason,
     rule_passes,
     sample_findings,
+    sample_stratified_tail,
     summarize_sample,
 )
 
@@ -43,6 +45,58 @@ class RuleTpCensusTests(unittest.TestCase):
         ]
         sampled = sample_findings(findings, sample_cap=100)
         self.assertEqual(len(sampled), 2)
+
+    def test_stratified_tail_skips_primary_and_caps_per_repo_bucket(self) -> None:
+        findings = [
+            {
+                "savings": 100.0,
+                "repo": "a",
+                "path": "primary.sql",
+                "line": 1,
+                "bucket": "x",
+                "message": "m",
+                "label": "tp",
+            },
+            {
+                "savings": 50.0,
+                "repo": "a",
+                "path": "tail1.sql",
+                "line": 2,
+                "bucket": "x",
+                "message": "m",
+                "label": "tp",
+            },
+            {
+                "savings": 40.0,
+                "repo": "a",
+                "path": "tail2.sql",
+                "line": 3,
+                "bucket": "x",
+                "message": "m",
+                "label": "tp",
+            },
+            {
+                "savings": 30.0,
+                "repo": "a",
+                "path": "tail3.sql",
+                "line": 4,
+                "bucket": "y",
+                "message": "m",
+                "label": "tp",
+            },
+        ]
+        sampled = sample_stratified_tail(findings, [findings[0]], per_bucket_cap=1)
+        self.assertEqual([item["path"] for item in sampled], ["tail1.sql", "tail3.sql"])
+
+    def test_parse_failure_source_patterns(self) -> None:
+        self.assertEqual(
+            parse_failure_source_pattern({"snippet": "{{ config(materialized='table') }}"}),
+            "dbt_config_wrapper",
+        )
+        self.assertEqual(
+            parse_failure_source_pattern({"snippet": "select * from x qualify rn = 1"}),
+            "dialect_syntax",
+        )
 
     def test_pass_when_no_fp_bug_or_unknown(self) -> None:
         findings = [

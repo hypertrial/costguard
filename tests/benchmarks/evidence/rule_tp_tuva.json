@@ -4021,7 +4021,7 @@
           "class": null,
           "label": "tp",
           "message": "Repeated normalization expression detected.",
-          "savings": 1.2,
+          "savings": 1.5,
           "snippet": "or lower(trim(appts.cancellation_reason)) = lower(trim(appointment_cancellation_reason.code))"
         }
       ]
@@ -5261,18 +5261,6 @@
         },
         {
           "repo": "tuva",
-          "path": "models/data_marts/benchmarks/pre_predict/final/benchmarks__person_year.sql",
-          "line": 157,
-          "bucket": "other",
-          "verdict": "tp",
-          "class": null,
-          "label": "tp",
-          "message": "Window function has no PARTITION BY.",
-          "savings": 1.6,
-          "snippet": "row_number() over ("
-        },
-        {
-          "repo": "tuva",
           "path": "models/claims_preprocessing/encounters/intermediate/encounters__orphaned_claims.sql",
           "line": 33,
           "bucket": "other",
@@ -5318,6 +5306,18 @@
           "message": "Window function has no PARTITION BY.",
           "savings": 1.4,
           "snippet": ",row_number() over (order by count(*) desc) as value_rank"
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_marts/benchmarks/pre_predict/final/benchmarks__person_year.sql",
+          "line": 157,
+          "bucket": "other",
+          "verdict": "tp",
+          "class": null,
+          "label": "tp",
+          "message": "Window function has no PARTITION BY.",
+          "savings": 1.3,
+          "snippet": "row_number() over ("
         },
         {
           "repo": "tuva",
@@ -6842,10 +6842,10 @@
       "examined_examples": []
     },
     "SQLCOST017": {
-      "total": 14,
-      "examined": 14,
-      "tp": 13,
-      "exempt": 1,
+      "total": 19,
+      "examined": 19,
+      "tp": 14,
+      "exempt": 5,
       "fp_bug": 0,
       "unknown": 0,
       "pass": true,
@@ -6854,6 +6854,18 @@
       "fp_bug_buckets": {},
       "unknown_buckets": {},
       "examined_examples": [
+        {
+          "repo": "tuva",
+          "path": "models/core/final/core__immunization.sql",
+          "line": 116,
+          "bucket": "cast_on_key",
+          "verdict": "tp",
+          "class": null,
+          "label": "tp",
+          "message": "Join equality uses a function-wrapped key.",
+          "savings": 4.4,
+          "snippet": ""
+        },
         {
           "repo": "tuva",
           "path": "models/claims_preprocessing/eligibility/int_eligibility_state_normalized.sql",
@@ -6892,6 +6904,66 @@
         },
         {
           "repo": "tuva",
+          "path": "models/core/final/core__appointment.sql",
+          "line": 41,
+          "bucket": "cast_on_key",
+          "verdict": "tp",
+          "class": null,
+          "label": "tp",
+          "message": "Join equality uses a function-wrapped key.",
+          "savings": 2.6,
+          "snippet": "or lower(trim(appts.cancellation_reason)) = lower(trim(appointment_cancellation_reason.code))"
+        },
+        {
+          "repo": "tuva",
+          "path": "models/core/final/core__appointment.sql",
+          "line": 43,
+          "bucket": "cast_on_key",
+          "verdict": "tp",
+          "class": null,
+          "label": "tp",
+          "message": "Join equality uses a function-wrapped key.",
+          "savings": 2.6,
+          "snippet": "or lower(trim(appts.cancellation_reason)) = lower(trim(appointment_cancellation_reason.code))"
+        },
+        {
+          "repo": "tuva",
+          "path": "models/core/final/core__medication.sql",
+          "line": 150,
+          "bucket": "coalesce_key",
+          "verdict": "fp",
+          "class": "exempt",
+          "label": "exempt",
+          "message": "Join equality uses a function-wrapped key.",
+          "savings": 2.3,
+          "snippet": "on coalesce(sm.rxnorm_code, ndc.rxcui) = rxatc.rxcui"
+        },
+        {
+          "repo": "tuva",
+          "path": "models/core/final/core__medication.sql",
+          "line": 162,
+          "bucket": "coalesce_key",
+          "verdict": "fp",
+          "class": "exempt",
+          "label": "exempt",
+          "message": "Join equality uses a function-wrapped key.",
+          "savings": 2.3,
+          "snippet": "on coalesce(sm.rxnorm_code, ndc.rxcui) = rxatc.rxcui"
+        },
+        {
+          "repo": "tuva",
+          "path": "models/core/final/core__medication.sql",
+          "line": 174,
+          "bucket": "coalesce_key",
+          "verdict": "fp",
+          "class": "exempt",
+          "label": "exempt",
+          "message": "Join equality uses a function-wrapped key.",
+          "savings": 2.3,
+          "snippet": "on coalesce(sm.rxnorm_code, ndc.rxcui) = rxatc.rxcui"
+        },
+        {
+          "repo": "tuva",
           "path": "models/data_marts/quality_measures/intermediate/cqm438_statin_therapy_for_patients_with_cardiovascular_disease/quality_measures__int_cqm438_exclusions.sql",
           "line": 1,
           "bucket": "cast_on_key",
@@ -6916,39 +6988,15 @@
         },
         {
           "repo": "tuva",
-          "path": "models/core/final/core__appointment.sql",
-          "line": 41,
+          "path": "models/data_marts/benchmarks/pre_predict/final/benchmarks__person_year.sql",
+          "line": 120,
           "bucket": "cast_on_key",
           "verdict": "tp",
           "class": null,
           "label": "tp",
           "message": "Join equality uses a function-wrapped key.",
-          "savings": 2.0,
-          "snippet": "or lower(trim(appts.cancellation_reason)) = lower(trim(appointment_cancellation_reason.code))"
-        },
-        {
-          "repo": "tuva",
-          "path": "models/core/final/core__appointment.sql",
-          "line": 43,
-          "bucket": "cast_on_key",
-          "verdict": "tp",
-          "class": null,
-          "label": "tp",
-          "message": "Join equality uses a function-wrapped key.",
-          "savings": 2.0,
-          "snippet": "or lower(trim(appts.cancellation_reason)) = lower(trim(appointment_cancellation_reason.code))"
-        },
-        {
-          "repo": "tuva",
-          "path": "models/core/final/core__appointment.sql",
-          "line": 45,
-          "bucket": "cast_on_key",
-          "verdict": "tp",
-          "class": null,
-          "label": "tp",
-          "message": "Join equality uses a function-wrapped key.",
-          "savings": 2.0,
-          "snippet": "or lower(trim(appts.cancellation_reason)) = lower(trim(appointment_cancellation_reason.code))"
+          "savings": 1.4,
+          "snippet": "inner join {{ ref('benchmarks__stg_core__member_months') }} as mm"
         },
         {
           "repo": "tuva",
@@ -6973,6 +7021,18 @@
           "message": "Join equality uses a function-wrapped key.",
           "savings": 1.4,
           "snippet": ""
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_marts/normalize/normalize__all_codes.sql",
+          "line": 57,
+          "bucket": "symmetric_normalize",
+          "verdict": "fp",
+          "class": "exempt",
+          "label": "exempt",
+          "message": "Join equality uses a function-wrapped key.",
+          "savings": 1.3,
+          "snippet": "left join  {{ ref('custom_mapped') }} custom_mapped"
         },
         {
           "repo": "tuva",
@@ -7279,18 +7339,6 @@
         },
         {
           "repo": "tuva",
-          "path": "models/data_marts/normalize/normalize__all_codes.sql",
-          "line": 36,
-          "bucket": "union_without_all",
-          "verdict": "tp",
-          "class": null,
-          "label": "tp",
-          "message": "Plain UNION detected; UNION ALL is usually cheaper for dbt model stacking.",
-          "savings": 1.6,
-          "snippet": "union"
-        },
-        {
-          "repo": "tuva",
           "path": "models/data_marts/quality_measures/intermediate/cqm130_documentation_of_current_medications_in_the_medical_record/quality_measures__int_cqm130_denominator.sql",
           "line": 23,
           "bucket": "other",
@@ -7300,6 +7348,18 @@
           "message": "Plain UNION detected; UNION ALL is usually cheaper for dbt model stacking.",
           "savings": 1.4,
           "snippet": "on coalesce(encounter.encounter_end_date, encounter.encounter_start_date) >= pp.performance_period_begin"
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_marts/normalize/normalize__all_codes.sql",
+          "line": 36,
+          "bucket": "union_without_all",
+          "verdict": "tp",
+          "class": null,
+          "label": "tp",
+          "message": "Plain UNION detected; UNION ALL is usually cheaper for dbt model stacking.",
+          "savings": 1.2,
+          "snippet": "union"
         },
         {
           "repo": "tuva",
@@ -7500,18 +7560,6 @@
         },
         {
           "repo": "tuva",
-          "path": "models/data_marts/benchmarks/pre_predict/final/benchmarks__person_year.sql",
-          "line": 38,
-          "bucket": "count_distinct",
-          "verdict": "tp",
-          "class": null,
-          "label": "tp",
-          "message": "Exact COUNT(DISTINCT ...) detected.",
-          "savings": 1.6,
-          "snippet": ", count(distinct e.encounter_id) as encounter_count"
-        },
-        {
-          "repo": "tuva",
           "path": "models/data_marts/pharmacy/intermediate/pharmacy__int_claims_current_cost.sql",
           "line": 1,
           "bucket": "count_distinct",
@@ -7533,6 +7581,18 @@
           "message": "Exact COUNT(DISTINCT ...) detected.",
           "savings": 1.4,
           "snippet": ", count(distinct eligibility_span_id) as result_count"
+        },
+        {
+          "repo": "tuva",
+          "path": "models/data_marts/benchmarks/pre_predict/final/benchmarks__person_year.sql",
+          "line": 38,
+          "bucket": "count_distinct",
+          "verdict": "tp",
+          "class": null,
+          "label": "tp",
+          "message": "Exact COUNT(DISTINCT ...) detected.",
+          "savings": 1.3,
+          "snippet": ", count(distinct e.encounter_id) as encounter_count"
         },
         {
           "repo": "tuva",

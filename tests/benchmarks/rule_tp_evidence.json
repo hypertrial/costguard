@@ -2350,6 +2350,18 @@
         "snippet": ", CAST(json_extract_scalar(json_extract_scalar(receipt, '$.info'), '$.quantity') AS UINT256) AS withdrawal_amount_raw"
       },
       {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs/fct_service_alerts_trip_summaries.sql",
+        "line": 31,
+        "bucket": "repeated_json",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Repeated JSON extraction detected.",
+        "savings": 1.3,
+        "snippet": "(JSON_VALUE(unnested_alert_content, '$.message_id'),"
+      },
+      {
         "repo": "spellbook",
         "path": "dbt_subprojects/daily_spellbook/models/ton/ton_jetton_price_daily.sql",
         "line": 64,
@@ -2374,18 +2386,6 @@
         "snippet": "JSON_VALUE(metadata, '$.jobChange.job.jobName') as job_name,"
       },
       {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/gtfs/fct_service_alerts_trip_summaries.sql",
-        "line": 31,
-        "bucket": "repeated_json",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Repeated JSON extraction detected.",
-        "savings": 0.97,
-        "snippet": "(JSON_VALUE(unnested_alert_content, '$.message_id'),"
-      },
-      {
         "repo": "spellbook",
         "path": "dbt_subprojects/daily_spellbook/models/op/token_distributions/optimism/op_token_distributions_optimism_project_wallets.sql",
         "line": 148,
@@ -2394,7 +2394,7 @@
         "class": null,
         "label": "tp",
         "message": "Repeated JSON extraction detected.",
-        "savings": 0.71,
+        "savings": 0.92,
         "snippet": ",(0x2c8d267abd311e411793ffc3aca2d5206af59a08,'QiDao','sUSDC/MAI: Velodrome')"
       },
       {
@@ -3503,6 +3503,18 @@
       },
       {
         "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_quality/fct_daily_vehicle_positions_latency_statistics.sql",
+        "line": 1,
+        "bucket": "other",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Incremental model appears to have no unique_key.",
+        "savings": 1.5,
+        "snippet": "{{"
+      },
+      {
+        "repo": "data-infra",
         "path": "warehouse/models/mart/kuba/fct_kuba__device_properties.sql",
         "line": 1,
         "bucket": "other",
@@ -3767,7 +3779,31 @@
       },
       {
         "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs/fct_trip_updates_trip_summaries.sql",
+        "line": 1,
+        "bucket": "other",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Incremental model appears to have no unique_key.",
+        "savings": 1.1,
+        "snippet": "{{"
+      },
+      {
+        "repo": "data-infra",
         "path": "warehouse/models/mart/gtfs/fct_vehicle_locations_path.sql",
+        "line": 1,
+        "bucket": "other",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Incremental model appears to have no unique_key.",
+        "savings": 1.1,
+        "snippet": "{{"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_quality/fct_daily_trip_updates_message_age_summary.sql",
         "line": 1,
         "bucket": "other",
         "verdict": "tp",
@@ -3815,18 +3851,6 @@
       },
       {
         "repo": "data-infra",
-        "path": "warehouse/models/mart/gtfs_quality/fct_daily_vehicle_positions_latency_statistics.sql",
-        "line": 1,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Incremental model appears to have no unique_key.",
-        "savings": 1.0,
-        "snippet": "{{"
-      },
-      {
-        "repo": "data-infra",
         "path": "warehouse/models/mart/gtfs/fct_trip_updates_trip_metrics.sql",
         "line": 1,
         "bucket": "other",
@@ -3871,30 +3895,6 @@
         "label": "tp",
         "message": "Incremental model appears to have no unique_key.",
         "savings": 0.8,
-        "snippet": "{{"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/gtfs/fct_trip_updates_trip_summaries.sql",
-        "line": 1,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Incremental model appears to have no unique_key.",
-        "savings": 0.8,
-        "snippet": "{{"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/gtfs_quality/fct_daily_trip_updates_message_age_summary.sql",
-        "line": 1,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Incremental model appears to have no unique_key.",
-        "savings": 0.78,
         "snippet": "{{"
       },
       {
@@ -4082,10 +4082,10 @@
   "SQLCOST006": {
     "pass": true,
     "pass_reason": "fully_examined",
-    "total": 75,
-    "examined": 75,
-    "tp": 59,
-    "exempt": 16,
+    "total": 38,
+    "examined": 38,
+    "tp": 33,
+    "exempt": 5,
     "fp_bug": 0,
     "unknown": 0,
     "examined_examples": [
@@ -4139,30 +4139,6 @@
       },
       {
         "repo": "spellbook",
-        "path": "dbt_subprojects/tokens/tests/generic/test_prices_tokens_against_erc20.sql",
-        "line": 16,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join has no clear equality predicate.",
-        "savings": 6.5,
-        "snippet": "inner join {{source('tokens','erc20')}} erc20 using (blockchain, contract_address)"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/tests/validate_guidelines_checks_rows_per_check_matches_index.sql",
-        "line": 18,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join has no clear equality predicate.",
-        "savings": 4.7,
-        "snippet": "FULL OUTER JOIN idx_check_cts"
-      },
-      {
-        "repo": "spellbook",
         "path": "dbt_subprojects/dex/models/_projects/oneinch/_meta/oneinch_blockchains.sql",
         "line": 20,
         "bucket": "other",
@@ -4186,30 +4162,6 @@
         "snippet": "LEFT JOIN UNNEST(l.component) AS component_key"
       },
       {
-        "repo": "data-infra",
-        "path": "warehouse/tests/staging/payments/littlepay/test_micropayment_device_transactions.sql",
-        "line": 42,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join has no clear equality predicate.",
-        "savings": 3.3,
-        "snippet": "inner join multiple_debit_transaction_ids using (littlepay_transaction_id)"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/tests/staging/payments/littlepay/test_micropayment_transaction_time_order.sql",
-        "line": 37,
-        "bucket": "equality_join",
-        "verdict": "fp",
-        "class": "exempt",
-        "label": "exempt",
-        "message": "Join has no clear equality predicate.",
-        "savings": 3.3,
-        "snippet": "INNER JOIN"
-      },
-      {
         "repo": "spellbook",
         "path": "dbt_subprojects/dex/models/_projects/oneinch/outside/oneinch_ar_trades.sql",
         "line": 12,
@@ -4220,54 +4172,6 @@
         "message": "Join has no clear equality predicate.",
         "savings": 3.3,
         "snippet": "{% set placeholder_tokens = oneinch_cross_chain_placeholder_tokens_cfg_macro() | join(', ') %}"
-      },
-      {
-        "repo": "spellbook",
-        "path": "dbt_subprojects/hourly_spellbook/models/_sector/bridges/flows/chains/ethereum/platforms/bridges_ethereum_sui_native_v1_deposits.sql",
-        "line": 36,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join has no clear equality predicate.",
-        "savings": 3.3,
-        "snippet": "LEFT JOIN token_ids USING (tokenID)"
-      },
-      {
-        "repo": "spellbook",
-        "path": "dbt_subprojects/hourly_spellbook/models/_sector/bridges/flows/chains/ethereum/platforms/bridges_ethereum_sui_native_v1_withdrawals.sql",
-        "line": 36,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join has no clear equality predicate.",
-        "savings": 3.3,
-        "snippet": "LEFT JOIN token_ids USING (tokenID)"
-      },
-      {
-        "repo": "spellbook",
-        "path": "dbt_subprojects/hourly_spellbook/models/_sector/bridges/flows/evms/bridges_evms_flows.sql",
-        "line": 89,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join has no clear equality predicate.",
-        "savings": 3.3,
-        "snippet": "FULL OUTER JOIN latest_deposits d USING (bridge_name, bridge_version, deposit_chain, withdrawal_chain, bridge_transfer_id)"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/intermediate/payments/int_payments__micropayments_to_aggregations.sql",
-        "line": 46,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join has no clear equality predicate.",
-        "savings": 3.1,
-        "snippet": "LEFT JOIN micropayment_adj USING (micropayment_id)"
       },
       {
         "repo": "data-infra",
@@ -4316,6 +4220,18 @@
         "message": "Join has no clear equality predicate.",
         "savings": 3.1,
         "snippet": "-- Single-pass unnest avoids repeated logs scans and evt_data self-join."
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_schedule__frequencies_stop_times.sql",
+        "line": 65,
+        "bucket": "other",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Join has no clear equality predicate.",
+        "savings": 2.5,
+        "snippet": "LEFT JOIN UNNEST(GENERATE_ARRAY(start_time_sec, end_time_sec, headway_secs))"
       },
       {
         "repo": "data-infra",
@@ -4379,18 +4295,6 @@
       },
       {
         "repo": "data-infra",
-        "path": "warehouse/models/mart/gtfs_quality/fct_monthly_reports_site_organization_gtfs_vendors.sql",
-        "line": 96,
-        "bucket": "equality_join",
-        "verdict": "fp",
-        "class": "exempt",
-        "label": "exempt",
-        "message": "Join has no clear equality predicate.",
-        "savings": 2.1,
-        "snippet": "LEFT JOIN filter_rt"
-      },
-      {
-        "repo": "data-infra",
         "path": "warehouse/models/intermediate/gtfs/int_gtfs_rt__service_alerts_fully_unnested.sql",
         "line": 76,
         "bucket": "other",
@@ -4400,54 +4304,6 @@
         "message": "Join has no clear equality predicate.",
         "savings": 2.0,
         "snippet": "LEFT JOIN UNNEST(messages.active_period) AS unnested_active_period"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/intermediate/payments/int_payments__authorisations_deduped.sql",
-        "line": 35,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join has no clear equality predicate.",
-        "savings": 2.0,
-        "snippet": "LEFT JOIN settlement_rrns USING (retrieval_reference_number)"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/gtfs/fct_daily_service_alerts.sql",
-        "line": 115,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join has no clear equality predicate.",
-        "savings": 2.0,
-        "snippet": "LEFT JOIN message_keys USING (key)"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/transit_database/fct_close_expired_issues.sql",
-        "line": 68,
-        "bucket": "equality_join",
-        "verdict": "fp",
-        "class": "exempt",
-        "label": "exempt",
-        "message": "Join has no clear equality predicate.",
-        "savings": 2.0,
-        "snippet": "FULL OUTER JOIN calendar_dates_exceptions ce"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/transit_database/fct_close_expired_issues.sql",
-        "line": 77,
-        "bucket": "equality_join",
-        "verdict": "fp",
-        "class": "exempt",
-        "label": "exempt",
-        "message": "Join has no clear equality predicate.",
-        "savings": 2.0,
-        "snippet": "LEFT JOIN max_service_end_dates d"
       },
       {
         "repo": "spellbook",
@@ -4463,42 +4319,6 @@
       },
       {
         "repo": "data-infra",
-        "path": "warehouse/models/intermediate/gtfs/int_gtfs_schedule__frequencies_stop_times.sql",
-        "line": 22,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join has no clear equality predicate.",
-        "savings": 1.9,
-        "snippet": "INNER JOIN stop_times"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/intermediate/gtfs/int_gtfs_schedule__frequencies_stop_times.sql",
-        "line": 65,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join has no clear equality predicate.",
-        "savings": 1.9,
-        "snippet": "LEFT JOIN UNNEST(GENERATE_ARRAY(start_time_sec, end_time_sec, headway_secs))"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/gtfs_quality/idx_monthly_reports_site.sql",
-        "line": 166,
-        "bucket": "equality_join",
-        "verdict": "fp",
-        "class": "exempt",
-        "label": "exempt",
-        "message": "Join has no clear equality predicate.",
-        "savings": 1.9,
-        "snippet": "LEFT JOIN month_reports_urls"
-      },
-      {
-        "repo": "data-infra",
         "path": "warehouse/models/mart/gtfs_audit/dim_gtfs_schedule_unzip_outcomes.sql",
         "line": 36,
         "bucket": "other",
@@ -4508,30 +4328,6 @@
         "message": "Join has no clear equality predicate.",
         "savings": 1.8,
         "snippet": "LEFT JOIN UNNEST(extracted_files) AS unnest_extracted_files"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/payments/reliability/v2_payments_reliability_weekly_unlabeled_routes.sql",
-        "line": 43,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join has no clear equality predicate.",
-        "savings": 1.8,
-        "snippet": "LEFT JOIN count_rides"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/payments/reliability/v2_payments_reliability_weekly_unlabeled_routes_enghouse.sql",
-        "line": 41,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join has no clear equality predicate.",
-        "savings": 1.8,
-        "snippet": "LEFT JOIN count_rides"
       },
       {
         "repo": "data-infra",
@@ -4546,30 +4342,6 @@
         "snippet": "-- since these fields are used to join with gtfs data"
       },
       {
-        "repo": "spellbook",
-        "path": "dbt_subprojects/hourly_spellbook/models/_sector/staking/ethereum/staking_ethereum_flows.sql",
-        "line": 103,
-        "bucket": "equality_join",
-        "verdict": "fp",
-        "class": "exempt",
-        "label": "exempt",
-        "message": "Join has no clear equality predicate.",
-        "savings": 1.8,
-        "snippet": "INNER JOIN indexes i USING (validator_index)"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/gtfs/fct_vehicle_positions_trip_summaries.sql",
-        "line": 98,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join has no clear equality predicate.",
-        "savings": 1.7,
-        "snippet": "LEFT JOIN lat_long USING (key)"
-      },
-      {
         "repo": "data-infra",
         "path": "warehouse/models/mart/gtfs/fct_service_alerts_messages_unnested.sql",
         "line": 57,
@@ -4580,66 +4352,6 @@
         "message": "Join has no clear equality predicate.",
         "savings": 1.6,
         "snippet": "-- try to figure out what the service date would be to join back with schedule: fall back from explicit to imputed"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/gtfs/fct_service_alerts_trip_summaries.sql",
-        "line": 23,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join has no clear equality predicate.",
-        "savings": 1.6,
-        "snippet": "LEFT JOIN UNNEST(alert_content_array) AS unnested_alert_content"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/staging/transit_database/base/base_tdqi_issues_idmap.sql",
-        "line": 51,
-        "bucket": "equality_join",
-        "verdict": "fp",
-        "class": "exempt",
-        "label": "exempt",
-        "message": "Join has no clear equality predicate.",
-        "savings": 1.6,
-        "snippet": "LEFT JOIN mapped_services AS services_map"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/staging/transit_database/base/base_tts_contracts_idmap.sql",
-        "line": 49,
-        "bucket": "equality_join",
-        "verdict": "fp",
-        "class": "exempt",
-        "label": "exempt",
-        "message": "Join has no clear equality predicate.",
-        "savings": 1.6,
-        "snippet": "LEFT JOIN mapped_org_ids AS map"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/staging/transit_database/base/base_tts_products_idmap.sql",
-        "line": 31,
-        "bucket": "equality_join",
-        "verdict": "fp",
-        "class": "exempt",
-        "label": "exempt",
-        "message": "Join has no clear equality predicate.",
-        "savings": 1.6,
-        "snippet": "LEFT JOIN mapped_org_ids AS map"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/staging/transit_database/base/base_tts_service_components_idmap.sql",
-        "line": 31,
-        "bucket": "equality_join",
-        "verdict": "fp",
-        "class": "exempt",
-        "label": "exempt",
-        "message": "Join has no clear equality predicate.",
-        "savings": 1.6,
-        "snippet": "LEFT JOIN mapped_service_ids AS T2"
       },
       {
         "repo": "data-infra",
@@ -4667,42 +4379,6 @@
       },
       {
         "repo": "data-infra",
-        "path": "warehouse/models/mart/gtfs_quality/fct_daily_vehicle_positions_latency_statistics.sql",
-        "line": 123,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join has no clear equality predicate.",
-        "savings": 1.5,
-        "snippet": "LEFT JOIN summarize_vehicle_ages"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/tides/tides_publication_feeds.sql",
-        "line": 37,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join has no clear equality predicate.",
-        "savings": 1.5,
-        "snippet": "-- with ANY_VALUE so the join below cannot fan out feed_days."
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/tides/tides_publication_feeds.sql",
-        "line": 60,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join has no clear equality predicate.",
-        "savings": 1.5,
-        "snippet": "LEFT JOIN feed_meta AS fm"
-      },
-      {
-        "repo": "data-infra",
         "path": "warehouse/models/mart/gtfs/fct_stop_time_updates.sql",
         "line": 35,
         "bucket": "other",
@@ -4724,30 +4400,6 @@
         "message": "Join has no clear equality predicate.",
         "savings": 1.4,
         "snippet": "LEFT JOIN UNNEST(construct_base64_url.schedule_to_use_for_rt_validation) AS unnested_schedule_to_use_for_rt_validation"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/gtfs/fct_daily_rt_service_summary.sql",
-        "line": 54,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join has no clear equality predicate.",
-        "savings": 1.3,
-        "snippet": "-- add this to make sure the tu belonging to quartet is linked and use in join"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/gtfs/fct_daily_rt_service_summary.sql",
-        "line": 130,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join has no clear equality predicate.",
-        "savings": 1.3,
-        "snippet": "LEFT JOIN vp_aggregation AS vp"
       },
       {
         "repo": "data-infra",
@@ -4774,30 +4426,6 @@
         "snippet": "-- TODO: do we also want to join in schedule feed key here? we already have trip instance key that can traverse to schedule"
       },
       {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/gtfs/fct_trip_updates_trip_summaries.sql",
-        "line": 121,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join has no clear equality predicate.",
-        "savings": 1.2,
-        "snippet": "LEFT JOIN canceled_stops USING (key)"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/gtfs_quality/fct_daily_trip_updates_message_age_summary.sql",
-        "line": 124,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join has no clear equality predicate.",
-        "savings": 1.2,
-        "snippet": "LEFT JOIN summarize_trip_updates_ages"
-      },
-      {
         "repo": "spellbook",
         "path": "dbt_subprojects/daily_spellbook/models/bridge/bridge_flows.sql",
         "line": 131,
@@ -4808,30 +4436,6 @@
         "message": "Join has no clear equality predicate.",
         "savings": 1.1,
         "snippet": "-- Eventual improvement: See if we can join on event (i.e. tie a Hop event with a standard bridge event)"
-      },
-      {
-        "repo": "spellbook",
-        "path": "dbt_subprojects/daily_spellbook/models/_metrics/dune_index/metrics_dune_index_daily.sql",
-        "line": 70,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join has no clear equality predicate.",
-        "savings": 0.33,
-        "snippet": "left join transfers using (blockchain, block_date)"
-      },
-      {
-        "repo": "spellbook",
-        "path": "dbt_subprojects/daily_spellbook/models/_sector/addresses/addresses_info.sql",
-        "line": 240,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join has no clear equality predicate.",
-        "savings": 0.33,
-        "snippet": "inner join addresses_in_delta using (address, address_prefix)"
       },
       {
         "repo": "spellbook",
@@ -4871,18 +4475,6 @@
       },
       {
         "repo": "spellbook",
-        "path": "dbt_subprojects/solana/models/oneinch/oneinch_solana_transactions.sql",
-        "line": 16,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join has no clear equality predicate.",
-        "savings": 0.33,
-        "snippet": "with tx_list as ( -- for filtering using fast inner join"
-      },
-      {
-        "repo": "spellbook",
         "path": "dbt_subprojects/tokens/models/aptos/asset_activities/aptos_fungible_asset_activities.sql",
         "line": 20,
         "bucket": "other",
@@ -4892,30 +4484,6 @@
         "message": "Join has no clear equality predicate.",
         "savings": 0.23,
         "snippet": "event_index,"
-      },
-      {
-        "repo": "spellbook",
-        "path": "dbt_subprojects/solana/models/_sector/dex/orca_whirlpool/orca_whirlpool_v2_token_transfers.sql",
-        "line": 65,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join has no clear equality predicate.",
-        "savings": 0.22,
-        "snippet": "INNER JOIN whirlpool_v2_swaps USING (block_date, block_slot, tx_index, outer_instruction_index)"
-      },
-      {
-        "repo": "spellbook",
-        "path": "dbt_subprojects/solana/models/_sector/dex/solfi/solfi_solana_token_transfers.sql",
-        "line": 46,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join has no clear equality predicate.",
-        "savings": 0.22,
-        "snippet": "inner join solfi_swaps using (block_date, block_slot, tx_index, outer_instruction_index)"
       },
       {
         "repo": "spellbook",
@@ -4964,18 +4532,6 @@
         "message": "Join has no clear equality predicate.",
         "savings": 0.16,
         "snippet": "-- evt_tx_from / evt_tx_to replace add_tx_columns \u2192 transactions join (same pattern as market_created)."
-      },
-      {
-        "repo": "spellbook",
-        "path": "dbt_subprojects/daily_spellbook/models/_metrics/transactions/chains/ton/metrics_ton_transactions_daily.sql",
-        "line": 52,
-        "bucket": "equality_join",
-        "verdict": "fp",
-        "class": "exempt",
-        "label": "exempt",
-        "message": "Join has no clear equality predicate.",
-        "savings": 0.13,
-        "snippet": "join jetton_prices"
       },
       {
         "repo": "spellbook",
@@ -5183,6 +4739,18 @@
       },
       {
         "repo": "data-infra",
+        "path": "warehouse/models/intermediate/payments/int_payments__authorisations_deduped.sql",
+        "line": 32,
+        "bucket": "other",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "ORDER BY in a model without LIMIT.",
+        "savings": 1.8,
+        "snippet": "ROW_NUMBER() OVER (PARTITION BY _payments_key ORDER BY littlepay_export_ts DESC, _line_number DESC) AS payments_key_appearance_num,"
+      },
+      {
+        "repo": "data-infra",
         "path": "warehouse/models/intermediate/payments/int_payments__refunds_deduped.sql",
         "line": 124,
         "bucket": "other",
@@ -5195,6 +4763,18 @@
       },
       {
         "repo": "data-infra",
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_schedule__frequencies_stop_times.sql",
+        "line": 18,
+        "bucket": "other",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "ORDER BY in a model without LIMIT.",
+        "savings": 1.7,
+        "snippet": "ORDER BY stop_sequence"
+      },
+      {
+        "repo": "data-infra",
         "path": "warehouse/models/intermediate/payments/int_payments__matched_device_transactions.sql",
         "line": 23,
         "bucket": "other",
@@ -5204,6 +4784,18 @@
         "message": "ORDER BY in a model without LIMIT.",
         "savings": 1.6,
         "snippet": "ROW_NUMBER() OVER(PARTITION BY micropayment_id ORDER BY transaction_date_time_utc) AS row_num"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs/fct_vehicle_positions_trip_summaries.sql",
+        "line": 39,
+        "bucket": "other",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "ORDER BY in a model without LIMIT.",
+        "savings": 1.6,
+        "snippet": "ORDER BY COALESCE(max_vehicle_timestamp, max_header_timestamp, max_extract_ts)"
       },
       {
         "repo": "data-infra",
@@ -5228,6 +4820,30 @@
         "message": "ORDER BY in a model without LIMIT.",
         "savings": 1.6,
         "snippet": "WHEN ROW_NUMBER() OVER(PARTITION BY aggregation_id, retrieval_reference_number ORDER BY record_updated_timestamp_utc) > 1 THEN \"CREDIT\""
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/payments/reliability/v2_payments_reliability_weekly_unlabeled_routes.sql",
+        "line": 58,
+        "bucket": "other",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "ORDER BY in a model without LIMIT.",
+        "savings": 1.6,
+        "snippet": "RANK() OVER (PARTITION BY participant_id ORDER BY week_start DESC) AS recency_rank"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/payments/reliability/v2_payments_reliability_weekly_unlabeled_routes_enghouse.sql",
+        "line": 55,
+        "bucket": "other",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "ORDER BY in a model without LIMIT.",
+        "savings": 1.6,
+        "snippet": "RANK() OVER (PARTITION BY operator_id ORDER BY week_start DESC) AS recency_rank"
       },
       {
         "repo": "data-infra",
@@ -5315,30 +4931,6 @@
       },
       {
         "repo": "data-infra",
-        "path": "warehouse/models/intermediate/payments/int_payments__authorisations_deduped.sql",
-        "line": 32,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "ORDER BY in a model without LIMIT.",
-        "savings": 1.4,
-        "snippet": "ROW_NUMBER() OVER (PARTITION BY _payments_key ORDER BY littlepay_export_ts DESC, _line_number DESC) AS payments_key_appearance_num,"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/intermediate/gtfs/int_gtfs_schedule__frequencies_stop_times.sql",
-        "line": 18,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "ORDER BY in a model without LIMIT.",
-        "savings": 1.3,
-        "snippet": "ORDER BY stop_sequence"
-      },
-      {
-        "repo": "data-infra",
         "path": "warehouse/models/mart/gtfs/fct_trip_updates_stop_metrics.sql",
         "line": 53,
         "bucket": "other",
@@ -5372,42 +4964,6 @@
         "message": "ORDER BY in a model without LIMIT.",
         "savings": 1.2,
         "snippet": "ORDER BY position_latitude, position_longitude"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/gtfs/fct_vehicle_positions_trip_summaries.sql",
-        "line": 39,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "ORDER BY in a model without LIMIT.",
-        "savings": 1.2,
-        "snippet": "ORDER BY COALESCE(max_vehicle_timestamp, max_header_timestamp, max_extract_ts)"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/payments/reliability/v2_payments_reliability_weekly_unlabeled_routes.sql",
-        "line": 58,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "ORDER BY in a model without LIMIT.",
-        "savings": 1.2,
-        "snippet": "RANK() OVER (PARTITION BY participant_id ORDER BY week_start DESC) AS recency_rank"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/payments/reliability/v2_payments_reliability_weekly_unlabeled_routes_enghouse.sql",
-        "line": 55,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "ORDER BY in a model without LIMIT.",
-        "savings": 1.2,
-        "snippet": "RANK() OVER (PARTITION BY operator_id ORDER BY week_start DESC) AS recency_rank"
       },
       {
         "repo": "data-infra",
@@ -6658,6 +6214,42 @@
         "snippet": "SELECT DISTINCT"
       },
       {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/payments/indexes/payments_tests_daily_date_spine.sql",
+        "line": 16,
+        "bucket": "blind_distinct",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "SELECT DISTINCT detected.",
+        "savings": 2.8,
+        "snippet": "SELECT DISTINCT participant_id"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/payments/indexes/payments_tests_weekly_date_spine.sql",
+        "line": 16,
+        "bucket": "blind_distinct",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "SELECT DISTINCT detected.",
+        "savings": 2.8,
+        "snippet": "SELECT DISTINCT participant_id"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/payments/indexes/payments_tests_weekly_date_spine_enghouse.sql",
+        "line": 16,
+        "bucket": "blind_distinct",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "SELECT DISTINCT detected.",
+        "savings": 2.8,
+        "snippet": "SELECT DISTINCT operator_id"
+      },
+      {
         "repo": "spellbook",
         "path": "dbt_subprojects/daily_spellbook/models/_projects/eigenlayer/ethereum/eigenlayer_ethereum_avs_paid_rewards.sql",
         "line": 12,
@@ -6728,6 +6320,18 @@
         "message": "SELECT DISTINCT detected.",
         "savings": 2.0,
         "snippet": "SELECT DISTINCT"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/payments/indexes/payments_tests_monthly_date_spine.sql",
+        "line": 19,
+        "bucket": "blind_distinct",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "SELECT DISTINCT detected.",
+        "savings": 2.0,
+        "snippet": "SELECT DISTINCT participant_id"
       },
       {
         "repo": "spellbook",
@@ -6848,54 +6452,6 @@
         "message": "SELECT DISTINCT detected.",
         "savings": 1.8,
         "snippet": "SELECT DISTINCT"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/gtfs_audit/dim_gtfs_schedule_validation_notices.sql",
-        "line": 4,
-        "bucket": "blind_distinct",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "SELECT DISTINCT detected.",
-        "savings": 1.8,
-        "snippet": "SELECT DISTINCT"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/gtfs_audit/dim_gtfs_schedule_validation_outcomes.sql",
-        "line": 4,
-        "bucket": "blind_distinct",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "SELECT DISTINCT detected.",
-        "savings": 1.8,
-        "snippet": "SELECT DISTINCT"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/gtfs_quality/fct_implemented_checks.sql",
-        "line": 10,
-        "bucket": "blind_distinct",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "SELECT DISTINCT detected.",
-        "savings": 1.8,
-        "snippet": "SELECT DISTINCT"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/payments/indexes/payments_tests_daily_date_spine.sql",
-        "line": 16,
-        "bucket": "blind_distinct",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "SELECT DISTINCT detected.",
-        "savings": 1.8,
-        "snippet": "SELECT DISTINCT participant_id"
       }
     ]
   },
@@ -6935,10 +6491,10 @@
   "SQLCOST012": {
     "pass": true,
     "pass_reason": "fully_examined",
-    "total": 69,
-    "examined": 69,
+    "total": 66,
+    "examined": 66,
     "tp": 49,
-    "exempt": 20,
+    "exempt": 17,
     "fp_bug": 0,
     "unknown": 0,
     "examined_examples": [
@@ -7111,42 +6667,6 @@
         "snippet": "cross join latest_prices p"
       },
       {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/payments/indexes/payments_tests_daily_date_spine.sql",
-        "line": 34,
-        "bucket": "date_spine_cross_join",
-        "verdict": "fp",
-        "class": "exempt",
-        "label": "exempt",
-        "message": "Cross join detected without an explicit allow comment.",
-        "savings": 3.2,
-        "snippet": "CROSS JOIN create_date_range"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/payments/indexes/payments_tests_weekly_date_spine.sql",
-        "line": 35,
-        "bucket": "date_spine_cross_join",
-        "verdict": "fp",
-        "class": "exempt",
-        "label": "exempt",
-        "message": "Cross join detected without an explicit allow comment.",
-        "savings": 3.2,
-        "snippet": "CROSS JOIN create_week_range"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/payments/indexes/payments_tests_weekly_date_spine_enghouse.sql",
-        "line": 35,
-        "bucket": "date_spine_cross_join",
-        "verdict": "fp",
-        "class": "exempt",
-        "label": "exempt",
-        "message": "Cross join detected without an explicit allow comment.",
-        "savings": 3.2,
-        "snippet": "CROSS JOIN create_week_range"
-      },
-      {
         "repo": "spellbook",
         "path": "dbt_macros/shared/balancer/balancer_token_balance_changes_macro.sql",
         "line": 243,
@@ -7157,6 +6677,18 @@
         "message": "Cross join detected without an explicit allow comment.",
         "savings": 3.2,
         "snippet": "CROSS JOIN global_fees g"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_sector/labels/addresses/dex/persona/smart_dex_traders/ethereum/labels_smart_dex_traders_ethereum.sql",
+        "line": 33,
+        "bucket": "group_by_comma_fp",
+        "verdict": "fp",
+        "class": "exempt",
+        "label": "exempt",
+        "message": "Cross join detected without an explicit allow comment.",
+        "savings": 3.1,
+        "snippet": "** Scope:"
       },
       {
         "repo": "spellbook",
@@ -7205,18 +6737,6 @@
         "message": "Cross join detected without an explicit allow comment.",
         "savings": 2.6,
         "snippet": "CROSS JOIN global_fees g"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/payments/indexes/payments_tests_monthly_date_spine.sql",
-        "line": 46,
-        "bucket": "date_spine_cross_join",
-        "verdict": "fp",
-        "class": "exempt",
-        "label": "exempt",
-        "message": "Cross join detected without an explicit allow comment.",
-        "savings": 2.5,
-        "snippet": "CROSS JOIN clean_month_range"
       },
       {
         "repo": "data-infra",
@@ -7412,102 +6932,6 @@
       },
       {
         "repo": "spellbook",
-        "path": "dbt_subprojects/daily_spellbook/models/chainlink/arbitrum/chainlink_arbitrum_price_feeds_hourly.sql",
-        "line": 48,
-        "bucket": "cross_join_explicit",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Cross join detected without an explicit allow comment.",
-        "savings": 0.2,
-        "snippet": "CROSS JOIN hourly_sequence_meta"
-      },
-      {
-        "repo": "spellbook",
-        "path": "dbt_subprojects/daily_spellbook/models/chainlink/avalanche_c/chainlink_avalanche_c_price_feeds_hourly.sql",
-        "line": 48,
-        "bucket": "cross_join_explicit",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Cross join detected without an explicit allow comment.",
-        "savings": 0.2,
-        "snippet": "CROSS JOIN hourly_sequence_meta"
-      },
-      {
-        "repo": "spellbook",
-        "path": "dbt_subprojects/daily_spellbook/models/chainlink/bnb/chainlink_bnb_price_feeds_hourly.sql",
-        "line": 48,
-        "bucket": "cross_join_explicit",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Cross join detected without an explicit allow comment.",
-        "savings": 0.2,
-        "snippet": "CROSS JOIN hourly_sequence_meta"
-      },
-      {
-        "repo": "spellbook",
-        "path": "dbt_subprojects/daily_spellbook/models/chainlink/ethereum/chainlink_ethereum_price_feeds_hourly.sql",
-        "line": 48,
-        "bucket": "cross_join_explicit",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Cross join detected without an explicit allow comment.",
-        "savings": 0.2,
-        "snippet": "CROSS JOIN hourly_sequence_meta"
-      },
-      {
-        "repo": "spellbook",
-        "path": "dbt_subprojects/daily_spellbook/models/chainlink/fantom/chainlink_fantom_price_feeds_hourly.sql",
-        "line": 48,
-        "bucket": "cross_join_explicit",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Cross join detected without an explicit allow comment.",
-        "savings": 0.2,
-        "snippet": "CROSS JOIN hourly_sequence_meta"
-      },
-      {
-        "repo": "spellbook",
-        "path": "dbt_subprojects/daily_spellbook/models/chainlink/gnosis/chainlink_gnosis_price_feeds_hourly.sql",
-        "line": 48,
-        "bucket": "cross_join_explicit",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Cross join detected without an explicit allow comment.",
-        "savings": 0.2,
-        "snippet": "CROSS JOIN hourly_sequence_meta"
-      },
-      {
-        "repo": "spellbook",
-        "path": "dbt_subprojects/daily_spellbook/models/chainlink/optimism/chainlink_optimism_price_feeds_hourly.sql",
-        "line": 48,
-        "bucket": "cross_join_explicit",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Cross join detected without an explicit allow comment.",
-        "savings": 0.2,
-        "snippet": "CROSS JOIN hourly_sequence_meta"
-      },
-      {
-        "repo": "spellbook",
-        "path": "dbt_subprojects/daily_spellbook/models/chainlink/polygon/chainlink_polygon_price_feeds_hourly.sql",
-        "line": 48,
-        "bucket": "cross_join_explicit",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Cross join detected without an explicit allow comment.",
-        "savings": 0.2,
-        "snippet": "CROSS JOIN hourly_sequence_meta"
-      },
-      {
-        "repo": "spellbook",
         "path": "dbt_subprojects/daily_spellbook/models/sui/tvl/supply/sui_tvl_supply_silver.sql",
         "line": 34,
         "bucket": "cross_join_explicit",
@@ -7568,6 +6992,18 @@
       },
       {
         "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/arbitrum/chainlink_arbitrum_price_feeds_hourly.sql",
+        "line": 48,
+        "bucket": "cross_join_explicit",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Cross join detected without an explicit allow comment.",
+        "savings": 0.13,
+        "snippet": "CROSS JOIN hourly_sequence_meta"
+      },
+      {
+        "repo": "spellbook",
         "path": "dbt_subprojects/daily_spellbook/models/chainlink/avalanche_c/chainlink_avalanche_c_fm_reward_daily.sql",
         "line": 44,
         "bucket": "cross_join_explicit",
@@ -7589,6 +7025,18 @@
         "message": "Cross join detected without an explicit allow comment.",
         "savings": 0.13,
         "snippet": "CROSS JOIN"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/avalanche_c/chainlink_avalanche_c_price_feeds_hourly.sql",
+        "line": 48,
+        "bucket": "cross_join_explicit",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Cross join detected without an explicit allow comment.",
+        "savings": 0.13,
+        "snippet": "CROSS JOIN hourly_sequence_meta"
       },
       {
         "repo": "spellbook",
@@ -7616,6 +7064,18 @@
       },
       {
         "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/bnb/chainlink_bnb_price_feeds_hourly.sql",
+        "line": 48,
+        "bucket": "cross_join_explicit",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Cross join detected without an explicit allow comment.",
+        "savings": 0.13,
+        "snippet": "CROSS JOIN hourly_sequence_meta"
+      },
+      {
+        "repo": "spellbook",
         "path": "dbt_subprojects/daily_spellbook/models/chainlink/ethereum/chainlink_ethereum_fm_reward_daily.sql",
         "line": 44,
         "bucket": "cross_join_explicit",
@@ -7637,6 +7097,18 @@
         "message": "Cross join detected without an explicit allow comment.",
         "savings": 0.13,
         "snippet": "CROSS JOIN"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/ethereum/chainlink_ethereum_price_feeds_hourly.sql",
+        "line": 48,
+        "bucket": "cross_join_explicit",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Cross join detected without an explicit allow comment.",
+        "savings": 0.13,
+        "snippet": "CROSS JOIN hourly_sequence_meta"
       },
       {
         "repo": "spellbook",
@@ -7664,6 +7136,18 @@
       },
       {
         "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/fantom/chainlink_fantom_price_feeds_hourly.sql",
+        "line": 48,
+        "bucket": "cross_join_explicit",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Cross join detected without an explicit allow comment.",
+        "savings": 0.13,
+        "snippet": "CROSS JOIN hourly_sequence_meta"
+      },
+      {
+        "repo": "spellbook",
         "path": "dbt_subprojects/daily_spellbook/models/chainlink/gnosis/chainlink_gnosis_fm_reward_daily.sql",
         "line": 44,
         "bucket": "cross_join_explicit",
@@ -7685,6 +7169,18 @@
         "message": "Cross join detected without an explicit allow comment.",
         "savings": 0.13,
         "snippet": "CROSS JOIN"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/gnosis/chainlink_gnosis_price_feeds_hourly.sql",
+        "line": 48,
+        "bucket": "cross_join_explicit",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Cross join detected without an explicit allow comment.",
+        "savings": 0.13,
+        "snippet": "CROSS JOIN hourly_sequence_meta"
       },
       {
         "repo": "spellbook",
@@ -7712,6 +7208,18 @@
       },
       {
         "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/optimism/chainlink_optimism_price_feeds_hourly.sql",
+        "line": 48,
+        "bucket": "cross_join_explicit",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Cross join detected without an explicit allow comment.",
+        "savings": 0.13,
+        "snippet": "CROSS JOIN hourly_sequence_meta"
+      },
+      {
+        "repo": "spellbook",
         "path": "dbt_subprojects/daily_spellbook/models/chainlink/polygon/chainlink_polygon_fm_reward_daily.sql",
         "line": 44,
         "bucket": "cross_join_explicit",
@@ -7733,6 +7241,18 @@
         "message": "Cross join detected without an explicit allow comment.",
         "savings": 0.13,
         "snippet": "CROSS JOIN"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/polygon/chainlink_polygon_price_feeds_hourly.sql",
+        "line": 48,
+        "bucket": "cross_join_explicit",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Cross join detected without an explicit allow comment.",
+        "savings": 0.13,
+        "snippet": "CROSS JOIN hourly_sequence_meta"
       },
       {
         "repo": "spellbook",
@@ -7961,18 +7481,6 @@
         "message": "Window function has no PARTITION BY.",
         "savings": 2.9,
         "snippet": "count(1) over () AS                                total_count,"
-      },
-      {
-        "repo": "spellbook",
-        "path": "dbt_subprojects/daily_spellbook/models/_sector/labels/addresses/dex/persona/smart_dex_traders/ethereum/labels_smart_dex_traders_ethereum.sql",
-        "line": 267,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Window function has no PARTITION BY.",
-        "savings": 2.8,
-        "snippet": "percent_rank() over (order by profit_multiple) as percent_rank"
       },
       {
         "repo": "spellbook",
@@ -8981,6 +8489,18 @@
         "message": "Window function has no PARTITION BY.",
         "savings": 1.7,
         "snippet": "QUALIFY DENSE_RANK() OVER (ORDER BY execution_ts DESC) = 1"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/staging/ntd_funding_and_expenses/stg_ntd__service_data_and_operating_expenses_time_series_by_mode__voms.sql",
+        "line": 10,
+        "bucket": "other",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Window function has no PARTITION BY.",
+        "savings": 1.7,
+        "snippet": "QUALIFY DENSE_RANK() OVER (ORDER BY execution_ts DESC) = 1"
       }
     ]
   },
@@ -9236,18 +8756,6 @@
       },
       {
         "repo": "mattermost-warehouse",
-        "path": "transform/snowflake-dbt/models/mattermost/hourly/form_attribution.sql",
-        "line": 18,
-        "bucket": "repeated_cte_ref",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "CTE is referenced multiple times.",
-        "savings": 1500.0,
-        "snippet": "select forms_w_adgroup.anonymous_id, forms_w_adgroup.form_fill_id, forms_w_adgroup.timestamp, forms_w_adgroup.EMAIL, forms_w_adgroup.context_page_path, forms_w_adgroup.formid, coalesce(forms_w_adgroup.campaignname, website_visits_w_adgroup."
-      },
-      {
-        "repo": "mattermost-warehouse",
         "path": "transform/snowflake-dbt/models/mattermost/hourly/user_retention.sql",
         "line": 29,
         "bucket": "repeated_cte_ref",
@@ -9497,6 +9005,18 @@
         "message": "CTE is referenced multiple times.",
         "savings": 860.0,
         "snippet": "charges.amount"
+      },
+      {
+        "repo": "mattermost-warehouse",
+        "path": "transform/snowflake-dbt/models/mattermost/hourly/form_attribution.sql",
+        "line": 18,
+        "bucket": "repeated_cte_ref",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "CTE is referenced multiple times.",
+        "savings": 820.0,
+        "snippet": "select forms_w_adgroup.anonymous_id, forms_w_adgroup.form_fill_id, forms_w_adgroup.timestamp, forms_w_adgroup.EMAIL, forms_w_adgroup.context_page_path, forms_w_adgroup.formid, coalesce(forms_w_adgroup.campaignname, website_visits_w_adgroup."
       },
       {
         "repo": "mattermost-warehouse",
@@ -11422,13 +10942,25 @@
   "SQLCOST017": {
     "pass": true,
     "pass_reason": "fully_examined",
-    "total": 21,
-    "examined": 21,
-    "tp": 9,
-    "exempt": 12,
+    "total": 34,
+    "examined": 34,
+    "tp": 11,
+    "exempt": 23,
     "fp_bug": 0,
     "unknown": 0,
     "examined_examples": [
+      {
+        "repo": "mattermost-warehouse",
+        "path": "transform/snowflake-dbt/models/mattermost/hourly/form_attribution.sql",
+        "line": 34,
+        "bucket": "symmetric_normalize",
+        "verdict": "fp",
+        "class": "exempt",
+        "label": "exempt",
+        "message": "Join equality uses a function-wrapped key.",
+        "savings": 680.0,
+        "snippet": "left join {{ ref('contact') }} on lower(contact.email) = lower(form_adgroup_attribution.email)"
+      },
       {
         "repo": "spellbook",
         "path": "dbt_subprojects/daily_spellbook/models/stablecoins/stablecoins_multichain_tokens.sql",
@@ -11443,27 +10975,39 @@
       },
       {
         "repo": "spellbook",
-        "path": "dbt_subprojects/daily_spellbook/models/op/token_distributions/optimism/op_token_distributions_optimism_project_wallets.sql",
-        "line": 304,
-        "bucket": "cast_on_key",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/vebal/ethereum/balancer_ethereum_vebal_balances_day.sql",
+        "line": 120,
+        "bucket": "date_trunc_join",
+        "verdict": "fp",
+        "class": "exempt",
+        "label": "exempt",
         "message": "Join equality uses a function-wrapped key.",
-        "savings": 0.8,
-        "snippet": "LEFT JOIN {{ ref('op_token_distributions_optimism_project_name_mapping') }} pnm"
+        "savings": 2.2,
+        "snippet": "LEFT JOIN locks_info l"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/balancer/vebal/ethereum/balancer_ethereum_vebal_slopes.sql",
+        "line": 96,
+        "bucket": "date_trunc_join",
+        "verdict": "fp",
+        "class": "exempt",
+        "label": "exempt",
+        "message": "Join equality uses a function-wrapped key.",
+        "savings": 2.2,
+        "snippet": "LEFT JOIN locks_info l"
       },
       {
         "repo": "spellbook",
         "path": "dbt_subprojects/daily_spellbook/models/bridge/bridge_flows.sql",
-        "line": 63,
+        "line": 65,
         "bucket": "symmetric_normalize",
         "verdict": "fp",
         "class": "exempt",
         "label": "exempt",
         "message": "Join equality uses a function-wrapped key.",
         "savings": 0.72,
-        "snippet": "LEFT JOIN {{ ref('chain_info_chain_ids') }} cid_source"
+        "snippet": "LEFT JOIN {{ ref('chain_info_chain_ids') }} cid_dest"
       },
       {
         "repo": "spellbook",
@@ -11476,6 +11020,114 @@
         "message": "Join equality uses a function-wrapped key.",
         "savings": 0.72,
         "snippet": "LEFT JOIN {{ ref('chain_info_chain_ids') }} cid_dest"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/arbitrum/chainlink_arbitrum_price_feeds.sql",
+        "line": 50,
+        "bucket": "date_trunc_join",
+        "verdict": "fp",
+        "class": "exempt",
+        "label": "exempt",
+        "message": "Join equality uses a function-wrapped key.",
+        "savings": 0.22,
+        "snippet": "INNER JOIN"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/avalanche_c/chainlink_avalanche_c_price_feeds.sql",
+        "line": 50,
+        "bucket": "date_trunc_join",
+        "verdict": "fp",
+        "class": "exempt",
+        "label": "exempt",
+        "message": "Join equality uses a function-wrapped key.",
+        "savings": 0.22,
+        "snippet": "INNER JOIN"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/bnb/chainlink_bnb_price_feeds.sql",
+        "line": 50,
+        "bucket": "date_trunc_join",
+        "verdict": "fp",
+        "class": "exempt",
+        "label": "exempt",
+        "message": "Join equality uses a function-wrapped key.",
+        "savings": 0.22,
+        "snippet": "INNER JOIN"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/ethereum/chainlink_ethereum_price_feeds.sql",
+        "line": 50,
+        "bucket": "date_trunc_join",
+        "verdict": "fp",
+        "class": "exempt",
+        "label": "exempt",
+        "message": "Join equality uses a function-wrapped key.",
+        "savings": 0.22,
+        "snippet": "INNER JOIN"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/fantom/chainlink_fantom_price_feeds.sql",
+        "line": 50,
+        "bucket": "date_trunc_join",
+        "verdict": "fp",
+        "class": "exempt",
+        "label": "exempt",
+        "message": "Join equality uses a function-wrapped key.",
+        "savings": 0.22,
+        "snippet": "INNER JOIN"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/gnosis/chainlink_gnosis_price_feeds.sql",
+        "line": 50,
+        "bucket": "date_trunc_join",
+        "verdict": "fp",
+        "class": "exempt",
+        "label": "exempt",
+        "message": "Join equality uses a function-wrapped key.",
+        "savings": 0.22,
+        "snippet": "INNER JOIN"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/optimism/chainlink_optimism_price_feeds.sql",
+        "line": 50,
+        "bucket": "date_trunc_join",
+        "verdict": "fp",
+        "class": "exempt",
+        "label": "exempt",
+        "message": "Join equality uses a function-wrapped key.",
+        "savings": 0.22,
+        "snippet": "INNER JOIN"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/chainlink/polygon/chainlink_polygon_price_feeds.sql",
+        "line": 50,
+        "bucket": "date_trunc_join",
+        "verdict": "fp",
+        "class": "exempt",
+        "label": "exempt",
+        "message": "Join equality uses a function-wrapped key.",
+        "savings": 0.22,
+        "snippet": "INNER JOIN"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/op/token_distributions/optimism/op_token_distributions_optimism_other_distributions_claims.sql",
+        "line": 66,
+        "bucket": "date_trunc_join",
+        "verdict": "fp",
+        "class": "exempt",
+        "label": "exempt",
+        "message": "Join equality uses a function-wrapped key.",
+        "savings": 0.22,
+        "snippet": "inner JOIN {{ source('erc20_optimism', 'evt_Transfer') }} tf"
       },
       {
         "repo": "spellbook",
@@ -11527,63 +11179,75 @@
       },
       {
         "repo": "spellbook",
-        "path": "dbt_subprojects/hourly_spellbook/models/_sector/perpetual/projects/tigris/arbitrum/events/tigris_arbitrum_events_options_open_position.sql",
-        "line": 53,
-        "bucket": "date_trunc_join",
-        "verdict": "fp",
-        "class": "exempt",
-        "label": "exempt",
-        "message": "Join equality uses a function-wrapped key.",
-        "savings": 0.12,
-        "snippet": "INNER JOIN pairs ta"
-      },
-      {
-        "repo": "spellbook",
-        "path": "dbt_subprojects/hourly_spellbook/models/_sector/perpetual/projects/tigris/polygon/events/tigris_polygon_events_options_open_position.sql",
-        "line": 53,
-        "bucket": "date_trunc_join",
-        "verdict": "fp",
-        "class": "exempt",
-        "label": "exempt",
-        "message": "Join equality uses a function-wrapped key.",
-        "savings": 0.12,
-        "snippet": "INNER JOIN pairs ta"
-      },
-      {
-        "repo": "spellbook",
-        "path": "dbt_subprojects/daily_spellbook/models/governance/optimism/governance_optimism_agora_proposals.sql",
-        "line": 215,
+        "path": "dbt_subprojects/hourly_spellbook/models/_sector/nft/aggregators/chains/nft_ethereum_aggregators_gem.sql",
+        "line": 26,
         "bucket": "cast_on_key",
         "verdict": "tp",
         "class": null,
         "label": "tp",
         "message": "Join equality uses a function-wrapped key.",
-        "savings": 0.094,
-        "snippet": "LEFT JOIN {{ source('optimism_governor_optimism','OptimismGovernorV6_evt_ProposalCanceled') }} AS pc ON p.proposal_id = cast(pc.proposalId as varchar)"
+        "savings": 0.14,
+        "snippet": "left join {{ source('ethereum','transactions') }} t"
       },
       {
         "repo": "spellbook",
-        "path": "dbt_subprojects/hourly_spellbook/models/_sector/perpetual/projects/tigris/arbitrum/events/tigris_arbitrum_events_open_position.sql",
-        "line": 68,
+        "path": "dbt_subprojects/dex/models/_projects/zeroex/base/zeroex_base_api_fills.sql",
+        "line": 205,
         "bucket": "date_trunc_join",
         "verdict": "fp",
         "class": "exempt",
         "label": "exempt",
         "message": "Join equality uses a function-wrapped key.",
-        "savings": 0.092,
-        "snippet": "INNER JOIN pairs ta"
+        "savings": 0.1,
+        "snippet": "INNER JOIN {{ source('base', 'transactions')}} tx ON all_tx.tx_hash = tx.hash"
       },
       {
         "repo": "spellbook",
-        "path": "dbt_subprojects/hourly_spellbook/models/_sector/perpetual/projects/tigris/arbitrum/events/tigris_arbitrum_events_open_position.sql",
-        "line": 109,
+        "path": "dbt_subprojects/dex/models/_projects/zeroex/celo/zeroex_celo_api_fills.sql",
+        "line": 199,
         "bucket": "date_trunc_join",
         "verdict": "fp",
         "class": "exempt",
         "label": "exempt",
         "message": "Join equality uses a function-wrapped key.",
-        "savings": 0.092,
-        "snippet": "INNER JOIN pairs ta"
+        "savings": 0.1,
+        "snippet": "INNER JOIN {{ source('celo', 'transactions')}} tx ON all_tx.tx_hash = tx.hash"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/models/_projects/zeroex/ethereum/zeroex_ethereum_api_fills.sql",
+        "line": 483,
+        "bucket": "date_trunc_join",
+        "verdict": "fp",
+        "class": "exempt",
+        "label": "exempt",
+        "message": "Join equality uses a function-wrapped key.",
+        "savings": 0.1,
+        "snippet": "INNER JOIN {{ source('ethereum', 'transactions')}} tx ON all_tx.tx_hash = tx.hash and all_tx.block_time = tx.block_time"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/models/_projects/zeroex/optimism/zeroex_optimism_api_fills.sql",
+        "line": 266,
+        "bucket": "date_trunc_join",
+        "verdict": "fp",
+        "class": "exempt",
+        "label": "exempt",
+        "message": "Join equality uses a function-wrapped key.",
+        "savings": 0.1,
+        "snippet": "INNER JOIN {{ source('optimism', 'transactions')}} tx ON all_tx.tx_hash = tx.hash"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/_projects/polymarket/polygon/polymarket_polygon_positions.sql",
+        "line": 49,
+        "bucket": "cast_on_key",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Join equality uses a function-wrapped key.",
+        "savings": 0.078,
+        "snippet": "inner join {{ this }} as existing"
       },
       {
         "repo": "spellbook",
@@ -11635,27 +11299,39 @@
       },
       {
         "repo": "spellbook",
-        "path": "dbt_subprojects/hourly_spellbook/models/_sector/perpetual/projects/tigris/polygon/events/tigris_polygon_events_open_position.sql",
-        "line": 69,
-        "bucket": "date_trunc_join",
-        "verdict": "fp",
-        "class": "exempt",
-        "label": "exempt",
+        "path": "dbt_subprojects/daily_spellbook/models/governance/optimism/governance_optimism_agora_proposals.sql",
+        "line": 106,
+        "bucket": "cast_on_key",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
         "message": "Join equality uses a function-wrapped key.",
-        "savings": 0.07,
-        "snippet": "INNER JOIN pairs ta"
+        "savings": 0.074,
+        "snippet": "LEFT JOIN {{ source('optimism_governor_optimism','OptimismGovernorV6_evt_ProposalCanceled') }} AS pc ON p.proposal_id = cast(pc.proposalId as varchar)"
       },
       {
         "repo": "spellbook",
-        "path": "dbt_subprojects/hourly_spellbook/models/_sector/perpetual/projects/tigris/polygon/events/tigris_polygon_events_open_position.sql",
-        "line": 151,
+        "path": "dbt_subprojects/daily_spellbook/models/governance/optimism/governance_optimism_agora_proposals.sql",
+        "line": 215,
+        "bucket": "cast_on_key",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Join equality uses a function-wrapped key.",
+        "savings": 0.074,
+        "snippet": "LEFT JOIN {{ source('optimism_governor_optimism','OptimismGovernorV6_evt_ProposalCanceled') }} AS pc ON p.proposal_id = cast(pc.proposalId as varchar)"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/models/_projects/zeroex/polygon/zeroex_polygon_api_fills.sql",
+        "line": 325,
         "bucket": "date_trunc_join",
         "verdict": "fp",
         "class": "exempt",
         "label": "exempt",
         "message": "Join equality uses a function-wrapped key.",
-        "savings": 0.07,
-        "snippet": "INNER JOIN pairs ta"
+        "savings": 0.061,
+        "snippet": "INNER JOIN {{ source('polygon', 'transactions')}} tx ON all_tx.tx_hash = tx.hash and all_tx.block_time = tx.block_time"
       },
       {
         "repo": "spellbook",
@@ -14131,6 +13807,18 @@
       },
       {
         "repo": "data-infra",
+        "path": "warehouse/models/intermediate/payments/int_payments__micropayments_to_aggregations.sql",
+        "line": 39,
+        "bucket": "count_distinct",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Exact COUNT(DISTINCT ...) detected.",
+        "savings": 2.8,
+        "snippet": "COUNT(DISTINCT micropayment_id) AS num_micropayments,"
+      },
+      {
+        "repo": "data-infra",
         "path": "warehouse/tests/mart/gtfs_quality/test_fct_daily_schedule_validation_notices_one_version_per_date_feed.sql",
         "line": 9,
         "bucket": "count_distinct",
@@ -14179,18 +13867,6 @@
       },
       {
         "repo": "data-infra",
-        "path": "warehouse/models/intermediate/payments/int_payments__micropayments_to_aggregations.sql",
-        "line": 39,
-        "bucket": "count_distinct",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Exact COUNT(DISTINCT ...) detected.",
-        "savings": 1.9,
-        "snippet": "COUNT(DISTINCT micropayment_id) AS num_micropayments,"
-      },
-      {
-        "repo": "data-infra",
         "path": "warehouse/models/mart/gtfs/fct_daily_feed_scheduled_service_summary.sql",
         "line": 38,
         "bucket": "count_distinct",
@@ -14227,6 +13903,30 @@
       },
       {
         "repo": "data-infra",
+        "path": "warehouse/models/intermediate/payments/int_payments__authorisations_deduped.sql",
+        "line": 19,
+        "bucket": "count_distinct",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Exact COUNT(DISTINCT ...) detected.",
+        "savings": 1.6,
+        "snippet": "COUNT(DISTINCT _key) > 1 AS is_dup,"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs/fct_daily_rt_service_summary.sql",
+        "line": 35,
+        "bucket": "count_distinct",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Exact COUNT(DISTINCT ...) detected.",
+        "savings": 1.4,
+        "snippet": "COUNT(DISTINCT IF(appeared_in_tu IS TRUE, route_id, NULL)) AS n_tu_routes,"
+      },
+      {
+        "repo": "data-infra",
         "path": "warehouse/models/mart/gtfs/fct_daily_schedule_rt_route_direction_summary.sql",
         "line": 53,
         "bucket": "count_distinct",
@@ -14236,6 +13936,18 @@
         "message": "Exact COUNT(DISTINCT ...) detected.",
         "savings": 1.4,
         "snippet": "COUNT(DISTINCT trip_instance_key) AS n_trips,"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_quality/idx_monthly_reports_site.sql",
+        "line": 72,
+        "bucket": "count_distinct",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Exact COUNT(DISTINCT ...) detected.",
+        "savings": 1.4,
+        "snippet": "COUNT(DISTINCT route_id) AS route_ct"
       },
       {
         "repo": "data-infra",
@@ -14251,18 +13963,6 @@
       },
       {
         "repo": "data-infra",
-        "path": "warehouse/models/intermediate/payments/int_payments__authorisations_deduped.sql",
-        "line": 19,
-        "bucket": "count_distinct",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Exact COUNT(DISTINCT ...) detected.",
-        "savings": 1.2,
-        "snippet": "COUNT(DISTINCT _key) > 1 AS is_dup,"
-      },
-      {
-        "repo": "data-infra",
         "path": "warehouse/models/mart/gtfs/fct_trip_updates_stop_metrics.sql",
         "line": 50,
         "bucket": "count_distinct",
@@ -14272,18 +13972,6 @@
         "message": "Exact COUNT(DISTINCT ...) detected.",
         "savings": 1.1,
         "snippet": "COUNT(DISTINCT trip_key) AS n_tu_trips,"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/gtfs_quality/idx_monthly_reports_site.sql",
-        "line": 72,
-        "bucket": "count_distinct",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Exact COUNT(DISTINCT ...) detected.",
-        "savings": 1.1,
-        "snippet": "COUNT(DISTINCT route_id) AS route_ct"
       },
       {
         "repo": "data-infra",
@@ -14332,18 +14020,6 @@
         "message": "Exact COUNT(DISTINCT ...) detected.",
         "savings": 0.92,
         "snippet": "COUNT(DISTINCT outcomes.extract_ts) AS validated_extracts,"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/gtfs/fct_daily_rt_service_summary.sql",
-        "line": 35,
-        "bucket": "count_distinct",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Exact COUNT(DISTINCT ...) detected.",
-        "savings": 0.8,
-        "snippet": "COUNT(DISTINCT IF(appeared_in_tu IS TRUE, route_id, NULL)) AS n_tu_routes,"
       },
       {
         "repo": "data-infra",
@@ -16905,7 +16581,7 @@
         "class": null,
         "label": "tp",
         "message": "Incremental model uses on_schema_change=sync_all_columns.",
-        "savings": 1.0,
+        "savings": 1.4,
         "snippet": "{{"
       },
       {
@@ -17750,55 +17426,7 @@
       },
       {
         "repo": "spellbook",
-        "path": "dbt_subprojects/dex/models/_projects/zeroex/base/zeroex_base_api_fills.sql",
-        "line": 1,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Incremental model uses on_schema_change=sync_all_columns.",
-        "savings": 0.18,
-        "snippet": "{{  config("
-      },
-      {
-        "repo": "spellbook",
-        "path": "dbt_subprojects/dex/models/_projects/zeroex/celo/zeroex_celo_api_fills.sql",
-        "line": 1,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Incremental model uses on_schema_change=sync_all_columns.",
-        "savings": 0.18,
-        "snippet": "{{  config("
-      },
-      {
-        "repo": "spellbook",
-        "path": "dbt_subprojects/dex/models/_projects/zeroex/ethereum/zeroex_ethereum_api_fills.sql",
-        "line": 1,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Incremental model uses on_schema_change=sync_all_columns.",
-        "savings": 0.18,
-        "snippet": "{{  config("
-      },
-      {
-        "repo": "spellbook",
         "path": "dbt_subprojects/dex/models/_projects/zeroex/fantom/zeroex_fantom_api_fills.sql",
-        "line": 1,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Incremental model uses on_schema_change=sync_all_columns.",
-        "savings": 0.18,
-        "snippet": "{{  config("
-      },
-      {
-        "repo": "spellbook",
-        "path": "dbt_subprojects/dex/models/_projects/zeroex/optimism/zeroex_optimism_api_fills.sql",
         "line": 1,
         "bucket": "other",
         "verdict": "tp",
@@ -17974,6 +17602,54 @@
         "label": "tp",
         "message": "Incremental model uses on_schema_change=sync_all_columns.",
         "savings": 0.14,
+        "snippet": "{{  config("
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/models/_projects/zeroex/base/zeroex_base_api_fills.sql",
+        "line": 1,
+        "bucket": "other",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Incremental model uses on_schema_change=sync_all_columns.",
+        "savings": 0.13,
+        "snippet": "{{  config("
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/models/_projects/zeroex/celo/zeroex_celo_api_fills.sql",
+        "line": 1,
+        "bucket": "other",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Incremental model uses on_schema_change=sync_all_columns.",
+        "savings": 0.13,
+        "snippet": "{{  config("
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/models/_projects/zeroex/ethereum/zeroex_ethereum_api_fills.sql",
+        "line": 1,
+        "bucket": "other",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Incremental model uses on_schema_change=sync_all_columns.",
+        "savings": 0.13,
+        "snippet": "{{  config("
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/dex/models/_projects/zeroex/optimism/zeroex_optimism_api_fills.sql",
+        "line": 1,
+        "bucket": "other",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Incremental model uses on_schema_change=sync_all_columns.",
+        "savings": 0.13,
         "snippet": "{{  config("
       },
       {
@@ -18416,7 +18092,7 @@
         "class": null,
         "label": "tp",
         "message": "Join predicate uses pattern matching.",
-        "savings": 0.12,
+        "savings": 0.098,
         "snippet": "LEFT JOIN {{ source('optimism_governor_optimism','OptimismGovernorV6_evt_ProposalCanceled') }} AS pc ON p.proposal_id = cast(pc.proposalId as varchar)"
       },
       {
@@ -19847,6 +19523,18 @@
         "snippet": "cross join unnest(orderhashes) with ordinality as foo(om_order_hash,om_order_id)"
       },
       {
+        "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs/fct_service_alerts_trip_summaries.sql",
+        "line": 23,
+        "bucket": "other",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Row-exploding UNNEST or LATERAL FLATTEN followed by deduplication.",
+        "savings": 2.1,
+        "snippet": "LEFT JOIN UNNEST(alert_content_array) AS unnested_alert_content"
+      },
+      {
         "repo": "spellbook",
         "path": "dbt_macros/shared/balancer/balancer_liquidity_macro.sql",
         "line": 126,
@@ -19917,18 +19605,6 @@
         "message": "Row-exploding UNNEST or LATERAL FLATTEN followed by deduplication.",
         "savings": 1.8,
         "snippet": "CROSS JOIN UNNEST (ARRAY["
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/gtfs/fct_service_alerts_trip_summaries.sql",
-        "line": 23,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Row-exploding UNNEST or LATERAL FLATTEN followed by deduplication.",
-        "savings": 1.6,
-        "snippet": "LEFT JOIN UNNEST(alert_content_array) AS unnested_alert_content"
       },
       {
         "repo": "data-infra",
@@ -20743,7 +20419,7 @@
         "class": null,
         "label": "tp",
         "message": "NOT IN (subquery) detected.",
-        "savings": 1.0,
+        "savings": 1.3,
         "snippet": "AND address NOT IN (SELECT address FROM {{source('cex_optimism', 'addresses')}} ) --make sure we don't accidently catch a CEX"
       },
       {
@@ -20820,18 +20496,6 @@
       },
       {
         "repo": "spellbook",
-        "path": "dbt_subprojects/daily_spellbook/models/cryptopunks/ethereum/cryptopunks_ethereum_punk_offer_events.sql",
-        "line": 64,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "NOT IN (subquery) detected.",
-        "savings": 0.2,
-        "snippet": "where a.evt_tx_hash not in (select distinct evt_tx_hash from {{ source('cryptopunks_ethereum','CryptoPunksMarket_evt_PunkBought') }} )"
-      },
-      {
-        "repo": "spellbook",
         "path": "dbt_subprojects/dex/models/_projects/curvefi/optimism/curve_optimism_pools.sql",
         "line": 230,
         "bucket": "other",
@@ -20877,6 +20541,18 @@
         "message": "NOT IN (subquery) detected.",
         "savings": 0.14,
         "snippet": "and evt_tx_hash not in (select evt_tx_hash from {{source('lido_optimism','wstETH_evt_Transfer')}})"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/cryptopunks/ethereum/cryptopunks_ethereum_punk_offer_events.sql",
+        "line": 64,
+        "bucket": "other",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "NOT IN (subquery) detected.",
+        "savings": 0.13,
+        "snippet": "where a.evt_tx_hash not in (select distinct evt_tx_hash from {{ source('cryptopunks_ethereum','CryptoPunksMarket_evt_PunkBought') }} )"
       },
       {
         "repo": "spellbook",
@@ -20978,8 +20654,8 @@
   },
   "SQLCOST038": {
     "pass": true,
-    "pass_reason": "sampled_100_of_420",
-    "total": 420,
+    "pass_reason": "sampled_100_of_447",
+    "total": 447,
     "examined": 100,
     "tp": 100,
     "exempt": 0,
@@ -21096,6 +20772,18 @@
       },
       {
         "repo": "spellbook",
+        "path": "dbt_subprojects/dex/macros/models/_project/oneinch/AR/oneinch_ar_macro.sql",
+        "line": 117,
+        "bucket": "other",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
+        "savings": 6.5,
+        "snippet": "join raw_calls using(block_date, block_number, tx_hash, call_trace_address)"
+      },
+      {
+        "repo": "spellbook",
         "path": "dbt_subprojects/dex/macros/models/oneinch_lop_dex_trades_passthrough.sql",
         "line": 38,
         "bucket": "other",
@@ -21180,15 +20868,39 @@
       },
       {
         "repo": "spellbook",
-        "path": "dbt_subprojects/solana/macros/_sector/transfers/solana_token22_spl_transfers_macro.sql",
-        "line": 271,
+        "path": "dbt_subprojects/solana/macros/_sector/gas/solana_tx_fees_macro.sql",
+        "line": 85,
         "bucket": "other",
         "verdict": "tp",
         "class": null,
         "label": "tp",
         "message": "Join equality keys do not cover the joined model's known unique_key grain.",
         "savings": 6.5,
-        "snippet": "LEFT JOIN prices p"
+        "snippet": "LEFT JOIN {{ source('prices','usd_forward_fill') }} p"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/solana/macros/_sector/gas/solana_vote_fees_macro.sql",
+        "line": 67,
+        "bucket": "other",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
+        "savings": 6.5,
+        "snippet": "LEFT JOIN {{ source('prices','usd_forward_fill') }} p"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/solana/macros/_sector/transfers/solana_token22_spl_transfers_macro.sql",
+        "line": 51,
+        "bucket": "other",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
+        "savings": 6.5,
+        "snippet": "LEFT JOIN"
       },
       {
         "repo": "spellbook",
@@ -21349,14 +21061,14 @@
       {
         "repo": "spellbook",
         "path": "dbt_subprojects/daily_spellbook/models/_projects/polymarket/polygon/polymarket_polygon_market_prices_daily.sql",
-        "line": 45,
+        "line": 40,
         "bucket": "other",
         "verdict": "tp",
         "class": null,
         "label": "tp",
         "message": "Join equality keys do not cover the joined model's known unique_key grain.",
         "savings": 3.3,
-        "snippet": "-- Join with market details to get market end time and token outcome information"
+        "snippet": "LEFT JOIN changed_prices lp"
       },
       {
         "repo": "spellbook",
@@ -21540,6 +21252,54 @@
       },
       {
         "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_sector/rollup_economics/ethereum/l1_blob_fees/rollup_economics_ethereum_l1_blob_fees.sql",
+        "line": 23,
+        "bucket": "other",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
+        "savings": 3.3,
+        "snippet": "INNER JOIN {{ source('prices', 'usd') }} p"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_sector/rollup_economics/ethereum/l1_data_fees/rollup_economics_ethereum_l1_data_fees.sql",
+        "line": 63,
+        "bucket": "other",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
+        "savings": 3.3,
+        "snippet": "INNER JOIN {{ source('prices', 'usd') }} p"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_sector/rollup_economics/ethereum/l1_verification_fees/rollup_economics_ethereum_l1_verification_fees.sql",
+        "line": 57,
+        "bucket": "other",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
+        "savings": 3.3,
+        "snippet": "INNER JOIN {{ source('prices', 'usd') }} p"
+      },
+      {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/hourly_spellbook/models/_sector/staking/ethereum/staking_ethereum_flows.sql",
+        "line": 47,
+        "bucket": "other",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
+        "savings": 3.3,
+        "snippet": "INNER JOIN {{source('beacon', 'validators')}} i ON d.pubkey=i.public_key"
+      },
+      {
+        "repo": "spellbook",
         "path": "dbt_subprojects/solana/models/_sector/dex/raydium_launchlab/raydium_launchlab_v1_trades.sql",
         "line": 44,
         "bucket": "other",
@@ -21601,230 +21361,230 @@
       {
         "repo": "spellbook",
         "path": "dbt_subprojects/daily_spellbook/models/_metrics/dune_index/metrics_dune_index_stats.sql",
-        "line": 135,
+        "line": 94,
         "bucket": "other",
         "verdict": "tp",
         "class": null,
         "label": "tp",
         "message": "Join equality keys do not cover the joined model's known unique_key grain.",
         "savings": 2.0,
-        "snippet": "inner join total_current_month_dune_index as t"
+        "snippet": "inner join total_current_week_dune_index as t"
       },
       {
         "repo": "spellbook",
         "path": "dbt_subprojects/daily_spellbook/models/nexusmutual/ethereum/covers/nexusmutual_ethereum_covers_daily_agg.sql",
-        "line": 139,
+        "line": 273,
         "bucket": "other",
         "verdict": "tp",
         "class": null,
         "label": "tp",
         "message": "Join equality keys do not cover the joined model's known unique_key grain.",
         "savings": 2.0,
-        "snippet": "left join covers c_period on ds.block_date between c_period.cover_start_date and c_period.cover_end_date"
+        "snippet": "left join daily_cover_sales_aggs cs on ac.block_date = cs.block_date"
       },
       {
         "repo": "spellbook",
         "path": "dbt_subprojects/dex/models/_projects/balancer/trades/arbitrum/balancer_v2_arbitrum_trades.sql",
-        "line": 131,
+        "line": 67,
         "bucket": "other",
         "verdict": "tp",
         "class": null,
         "label": "tp",
         "message": "Join equality keys do not cover the joined model's known unique_key grain.",
         "savings": 2.0,
-        "snippet": "LEFT JOIN {{ source('balancer_v2_arbitrum', 'bpt_prices') }} bpa_bpt_prices"
+        "snippet": "LEFT JOIN {{ source('balancer_v2_arbitrum', 'bpt_prices') }} bpt_prices"
       },
       {
         "repo": "spellbook",
         "path": "dbt_subprojects/dex/models/_projects/balancer/trades/arbitrum/balancer_v3_arbitrum_trades.sql",
-        "line": 148,
+        "line": 69,
         "bucket": "other",
         "verdict": "tp",
         "class": null,
         "label": "tp",
         "message": "Join equality keys do not cover the joined model's known unique_key grain.",
         "savings": 2.0,
-        "snippet": "LEFT JOIN {{ source('balancer', 'bpt_prices') }} bpa_bpt_prices"
+        "snippet": "LEFT JOIN {{ source('balancer', 'bpt_prices') }} bpt_prices"
       },
       {
         "repo": "spellbook",
         "path": "dbt_subprojects/dex/models/_projects/balancer/trades/avalanche_c/balancer_v2_avalanche_c_trades.sql",
-        "line": 131,
+        "line": 67,
         "bucket": "other",
         "verdict": "tp",
         "class": null,
         "label": "tp",
         "message": "Join equality keys do not cover the joined model's known unique_key grain.",
         "savings": 2.0,
-        "snippet": "LEFT JOIN {{ source('balancer_v2_avalanche_c', 'bpt_prices') }} bpa_bpt_prices"
+        "snippet": "LEFT JOIN {{ source('balancer_v2_avalanche_c', 'bpt_prices') }} bpt_prices"
       },
       {
         "repo": "spellbook",
         "path": "dbt_subprojects/dex/models/_projects/balancer/trades/avalanche_c/balancer_v3_avalanche_c_trades.sql",
-        "line": 147,
+        "line": 68,
         "bucket": "other",
         "verdict": "tp",
         "class": null,
         "label": "tp",
         "message": "Join equality keys do not cover the joined model's known unique_key grain.",
         "savings": 2.0,
-        "snippet": "LEFT JOIN {{ source('balancer', 'bpt_prices') }} bpa_bpt_prices"
+        "snippet": "LEFT JOIN {{ source('balancer', 'bpt_prices') }} bpt_prices"
       },
       {
         "repo": "spellbook",
         "path": "dbt_subprojects/dex/models/_projects/balancer/trades/base/balancer_v2_base_trades.sql",
-        "line": 131,
+        "line": 67,
         "bucket": "other",
         "verdict": "tp",
         "class": null,
         "label": "tp",
         "message": "Join equality keys do not cover the joined model's known unique_key grain.",
         "savings": 2.0,
-        "snippet": "LEFT JOIN {{ source('balancer_v2_base', 'bpt_prices') }} bpa_bpt_prices"
+        "snippet": "LEFT JOIN {{ source('balancer_v2_base', 'bpt_prices') }} bpt_prices"
       },
       {
         "repo": "spellbook",
         "path": "dbt_subprojects/dex/models/_projects/balancer/trades/base/balancer_v3_base_trades.sql",
-        "line": 148,
+        "line": 69,
         "bucket": "other",
         "verdict": "tp",
         "class": null,
         "label": "tp",
         "message": "Join equality keys do not cover the joined model's known unique_key grain.",
         "savings": 2.0,
-        "snippet": "LEFT JOIN {{ source('balancer', 'bpt_prices') }} bpa_bpt_prices"
+        "snippet": "LEFT JOIN {{ source('balancer', 'bpt_prices') }} bpt_prices"
       },
       {
         "repo": "spellbook",
         "path": "dbt_subprojects/dex/models/_projects/balancer/trades/ethereum/balancer_v2_ethereum_trades.sql",
-        "line": 131,
+        "line": 67,
         "bucket": "other",
         "verdict": "tp",
         "class": null,
         "label": "tp",
         "message": "Join equality keys do not cover the joined model's known unique_key grain.",
         "savings": 2.0,
-        "snippet": "LEFT JOIN {{ source('balancer_v2_ethereum', 'bpt_prices') }} bpa_bpt_prices"
+        "snippet": "LEFT JOIN {{ source('balancer_v2_ethereum', 'bpt_prices') }} bpt_prices"
       },
       {
         "repo": "spellbook",
         "path": "dbt_subprojects/dex/models/_projects/balancer/trades/ethereum/balancer_v3_ethereum_trades.sql",
-        "line": 148,
+        "line": 69,
         "bucket": "other",
         "verdict": "tp",
         "class": null,
         "label": "tp",
         "message": "Join equality keys do not cover the joined model's known unique_key grain.",
         "savings": 2.0,
-        "snippet": "LEFT JOIN {{ source('balancer', 'bpt_prices') }} bpa_bpt_prices"
+        "snippet": "LEFT JOIN {{ source('balancer', 'bpt_prices') }} bpt_prices"
       },
       {
         "repo": "spellbook",
         "path": "dbt_subprojects/dex/models/_projects/balancer/trades/gnosis/balancer_v2_gnosis_trades.sql",
-        "line": 131,
+        "line": 67,
         "bucket": "other",
         "verdict": "tp",
         "class": null,
         "label": "tp",
         "message": "Join equality keys do not cover the joined model's known unique_key grain.",
         "savings": 2.0,
-        "snippet": "LEFT JOIN {{ source('balancer_v2_gnosis', 'bpt_prices') }} bpa_bpt_prices"
+        "snippet": "LEFT JOIN {{ source('balancer_v2_gnosis', 'bpt_prices') }} bpt_prices"
       },
       {
         "repo": "spellbook",
         "path": "dbt_subprojects/dex/models/_projects/balancer/trades/gnosis/balancer_v3_gnosis_trades.sql",
-        "line": 148,
+        "line": 69,
         "bucket": "other",
         "verdict": "tp",
         "class": null,
         "label": "tp",
         "message": "Join equality keys do not cover the joined model's known unique_key grain.",
         "savings": 2.0,
-        "snippet": "LEFT JOIN {{ source('balancer', 'bpt_prices') }} bpa_bpt_prices"
+        "snippet": "LEFT JOIN {{ source('balancer', 'bpt_prices') }} bpt_prices"
       },
       {
         "repo": "spellbook",
         "path": "dbt_subprojects/dex/models/_projects/balancer/trades/hyperevm/balancer_v3_hyperevm_trades.sql",
-        "line": 147,
+        "line": 68,
         "bucket": "other",
         "verdict": "tp",
         "class": null,
         "label": "tp",
         "message": "Join equality keys do not cover the joined model's known unique_key grain.",
         "savings": 2.0,
-        "snippet": "LEFT JOIN {{ source('balancer', 'bpt_prices') }} bpa_bpt_prices"
+        "snippet": "LEFT JOIN {{ source('balancer', 'bpt_prices') }} bpt_prices"
       },
       {
         "repo": "spellbook",
         "path": "dbt_subprojects/dex/models/_projects/balancer/trades/monad/balancer_v3_monad_trades.sql",
-        "line": 147,
+        "line": 68,
         "bucket": "other",
         "verdict": "tp",
         "class": null,
         "label": "tp",
         "message": "Join equality keys do not cover the joined model's known unique_key grain.",
         "savings": 2.0,
-        "snippet": "LEFT JOIN {{ source('balancer', 'bpt_prices') }} bpa_bpt_prices"
+        "snippet": "LEFT JOIN {{ source('balancer', 'bpt_prices') }} bpt_prices"
       },
       {
         "repo": "spellbook",
         "path": "dbt_subprojects/dex/models/_projects/balancer/trades/optimism/balancer_v2_optimism_trades.sql",
-        "line": 131,
+        "line": 67,
         "bucket": "other",
         "verdict": "tp",
         "class": null,
         "label": "tp",
         "message": "Join equality keys do not cover the joined model's known unique_key grain.",
         "savings": 2.0,
-        "snippet": "LEFT JOIN {{ source('balancer_v2_optimism', 'bpt_prices') }} bpa_bpt_prices"
+        "snippet": "LEFT JOIN {{ source('balancer_v2_optimism', 'bpt_prices') }} bpt_prices"
       },
       {
         "repo": "spellbook",
         "path": "dbt_subprojects/dex/models/_projects/balancer/trades/polygon/balancer_v2_polygon_trades.sql",
-        "line": 131,
+        "line": 67,
         "bucket": "other",
         "verdict": "tp",
         "class": null,
         "label": "tp",
         "message": "Join equality keys do not cover the joined model's known unique_key grain.",
         "savings": 2.0,
-        "snippet": "LEFT JOIN {{ source('balancer_v2_polygon', 'bpt_prices') }} bpa_bpt_prices"
+        "snippet": "LEFT JOIN {{ source('balancer_v2_polygon', 'bpt_prices') }} bpt_prices"
       },
       {
         "repo": "spellbook",
         "path": "dbt_subprojects/dex/models/_projects/balancer/trades/zkevm/balancer_v2_zkevm_trades.sql",
-        "line": 131,
+        "line": 67,
         "bucket": "other",
         "verdict": "tp",
         "class": null,
         "label": "tp",
         "message": "Join equality keys do not cover the joined model's known unique_key grain.",
         "savings": 2.0,
-        "snippet": "LEFT JOIN {{ source('balancer_v2_zkevm', 'bpt_prices') }} bpa_bpt_prices"
+        "snippet": "LEFT JOIN {{ source('balancer_v2_zkevm', 'bpt_prices') }} bpt_prices"
       },
       {
         "repo": "spellbook",
         "path": "dbt_subprojects/dex/models/_projects/beets/beets_v2_sonic_trades.sql",
-        "line": 131,
+        "line": 67,
         "bucket": "other",
         "verdict": "tp",
         "class": null,
         "label": "tp",
         "message": "Join equality keys do not cover the joined model's known unique_key grain.",
         "savings": 2.0,
-        "snippet": "LEFT JOIN {{ source('beets', 'bpt_prices') }} bpa_bpt_prices"
+        "snippet": "LEFT JOIN {{ source('beets', 'bpt_prices') }} bpt_prices"
       },
       {
         "repo": "spellbook",
         "path": "dbt_subprojects/dex/models/_projects/beets/beets_v3_sonic_trades.sql",
-        "line": 148,
+        "line": 69,
         "bucket": "other",
         "verdict": "tp",
         "class": null,
         "label": "tp",
         "message": "Join equality keys do not cover the joined model's known unique_key grain.",
         "savings": 2.0,
-        "snippet": "LEFT JOIN {{ source('beets', 'bpt_prices') }} bpa_bpt_prices"
+        "snippet": "LEFT JOIN {{ source('beets', 'bpt_prices') }} bpt_prices"
       },
       {
         "repo": "spellbook",
@@ -21865,7 +21625,7 @@
       {
         "repo": "spellbook",
         "path": "dbt_subprojects/solana/models/_sector/dex/bot_trades/solana/platforms/alpha_dex_solana_bot_trades.sql",
-        "line": 113,
+        "line": 57,
         "bucket": "other",
         "verdict": "tp",
         "class": null,
@@ -21877,31 +21637,31 @@
       {
         "repo": "spellbook",
         "path": "dbt_subprojects/solana/models/_sector/dex/bot_trades/solana/platforms/consortium_key_solana_bot_trades.sql",
-        "line": 101,
+        "line": 56,
         "bucket": "other",
         "verdict": "tp",
         "class": null,
         "label": "tp",
         "message": "Join equality keys do not cover the joined model's known unique_key grain.",
         "savings": 2.0,
-        "snippet": "join"
+        "snippet": "join users on trader_id = user"
       },
       {
         "repo": "spellbook",
         "path": "dbt_subprojects/solana/models/_sector/dex/bot_trades/solana/platforms/padre_solana_bot_trades.sql",
-        "line": 101,
+        "line": 56,
         "bucket": "other",
         "verdict": "tp",
         "class": null,
         "label": "tp",
         "message": "Join equality keys do not cover the joined model's known unique_key grain.",
         "savings": 2.0,
-        "snippet": "join"
+        "snippet": "join users on trader_id = user"
       },
       {
         "repo": "spellbook",
         "path": "dbt_subprojects/solana/models/_sector/dex/bot_trades/solana/platforms/soul_sniper_solana_bot_trades.sql",
-        "line": 113,
+        "line": 57,
         "bucket": "other",
         "verdict": "tp",
         "class": null,
@@ -21957,18 +21717,6 @@
         "message": "Join equality keys do not cover the joined model's known unique_key grain.",
         "savings": 1.8,
         "snippet": "inner join pubkey on validator_index.pubkey = pubkey.pubkey"
-      },
-      {
-        "repo": "spellbook",
-        "path": "dbt_subprojects/hourly_spellbook/models/_sector/staking/ethereum/staking_ethereum_flows.sql",
-        "line": 47,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
-        "savings": 1.8,
-        "snippet": "INNER JOIN {{source('beacon', 'validators')}} i ON d.pubkey=i.public_key"
       },
       {
         "repo": "spellbook",
@@ -22069,14 +21817,14 @@
       {
         "repo": "spellbook",
         "path": "dbt_subprojects/hourly_spellbook/models/_project/lido/lido_liquidity.sql",
-        "line": 162,
+        "line": 140,
         "bucket": "other",
         "verdict": "tp",
         "class": null,
         "label": "tp",
         "message": "Join equality keys do not cover the joined model's known unique_key grain.",
         "savings": 0.88,
-        "snippet": "LEFT JOIN pools AS vol on d.day = DATE_TRUNC('day', vol.time)  and d.pool = vol.pool"
+        "snippet": "left join wsteth_rate on dates.day = wsteth_rate.day"
       },
       {
         "repo": "spellbook",
@@ -22113,78 +21861,6 @@
         "message": "Join equality keys do not cover the joined model's known unique_key grain.",
         "savings": 0.33,
         "snippet": "LEFT JOIN {{ source('tokens', 'erc20') }} a on a.contract_address = collateral and a.blockchain = p.blockchain"
-      },
-      {
-        "repo": "spellbook",
-        "path": "dbt_subprojects/daily_spellbook/models/boost/boost_claimed.sql",
-        "line": 132,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
-        "savings": 0.33,
-        "snippet": "left join {{ source('prices','usd') }} p"
-      },
-      {
-        "repo": "spellbook",
-        "path": "dbt_subprojects/daily_spellbook/models/chainlink/arbitrum/chainlink_arbitrum_vrf_gas_daily.sql",
-        "line": 66,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
-        "savings": 0.33,
-        "snippet": "FULL OUTER JOIN vrf_gas_reverted_daily reverted ON"
-      },
-      {
-        "repo": "spellbook",
-        "path": "dbt_subprojects/daily_spellbook/models/chainlink/arbitrum/chainlink_arbitrum_vrf_request_daily.sql",
-        "line": 31,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
-        "savings": 0.33,
-        "snippet": "FULL OUTER JOIN {{ ref('chainlink_arbitrum_vrf_reverted_transactions') }} reverted ON"
-      },
-      {
-        "repo": "spellbook",
-        "path": "dbt_subprojects/daily_spellbook/models/chainlink/arbitrum/chainlink_arbitrum_vrf_reward_daily.sql",
-        "line": 37,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
-        "savings": 0.33,
-        "snippet": "LEFT JOIN link_usd_daily lud ON lud.date_start = vrf_daily.date_start"
-      },
-      {
-        "repo": "spellbook",
-        "path": "dbt_subprojects/daily_spellbook/models/chainlink/avalanche_c/chainlink_avalanche_c_automation_reward_daily.sql",
-        "line": 38,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
-        "savings": 0.33,
-        "snippet": "LEFT JOIN link_usd_daily lud ON lud.date_start = automation_performed_daily.date_start"
-      },
-      {
-        "repo": "spellbook",
-        "path": "dbt_subprojects/daily_spellbook/models/chainlink/avalanche_c/chainlink_avalanche_c_vrf_gas_daily.sql",
-        "line": 66,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Join equality keys do not cover the joined model's known unique_key grain.",
-        "savings": 0.33,
-        "snippet": "FULL OUTER JOIN vrf_gas_reverted_daily reverted ON"
       }
     ]
   },
@@ -23027,6 +22703,18 @@
         "snippet": "SELECT"
       },
       {
+        "repo": "spellbook",
+        "path": "dbt_subprojects/daily_spellbook/models/op/token_distributions/optimism/op_token_distributions_optimism_project_wallets.sql",
+        "line": 1,
+        "bucket": "other",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "View or ephemeral model is referenced by many downstream models.",
+        "savings": 1.3,
+        "snippet": "{{ config("
+      },
+      {
         "repo": "data-infra",
         "path": "warehouse/models/intermediate/ntd_validation/int_ntd_rr20_financial_specific_funds.sql",
         "line": 1,
@@ -23037,18 +22725,6 @@
         "message": "View or ephemeral model is referenced by many downstream models.",
         "savings": 1.0,
         "snippet": "-------"
-      },
-      {
-        "repo": "spellbook",
-        "path": "dbt_subprojects/daily_spellbook/models/op/token_distributions/optimism/op_token_distributions_optimism_project_wallets.sql",
-        "line": 1,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "View or ephemeral model is referenced by many downstream models.",
-        "savings": 1.0,
-        "snippet": "{{ config("
       },
       {
         "repo": "spellbook",
@@ -23100,6 +22776,18 @@
     "examined_examples": [
       {
         "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs/fct_daily_service_alerts.sql",
+        "line": 1,
+        "bucket": "other",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Table model has a recognized date or partition column but is not incremental.",
+        "savings": 2.6,
+        "snippet": "{{"
+      },
+      {
+        "repo": "data-infra",
         "path": "warehouse/models/mart/gtfs_rollup/fct_monthly_schedule_rt_route_direction_summary.sql",
         "line": 1,
         "bucket": "other",
@@ -23136,6 +22824,18 @@
       },
       {
         "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_quality/fct_monthly_reports_site_organization_gtfs_vendors.sql",
+        "line": 1,
+        "bucket": "other",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Table model has a recognized date or partition column but is not incremental.",
+        "savings": 2.5,
+        "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
         "path": "warehouse/models/mart/gtfs_rollup/fct_operator_hourly_summary.sql",
         "line": 1,
         "bucket": "other",
@@ -23160,6 +22860,18 @@
       },
       {
         "repo": "data-infra",
+        "path": "warehouse/models/mart/gtfs_quality/idx_monthly_reports_site.sql",
+        "line": 1,
+        "bucket": "other",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "Table model has a recognized date or partition column but is not incremental.",
+        "savings": 2.1,
+        "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
         "path": "warehouse/models/mart/gtfs/fct_daily_schedule_rt_route_direction_summary.sql",
         "line": 1,
         "bucket": "other",
@@ -23180,42 +22892,6 @@
         "label": "tp",
         "message": "Table model has a recognized date or partition column but is not incremental.",
         "savings": 1.9,
-        "snippet": "{{ config(materialized='table') }}"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/gtfs_quality/fct_monthly_reports_site_organization_gtfs_vendors.sql",
-        "line": 1,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Table model has a recognized date or partition column but is not incremental.",
-        "savings": 1.9,
-        "snippet": "{{ config(materialized='table') }}"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/gtfs/fct_daily_service_alerts.sql",
-        "line": 1,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Table model has a recognized date or partition column but is not incremental.",
-        "savings": 1.8,
-        "snippet": "{{"
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/models/mart/gtfs_quality/idx_monthly_reports_site.sql",
-        "line": 1,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "Table model has a recognized date or partition column but is not incremental.",
-        "savings": 1.6,
         "snippet": "{{ config(materialized='table') }}"
       },
       {
@@ -23292,8 +22968,8 @@
       },
       {
         "repo": "data-infra",
-        "path": "warehouse/models/mart/transit_database/dim_gtfs_datasets.sql",
-        "line": 18,
+        "path": "warehouse/models/intermediate/gtfs/int_gtfs_schedule__frequencies_stop_times.sql",
+        "line": 16,
         "bucket": "other",
         "verdict": "tp",
         "class": null,
@@ -23304,14 +22980,14 @@
       },
       {
         "repo": "data-infra",
-        "path": "warehouse/models/intermediate/gtfs/int_gtfs_schedule__frequencies_stop_times.sql",
-        "line": 16,
+        "path": "warehouse/models/mart/transit_database/dim_gtfs_datasets.sql",
+        "line": 18,
         "bucket": "other",
         "verdict": "tp",
         "class": null,
         "label": "tp",
         "message": "Window function uses an unbounded frame.",
-        "savings": 1.2,
+        "savings": 1.5,
         "snippet": "OVER("
       },
       {
@@ -23421,6 +23097,18 @@
         "message": "BigQuery model reads source() or ref() without an obvious partition or date filter.",
         "savings": 7.3,
         "snippet": "{{ config(materialized='table') }}"
+      },
+      {
+        "repo": "data-infra",
+        "path": "warehouse/tests/validate_guidelines_checks_rows_per_check_matches_index.sql",
+        "line": 1,
+        "bucket": "other",
+        "verdict": "tp",
+        "class": null,
+        "label": "tp",
+        "message": "BigQuery model reads source() or ref() without an obvious partition or date filter.",
+        "savings": 7.3,
+        "snippet": "WITH check_cts AS ("
       },
       {
         "repo": "data-infra",
@@ -24528,27 +24216,15 @@
       },
       {
         "repo": "data-infra",
-        "path": "warehouse/models/intermediate/gtfs_quality/guidelines_checks/int_gtfs_quality__include_tts.sql",
+        "path": "warehouse/tests/staging/payments/littlepay/test_micropayment_device_transactions.sql",
         "line": 1,
         "bucket": "other",
         "verdict": "tp",
         "class": null,
         "label": "tp",
         "message": "BigQuery model reads source() or ref() without an obvious partition or date filter.",
-        "savings": 4.3,
-        "snippet": "WITH guideline_index AS ("
-      },
-      {
-        "repo": "data-infra",
-        "path": "warehouse/tests/validate_guidelines_checks_rows_per_check_matches_index.sql",
-        "line": 1,
-        "bucket": "other",
-        "verdict": "tp",
-        "class": null,
-        "label": "tp",
-        "message": "BigQuery model reads source() or ref() without an obvious partition or date filter.",
-        "savings": 4.2,
-        "snippet": "WITH check_cts AS ("
+        "savings": 4.6,
+        "snippet": "{{ config(store_failures = true) }}"
       }
     ]
   },

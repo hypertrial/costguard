@@ -318,6 +318,12 @@ Work completed in two phases; full narratives are linked, not duplicated here.
 - **Rule fixes:** SQLCOST006 emits `confidence: low` on regex-only extraction; symmetric coalesce/cast equality keys in AST; subquery join `ON` detection after balanced `(`…`)`
 - **Outcome:** SQLCOST006 total 99→98, exempt 32→31; 44/44 census PASS
 
+### Phase 4 — Tail review and residual precision fixes
+
+- **Harness:** `rule_tp_census.py --emit-stratified-evidence` samples unreviewed high-volume tails by `(repo, rule, bucket)`.
+- **Rule fixes:** regex fallback equality detection for range-plus-equality joins; `USING (...)` equality handling; nested symmetric `trim(lower(...))` joins; generated date-range CTE names; single-quoted string masking in comma-join fallback.
+- **Outcome:** SQLCOST006 total 75→38 and exemptions 16→5 in refreshed evidence; SQLCOST012 exemptions 20→17; supplemental behavioral tails have 0 `fp_bug` and 0 `unknown`; SQLCOST027 top parse-marker source patterns are documented in [Rule TP coverage](rule-tp-coverage.md#supplemental-tail-review).
+
 ### Optional second rater
 
 Local LLM judge pipeline for inter-rater reliability — does **not** replace registry adjudication. See [LLM judge IRR](llm-judge-irr.md).

@@ -9,7 +9,7 @@ Snapshot: [`tests/benchmarks/evidence/v2.4.json`](../../../tests/benchmarks/evid
 
 | Metric | Value | Enterprise gate |
 | --- | --- | --- |
-| Overall sampled precision | 97.1% | ≥ 80% |
+| Overall sampled precision | 97.2% | ≥ 80% |
 | High-severity sampled precision | 99.8% | ≥ 90% |
 | Per-rule sampled precision | see tier table | ≥ 70% each classified rule |
 | Rules passing TP census | 44/45 | 44/44 behavioral |

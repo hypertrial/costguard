@@ -582,6 +582,18 @@ fn coalesce_cast_both_sides_equality_join_is_not_unbounded() {
 }
 
 #[test]
+fn regex_using_join_is_not_unbounded() {
+    let file = sql_file(
+        "models/marts/fct.sql",
+        "{{ not_parsable }} select * from orders o join users u using (user_id)",
+    );
+    let doc = analyze(&file);
+    assert!(!doc.feature_extraction_used_ast);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(!ids.contains(&"SQLCOST006".to_string()));
+}
+
+#[test]
 fn regex_only_unbounded_join_emits_low_confidence() {
     let file = sql_file(
         "models/marts/fct.sql",

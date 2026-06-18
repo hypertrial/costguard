@@ -26,6 +26,8 @@ CAST_RE = re.compile(r"(?i)\bcast\s*\(")
 COALESCE_RE = re.compile(r"(?i)\bcoalesce\s*\(")
 HASH_RE = re.compile(r"(?i)\b(?:keccak|sha256|md5|hash)\s*\(")
 DATE_TRUNC_RE = re.compile(r"(?i)\bdate_trunc\s*\(")
+JOIN_ON_CAST_RE = re.compile(r"(?is)\bjoin\b.{0,260}?\bon\b.{0,260}?\bcast\s*\(")
+JOIN_ON_DATE_TRUNC_RE = re.compile(r"(?is)\bjoin\b.{0,260}?\bon\b.{0,260}?\bdate_trunc\s*\(")
 BLOCK_TIME_RE = re.compile(r"(?i)\b(?:block_time|evt_block_time|evt_block_date|block_date)\b")
 SOURCE_RE = re.compile(r"(?i)\bsource\s*\(")
 IS_INCREMENTAL_RE = re.compile(r"(?i)is_incremental\s*\(")
@@ -198,7 +200,11 @@ def classify_sqlcost017(sql: str) -> str:
     masked = mask_literals_and_comments(sql).lower()
     if re.search(r"(?i)lower\s*\([^)]+\)\s*=\s*lower\s*\(", masked):
         return "symmetric_normalize"
-    if DATE_TRUNC_RE.search(masked) and JOIN_ON_RE.search(masked):
+    join_has_cast = JOIN_ON_CAST_RE.search(masked)
+    join_has_date_trunc = JOIN_ON_DATE_TRUNC_RE.search(masked)
+    if join_has_cast and not join_has_date_trunc:
+        return "cast_on_key"
+    if join_has_date_trunc or (DATE_TRUNC_RE.search(masked) and JOIN_ON_RE.search(masked)):
         return "date_trunc_join"
     if CAST_RE.search(masked):
         return "cast_on_key"

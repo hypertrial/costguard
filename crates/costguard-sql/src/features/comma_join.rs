@@ -39,7 +39,20 @@ fn mask_line_and_jinja_comments(text: &str) -> String {
     let lower = text.to_ascii_lowercase();
     let mut output = String::with_capacity(text.len());
     let mut i = 0usize;
+    let mut in_single = false;
     while i < text.len() {
+        let ch = text[i..].chars().next().expect("char");
+        if ch == '\'' {
+            in_single = !in_single;
+            output.push(' ');
+            i += ch.len_utf8();
+            continue;
+        }
+        if in_single {
+            output.push(if ch == '\n' { '\n' } else { ' ' });
+            i += ch.len_utf8();
+            continue;
+        }
         if lower[i..].starts_with("--") {
             let start = i;
             while i < text.len() && text.as_bytes()[i] != b'\n' {
@@ -60,7 +73,6 @@ fn mask_line_and_jinja_comments(text: &str) -> String {
                 continue;
             }
         }
-        let ch = text[i..].chars().next().expect("char");
         output.push(ch);
         i += ch.len_utf8();
     }
