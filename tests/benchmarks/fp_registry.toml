@@ -753,3 +753,26 @@ class = "exempt"
 corpus_case = "recall_equality_join_ok"
 notes = "equality join predicates should not fire unbounded join rule"
 
+[[finding]]
+rule = "SQLCOST022"
+repo = "nba-monte-carlo"
+bucket = "other"
+verdict = "tp"
+corpus_case = "recall_python_collect"
+notes = "Python models using fetchall/to_pandas collect warehouse data locally"
+
+[[finding]]
+rule = "SQLCOST009"
+repo = "tuva"
+bucket = "other"
+verdict = "tp"
+corpus_case = "recall_normalization_repeated"
+notes = "Tuva appointment joins repeat lower(trim(...)) normalization inline"
+
+[[finding]]
+rule = "SQLCOST011"
+repo = "tuva"
+bucket = "other"
+verdict = "tp"
+corpus_case = "recall_source_mart_second"
+notes = "Tuva semantic-layer mart reads expected_values sources directly"

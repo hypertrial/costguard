@@ -68,6 +68,10 @@ fn build_reverse_dependencies(dbt: &DbtProject) -> HashMap<String, Vec<String>> 
             }
         }
     }
+    for dependents in reverse.values_mut() {
+        dependents.sort();
+        dependents.dedup();
+    }
     reverse
 }
 
@@ -803,5 +807,40 @@ mod tests {
         assert_eq!(root, 15);
         let saturated: f64 = 1.0 + (1.0 + 15.0_f64).log2() * 0.25;
         assert!((saturated - 2.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn downstream_ids_cap_is_deterministic_for_wide_graph() {
+        let mut dbt = DbtProject::default();
+        dbt.models.insert(
+            "model.pkg.root".into(),
+            DbtModel {
+                unique_id: Some("model.pkg.root".into()),
+                name: "root".into(),
+                ..DbtModel::default()
+            },
+        );
+        for index in 0..20 {
+            let id = format!("model.pkg.child_{index:02}");
+            dbt.graph
+                .depends_on
+                .insert(id.clone(), vec!["model.pkg.root".into()]);
+            dbt.models.insert(
+                id.clone(),
+                DbtModel {
+                    unique_id: Some(id),
+                    name: format!("child_{index:02}"),
+                    ..DbtModel::default()
+                },
+            );
+        }
+
+        let ids = build_downstream_ids(&dbt)
+            .remove("model.pkg.root")
+            .expect("root downstream");
+
+        assert_eq!(ids.len(), 15);
+        assert_eq!(ids[0], "model.pkg.child_05");
+        assert_eq!(ids[14], "model.pkg.child_19");
     }
 }

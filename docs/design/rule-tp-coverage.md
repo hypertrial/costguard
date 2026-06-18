@@ -113,3 +113,49 @@ Rules may PASS with `exempt > 0` when registry rows use `class = "exempt"` for r
 | SQLCOST014 | 4 | `other` (single-use CTE homonyms) |
 
 Paydown workflow: [Manual rule review playbook — Residual FP policy](manual-rule-review.md#residual-fp-policy).
+
+## Required benchmark add-on review
+
+Generated: 2026-06-18  
+Required support-matrix repos: nba-monte-carlo (DuckDB) and Tuva (DuckDB). These repos were reviewed separately so each repo gets up to 100 cost-ranked examples per emitted behavioral rule. Evidence lives in [`tests/benchmarks/evidence/rule_tp_nba_monte_carlo.json`](../../tests/benchmarks/evidence/rule_tp_nba_monte_carlo.json) and [`tests/benchmarks/evidence/rule_tp_tuva.json`](../../tests/benchmarks/evidence/rule_tp_tuva.json).
+
+### NBA Monte Carlo
+
+- **44/44 rules PASS**
+
+| Rule | Total | Examined | TP | Exempt | FP bug | Unknown | Pass reason |
+|------|-------|----------|----|--------|--------|---------|-------------|
+| SQLCOST012 | 2 | 2 | 2 | 0 | 0 | 0 | fully_examined |
+| SQLCOST022 | 3 | 3 | 3 | 0 | 0 | 0 | fully_examined |
+| SQLCOST039 | 5 | 5 | 5 | 0 | 0 | 0 | fully_examined |
+
+`SQLCOST027` parse markers are infrastructure-only and excluded from the behavioral pass bar.
+
+### Tuva
+
+- **44/44 rules PASS**
+
+| Rule | Total | Examined | TP | Exempt | FP bug | Unknown | Pass reason |
+|------|-------|----------|----|--------|--------|---------|-------------|
+| SQLCOST001 | 138 | 100 | 100 | 0 | 0 | 0 | sampled_100_of_138 |
+| SQLCOST002 | 5 | 5 | 5 | 0 | 0 | 0 | fully_examined |
+| SQLCOST003 | 1 | 1 | 1 | 0 | 0 | 0 | fully_examined |
+| SQLCOST004 | 1 | 1 | 1 | 0 | 0 | 0 | fully_examined |
+| SQLCOST006 | 16 | 16 | 11 | 5 | 0 | 0 | fully_examined |
+| SQLCOST007 | 155 | 100 | 100 | 0 | 0 | 0 | sampled_100_of_155 |
+| SQLCOST008 | 270 | 100 | 100 | 0 | 0 | 0 | sampled_100_of_270 |
+| SQLCOST009 | 1 | 1 | 1 | 0 | 0 | 0 | fully_examined |
+| SQLCOST011 | 1 | 1 | 1 | 0 | 0 | 0 | fully_examined |
+| SQLCOST012 | 69 | 69 | 32 | 37 | 0 | 0 | fully_examined |
+| SQLCOST013 | 49 | 49 | 49 | 0 | 0 | 0 | fully_examined |
+| SQLCOST014 | 141 | 100 | 93 | 7 | 0 | 0 | sampled_100_of_141 |
+| SQLCOST015 | 7 | 7 | 7 | 0 | 0 | 0 | fully_examined |
+| SQLCOST017 | 14 | 14 | 13 | 1 | 0 | 0 | fully_examined |
+| SQLCOST018 | 26 | 26 | 26 | 0 | 0 | 0 | fully_examined |
+| SQLCOST020 | 22 | 22 | 22 | 0 | 0 | 0 | fully_examined |
+| SQLCOST031 | 5 | 5 | 5 | 0 | 0 | 0 | fully_examined |
+| SQLCOST037 | 1 | 1 | 1 | 0 | 0 | 0 | fully_examined |
+| SQLCOST039 | 54 | 54 | 54 | 0 | 0 | 0 | fully_examined |
+| SQLCOST040 | 1 | 1 | 1 | 0 | 0 | 0 | fully_examined |
+
+`SQLCOST027` parse markers are infrastructure-only and excluded from the behavioral pass bar.
