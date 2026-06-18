@@ -12,9 +12,9 @@ use crate::{CteFeature, ExpressionFeature, JoinFeature, JoinKind, SqlFeatures, W
 use costguard_diagnostics::{LineIndex, Span};
 use sqlparser::ast::{
     BinaryOperator, DuplicateTreatment, Expr, Function, FunctionArguments, GroupByExpr, Join,
-    JoinConstraint, JoinOperator, ObjectName, Query, Select, SelectItem, SetExpr, SetOperator,
-    SetQuantifier, Statement, TableFactor, TableWithJoins, Value, WindowFrameBound, WindowSpec,
-    WindowType, With,
+    JoinConstraint, JoinOperator, ObjectName, ObjectNamePart, Query, Select, SelectItem, SetExpr,
+    SetOperator, SetQuantifier, Statement, TableFactor, TableWithJoins, Value, ValueWithSpan,
+    WindowFrameBound, WindowSpec, WindowType, With,
 };
 use std::collections::HashMap;
 
@@ -147,7 +147,9 @@ fn extract_select(select: &Select, finder: &mut SpanFinder<'_>, features: &mut S
                     });
                 }
             }
-            SelectItem::ExprWithAlias { expr, .. } | SelectItem::UnnamedExpr(expr) => {
+            SelectItem::ExprWithAlias { expr, .. }
+            | SelectItem::ExprWithAliases { expr, .. }
+            | SelectItem::UnnamedExpr(expr) => {
                 extract_scalar_subquery_in_select(expr, finder, features);
                 extract_expr(expr, finder, features);
             }
@@ -192,7 +194,7 @@ fn extract_join(
     cross_catalog: bool,
 ) {
     let kind = match &join.join_operator {
-        JoinOperator::CrossJoin | JoinOperator::CrossApply => JoinKind::Cross,
+        JoinOperator::CrossJoin(_) | JoinOperator::CrossApply => JoinKind::Cross,
         JoinOperator::LeftOuter(_) => JoinKind::Left,
         JoinOperator::RightOuter(_) => JoinKind::Right,
         JoinOperator::FullOuter(_) => JoinKind::Full,
@@ -208,7 +210,8 @@ fn extract_join(
     let right_relation = table_factor_relation_name(&join.relation);
     let (predicate, has_equality, function_on_join_key, pattern_matching, equality_keys) =
         match &join.join_operator {
-            JoinOperator::Inner(inner)
+            JoinOperator::Join(inner)
+            | JoinOperator::Inner(inner)
             | JoinOperator::LeftOuter(inner)
             | JoinOperator::RightOuter(inner)
             | JoinOperator::FullOuter(inner) => match inner {
@@ -233,7 +236,7 @@ fn extract_join(
                 }
                 JoinConstraint::Using(ids) => {
                     let predicate = format!("USING({ids:?})");
-                    let keys = ids.iter().map(|id| id.value.to_ascii_lowercase()).collect();
+                    let keys = ids.iter().map(object_name_last).collect();
                     (Some(predicate), true, false, false, keys)
                 }
                 _ => (None, false, false, false, Vec::new()),
@@ -428,7 +431,7 @@ fn record_single_part_table_reference(
     if name.0.len() != 1 {
         return;
     }
-    let ident = name.0[0].value.to_ascii_lowercase();
+    let ident = object_name_part_ident(&name.0[0]);
     // ponytail: min_byte skips homonyms before the current FROM/JOIN; table-ref cursor is separate from CTE-name search
     let span = if min_byte > 0 {
         finder.find_word_after(&ident, min_byte)
@@ -498,12 +501,12 @@ fn table_factor_relation_name(factor: &TableFactor) -> Option<String> {
     match factor {
         TableFactor::Table { name, alias, .. } => {
             if name.0.len() == 1 {
-                Some(name.0[0].value.to_ascii_lowercase())
+                Some(object_name_part_ident(&name.0[0]))
             } else {
                 alias
                     .as_ref()
                     .map(|alias| alias.name.value.to_ascii_lowercase())
-                    .or_else(|| name.0.last().map(|ident| ident.value.to_ascii_lowercase()))
+                    .or_else(|| name.0.last().map(object_name_part_ident))
             }
         }
         TableFactor::Derived {
@@ -557,8 +560,11 @@ fn is_unbounded_window_frame(frame: &sqlparser::ast::WindowFrame) -> bool {
 }
 
 fn object_name_last(name: &ObjectName) -> String {
-    name.0
-        .last()
+    name.0.last().map(object_name_part_ident).unwrap_or_default()
+}
+
+fn object_name_part_ident(part: &ObjectNamePart) -> String {
+    part.as_ident()
         .map(|ident| ident.value.to_ascii_lowercase())
         .unwrap_or_default()
 }
@@ -822,7 +828,7 @@ fn table_factor_catalog(factor: &TableFactor) -> Option<String> {
 
 fn object_name_catalog(name: &ObjectName) -> Option<String> {
     if name.0.len() >= 3 {
-        Some(name.0[0].value.to_ascii_lowercase())
+        Some(object_name_part_ident(&name.0[0]))
     } else {
         None
     }
@@ -856,7 +862,7 @@ fn push_table_factor_alias(factor: &TableFactor, aliases: &mut Vec<String>) {
             if let Some(alias) = alias {
                 aliases.push(alias.name.value.to_ascii_lowercase());
             } else if let Some(table) = name.0.last() {
-                aliases.push(table.value.to_ascii_lowercase());
+                aliases.push(object_name_part_ident(table));
             }
         }
         TableFactor::Derived {
@@ -919,9 +925,10 @@ fn extract_leading_wildcard_likes(
 
 fn pattern_starts_with_wildcard(expr: &Expr) -> bool {
     match expr {
-        Expr::Value(Value::SingleQuotedString(value) | Value::DoubleQuotedString(value)) => {
-            value.starts_with('%') || value.starts_with('_')
-        }
+        Expr::Value(ValueWithSpan {
+            value: Value::SingleQuotedString(value) | Value::DoubleQuotedString(value),
+            ..
+        }) => value.starts_with('%') || value.starts_with('_'),
         Expr::Nested(inner) => pattern_starts_with_wildcard(inner),
         _ => false,
     }
