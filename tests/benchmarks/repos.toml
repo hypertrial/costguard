@@ -116,13 +116,19 @@ name = "ol-data-platform"
 url = "https://github.com/mitodl/ol-data-platform.git"
 commit = "e20b9148d0142b548f498d17ad4f229f357846f7"
 warehouse = "trino"
-# compile_best_effort: offline dummy trino profile; keeps partial manifest if introspective macros fail
+# duckdb dev compile matches upstream CI; scan stays trino for dialect-accurate rules
 compile_dbt = true
-compile_best_effort = true
-dbt_adapter = "dbt-trino"
-dbt_profile_type = "trino"
+dbt_adapter = "dbt-duckdb"
+dbt_profile_type = "duckdb"
 dbt_project_dir = "src/ol_dbt"
+dbt_profiles_dir = "src/ol_dbt"
+dbt_target = "dev"
+dbt_no_introspect = false
+dbt_no_populate_cache = false
+dbt_threads = 1
+dbt_compile_shim = "tests/benchmarks/compile-shims/ol-data-platform.sql"
 scan_paths = ["src/ol_dbt"]
 smoke_scan_paths = ["src/ol_dbt/models/staging"]
 fail_on = "critical"
-max_parse_failure_rate = 0.5
+max_parse_failure_rate = 0.35
+max_sql_parse_compiled_failures = 5

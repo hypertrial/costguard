@@ -64,6 +64,8 @@ GitHub Actions workflows are optional `workflow_dispatch` mirrors. The local rel
 | Vendored harness | `generic` | `critical` |
 | This repo PR workflow | `generic` | `high` |
 
+`ol-data-platform` scans with `trino` but compiles offline via DuckDB `dev` (repo-native profiles) plus a `dbt_compile_shim` injected into `trino_utils` so `dbt compile` succeeds without warehouse credentials. See `tests/benchmarks/compile-shims/ol-data-platform.sql`.
+
 ## Layer 4 — Synthetic scale
 
 ```bash

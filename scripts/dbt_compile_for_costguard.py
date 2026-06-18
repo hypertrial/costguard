@@ -184,6 +184,30 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def compile_shim_target(project_dir: Path) -> Path:
+    return (
+        project_dir
+        / "dbt_packages"
+        / "trino_utils"
+        / "macros"
+        / "dbt_utils"
+        / "sql"
+        / "costguard_get_intervals_between.sql"
+    )
+
+
+def apply_compile_shim(project_dir: Path, shim_src: Path) -> None:
+    if not shim_src.is_file():
+        raise SystemExit(f"compile shim not found: {shim_src}")
+    target = compile_shim_target(project_dir)
+    if not target.parent.is_dir():
+        raise SystemExit(
+            "compile shim requires trino_utils from dbt deps; "
+            f"missing {target.parent}"
+        )
+    target.write_text(shim_src.read_text(encoding="utf-8"), encoding="utf-8")
+
+
 def merge_manifests(entries: list[tuple[Path, str]], output: Path) -> None:
     merged: dict[str, Any] = {"nodes": {}, "sources": {}, "exposures": {}}
     for manifest_path, prefix in entries:
@@ -216,6 +240,7 @@ def compile_dbt_project(
     no_introspect: bool = True,
     no_populate_cache: bool = True,
     threads: int | None = None,
+    compile_shim: Path | None = None,
 ) -> Path:
     if not (project_dir / "dbt_project.yml").exists():
         raise SystemExit(f"compile enabled but no dbt_project.yml in {project_dir}")
@@ -255,6 +280,9 @@ def compile_dbt_project(
         else:
             raise SystemExit(message)
 
+    if compile_shim is not None:
+        apply_compile_shim(project_dir, compile_shim)
+
     compile_cmd = [
         str(dbt),
         "compile",
@@ -273,7 +301,7 @@ def compile_dbt_project(
         compile_cmd.extend(["--vars", dbt_vars])
     compile_proc = subprocess.run(
         compile_cmd,
-        cwd=checkout,
+        cwd=project_dir,
         env=env,
         capture_output=True,
         text=True,
@@ -288,9 +316,10 @@ def compile_dbt_project(
                 file=sys.stderr,
             )
             return manifest
+        detail = compile_proc.stderr.strip() or compile_proc.stdout.strip() or "(no output)"
         raise SystemExit(
             f"dbt compile failed for {project_dir} (exit {compile_proc.returncode}):\n"
-            f"{compile_proc.stderr.strip()}"
+            f"{detail}"
         )
 
     if not manifest.exists():
@@ -511,6 +540,7 @@ def compile_dbt_for_costguard(
     no_introspect: bool = True,
     no_populate_cache: bool = True,
     threads: int | None = None,
+    compile_shim: Path | None = None,
 ) -> tuple[Path, str]:
     resolved_profile_type = profile_type or profile_type_from_adapter(adapter_package)
     dirs = compile_dirs or []
@@ -583,6 +613,7 @@ def compile_dbt_for_costguard(
             no_introspect=no_introspect,
             no_populate_cache=no_populate_cache,
             threads=threads,
+            compile_shim=compile_shim,
         )
         try:
             project_rel = str(resolved_project.relative_to(checkout))
@@ -620,6 +651,10 @@ def compile_dbt_repo(
     smoke: bool = False,
     force_compile: bool = False,
 ) -> str:
+    repo_root = Path(__file__).resolve().parents[1]
+    compile_shim = None
+    if repo.get("dbt_compile_shim"):
+        compile_shim = (repo_root / str(repo["dbt_compile_shim"])).resolve()
     if not repo.get("compile_dbt", False):
         return "skip"
 
@@ -660,6 +695,8 @@ def compile_dbt_repo(
         cache_scope = f"{cache_scope}\npreserve-manifest-paths:true"
     if repo.get("dbt_profiles_dir"):
         cache_scope = f"{cache_scope}\nprofiles:{repo['dbt_profiles_dir']}"
+    if repo.get("dbt_compile_shim"):
+        cache_scope = f"{cache_scope}\nshim:{repo['dbt_compile_shim']}"
     cache_scope = (
         f"{cache_scope}\nno-introspect:{bool(repo.get('dbt_no_introspect', True))}"
         f"\nno-populate-cache:{bool(repo.get('dbt_no_populate_cache', True))}"
@@ -692,6 +729,7 @@ def compile_dbt_repo(
         no_introspect=bool(repo.get("dbt_no_introspect", True)),
         no_populate_cache=bool(repo.get("dbt_no_populate_cache", True)),
         threads=int(repo["dbt_threads"]) if repo.get("dbt_threads") is not None else None,
+        compile_shim=compile_shim,
     )
     return compile_cache
 

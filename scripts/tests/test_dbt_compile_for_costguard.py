@@ -10,8 +10,10 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 import dbt_compile_for_costguard as dbt_compile_module  # noqa: E402
 from dbt_compile_for_costguard import (  # noqa: E402
+    apply_compile_shim,
     compile_dbt_for_costguard,
     compile_dbt_repo,
+    compile_shim_target,
     manifest_cache_path,
     merge_manifests,
     packages_fingerprint,
@@ -206,12 +208,12 @@ class DbtCompileHelpersTest(unittest.TestCase):
             threads=1,
         )
 
-        args = (tmp / "dbt-args.txt").read_text(encoding="utf-8")
+        args = (project / "dbt-args.txt").read_text(encoding="utf-8")
         self.assertIn("--vars {days: 7}", args)
         self.assertIn("--threads 1", args)
         self.assertNotIn("--no-introspect", args)
         self.assertNotIn("--no-populate-cache", args)
-        self.assertEqual((tmp / "dbt-env.txt").read_text(encoding="utf-8"), "enabled")
+        self.assertEqual((project / "dbt-env.txt").read_text(encoding="utf-8"), "enabled")
 
     def test_compile_repo_passes_dbt_vars_and_scopes_cache(self) -> None:
         tmp = self._temp_dir()
@@ -312,6 +314,64 @@ class DbtCompileHelpersTest(unittest.TestCase):
         self.assertEqual(result, output)
         self.assertEqual(state, "miss")
         self.assertEqual(captured["manifest_path"], manifest)
+
+    def test_apply_compile_shim_writes_trino_utils_override(self) -> None:
+        tmp = self._temp_dir()
+        project = tmp / "src" / "ol_dbt"
+        shim_dir = (
+            project
+            / "dbt_packages"
+            / "trino_utils"
+            / "macros"
+            / "dbt_utils"
+            / "sql"
+        )
+        shim_dir.mkdir(parents=True)
+        shim_src = tmp / "offline.sql"
+        shim_src.write_text("{% macro trino__get_intervals_between() %}{% endmacro %}\n", encoding="utf-8")
+
+        apply_compile_shim(project, shim_src)
+
+        target = compile_shim_target(project)
+        self.assertTrue(target.is_file())
+        self.assertEqual(target.read_text(encoding="utf-8"), shim_src.read_text(encoding="utf-8"))
+
+    def test_compile_repo_forwards_compile_shim(self) -> None:
+        tmp = self._temp_dir()
+        checkout = tmp / "checkout"
+        checkout.mkdir()
+        project = checkout / "src" / "ol_dbt"
+        project.mkdir(parents=True)
+        (project / "dbt_project.yml").write_text("name: demo\nprofile: demo\n", encoding="utf-8")
+        shim_src = ROOT / "tests" / "benchmarks" / "compile-shims" / "ol-data-platform.sql"
+        captured: dict[str, object] = {}
+        original = dbt_compile_module.compile_dbt_for_costguard
+
+        def fake_compile_dbt_for_costguard(_checkout: Path, **kwargs):
+            captured.update(kwargs)
+            return kwargs["manifest_out"], "miss"
+
+        try:
+            dbt_compile_module.compile_dbt_for_costguard = fake_compile_dbt_for_costguard
+            compile_dbt_repo(
+                checkout,
+                {
+                    "name": "ol-data-platform",
+                    "commit": "a" * 40,
+                    "compile_dbt": True,
+                    "dbt_adapter": "dbt-duckdb",
+                    "dbt_profile_type": "duckdb",
+                    "dbt_project_dir": "src/ol_dbt",
+                    "dbt_profiles_dir": "src/ol_dbt",
+                    "dbt_compile_shim": "tests/benchmarks/compile-shims/ol-data-platform.sql",
+                },
+                cache_dir=tmp / "cache",
+                force_compile=True,
+            )
+        finally:
+            dbt_compile_module.compile_dbt_for_costguard = original
+
+        self.assertEqual(captured["compile_shim"], shim_src.resolve())
 
     def _temp_dir(self) -> Path:
         import tempfile

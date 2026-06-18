@@ -1,7 +1,7 @@
 {
   "commit": "e20b9148d0142b548f498d17ad4f229f357846f7",
   "kind": "external",
-  "max_rss_bytes": 163659776,
+  "max_rss_bytes": 183910400,
   "metrics": {
     "counts": {
       "manifest": 0,
@@ -15,43 +15,41 @@
       "SQLCOST002": 1,
       "SQLCOST003": 3,
       "SQLCOST006": 1,
-      "SQLCOST014": 3,
       "SQLCOST019": 1,
-      "SQLCOST027": 58
+      "SQLCOST027": 4
     },
     "diagnostics_by_severity": {
       "high": 2,
-      "info": 58,
-      "low": 3,
+      "info": 4,
       "med": 4
     },
     "metadata_only_scan": false,
     "metadata_warnings": 0,
-    "new_findings": 67,
-    "sql_parse_compiled_failures": 0,
-    "sql_parse_compiled_total": 0,
-    "sql_parse_failures": 58,
+    "new_findings": 10,
+    "sql_parse_compiled_failures": 4,
+    "sql_parse_compiled_total": 242,
+    "sql_parse_failures": 4,
     "sql_parse_other_failures": 0,
     "sql_parse_other_total": 0,
     "sql_parse_total": 242,
     "yaml_parse_failures": 0
   },
-  "runtime_max_ms": 118,
-  "runtime_median_ms": 117,
+  "runtime_max_ms": 149,
+  "runtime_median_ms": 148,
   "runtime_samples_ms": [
-    117,
-    115,
-    118
+    149,
+    148,
+    148
   ],
   "target": "external/ol-data-platform_smoke",
   "thresholds": {
     "max_diagnostics_by_rule": {},
     "max_parse_failure_delta": 50,
-    "max_parse_failure_rate": 0.5,
+    "max_parse_failure_rate": 0.35,
     "max_rss_bytes": 1073741824,
     "max_runtime_max_ms": 2118,
     "max_runtime_median_ms": 1117,
-    "max_sql_parse_compiled_failures": 0
+    "max_sql_parse_compiled_failures": 4
   },
   "version": 2,
   "warehouse": "trino"

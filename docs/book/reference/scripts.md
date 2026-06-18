@@ -192,6 +192,8 @@ Committed Grade C cost priors for external repos live in `tests/benchmarks/cost-
 
 Reports include `compile_cache: hit|miss|skip` when dbt compile is enabled. External reports may include a `cost` block when cost estimation is enabled. Benchmark scripts use release CLI builds via `costguard_tooling.py`.
 
+Repos may set `dbt_compile_shim` in [`tests/benchmarks/repos.toml`](../../../tests/benchmarks/repos.toml) to copy an offline macro override into `dbt_packages/trino_utils` after `dbt deps` (used by `ol-data-platform` for `get_intervals_between` during DuckDB compile).
+
 Validate vendored baselines in Rust:
 
 ```bash
