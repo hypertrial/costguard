@@ -336,6 +336,7 @@ pub struct ScanRuntimeOverrides {
     pub write_baseline_path: Option<PathBuf>,
     pub cost: bool,
     pub fail_on_cost_delta: Option<f64>,
+    pub min_cost_coverage: Option<f64>,
     pub analysis_policy: Option<String>,
     pub policy_bundle_path: Option<PathBuf>,
     pub trust_store_path: Option<PathBuf>,
@@ -384,6 +385,15 @@ impl ScanRuntimeOverrides {
             });
             cost_config.enabled = true;
             cost_config.fail_on_monthly_delta = Some(delta);
+            config.cost = Some(cost_config);
+        }
+        if let Some(fraction) = self.min_cost_coverage {
+            let mut cost_config = config.cost.take().unwrap_or_else(|| CostConfig {
+                enabled: true,
+                ..CostConfig::default()
+            });
+            cost_config.enabled = true;
+            cost_config.min_mapped_spend_fraction = Some(fraction);
             config.cost = Some(cost_config);
         }
         if let Some(policy) = &self.analysis_policy {

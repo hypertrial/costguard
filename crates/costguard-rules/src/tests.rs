@@ -436,6 +436,56 @@ fn cross_join_to_scalar_cte_is_not_flagged() {
 }
 
 #[test]
+fn comma_join_to_scalar_cte_is_not_flagged() {
+    let file = sql_file(
+        "models/marts/fct.sql",
+        "with global_fees as (select fee from rates where rn = 1) \
+         select swap.amount from swap, global_fees g where g.rn = 1",
+    );
+    let doc = analyze_for_rule("SQLCOST012", &file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(!ids.contains(&"SQLCOST012".to_string()));
+}
+
+#[test]
+fn cross_join_unnest_is_not_flagged() {
+    let file = sql_file(
+        "models/marts/fct.sql",
+        "select t.x from base cross join unnest(base.items) as t(x)",
+    );
+    let doc = analyze_for_rule("SQLCOST012", &file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(!ids.contains(&"SQLCOST012".to_string()));
+}
+
+#[test]
+fn equality_join_from_fp_registry_is_not_unbounded() {
+    let file = sql_file(
+        "models/marts/fct_safe_join.sql",
+        "select * from a join b on a.id = b.id",
+    );
+    let doc = analyze(&file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(!ids.contains(&"SQLCOST006".to_string()));
+}
+
+#[test]
+fn unbounded_join_positive_cases_still_fire() {
+    for sql in [
+        "select * from orders o join users u on o.amount > u.threshold",
+        "select * from a join b on a.id <> b.id",
+    ] {
+        let file = sql_file("models/marts/fct.sql", sql);
+        let doc = analyze(&file);
+        let ids = run_for_file(&file, &[doc]);
+        assert!(
+            ids.contains(&"SQLCOST006".to_string()),
+            "expected SQLCOST006 for {sql}"
+        );
+    }
+}
+
+#[test]
 fn macro_template_skips_repeated_cte_and_unbounded_join_rules() {
     let file = sql_file(
         "dbt_subprojects/dex/macros/add_amount_usd_dex_trades.sql",
@@ -447,6 +497,44 @@ fn macro_template_skips_repeated_cte_and_unbounded_join_rules() {
     let doc = analyze(&file);
     let ids = run_for_file(&file, &[doc]);
     assert!(!ids.contains(&"SQLCOST014".to_string()));
+}
+
+#[test]
+fn subquery_inner_join_with_trailing_equality_on_is_not_unbounded() {
+    let file = sql_file(
+        "models/marts/opportunityfieldhistory.sql",
+        "SELECT o.id\nFROM source_table o\nINNER JOIN (\n    SELECT id, MAX(seq) AS seq\n    FROM source_table\n    GROUP BY id\n) oo\nON o.id = oo.id\n    AND o.seq = oo.seq",
+    );
+    let doc = analyze(&file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(!ids.contains(&"SQLCOST006".to_string()));
+}
+
+#[test]
+fn jinja_ref_left_join_with_equality_on_next_line_is_not_unbounded() {
+    let file = sql_file(
+        "models/tokens/tokens_arbitrum_nft.sql",
+        "{{ config(alias = 'nft') }}\nSELECT c.contract_address, t.name\nFROM {{ ref('tokens_arbitrum_nft_standards')}} c\nLEFT JOIN {{ref('tokens_arbitrum_nft_curated')}} t\nON c.contract_address = t.contract_address",
+    );
+    let doc = analyze(&file);
+    let parsed = doc.parsed;
+    let used_ast = doc.feature_extraction_used_ast;
+    let ids = run_for_file(&file, &[doc]);
+    assert!(
+        !ids.contains(&"SQLCOST006".to_string()),
+        "parsed={parsed} ast={used_ast}"
+    );
+}
+
+#[test]
+fn full_outer_join_on_constant_equality_is_not_unbounded() {
+    let file = sql_file(
+        "tests/check_rowcount.sql",
+        "select count_a, count_b\nfrom (select count(*) as count_a from a)\nfull outer join\n    (select count(*) as count_b from b)\non 1=1",
+    );
+    let doc = analyze(&file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(!ids.contains(&"SQLCOST006".to_string()));
 }
 
 #[test]

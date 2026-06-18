@@ -108,6 +108,8 @@ struct ScanArgs {
     cost: bool,
     #[arg(long)]
     fail_on_cost_delta: Option<f64>,
+    #[arg(long, value_name = "0.0..1.0")]
+    min_cost_coverage: Option<f64>,
 }
 
 #[derive(Debug, Parser)]
@@ -194,6 +196,8 @@ struct PrArgs {
     cost: bool,
     #[arg(long)]
     fail_on_cost_delta: Option<f64>,
+    #[arg(long, value_name = "0.0..1.0")]
+    min_cost_coverage: Option<f64>,
 }
 
 #[derive(Debug, Parser, Default)]
@@ -625,6 +629,7 @@ fn config_from_scan_args(args: ScanArgs) -> Result<ScanConfig> {
     overrides.write_baseline_path = args.write_baseline;
     overrides.cost = args.cost;
     overrides.fail_on_cost_delta = args.fail_on_cost_delta;
+    overrides.min_cost_coverage = args.min_cost_coverage;
     overrides.apply_to(&mut config)?;
     validate_scan_config(&config)?;
     Ok(config)
@@ -667,6 +672,7 @@ fn config_from_pr_args(args: PrArgs) -> Result<ScanConfig> {
     overrides.baseline_path = args.baseline;
     overrides.cost = args.cost;
     overrides.fail_on_cost_delta = args.fail_on_cost_delta;
+    overrides.min_cost_coverage = args.min_cost_coverage;
     overrides.apply_to(&mut config)?;
     validate_scan_config(&config)?;
     Ok(config)

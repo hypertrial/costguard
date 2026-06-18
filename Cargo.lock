@@ -211,6 +211,7 @@ dependencies = [
  "costguard-cost",
  "costguard-dbt",
  "costguard-diagnostics",
+ "costguard-output",
  "costguard-policy",
  "costguard-protocol",
  "costguard-rules",

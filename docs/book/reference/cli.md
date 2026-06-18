@@ -26,6 +26,7 @@ Source: `crates/costguard-cli/src/main.rs`
 | `--write-baseline` | scan | Write current findings to a baseline JSON file |
 | `--cost` | scan, explain, pr | Enable cost estimates (uses `[cost]` in `costguard.toml` when present) |
 | `--fail-on-cost-delta` | scan, pr | Fail when **addressable finding savings** p50 on new findings exceeds threshold (USD) |
+| `--min-cost-coverage` | scan, pr | Fail when mapped-spend coverage is below fraction (0.0–1.0); implies `--cost` |
 | `--analysis-policy` | scan, explain, pr, cost | `standard` or `strict`; see `[analysis]` in [Configuration](configuration.md) |
 | `--policy` | scan, explain, pr, cost | Signed policy bundle JSON path; see `[policy]` in [Configuration](configuration.md) |
 | `--trust-store` | scan, explain, pr, cost | Public trust store for `--policy` verification |
@@ -48,6 +49,7 @@ costguard scan [PATHS...] [OPTIONS]
 | `--write-baseline` | unset | Snapshot findings to a baseline v3 JSON file |
 | `--cost` | unset | Enable per-finding savings estimates and cost prioritization summary |
 | `--fail-on-cost-delta` | unset | Optional **addressable finding savings** p50 gate (USD) on new findings |
+| `--min-cost-coverage` | unset | Optional mapped-spend coverage floor (0.0–1.0); implies `--cost` |
 
 ## `explain`
 
@@ -83,6 +85,7 @@ costguard pr [OPTIONS]
 | `--baseline` | unset | Suppress findings matching baseline fingerprints (requires baseline v3) |
 | `--cost` | unset | Enable per-finding savings estimates and cost prioritization summary |
 | `--fail-on-cost-delta` | unset | Optional **addressable finding savings** p50 gate (USD) on new findings |
+| `--min-cost-coverage` | unset | Optional mapped-spend coverage floor (0.0–1.0); implies `--cost` |
 
 Invalid git bases and non-git directories fail the check instead of silently scanning zero files. Unchanged parse failures and other project-wide issues appear in the optional `context` report only; they do not fail the PR gate.
 

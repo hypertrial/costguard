@@ -2,7 +2,7 @@ use crate::evidence;
 use crate::helpers::{diagnostic, is_dbt_macro_path, is_downstream_model, is_staging_model};
 use crate::registry::{Rule, RuleContext};
 use costguard_diagnostics::{Confidence, Diagnostic, Severity};
-use costguard_sql::{CteFeature, JoinFeature, JoinKind};
+use costguard_sql::{is_date_spine_table, CteFeature, JoinFeature, JoinKind};
 use std::collections::HashMap;
 
 pub(crate) struct SelectStarRule;
@@ -14,7 +14,7 @@ pub(crate) struct UnpartitionedWindowRule;
 pub(crate) struct RepeatedCteRule;
 pub(crate) struct RecursiveCteRule;
 
-fn join_has_clear_equality(join: &JoinFeature, file_text: &str) -> bool {
+fn join_has_clear_equality(join: &JoinFeature, file_text: &str, used_ast: bool) -> bool {
     if join.has_equality || !join.equality_keys.is_empty() {
         return true;
     }
@@ -24,6 +24,14 @@ fn join_has_clear_equality(join: &JoinFeature, file_text: &str) -> bool {
     }) {
         return true;
     }
+    // ponytail: compiled/AST joins without extracted ON are inconclusive, not unbounded
+    if used_ast && join.extracted_from_ast && join.predicate.is_none() {
+        return true;
+    }
+    // ponytail: trust complete AST ON metadata; raw scan false-positives on nested subqueries
+    if used_ast && join.extracted_from_ast && join.predicate.is_some() {
+        return false;
+    }
     join_on_clause_has_equality(file_text, join.span.byte_start)
 }
 
@@ -32,7 +40,7 @@ fn join_on_clause_has_equality(text: &str, join_start: usize) -> bool {
         return true;
     }
     let start = join_start.min(text.len());
-    let end = (start + 3000).min(text.len());
+    let end = (start + 8000).min(text.len());
     on_snippet_has_equality(&text[start..end])
 }
 
@@ -141,6 +149,9 @@ fn skip_optional_alias(text: &str, idx: usize) -> usize {
 
 fn on_snippet_has_equality(text: &str) -> bool {
     let lower = text.to_ascii_lowercase();
+    if lower.trim_start().starts_with("using(") || lower.contains(" using(") {
+        return true;
+    }
     for (idx, _) in lower.match_indices(" on ") {
         let after = &lower[idx..];
         if after.starts_with(" on only ") {
@@ -163,12 +174,21 @@ fn on_snippet_has_equality(text: &str) -> bool {
     false
 }
 
-fn is_cte_broadcast_cross_join(join: &JoinFeature, ctes: &[CteFeature]) -> bool {
-    matches!(join.kind, JoinKind::Cross)
+fn is_cte_broadcast_join(join: &JoinFeature, ctes: &[CteFeature]) -> bool {
+    matches!(join.kind, JoinKind::Cross | JoinKind::Comma)
         && join
             .right_relation
             .as_ref()
             .is_some_and(|rel| ctes.iter().any(|cte| cte.name == *rel))
+}
+
+fn is_exempt_cross_or_comma_join(join: &JoinFeature, ctes: &[CteFeature]) -> bool {
+    if is_cte_broadcast_join(join, ctes) {
+        return true;
+    }
+    join.right_relation
+        .as_ref()
+        .is_some_and(|rel| is_date_spine_table(rel))
 }
 
 impl Rule for SelectStarRule {
@@ -243,7 +263,7 @@ impl Rule for UnboundedJoinRule {
                 matches!(
                     join.kind,
                     JoinKind::Inner | JoinKind::Left | JoinKind::Right | JoinKind::Full
-                ) && !join_has_clear_equality(join, &ctx.file.text)
+                ) && !join_has_clear_equality(join, &ctx.file.text, sql.feature_extraction_used_ast)
             })
             .map(|join| {
                 diagnostic(
@@ -379,7 +399,7 @@ impl Rule for CrossJoinRule {
             .iter()
             .filter(|join| {
                 matches!(join.kind, JoinKind::Cross | JoinKind::Comma)
-                    && !is_cte_broadcast_cross_join(join, &sql.features.ctes)
+                    && !is_exempt_cross_or_comma_join(join, &sql.features.ctes)
             })
             .map(|join| {
                 let confidence = if sql.feature_extraction_used_ast {
@@ -403,7 +423,7 @@ impl Rule for CrossJoinRule {
                     "cross joins can multiply row counts and create unexpectedly expensive queries.",
                 )
                 .with_suggestion(
-                    "add a join predicate, or document intent with 'costguard: allow cross-join'.",
+                    "add a join predicate, or suppress intentional use with `-- costguard: disable-next-line=SQLCOST012`.",
                 )
                 .with_confidence(confidence)
             })

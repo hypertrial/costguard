@@ -105,12 +105,14 @@ multiplier = { p10 = 2, p90 = 6 }
 costguard scan --cost
 costguard scan --cost --fail-on-cost-delta 500
 costguard pr --cost --fail-on-cost-delta 500
+costguard scan --cost --min-cost-coverage 0.8
 costguard explain models/marts/fct.sql --cost
 costguard cost report . --manifest target/manifest.json
 ```
 
 - `--cost` on `scan`, `pr`, and `explain` enables cost annotation
 - `--fail-on-cost-delta` gates on **addressable finding savings** p50 (deduplicated sum; also enables cost)
+- `--min-cost-coverage` gates on **mapped-spend coverage** (`coverage.mapped_spend_fraction`; also enables cost). Config equivalent: `[cost].min_mapped_spend_fraction`
 - `costguard cost report` renders a local cost prioritization summary without requiring findings
 - `costguard cost normalize` converts offline warehouse exports into the normalized metadata-only cost schema
 

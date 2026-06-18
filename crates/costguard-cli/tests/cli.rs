@@ -1040,3 +1040,143 @@ fn init_force_overwrites_and_warehouse_override() {
     let config = fs::read_to_string(root.join("costguard.toml")).unwrap();
     assert!(config.contains("warehouse = \"trino\""));
 }
+
+#[test]
+fn min_cost_coverage_fails_when_mapped_spend_is_below_threshold() {
+    let tempdir = tempfile::tempdir().expect("tempdir");
+    let root = tempdir.path();
+    fs::create_dir_all(root.join("models/marts")).expect("models");
+    fs::create_dir_all(root.join("target")).expect("target");
+    fs::copy(
+        fixture("cost_estimate").join("target/catalog.json"),
+        root.join("target/catalog.json"),
+    )
+    .expect("catalog");
+    fs::copy(
+        fixture("cost_estimate").join("observations.json"),
+        root.join("observations.json"),
+    )
+    .expect("observations");
+    fs::write(root.join("models/marts/a.sql"), "select 1 as id\n").expect("a");
+    fs::write(root.join("models/marts/b.sql"), "select 2 as id\n").expect("b");
+    fs::write(
+        root.join("dbt_project.yml"),
+        "name: test\nversion: 1.0.0\nconfig-version: 2\nmodel-paths: [\"models\"]\n",
+    )
+    .expect("dbt project");
+    fs::write(
+        root.join("costguard.toml"),
+        r#"warehouse = "bigquery"
+
+[cost]
+enabled = true
+
+[cost.pricing]
+model = "scan"
+usd_per_tb = 6.25
+
+[cost.inputs]
+catalog = "target/catalog.json"
+observations = "observations.json"
+
+[cost.sources."raw.events"]
+bytes = "100GB"
+"#,
+    )
+    .expect("cost config");
+    fs::write(
+        root.join("target/manifest.json"),
+        r#"{
+  "metadata": {
+    "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v12.json",
+    "project_name": "test"
+  },
+  "nodes": {
+    "model.test.a": {
+      "resource_type": "model",
+      "name": "a",
+      "package_name": "test",
+      "original_file_path": "models/marts/a.sql",
+      "path": "marts/a.sql",
+      "config": { "materialized": "table" },
+      "depends_on": { "nodes": [] }
+    },
+    "model.test.b": {
+      "resource_type": "model",
+      "name": "b",
+      "package_name": "test",
+      "original_file_path": "models/marts/b.sql",
+      "path": "marts/b.sql",
+      "config": { "materialized": "table" },
+      "depends_on": { "nodes": [] }
+    }
+  },
+  "sources": {}
+}"#,
+    )
+    .expect("manifest");
+
+    let output = costguard_command()
+        .current_dir(root)
+        .args([
+            "scan",
+            ".",
+            "--manifest",
+            "target/manifest.json",
+            "--min-cost-coverage",
+            "0.8",
+        ])
+        .output()
+        .expect("scan");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "expected cost coverage gate failure:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("cost_coverage"),
+        "expected cost_coverage violation:\n{stdout}"
+    );
+}
+
+#[test]
+fn min_cost_coverage_passes_when_observations_cover_models() {
+    let fixture = fixture("cost_estimate");
+    let output = costguard_command()
+        .current_dir(&fixture)
+        .args([
+            "scan",
+            ".",
+            "--manifest",
+            "target/manifest.json",
+            "--fail-on",
+            "critical",
+            "--min-cost-coverage",
+            "0.8",
+        ])
+        .output()
+        .expect("scan");
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "expected pass:\n{}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn min_cost_coverage_is_noop_without_cost_or_threshold() {
+    let fixture = fixture("corpus/jinja_heavy");
+    let output = costguard_command()
+        .current_dir(&fixture)
+        .args(["scan", ".", "--format", "json"])
+        .output()
+        .expect("scan");
+    assert_eq!(output.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        !stdout.contains("cost_coverage"),
+        "unexpected cost coverage violation:\n{stdout}"
+    );
+}

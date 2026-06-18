@@ -1,5 +1,6 @@
 use costguard_diagnostics::LineIndex;
 
+use super::join_heuristics::is_date_spine_table;
 use crate::{JoinFeature, JoinKind};
 
 pub(crate) fn from_clause_tables_start(lower: &str) -> Option<usize> {
@@ -118,6 +119,11 @@ pub(crate) fn extract_comma_joins(text: &str, line_index: &LineIndex) -> Vec<Joi
         if span_text.to_ascii_lowercase().contains("source(") {
             return Vec::new();
         }
+        if let Some(rel) = comma_join_right_relation(tail, comma_rel) {
+            if is_date_spine_table(&rel) {
+                return Vec::new();
+            }
+        }
         return vec![JoinFeature {
             span: line_index.span(span_start, span_end),
             kind: JoinKind::Comma,
@@ -126,8 +132,9 @@ pub(crate) fn extract_comma_joins(text: &str, line_index: &LineIndex) -> Vec<Joi
             function_on_join_key: false,
             pattern_matching: false,
             cross_catalog: false,
-            right_relation: None,
+            right_relation: comma_join_right_relation(tail, comma_rel),
             equality_keys: Vec::new(),
+            extracted_from_ast: false,
         }];
     }
     Vec::new()
@@ -236,4 +243,21 @@ fn is_leading_derived_comma_fp(text: &str) -> bool {
         }
     }
     false
+}
+
+fn comma_join_right_relation(text: &str, comma_rel: usize) -> Option<String> {
+    let after = text.get(comma_rel + 1..)?.trim_start();
+    let mut name = String::new();
+    for ch in after.chars() {
+        if ch.is_ascii_alphanumeric() || ch == '_' {
+            name.push(ch.to_ascii_lowercase());
+        } else {
+            break;
+        }
+    }
+    if name.is_empty() {
+        None
+    } else {
+        Some(name)
+    }
 }

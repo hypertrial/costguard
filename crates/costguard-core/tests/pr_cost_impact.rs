@@ -447,3 +447,51 @@ fn pr_impact_manifest_config_change_shifts_base_cost() {
         "manifest config change should shift base-vs-head cost decomposition"
     );
 }
+
+#[test]
+fn pr_markdown_renders_cost_impact_before_diagnostics_with_metadata() {
+    use costguard_core::OutputFormat;
+    use costguard_output::render;
+
+    let tempdir = tempfile::tempdir().expect("tempdir");
+    let root = tempdir.path();
+    write_cost_repo(root, manifest_two_models());
+    fs::write(root.join("models/marts/a.sql"), "select 1 as id\n").expect("write a");
+    fs::write(
+        root.join("models/marts/b.sql"),
+        "select * from a join c on a.id > c.id\n",
+    )
+    .expect("write b");
+
+    run_git(root, &["init"]);
+    run_git(root, &["config", "user.email", "costguard@example.com"]);
+    run_git(root, &["config", "user.name", "Costguard Test"]);
+    run_git(root, &["add", "."]);
+    run_git(root, &["commit", "-m", "initial"]);
+    fs::write(
+        root.join("models/marts/b.sql"),
+        "select * from a join c on a.id > c.id\nselect 2 as id\n",
+    )
+    .expect("change b");
+
+    let result = scan_pr(root, "HEAD");
+    let markdown = render(&result, OutputFormat::Markdown).expect("markdown");
+    let cost_idx = markdown
+        .find("## PR Cost Impact")
+        .expect("PR cost impact section");
+    let diag_idx = markdown
+        .find("## Diagnostics")
+        .expect("diagnostics section");
+    assert!(
+        cost_idx < diag_idx,
+        "cost impact should precede diagnostics:\n{markdown}"
+    );
+    assert!(
+        markdown.contains("confidence ") && markdown.contains("precision "),
+        "diagnostics should include confidence and precision tier:\n{markdown}"
+    );
+    assert!(
+        markdown.contains("grade"),
+        "diagnostics should include cost grade when estimates exist:\n{markdown}"
+    );
+}

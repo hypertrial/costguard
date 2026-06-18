@@ -127,6 +127,7 @@ Optional cost-estimation settings. See [Cost estimates](cost-estimates.md) for t
 | `default_table_size` | string | Size prior when bytes unknown: `small`, `medium`, `large`, `xlarge` |
 | `fail_on_monthly_delta` | float | Fail when **addressable finding savings** p50 on new findings exceeds threshold (USD) |
 | `fail_on_monthly_delta_gb` | float | Fail when addressable finding savings in GB-months on new findings exceeds threshold |
+| `min_mapped_spend_fraction` | float | Fail when mapped-spend coverage (`coverage.mapped_spend_fraction`) is below threshold (0.0–1.0); opt-in |
 | `incremental_fraction` | float | Fraction of table bytes for incremental models (default `0.05`) |
 
 ### `[cost.pricing]`

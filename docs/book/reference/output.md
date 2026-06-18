@@ -62,7 +62,7 @@ Compiled-only unmapped diagnostics annotate the raw model path at line 1 and inc
 
 ## Markdown (`markdown`)
 
-PR-summary-oriented report with grouped findings, context footer, suppression guidance, and (when `[cost]` is enabled) a cost summary with relabeled savings lines and an advisory disclaimer.
+PR-summary-oriented report with grouped findings, context footer, suppression guidance, and (when `[cost]` is enabled in PR mode) a **PR Cost Impact** section before diagnostics: net/introduced/avoided cost delta, efficiency/volume split, blast radius, coverage, addressable savings, grade mix, and top models. Per-finding lines include severity, confidence, precision tier, and savings when priced.
 
 ## SARIF (`sarif`)
 
@@ -79,7 +79,7 @@ Use `--write-baseline` / `--baseline` (or `[output].baseline` in config) to gran
 | `baselined_findings` | Findings suppressed by the baseline file |
 | `new_findings` | Findings reported after baseline filtering |
 
-Exit code `1` applies when analysis completeness checks fail (`analysis.passed = false`), to **new** findings at or above `--fail-on`, or when **addressable finding savings** p50 on new findings exceeds `--fail-on-cost-delta` (USD) or `fail_on_monthly_delta_gb` (GB-months) when set.
+Exit code `1` applies when analysis completeness checks fail (`analysis.passed = false`), to **new** findings at or above `--fail-on`, when **addressable finding savings** p50 on new findings exceeds `--fail-on-cost-delta` (USD) or `fail_on_monthly_delta_gb` (GB-months) when set, or when mapped-spend coverage is below `--min-cost-coverage` / `[cost].min_mapped_spend_fraction` when set (`analysis.violations` code `cost_coverage`).
 
 PR markdown output includes a reminder:
 
@@ -91,8 +91,8 @@ Suppress only intentional exceptions with `-- costguard: disable-next-line=RULE`
 
 | Code | Meaning |
 | --- | --- |
-| `0` | Analysis completeness checks passed; no diagnostics at or above `--fail-on` / `fail_on` (and `--min-confidence` / `min_confidence` when set); cost delta gate not exceeded; `explain` completed with `analysis.passed = true` |
-| `1` | Analysis completeness checks failed, one or more diagnostics at or above severity threshold with confidence at or above the optional floor, or addressable finding savings cost gate exceeded; `explain` with `analysis.passed = false` |
+| `0` | Analysis completeness checks passed; no diagnostics at or above `--fail-on` / `fail_on` (and `--min-confidence` / `min_confidence` when set); cost delta and optional cost-coverage gates not exceeded; `explain` completed with `analysis.passed = true` |
+| `1` | Analysis completeness checks failed (including optional `cost_coverage` when mapped-spend fraction is below threshold), one or more diagnostics at or above severity threshold with confidence at or above the optional floor, or addressable finding savings cost gate exceeded; `explain` with `analysis.passed = false` |
 | `2` | Configuration error (invalid config, missing manifest path, unsupported baseline or policy schema) |
 | `3` | Runtime error |
 

@@ -278,6 +278,9 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
             allowed: 0.0,
         });
     }
+    if let Some(violation) = evaluate_cost_coverage(config.cost.as_ref(), cost_summary.as_ref()) {
+        analysis.violations.push(violation);
+    }
     analysis.passed = analysis.violations.is_empty();
     let completed_at = chrono::Utc::now();
     Ok(ScanResult {
@@ -378,6 +381,34 @@ fn write_baseline_from_scan(
         )
     };
     write_finding_baseline(&output, &baseline_to_write)
+}
+
+fn evaluate_cost_coverage(
+    cost_config: Option<&costguard_cost::CostConfig>,
+    summary: Option<&costguard_cost::ProjectCostSummary>,
+) -> Option<AnalysisViolation> {
+    let cost_config = cost_config.filter(|config| config.enabled)?;
+    let threshold = cost_config.min_mapped_spend_fraction?;
+    let summary = summary?;
+    if summary.coverage.models_total == 0 {
+        return None;
+    }
+    let observed = summary.coverage.mapped_spend_fraction;
+    if observed >= threshold {
+        return None;
+    }
+    Some(AnalysisViolation {
+        code: "cost_coverage".into(),
+        message: format!(
+            "mapped spend coverage {:.0}% is below required {:.0}% ({}/{} models with measured spend)",
+            observed * 100.0,
+            threshold * 100.0,
+            summary.coverage.models_with_mapped_spend,
+            summary.coverage.models_total
+        ),
+        observed,
+        allowed: threshold,
+    })
 }
 
 fn run_optional_cost(

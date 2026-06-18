@@ -267,6 +267,7 @@ fn extract_join(
             cross_catalog,
             right_relation,
             equality_keys,
+            extracted_from_ast: true,
         });
         extract_table_factor(&join.relation, finder, features, span.byte_end);
     } else {
@@ -560,7 +561,10 @@ fn is_unbounded_window_frame(frame: &sqlparser::ast::WindowFrame) -> bool {
 }
 
 fn object_name_last(name: &ObjectName) -> String {
-    name.0.last().map(object_name_part_ident).unwrap_or_default()
+    name.0
+        .last()
+        .map(object_name_part_ident)
+        .unwrap_or_default()
 }
 
 fn object_name_part_ident(part: &ObjectNamePart) -> String {

@@ -19,17 +19,17 @@ notes = "32/32 sampled TP (100%)"
 [[rule]]
 id = "SQLCOST004"
 tier = "verified-high"
-notes = "85/85 sampled TP (100%)"
+notes = "91/91 sampled TP (100%)"
 
 [[rule]]
 id = "SQLCOST005"
 tier = "verified-high"
-notes = "12/12 sampled TP (100%)"
+notes = "11/12 sampled TP (92%)"
 
 [[rule]]
 id = "SQLCOST006"
-tier = "verified-low"
-notes = "67/98 sampled TP (68%)"
+tier = "verified-medium"
+notes = "59/75 sampled TP (79%)"
 
 [[rule]]
 id = "SQLCOST007"
@@ -58,8 +58,8 @@ notes = "vacuous_clean"
 
 [[rule]]
 id = "SQLCOST012"
-tier = "verified-low"
-notes = "20/40 sampled TP (50%)"
+tier = "verified-medium"
+notes = "49/69 sampled TP (71%)"
 
 [[rule]]
 id = "SQLCOST013"
@@ -69,7 +69,7 @@ notes = "100/100 sampled TP (100%)"
 [[rule]]
 id = "SQLCOST014"
 tier = "verified-high"
-notes = "96/100 sampled TP (96%)"
+notes = "93/100 sampled TP (93%)"
 
 [[rule]]
 id = "SQLCOST015"
@@ -83,8 +83,8 @@ notes = "vacuous_clean"
 
 [[rule]]
 id = "SQLCOST017"
-tier = "verified-high"
-notes = "3/3 sampled TP (100%)"
+tier = "verified-low"
+notes = "9/21 sampled TP (43%)"
 
 [[rule]]
 id = "SQLCOST018"
@@ -149,12 +149,12 @@ notes = "100/100 sampled TP (100%)"
 [[rule]]
 id = "SQLCOST030"
 tier = "verified-high"
-notes = "7/7 sampled TP (100%)"
+notes = "2/2 sampled TP (100%)"
 
 [[rule]]
 id = "SQLCOST031"
 tier = "verified-high"
-notes = "15/15 sampled TP (100%)"
+notes = "12/12 sampled TP (100%)"
 
 [[rule]]
 id = "SQLCOST032"
@@ -164,7 +164,7 @@ notes = "vacuous_clean"
 [[rule]]
 id = "SQLCOST033"
 tier = "verified-high"
-notes = "7/7 sampled TP (100%)"
+notes = "11/11 sampled TP (100%)"
 
 [[rule]]
 id = "SQLCOST034"
@@ -173,18 +173,18 @@ notes = "vacuous_clean"
 
 [[rule]]
 id = "SQLCOST035"
-tier = "informational"
-notes = "vacuous_clean"
-
-[[rule]]
-id = "SQLCOST036"
 tier = "verified-high"
 notes = "100/100 sampled TP (100%)"
 
 [[rule]]
+id = "SQLCOST036"
+tier = "verified-high"
+notes = "61/61 sampled TP (100%)"
+
+[[rule]]
 id = "SQLCOST037"
 tier = "verified-high"
-notes = "78/78 sampled TP (100%)"
+notes = "46/46 sampled TP (100%)"
 
 [[rule]]
 id = "SQLCOST038"
@@ -204,7 +204,7 @@ notes = "12/12 sampled TP (100%)"
 [[rule]]
 id = "SQLCOST041"
 tier = "verified-high"
-notes = "62/62 sampled TP (100%)"
+notes = "7/7 sampled TP (100%)"
 
 [[rule]]
 id = "SQLCOST042"

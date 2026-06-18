@@ -7,7 +7,7 @@
   "provenance": "fixture",
   "observations": [
     {
-      "model_id": "model.acme.fct_orders",
+      "model_id": "model.cost_estimate.fct_orders",
       "window_start": "2026-06-01T00:00:00Z",
       "window_end": "2026-07-01T00:00:00Z",
       "executions": 720,

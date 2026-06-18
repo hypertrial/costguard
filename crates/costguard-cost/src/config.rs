@@ -39,6 +39,7 @@ pub struct CostSection {
     pub default_table_size: Option<String>,
     pub fail_on_monthly_delta: Option<f64>,
     pub fail_on_monthly_delta_gb: Option<f64>,
+    pub min_mapped_spend_fraction: Option<f64>,
     pub incremental_fraction: Option<f64>,
     pub pricing: Option<CostPricingSection>,
     pub inputs: Option<CostInputsSection>,
@@ -141,6 +142,7 @@ pub struct CostConfig {
     pub default_table_size: TableSizeClass,
     pub fail_on_monthly_delta: Option<f64>,
     pub fail_on_monthly_delta_gb: Option<f64>,
+    pub min_mapped_spend_fraction: Option<f64>,
     pub incremental_fraction: f64,
     pub pricing: CostPricingSection,
     pub inputs: CostInputsSection,
@@ -159,6 +161,7 @@ impl Default for CostConfig {
             default_table_size: TableSizeClass::Medium,
             fail_on_monthly_delta: None,
             fail_on_monthly_delta_gb: None,
+            min_mapped_spend_fraction: None,
             incremental_fraction: 0.05,
             pricing: CostPricingSection {
                 model: None,
@@ -196,6 +199,7 @@ impl CostConfig {
             default_table_size,
             fail_on_monthly_delta: section.fail_on_monthly_delta,
             fail_on_monthly_delta_gb: section.fail_on_monthly_delta_gb,
+            min_mapped_spend_fraction: section.min_mapped_spend_fraction,
             incremental_fraction: section.incremental_fraction.unwrap_or(0.05),
             pricing: section.pricing.unwrap_or(CostPricingSection {
                 model: None,
@@ -240,6 +244,9 @@ impl CostConfig {
             "cost.fail_on_monthly_delta_gb",
             self.fail_on_monthly_delta_gb,
         )?;
+        if let Some(fraction) = self.min_mapped_spend_fraction {
+            validate_finite_inclusive_range("cost.min_mapped_spend_fraction", fraction, 0.0, 1.0)?;
+        }
 
         match self
             .pricing
@@ -358,6 +365,18 @@ fn validate_positive(name: &str, value: f64) -> anyhow::Result<()> {
 fn validate_finite_range(name: &str, value: f64, min: f64, max: f64) -> anyhow::Result<()> {
     if !value.is_finite() || value < min || value > max {
         anyhow::bail!("{name} must be finite and between {min} and {max}");
+    }
+    Ok(())
+}
+
+fn validate_finite_inclusive_range(
+    name: &str,
+    value: f64,
+    min: f64,
+    max: f64,
+) -> anyhow::Result<()> {
+    if !value.is_finite() || value < min || value > max {
+        anyhow::bail!("{name} must be finite and in {min}..={max}");
     }
     Ok(())
 }

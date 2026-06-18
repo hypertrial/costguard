@@ -2,11 +2,19 @@ use costguard_core::ScanResult;
 use costguard_cost::format_cost_line;
 use costguard_diagnostics::Diagnostic;
 
-use crate::{append_analysis_text, append_context_text, append_cost_summary, escape_text};
+use crate::{
+    append_analysis_text, append_context_text, append_cost_summary, append_pr_cost_impact_text,
+    escape_text, format_diagnostic_meta,
+};
 
 pub(crate) fn render_text(result: &ScanResult) -> String {
     let mut output = String::new();
     append_analysis_text(&mut output, result);
+    if let Some(summary) = result.cost_summary.as_ref() {
+        if let Some(pr) = &summary.pr_impact {
+            append_pr_cost_impact_text(&mut output, summary, pr);
+        }
+    }
     if let Some(summary) = &result.pr_summary {
         output.push_str("Changed files:\n");
         if summary.changed_files.is_empty() {
@@ -65,6 +73,10 @@ pub(crate) fn render_text(result: &ScanResult) -> String {
             diagnostic.column
         ));
         output.push_str(&format!("      {}\n", escape_text(&diagnostic.message)));
+        output.push_str(&format!(
+            "      {}\n",
+            escape_text(&format_diagnostic_meta(diagnostic))
+        ));
         if let Some(risk) = &diagnostic.risk {
             output.push_str(&format!("      Risk: {risk}\n"));
         }
@@ -101,7 +113,7 @@ pub(crate) fn append_top_cost_findings(output: &mut String, diagnostics: &[Diagn
             .unwrap_or(std::cmp::Ordering::Equal)
     });
     output.push_str("\nTop findings by estimated monthly savings:\n");
-    for (diagnostic, cost) in ranked.into_iter().take(10) {
+    for (diagnostic, cost) in ranked.into_iter().take(5) {
         output.push_str(&format!(
             "  - {} {}:{} — {}\n",
             diagnostic.rule_id,

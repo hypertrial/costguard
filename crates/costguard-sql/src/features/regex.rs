@@ -206,21 +206,21 @@ fn extract_joins(
         if kind == JoinKind::Cross && is_exempt_cross_join_suffix(after) {
             continue;
         }
-        let predicate = extract_on_predicate(after);
-        let predicate_lower = predicate
-            .as_deref()
-            .unwrap_or_default()
-            .to_ascii_lowercase();
+        let (predicate, has_equality, equality_keys) = extract_join_constraint(after);
+        let pattern_matching = predicate_matches_pattern(predicate.as_deref().unwrap_or_default());
+        let cross_catalog = cross_catalog_in_predicate(predicate.as_deref().unwrap_or_default());
+        let function_on_key = function_on_join_key(predicate.as_deref().unwrap_or_default());
         joins.push(JoinFeature {
             span: line_index.span(matched.start(), after_end),
             kind,
-            has_equality: has_equality_predicate(&predicate_lower),
-            function_on_join_key: function_on_join_key(&predicate_lower),
+            has_equality,
+            function_on_join_key: function_on_key,
             predicate,
-            pattern_matching: predicate_matches_pattern(&predicate_lower),
-            cross_catalog: cross_catalog_in_predicate(&predicate_lower),
+            pattern_matching,
+            cross_catalog,
             right_relation: None,
-            equality_keys: Vec::new(),
+            equality_keys,
+            extracted_from_ast: false,
         });
     }
 
@@ -413,7 +413,7 @@ fn mask_string_literals(text: &str) -> String {
 }
 fn find_join_clause_end(text: &str) -> Option<usize> {
     let lower = text.to_ascii_lowercase();
-    [
+    let needles = [
         " left join",
         " right join",
         " full join",
@@ -428,10 +428,65 @@ fn find_join_clause_end(text: &str) -> Option<usize> {
         "\ngroup by ",
         "\norder by ",
         "\nlimit ",
-    ]
-    .iter()
-    .filter_map(|needle| lower.find(needle))
-    .min()
+    ];
+    let mut best: Option<usize> = None;
+    let mut depth = 0i32;
+    for (i, ch) in lower.char_indices() {
+        match ch {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            _ if depth == 0 => {
+                for needle in needles {
+                    if lower[i..].starts_with(needle) {
+                        best = Some(best.map_or(i, |current| current.min(i)));
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    best
+}
+
+fn extract_join_constraint(after: &str) -> (Option<String>, bool, Vec<String>) {
+    let trimmed = after.trim_start();
+    let lower = trimmed.to_ascii_lowercase();
+    if lower.starts_with("using(") || lower.starts_with("using (") {
+        if let Some(keys) = parse_using_keys(trimmed) {
+            let predicate = format!("USING({})", keys.join(", "));
+            return (Some(predicate), true, keys);
+        }
+    }
+    let predicate = extract_on_predicate(after);
+    let predicate_lower = predicate
+        .as_deref()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    (
+        predicate,
+        has_equality_predicate(&predicate_lower),
+        Vec::new(),
+    )
+}
+
+fn parse_using_keys(text: &str) -> Option<Vec<String>> {
+    let open = text.find('(')?;
+    let close = text[open + 1..].find(')')? + open + 1;
+    let keys: Vec<String> = text[open + 1..close]
+        .split(',')
+        .map(|part| {
+            part.trim()
+                .trim_matches('"')
+                .trim_matches('`')
+                .to_ascii_lowercase()
+        })
+        .filter(|part| !part.is_empty())
+        .collect();
+    if keys.is_empty() {
+        None
+    } else {
+        Some(keys)
+    }
 }
 
 fn extract_on_predicate(after: &str) -> Option<String> {

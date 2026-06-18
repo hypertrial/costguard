@@ -12,16 +12,16 @@ Comma-join detection ignores commas in `GROUP BY`/`ORDER BY`, inside `ARRAY[...]
 
 ## Fix
 
-Add a join predicate, or document intentional use:
+Add a join predicate, or suppress intentional use on the line above:
 
 ```sql
--- costguard: allow cross-join
+-- costguard: disable-next-line=SQLCOST012
 SELECT a.id, b.id
 FROM a
 CROSS JOIN b
 ```
 
-Both `-- costguard: allow cross-join` and bare `costguard: allow cross-join` are accepted.
+Both `-- costguard: disable-next-line=SQLCOST012` and bare `costguard: disable-next-line=SQLCOST012` are accepted.
 
 Regex-only comma/cross join detection emits `confidence: low`. Parsed comma joins emit `confidence: medium` (regex-derived even when the file parses). AST-confirmed `CROSS JOIN` emits `confidence: high`. Use `--min-confidence high` (and optionally `--min-confidence-filter`) to hide lower-confidence hits in PR gates.
 

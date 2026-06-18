@@ -14,18 +14,18 @@ python3 scripts/generate_rule_docs.py
 | medium | `SQLCOST003` | Repeated regex extraction or replacement | verified-high | [SQLCOST003](../../rules/SQLCOST003.md) |
 | high | `SQLCOST004` | Incremental model without unique_key | verified-high | [SQLCOST004](../../rules/SQLCOST004.md) |
 | high | `SQLCOST005` | Incremental model without date or partition predicate | verified-high | [SQLCOST005](../../rules/SQLCOST005.md) |
-| medium | `SQLCOST006` | Unbounded join risk | verified-low | [SQLCOST006](../../rules/SQLCOST006.md) |
+| medium | `SQLCOST006` | Unbounded join risk | verified-medium | [SQLCOST006](../../rules/SQLCOST006.md) |
 | low | `SQLCOST007` | ORDER BY in model | verified-high | [SQLCOST007](../../rules/SQLCOST007.md) |
 | medium | `SQLCOST008` | Blind SELECT DISTINCT | verified-high | [SQLCOST008](../../rules/SQLCOST008.md) |
 | low | `SQLCOST009` | Repeated normalization expression | informational | [SQLCOST009](../../rules/SQLCOST009.md) |
 | high | `SQLCOST010` | Python model row-wise operation | informational | [SQLCOST010](../../rules/SQLCOST010.md) |
 | medium | `SQLCOST011` | Source used directly in mart layer | informational | [SQLCOST011](../../rules/SQLCOST011.md) |
-| medium | `SQLCOST012` | Cross join without explicit allow comment | verified-low | [SQLCOST012](../../rules/SQLCOST012.md) |
+| medium | `SQLCOST012` | Cross join without explicit allow comment | verified-medium | [SQLCOST012](../../rules/SQLCOST012.md) |
 | medium | `SQLCOST013` | Unpartitioned window function | verified-high | [SQLCOST013](../../rules/SQLCOST013.md) |
 | low | `SQLCOST014` | Repeated CTE reference | verified-high | [SQLCOST014](../../rules/SQLCOST014.md) |
 | medium | `SQLCOST015` | Expensive expression repeated across downstream models | verified-high | [SQLCOST015](../../rules/SQLCOST015.md) |
 | high | `SQLCOST016` | Non-sargable partition or date predicate | informational | [SQLCOST016](../../rules/SQLCOST016.md) |
-| medium | `SQLCOST017` | Function-wrapped join key | verified-high | [SQLCOST017](../../rules/SQLCOST017.md) |
+| medium | `SQLCOST017` | Function-wrapped join key | verified-low | [SQLCOST017](../../rules/SQLCOST017.md) |
 | medium | `SQLCOST018` | UNION instead of UNION ALL | verified-high | [SQLCOST018](../../rules/SQLCOST018.md) |
 | high | `SQLCOST019` | Incremental model reads source without source-side bound | verified-high | [SQLCOST019](../../rules/SQLCOST019.md) |
 | medium | `SQLCOST020` | Exact distinct aggregation on large model | verified-high | [SQLCOST020](../../rules/SQLCOST020.md) |
@@ -44,7 +44,7 @@ python3 scripts/generate_rule_docs.py
 | medium | `SQLCOST032` | OR across partition or date predicates | informational | [SQLCOST032](../../rules/SQLCOST032.md) |
 | high | `SQLCOST033` | Pattern-matching join predicate | verified-high | [SQLCOST033](../../rules/SQLCOST033.md) |
 | medium | `SQLCOST034` | Scalar subquery in SELECT list | informational | [SQLCOST034](../../rules/SQLCOST034.md) |
-| medium | `SQLCOST035` | Cross-catalog join | informational | [SQLCOST035](../../rules/SQLCOST035.md) |
+| medium | `SQLCOST035` | Cross-catalog join | verified-high | [SQLCOST035](../../rules/SQLCOST035.md) |
 | high | `SQLCOST036` | Row-exploding UNNEST or LATERAL FLATTEN | verified-high | [SQLCOST036](../../rules/SQLCOST036.md) |
 | high | `SQLCOST037` | NOT IN (subquery) | verified-high | [SQLCOST037](../../rules/SQLCOST037.md) |
 | high | `SQLCOST038` | Fan-out join on non-unique key | verified-high | [SQLCOST038](../../rules/SQLCOST038.md) |
@@ -105,7 +105,7 @@ Fix guidance: [SQLCOST005.md](../../rules/SQLCOST005.md)
 ### `SQLCOST006` — Unbounded join risk
 
 **Severity:** medium
-**Measured precision tier:** verified-low
+**Measured precision tier:** verified-medium
 
 Detects joins without safe equality predicates.
 
@@ -159,7 +159,7 @@ Fix guidance: [SQLCOST011.md](../../rules/SQLCOST011.md)
 ### `SQLCOST012` — Cross join without explicit allow comment
 
 **Severity:** medium
-**Measured precision tier:** verified-low
+**Measured precision tier:** verified-medium
 
 Detects CROSS JOIN and comma joins.
 
@@ -204,7 +204,7 @@ Fix guidance: [SQLCOST016.md](../../rules/SQLCOST016.md)
 ### `SQLCOST017` — Function-wrapped join key
 
 **Severity:** medium
-**Measured precision tier:** verified-high
+**Measured precision tier:** verified-low
 
 Detects joins where a join key is transformed inline.
 
@@ -375,7 +375,7 @@ Fix guidance: [SQLCOST034.md](../../rules/SQLCOST034.md)
 ### `SQLCOST035` — Cross-catalog join
 
 **Severity:** medium
-**Measured precision tier:** informational
+**Measured precision tier:** verified-high
 
 Detects joins between fully qualified tables with different catalog parts.
 

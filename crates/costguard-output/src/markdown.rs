@@ -2,7 +2,10 @@ use costguard_core::{PrSummary, ScanResult};
 use costguard_cost::format_cost_line;
 use costguard_diagnostics::{Diagnostic, Severity};
 
-use crate::{append_cost_summary_markdown, escape_fenced_code, escape_markdown};
+use crate::{
+    append_cost_summary_markdown, append_pr_cost_impact_markdown, escape_fenced_code,
+    escape_markdown, format_diagnostic_meta,
+};
 
 pub(crate) fn render_markdown(result: &ScanResult) -> String {
     let mut output = String::new();
@@ -31,6 +34,12 @@ pub(crate) fn render_markdown(result: &ScanResult) -> String {
         output.push_str(".\n\n");
     } else {
         output.push_str("# Costguard passed\n\nNo high-risk cost findings.\n\n");
+    }
+
+    if let Some(summary) = result.cost_summary.as_ref() {
+        if let Some(pr) = &summary.pr_impact {
+            append_pr_cost_impact_markdown(&mut output, summary, pr);
+        }
     }
 
     if let Some(summary) = &result.pr_summary {
@@ -77,12 +86,13 @@ pub(crate) fn render_markdown(result: &ScanResult) -> String {
         output.push_str("## Diagnostics\n\n");
         for diagnostic in &result.diagnostics {
             output.push_str(&format!(
-                "1. `{}` {}:{}:{}\n   {}\n",
+                "1. `{}` {}:{}:{}\n   {}\n   {}\n",
                 diagnostic.rule_id,
                 escape_markdown(&diagnostic.path.display().to_string()),
                 diagnostic.line,
                 diagnostic.column,
-                escape_markdown(&diagnostic.message)
+                escape_markdown(&diagnostic.message),
+                escape_markdown(&format_diagnostic_meta(diagnostic))
             ));
             if let Some(risk) = &diagnostic.risk {
                 output.push_str(&format!("   Risk: {}\n", escape_markdown(risk)));
@@ -128,7 +138,7 @@ pub(crate) fn append_top_cost_findings_markdown(output: &mut String, diagnostics
             .unwrap_or(std::cmp::Ordering::Equal)
     });
     output.push_str("\n## Top findings by estimated monthly savings\n\n");
-    for (diagnostic, cost) in ranked.into_iter().take(10) {
+    for (diagnostic, cost) in ranked.into_iter().take(5) {
         output.push_str(&format!(
             "- `{}` {}:{} — {}\n",
             diagnostic.rule_id,

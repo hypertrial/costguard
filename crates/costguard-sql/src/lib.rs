@@ -18,6 +18,7 @@ mod trino;
 
 pub use platform::Platform;
 
+pub use features::join_heuristics::is_date_spine_table;
 pub use parse::{normalize_for_parse, try_parse_compiled_sql, try_parse_compiled_sql_error};
 
 /// Which SQL representation was used for parsing.
@@ -91,6 +92,8 @@ pub struct JoinFeature {
     pub cross_catalog: bool,
     pub right_relation: Option<String>,
     pub equality_keys: Vec<String>,
+    /// True when this join was extracted from a parsed AST (not regex/comma heuristics).
+    pub extracted_from_ast: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
