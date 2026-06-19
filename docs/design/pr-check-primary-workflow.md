@@ -1,10 +1,10 @@
 # PR Check Primary Workflow
 
-Automated PR review is Costguard's main use case.
+Automated dbt PR cost review is Costguard's main use case.
 
 Primary positioning:
 
-> Costguard is a local, dbt-aware cost regression guardrail for git workflows.
+> Costguard is the dbt PR cost regression gate for CI.
 
 The local Rust CLI is the engine that powers the workflow. It is important for developer debugging,
 pre-commit usage, and CI portability, but product decisions should optimize first for PR checks.
@@ -12,17 +12,20 @@ The current MVP ships the CLI engine and a composite GitHub Action at
 [`.github/actions/costguard`](../../.github/actions/costguard). The PR workflow lives in
 [`.github/workflows/costguard-pr.yml`](../../.github/workflows/costguard-pr.yml).
 
-Run `dbt compile` in your existing CI job before the Action. Costguard auto-detects `target/manifest.json` when present; raw analysis still works without it. The Action does not install or compile dbt.
+Run `dbt compile` in your existing CI job before the Action when you want compiled-SQL and lineage context. Costguard auto-detects `target/manifest.json` when present; raw analysis still works without it. The Action does not install or compile dbt and never connects to the warehouse.
 
 Workflow:
 
 ```text
 PR opened
 -> changed SQL/dbt files scanned
--> cost/performance risks annotated
--> fail on high-risk findings
+-> dbt cost/performance risks annotated
+-> optional downstream blast radius and advisory savings reported
+-> fail on high-confidence, high-severity findings
 -> merge safer analytics code
 ```
+
+Measured benchmark evidence is part of the product contract: the current public snapshot reports 97.2% overall sampled precision, 99.8% high-severity sampled precision, and 44/44 behavioral rules passing the TP census.
 
 Use-case priority:
 
@@ -34,6 +37,8 @@ Use-case priority:
 | 4 | CI scheduled scan | Repo hygiene |
 | 5 | VS Code/LSP | Later |
 | 6 | Query history enrichment | Later advanced mode |
+
+General SQL analyzers cover broader categories such as security, compliance, migrations, app-code SQL extraction, schema validation, autofix, and editor feedback. Costguard should not chase that surface in the PR workflow; it should stay focused on dbt PR cost regression control.
 
 The MVP should optimize this command:
 

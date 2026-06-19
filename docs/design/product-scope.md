@@ -1,6 +1,6 @@
 # Product scope
 
-Costguard is a local, dbt-aware cost regression guardrail for git workflows.
+Costguard is the dbt PR cost regression gate for CI. It reviews changed models before merge, uses optional dbt manifest and lineage context for downstream impact, and runs without warehouse credentials.
 
 This document states what is in scope for the MVP, what is explicitly out of scope, and what comes next. It complements the workflow-focused [PR check primary workflow](pr-check-primary-workflow.md) doc.
 
@@ -10,7 +10,7 @@ These capabilities are production-ready or actively maintained as part of the cu
 
 | Capability | Notes |
 | --- | --- |
-| **PR check workflow** | `costguard pr`, composite GitHub Action, `costguard init` scaffolding |
+| **PR cost regression gate** | `costguard pr`, composite GitHub Action, `costguard init` scaffolding |
 | **Local scan and explain** | `costguard scan`, `costguard explain` for developer debugging |
 | **45 SQLCOST rules** | Severity and confidence are the enforcement contract |
 | **Multi-warehouse parsing** | Generic SQL, Snowflake, BigQuery, Trino (GA); Databricks, Redshift, Postgres, DuckDB (preview) |
@@ -18,7 +18,7 @@ These capabilities are production-ready or actively maintained as part of the cu
 | **Governance** | Baseline v3, signed policy v2, semantic finding identity (`semantic-v1`), suppressions |
 | **Output formats** | `github`, `markdown`, `json` plus documented exit-code contract |
 | **Privacy / local-only** | No warehouse credentials, no network calls during scan |
-| **Internal eval and benchmark** | Classification metrics pipeline and IRR judge for calibration (see [Classification metrics](classification-metrics.md), [LLM judge IRR](llm-judge-irr.md)) |
+| **Measured benchmark evidence** | Public precision snapshot plus classification metrics pipeline and IRR judge for calibration (see [Benchmark evidence](../book/reference/benchmarks.md), [Classification metrics](classification-metrics.md), [LLM judge IRR](llm-judge-irr.md)) |
 
 Primary workflow priority (from [PR check primary workflow](pr-check-primary-workflow.md)):
 
@@ -36,6 +36,8 @@ costguard pr --base origin/main --warehouse snowflake --fail-on high --min-confi
 ```
 
 Severity and confidence remain the default failure model. Optional cost deltas (`--fail-on-cost-delta`) require calibrated local inputs.
+
+Costguard is intentionally narrower than general SQL analyzers. Broad SQL security/compliance linting, migration analysis, app-code SQL extraction, schema validation, autofix, and editor feedback are adjacent categories; Costguard's product surface is dbt PR cost regression control, downstream blast radius, advisory savings, and credential-free CI.
 
 ## LLM judge MVP (in scope, early)
 
@@ -108,6 +110,7 @@ The judge is intended for local triage after a scan — not as a replacement for
 | Dollar thresholds as primary PR gate | `--fail-on-cost-delta` is optional and requires calibrated inputs |
 | LLM judge in CI | Judge never auto-fails PRs or runs in GitHub Actions |
 | Bundled model weights | Users supply their own GGUF |
+| Broad SQL analyzer replacement | Security/compliance linting, migrations, app-code SQL extraction, schema validation, autofix, and editor-first linting are not the primary product |
 | VS Code / LSP integration | Later use case (priority 5) |
 | Query history enrichment | Later advanced mode (priority 6) |
 

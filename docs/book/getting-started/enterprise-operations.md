@@ -40,7 +40,7 @@ Costguard 2.1 requires **baseline v3** and **policy v2**, both with `identity_sc
 4. Bump the Action pin to `@v2.4.0`, commit baseline v3 and signed policy v2 together, and merge in one release window.
 5. Re-run a full strict scan on default branch and confirm PR checks pass.
 
-See [Compatibility policy](../reference/compatibility.md) for rollback to `@v2.0.0`.
+See [Compatibility policy](../reference/compatibility.md) for rollback to the saved `v2.0.0` artifacts.
 
 ## Baseline rollout
 
@@ -72,4 +72,4 @@ Retain SARIF with the source commit, exact Costguard version, policy bundle dige
 
 ## Rollback
 
-Rollback means pinning the last known-good exact `2.x` release and its compatible policy bundle and baseline. For 2.1 rollbacks, restore `@v2.0.0` with saved policy v1 and baseline v2 artifacts. Never retag or replace an exact release. Keep `v2` out of regulated workflows when immutable behavior is required. If a policy rollout fails, revert the policy artifact and trust-store commit together where necessary; do not disable attestation or strict verification. Re-run a full scan after rollback and retain both failed and recovery evidence.
+Rollback means pinning the last known-good exact `2.x` release and its compatible policy bundle and baseline. For 2.1 rollbacks, restore the saved `v2.0.0` release with policy v1 and baseline v2 artifacts. Never retag or replace an exact release. Keep `v2` out of regulated workflows when immutable behavior is required. If a policy rollout fails, revert the policy artifact and trust-store commit together where necessary; do not disable attestation or strict verification. Re-run a full scan after rollback and retain both failed and recovery evidence.

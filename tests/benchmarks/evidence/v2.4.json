@@ -162,7 +162,7 @@
       "verdict": "tp"
     }
   ],
-  "generated_at": "2026-06-18",
+  "generated_at": "2026-06-19",
   "headline": {
     "high_severity_sampled_precision": 0.9980879541108987,
     "overall_sampled_precision": 0.971853425385024,

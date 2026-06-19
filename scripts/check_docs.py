@@ -27,6 +27,9 @@ JSON_OUTPUT_SCHEMA_CLAIM_RE = re.compile(
 BASELINE_SCHEMA_CLAIM_RE = re.compile(r"(?i)baseline schema v(\d+)")
 POLICY_SCHEMA_CLAIM_RE = re.compile(r"(?i)policy schema v(\d+)")
 RULE_COUNT_CLAIM_RE = re.compile(r"(\d+)\s+SQLCOST rules")
+PUBLIC_VERSION_PIN_RE = re.compile(
+    r"(?P<context>@|--tag\s+|sh\s+-s\s+--\s+|(?:COSTGUARD_)?VERSION\s*[:=]\s*[\"']?|rev:\s*)v(?P<version>\d+\.\d+\.\d+)"
+)
 RULE_GUIDES_DIR = ROOT / "docs" / "rules"
 
 
@@ -109,6 +112,26 @@ def check_version_claims() -> list[str]:
     return errors
 
 
+def check_public_version_pins(
+    files: list[Path] | None = None,
+    current: str | None = None,
+) -> list[str]:
+    current = current or workspace_version()
+    errors: list[str] = []
+    for source in files or markdown_files():
+        text = source.read_text(encoding="utf-8")
+        for line_number, line in enumerate(text.splitlines(), start=1):
+            for match in PUBLIC_VERSION_PIN_RE.finditer(line):
+                claimed = match.group("version")
+                if claimed != current:
+                    rel = source.relative_to(ROOT) if source.is_relative_to(ROOT) else source
+                    errors.append(
+                        f"{rel}:{line_number}: public release pin v{claimed} "
+                        f"does not match workspace version v{current}"
+                    )
+    return errors
+
+
 def rule_guide_count() -> int:
     return len(list(RULE_GUIDES_DIR.glob("SQLCOST*.md")))
 
@@ -162,6 +185,7 @@ def main() -> int:
     args = parser.parse_args()
     errors: list[str] = []
     errors.extend(check_version_claims())
+    errors.extend(check_public_version_pins())
     errors.extend(check_rule_count_claims())
     errors.extend(check_output_schema_claims())
     external_urls: set[str] = set()

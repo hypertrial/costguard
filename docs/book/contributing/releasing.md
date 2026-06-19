@@ -4,6 +4,8 @@ GitHub Actions is the sole publication authority. Local scripts qualify code and
 
 Matt (`mattfaltyn`) is the sole release owner. The `release-owners` team contains only Matt and bypasses PR, review, and required-check rules, so Matt may self-merge or push directly to `main`. Other contributors require one approval plus successful `pr-gate`, `scale`, and `costguard` checks. Force pushes and default-branch deletion have no bypass. A direct push receives CI feedback after entering `main`; fix failures with a new commit, never by rewriting history.
 
+The current public docs pin `v2.4.0`. Treat the release PR as the `v2.4.0` release commit: after merge, create the signed annotated tag and publish verified assets in the same release window before announcement or support handoff.
+
 1. Merge or directly push the release commit to `main` as Matt. PRs are recommended for reviewability but do not require another approver.
 2. Complete full-history secret/customer-data scanning, then explicitly make the repository public. Enable public security features, the Matt-only bypass, branch rules, the release environment, and `RELEASE_SSH_ALLOWED_SIGNERS` in GitHub repository settings.
 3. Produce one successful push-triggered `ci.yml` run for the exact release commit. The run must complete `pr-gate`, `scale`, `spellbook-smoke`, and `nba-monte-carlo-smoke`; the release workflow enforces this by commit SHA.

@@ -1,15 +1,21 @@
-# Stop wasting money on bad SQL
+# dbt cost regression checks for CI
 
 [![CI](https://img.shields.io/github/actions/workflow/status/hypertrial/costguard/ci.yml?branch=main)](https://github.com/hypertrial/costguard/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/hypertrial/costguard)](https://github.com/hypertrial/costguard/releases)
 [![License: MIT](https://img.shields.io/github/license/hypertrial/costguard)](LICENSE)
 [![Docs](https://img.shields.io/badge/docs-mdBook-blue)](docs/book/README.md)
 
-Costguard catches expensive dbt changes before they hit your warehouse.
+Costguard reviews dbt pull requests before merge.
 
-Costguard is a local, dbt-aware cost regression guardrail for git workflows.
+It scans changed models against the git base, uses optional dbt manifest and lineage context for downstream impact, and runs without warehouse credentials or live queries.
 
-One binary and one simple CI Action. `costguard pr` scans changed models against the git base. Runs locally as a fast Rust CLI with no warehouse credentials required.
+One binary and one simple CI Action. `costguard pr` is the main workflow; `costguard scan` is the local debugging path.
+
+Measured on real dbt benchmark repos and the corpus suite:
+
+- **97.2%** overall sampled precision
+- **99.8%** high-severity sampled precision
+- **44/44** behavioral rules passing TP census
 
 Generic SQL, Snowflake, BigQuery, and Trino scanning are production-ready; Databricks, Redshift, Postgres, and DuckDB support is preview.
 
@@ -67,6 +73,12 @@ Pin the exact Action tag `@v2.4.0` or use the moving compatible major tag `@v2`.
 Costguard reads **source files, git history, and (optionally) `target/manifest.json`**. It never connects to your warehouse and never needs credentials. The manifest is auto-detected when present; run `dbt compile` first only if you want compiled-SQL analysis on Jinja-heavy models.
 
 Full table: [Requirements](docs/book/getting-started/requirements.md).
+
+## Costguard vs general SQL analyzers
+
+General SQL analyzers are broad linting tools for security, compliance, migrations, app-code SQL extraction, schema validation, autofix, and editor feedback.
+
+Costguard is narrower by design: a dbt PR cost regression gate for changed models, downstream blast radius, severity/confidence enforcement, advisory savings, and credential-free CI.
 
 ## Documentation
 

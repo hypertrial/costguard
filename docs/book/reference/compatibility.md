@@ -36,7 +36,7 @@ Generate baselines with `costguard scan --write-baseline`. Write policy v2 docum
 
 Retain the pre-upgrade **policy v1** and **baseline v2** artifacts (and their digests) before deploying 2.1. To roll back:
 
-1. Pin the Action or binary to `@v2.0.0`.
+1. Pin the Action or binary to the saved `v2.0.0` release.
 2. Restore the saved baseline v2 and policy v1 bundle (and trust store if changed).
 3. Re-run a full scan and retain rollback evidence.
 

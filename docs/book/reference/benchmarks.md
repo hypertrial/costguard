@@ -2,7 +2,7 @@
 
 Public snapshot of Costguard precision/recall evidence from real dbt benchmark repos and the corpus regression suite.
 
-Snapshot: [`tests/benchmarks/evidence/v2.4.json`](../../../tests/benchmarks/evidence/v2.4.json) (generated 2026-06-18).
+Snapshot: [`tests/benchmarks/evidence/v2.4.json`](../../../tests/benchmarks/evidence/v2.4.json) (generated 2026-06-19).
 
 <!-- generated:evidence:start -->
 ## Headline metrics

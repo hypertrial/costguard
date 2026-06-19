@@ -1,10 +1,16 @@
-# Stop wasting money on bad SQL
+# dbt cost regression checks for CI
 
-Costguard catches expensive dbt changes before they hit your warehouse.
+Costguard reviews dbt pull requests before merge.
 
-Costguard is a local, dbt-aware cost regression guardrail for git workflows.
+It scans changed models against the git base, uses optional dbt manifest and lineage context for downstream impact, and runs without warehouse credentials or live queries.
 
-One binary and one simple CI Action. `costguard pr` scans changed models against the git base. Runs locally as a fast Rust CLI with no warehouse credentials required.
+One binary and one simple CI Action. `costguard pr` is the main workflow; `costguard scan` is the local debugging path.
+
+Measured on real dbt benchmark repos and the corpus suite:
+
+- **97.2%** overall sampled precision
+- **99.8%** high-severity sampled precision
+- **44/44** behavioral rules passing TP census
 
 Costguard supports Generic SQL, Snowflake, BigQuery, and Trino in production. Databricks, Redshift, Postgres, and DuckDB remain preview. See [Platforms and warehouses](reference/platforms.md) and the [compatibility policy](reference/compatibility.md).
 
@@ -17,6 +23,12 @@ direct raw-source usage, and row-wise Python logic.
 ```text
 PR opened -> changed SQL/dbt files scanned -> cost/perf risks annotated -> fail on high-risk findings
 ```
+
+## Costguard vs general SQL analyzers
+
+General SQL analyzers are broad linting tools for security, compliance, migrations, app-code SQL extraction, schema validation, autofix, and editor feedback.
+
+Costguard is narrower by design: a dbt PR cost regression gate for changed models, downstream blast radius, severity/confidence enforcement, advisory savings, and credential-free CI.
 
 ## Install
 
