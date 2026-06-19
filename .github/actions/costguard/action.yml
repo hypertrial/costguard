@@ -78,6 +78,14 @@ inputs:
     description: Repository slug for signed policy resolution
     required: false
     default: ""
+  receipt-path:
+    description: Optional path for the JSON v4 PR receipt
+    required: false
+    default: ""
+  compare-receipt:
+    description: Optional prior JSON v4 receipt used to calculate trend deltas
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -117,6 +125,8 @@ runs:
         POLICY_ORGANIZATION_INPUT: ${{ inputs.policy-organization }}
         POLICY_TEAM_INPUT: ${{ inputs.policy-team }}
         POLICY_REPOSITORY_INPUT: ${{ inputs.policy-repository }}
+        RECEIPT_PATH_INPUT: ${{ inputs.receipt-path }}
+        COMPARE_RECEIPT_INPUT: ${{ inputs.compare-receipt }}
       run: |
         PYTHON="$(command -v python3 || command -v python)"
         "${PYTHON}" "${GITHUB_ACTION_PATH}/scripts/costguard_action.py" run

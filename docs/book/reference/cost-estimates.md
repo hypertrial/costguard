@@ -124,12 +124,12 @@ Text and markdown scans append:
 - Top findings by estimated monthly savings
 - Cost summary with current/post-fix/potential savings, addressable finding savings, grade mix, top models, and an advisory disclaimer footer
 
-JSON schema version is **4** with an optional top-level `cost` object (v3 consumers may ignore new `cost` fields).
+JSON schema version is **4** with an optional top-level `cost` object. Per-finding estimates include additive `prior_basis`: `config-override`, `rule-prior:generic`, or `warehouse-prior:<warehouse>`; explicit `[cost.rules.RULE_ID]` multipliers always win.
 
 ## GitHub Action
 
 ```yaml
-- uses: hypertrial/costguard/.github/actions/costguard@v2.4.0
+- uses: hypertrial/costguard/.github/actions/costguard@v2.5.0
   with:
     cost: "true"
     fail-on-cost-delta: "500"

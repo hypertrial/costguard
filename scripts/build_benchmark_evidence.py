@@ -17,7 +17,13 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 EVIDENCE = ROOT / "tests" / "benchmarks" / "rule_tp_evidence.json"
 TIERS = ROOT / "tests" / "benchmarks" / "precision_tiers.toml"
-SNAPSHOT_OUT = ROOT / "tests" / "benchmarks" / "evidence" / "v2.4.json"
+REPOS = ROOT / "tests" / "benchmarks" / "repos.toml"
+FP_REGISTRY = ROOT / "tests" / "benchmarks" / "fp_registry.toml"
+WORKSPACE_VERSION = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))[
+    "workspace"
+]["package"]["version"]
+RELEASE_LINE = ".".join(WORKSPACE_VERSION.split(".")[:2])
+SNAPSHOT_OUT = ROOT / "tests" / "benchmarks" / "evidence" / f"v{RELEASE_LINE}.json"
 DOC_OUT = ROOT / "docs" / "book" / "reference" / "benchmarks.md"
 GENERATED_START = "<!-- generated:evidence:start -->"
 GENERATED_END = "<!-- generated:evidence:end -->"
@@ -30,6 +36,7 @@ INFRASTRUCTURE_RULES = {
     "SQLCOST027",
     "SQLCOST045",
 }
+CENSUS_EXCLUDED_RULES = {"SQLCOST045"}
 ENTERPRISE_GATES = {
     "high_severity_sampled_precision_min": 0.90,
     "overall_sampled_precision_min": 0.80,
@@ -110,17 +117,41 @@ def build_snapshot(
 
     overall = aggregate_precision(behavioral)
     high_overall = aggregate_precision(high_behavioral)
-    passing = sum(1 for rule_id, _ in rules.items() if evidence.get(rule_id, {}).get("pass"))
+    behavioral_rules = [rule_id for rule_id in rules if rule_id not in CENSUS_EXCLUDED_RULES]
+    passing = sum(1 for rule_id in behavioral_rules if evidence.get(rule_id, {}).get("pass"))
+
+    repos = tomllib.loads(REPOS.read_text(encoding="utf-8")).get("repo", [])
+    registry = tomllib.loads(FP_REGISTRY.read_text(encoding="utf-8")).get("finding", [])
+    fp_entries = [finding for finding in registry if finding.get("verdict") == "fp"]
+    bug_entries = [finding for finding in fp_entries if finding.get("class") == "bug"]
 
     return {
-        "version": "2.4",
+        "version": WORKSPACE_VERSION,
         "generated_at": date.today().isoformat(),
+        "quality_ledger": {
+            "evidence_snapshot": str(SNAPSHOT_OUT.relative_to(ROOT)),
+            "full_repositories": [repo["name"] for repo in repos],
+            "smoke_repositories": [
+                repo["name"]
+                for repo in repos
+                if repo.get("smoke_scan_paths") or repo.get("smoke_compile_dirs")
+            ],
+            "false_positive_registry": {
+                "status": "clean" if not bug_entries else "open-bugs",
+                "entries": len(registry),
+                "false_positives": len(fp_entries),
+                "documented_exemptions": sum(
+                    finding.get("class") == "exempt" for finding in fp_entries
+                ),
+                "open_bugs": len(bug_entries),
+            },
+        },
         "enterprise_gates": ENTERPRISE_GATES,
         "headline": {
             "overall_sampled_precision": overall,
             "high_severity_sampled_precision": high_overall,
             "rules_passing_census": passing,
-            "rules_total": len(rules),
+            "rules_total": len(behavioral_rules),
             "tier_counts": dict(sorted(tier_counts.items())),
         },
         "per_rule": per_rule,
@@ -135,6 +166,8 @@ def render_markdown(snapshot: dict) -> str:
     high = headline.get("high_severity_sampled_precision")
     overall_pct = f"{overall * 100:.1f}%" if overall is not None else "n/a"
     high_pct = f"{high * 100:.1f}%" if high is not None else "n/a"
+    ledger = snapshot["quality_ledger"]
+    fp = ledger["false_positive_registry"]
 
     tier_lines = "\n".join(
         f"- **{tier}:** {count}"
@@ -149,7 +182,17 @@ def render_markdown(snapshot: dict) -> str:
         )
     examples_block = "\n".join(example_lines) if example_lines else "- (none)"
 
-    generated = f"""## Headline metrics
+    generated = f"""## Quality ledger
+
+| Evidence | Current value |
+| --- | --- |
+| Release version | `{snapshot['version']}` |
+| Evidence snapshot | `{ledger['evidence_snapshot']}` |
+| Full benchmark repositories | {len(ledger['full_repositories'])}: {', '.join(ledger['full_repositories'])} |
+| Smoke benchmark repositories | {len(ledger['smoke_repositories'])}: {', '.join(ledger['smoke_repositories'])} |
+| False-positive registry | {fp['status']}; {fp['entries']} verdicts, {fp['documented_exemptions']} documented exemptions, {fp['open_bugs']} open bugs |
+
+## Headline metrics
 
 | Metric | Value | Enterprise gate |
 | --- | --- | --- |
@@ -180,7 +223,7 @@ python3 scripts/build_benchmark_evidence.py
             "Public snapshot of Costguard precision/recall evidence from real dbt benchmark repos "
             "and the corpus regression suite.",
             "",
-            f"Snapshot: [`tests/benchmarks/evidence/v2.4.json`](../../../tests/benchmarks/evidence/v2.4.json) "
+            f"Snapshot: [`tests/benchmarks/evidence/v{RELEASE_LINE}.json`](../../../tests/benchmarks/evidence/v{RELEASE_LINE}.json) "
             f"(generated {snapshot['generated_at']}).",
             "",
             GENERATED_START,
@@ -203,9 +246,10 @@ def main() -> int:
     if not EVIDENCE.exists():
         print(f"missing evidence: {EVIDENCE}", file=sys.stderr)
         return 1
-    if not TIERS.exists():
-        print(f"missing tiers: {TIERS}", file=sys.stderr)
-        return 1
+    for path in (TIERS, REPOS, FP_REGISTRY):
+        if not path.exists():
+            print(f"missing benchmark input: {path}", file=sys.stderr)
+            return 1
 
     evidence = json.loads(EVIDENCE.read_text(encoding="utf-8"))
     tiers = load_tiers()

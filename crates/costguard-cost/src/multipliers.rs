@@ -1,18 +1,65 @@
-use crate::config::{range_or_point_to_estimate, CostConfig};
+use crate::config::{range_or_point_to_estimate, CostConfig, Warehouse};
 use crate::Estimate;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
 pub fn rule_multiplier(rule_id: &str, config: &CostConfig) -> Option<Estimate> {
+    rule_multiplier_with_basis(rule_id, config).map(|(estimate, _)| estimate)
+}
+
+pub fn rule_multiplier_with_basis(
+    rule_id: &str,
+    config: &CostConfig,
+) -> Option<(Estimate, String)> {
     if is_infrastructure_rule(rule_id) {
         return None;
     }
     if let Some(override_cfg) = config.rules.get(rule_id) {
         if let Some(mult) = &override_cfg.multiplier {
-            return Some(range_or_point_to_estimate(mult, Some(0.2)));
+            return Some((
+                range_or_point_to_estimate(mult, Some(0.2)),
+                "config-override".into(),
+            ));
         }
     }
-    default_multipliers().get(rule_id).copied()
+    let estimate = default_multipliers().get(rule_id).copied()?;
+    let Some(factor) = warehouse_factor(rule_id, config.warehouse) else {
+        return Some((estimate, "rule-prior:generic".into()));
+    };
+    Some((
+        estimate * Estimate::from_point(factor, Some(0.01)),
+        format!("warehouse-prior:{}", warehouse_label(config.warehouse)),
+    ))
+}
+
+fn warehouse_factor(rule_id: &str, warehouse: Warehouse) -> Option<f64> {
+    match (warehouse, rule_id.to_ascii_uppercase().as_str()) {
+        (Warehouse::BigQuery, "SQLCOST001" | "SQLCOST036") => Some(1.20),
+        (Warehouse::BigQuery, "SQLCOST006" | "SQLCOST012") => Some(1.10),
+        (Warehouse::BigQuery, "SQLCOST028" | "SQLCOST029") => Some(1.35),
+        (Warehouse::Snowflake, "SQLCOST002" | "SQLCOST003" | "SQLCOST028") => Some(1.15),
+        (Warehouse::Snowflake, "SQLCOST006" | "SQLCOST012") => Some(1.10),
+        (Warehouse::Databricks, "SQLCOST006" | "SQLCOST012") => Some(1.15),
+        (Warehouse::Databricks, "SQLCOST013") => Some(1.10),
+        (Warehouse::Databricks, "SQLCOST028" | "SQLCOST029") => Some(1.25),
+        (Warehouse::Trino, "SQLCOST001" | "SQLCOST006" | "SQLCOST012") => Some(1.15),
+        (Warehouse::Trino, "SQLCOST028" | "SQLCOST029") => Some(1.20),
+        (Warehouse::Redshift, "SQLCOST006" | "SQLCOST012" | "SQLCOST028") => Some(1.15),
+        _ => None,
+    }
+}
+
+fn warehouse_label(warehouse: Warehouse) -> &'static str {
+    match warehouse {
+        Warehouse::Generic => "generic",
+        Warehouse::Snowflake => "snowflake",
+        Warehouse::BigQuery => "bigquery",
+        Warehouse::Trino => "trino",
+        Warehouse::Databricks => "databricks",
+        Warehouse::Redshift => "redshift",
+        Warehouse::Postgres => "postgres",
+        Warehouse::DuckDb => "duckdb",
+    }
 }
 
 pub fn is_infrastructure_rule(rule_id: &str) -> bool {
@@ -93,6 +140,7 @@ fn default_multipliers() -> &'static HashMap<&'static str, Estimate> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::RangeOrPoint;
 
     #[test]
     fn all_cost_bearing_rules_have_multipliers_or_infrastructure() {
@@ -107,5 +155,22 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn explicit_override_wins_over_warehouse_prior() {
+        let mut config = CostConfig {
+            warehouse: Warehouse::BigQuery,
+            ..CostConfig::default()
+        };
+        config.rules.insert(
+            "SQLCOST028".into(),
+            crate::CostRuleOverride {
+                multiplier: Some(RangeOrPoint::Point(2.0)),
+            },
+        );
+        let (estimate, basis) = rule_multiplier_with_basis("SQLCOST028", &config).unwrap();
+        assert_eq!(basis, "config-override");
+        assert!((estimate.median() - 2.0).abs() < 0.1);
     }
 }

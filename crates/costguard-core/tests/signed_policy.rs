@@ -3,7 +3,7 @@ mod common;
 
 use chrono::Utc;
 use common::{write_managed_policy_bundle, write_managed_scan_model};
-use costguard_core::{scan, FindingBaseline, ScanConfig, SignedPolicyConfig};
+use costguard_core::{scan, FindingBaseline, ScanConfig, SignedPolicyConfig, Waiver};
 use costguard_diagnostics::Severity;
 use costguard_policy::{
     generate_key, sign_policy, PolicyDocumentV2, PolicyException, PolicyPermissions, PolicyScope,
@@ -122,6 +122,46 @@ fn managed_policy_rejects_forbidden_local_overrides() {
     .unwrap_err()
     .to_string();
     assert!(error.contains("forbids local rule overrides"), "{error}");
+}
+
+#[test]
+fn managed_policy_controls_local_waivers() {
+    let configure = |_temp: &TempDir, config: &mut ScanConfig| {
+        config.waivers = vec![Waiver {
+            id: "CG-1".into(),
+            finding_id: None,
+            rule_id: Some("SQLCOST001".into()),
+            path: "models/**".into(),
+            owner: "@data".into(),
+            reason: "approved migration".into(),
+            ticket_url: "https://example.com/CG-1".into(),
+            approver: "@lead".into(),
+            created_at: "2026-01-01T00:00:00Z".into(),
+            expires_at: "2099-01-01T00:00:00Z".into(),
+        }];
+    };
+    let error = managed_scan_with(
+        EnforcementMode::Block,
+        PolicyPermissions::default(),
+        configure,
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(error.contains("forbids local waivers"), "{error}");
+
+    let result = managed_scan_with(
+        EnforcementMode::Block,
+        PolicyPermissions {
+            allow_local_waivers: true,
+            ..PolicyPermissions::default()
+        },
+        configure,
+    )
+    .unwrap();
+    assert!(result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.rule_id == "SQLCOST001"
+            && diagnostic.governance.enforcement == EnforcementOutcome::Excepted
+    }));
 }
 
 #[test]

@@ -10,7 +10,7 @@ One-liner installer for macOS and Linux release binaries. Downloads a release ta
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/hypertrial/costguard/main/scripts/install.sh | sh
-curl -fsSL .../install.sh | sh -s -- v2.4.0
+curl -fsSL .../install.sh | sh -s -- v2.5.0
 COSTGUARD_INSTALL_DIR="$HOME/.local/bin" curl -fsSL .../install.sh | sh
 ```
 

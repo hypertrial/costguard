@@ -28,9 +28,11 @@ Policy v1 and any document without `identity_scheme: "semantic-v1"` are rejected
 
 Exception entries reference findings by semantic `finding_id`.
 
-Resolution order is organization, team, repository, then path. Equal-specificity conflicts at the same priority are configuration errors. Central policy decides whether local severity changes, CLI overrides, inline suppressions, and repository baselines are permitted.
+Resolution order is organization, team, repository, then path. Equal-specificity conflicts at the same priority are configuration errors. Central policy decides whether local severity changes, CLI overrides, inline suppressions, repository baselines, and local waivers are permitted. Local `[[waivers]]` are rejected under a signed policy unless `permissions.allow_local_waivers = true`.
 
 Every exception requires an immutable ID, finding or rule scope, repository and path globs, owner, reason, ticket URL, approver, creation time, and expiry. Expired exceptions stop suppressing findings and make analysis incomplete.
+
+Repository-local waivers use the same audit metadata but match exactly one `finding_id` or `rule_id` plus a repository-relative path glob. Active waivers mark findings `excepted`; every expired local waiver makes analysis incomplete with `expired_waiver`.
 
 Use signed policy bundles via `[policy]` in `costguard.toml` or with `--policy` and `--trust-store` on `scan` and `pr`. For highly regulated teams, signed bundles provide a defensible audit trail while remaining distributable as pinned git artifacts.
 

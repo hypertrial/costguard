@@ -2,9 +2,19 @@
 
 Public snapshot of Costguard precision/recall evidence from real dbt benchmark repos and the corpus regression suite.
 
-Snapshot: [`tests/benchmarks/evidence/v2.4.json`](../../../tests/benchmarks/evidence/v2.4.json) (generated 2026-06-19).
+Snapshot: [`tests/benchmarks/evidence/v2.5.json`](../../../tests/benchmarks/evidence/v2.5.json) (generated 2026-06-19).
 
 <!-- generated:evidence:start -->
+## Quality ledger
+
+| Evidence | Current value |
+| --- | --- |
+| Release version | `2.5.0` |
+| Evidence snapshot | `tests/benchmarks/evidence/v2.5.json` |
+| Full benchmark repositories | 7: jaffle-shop, spellbook, nba-monte-carlo, tuva, mattermost-warehouse, data-infra, ol-data-platform |
+| Smoke benchmark repositories | 5: spellbook, nba-monte-carlo, mattermost-warehouse, data-infra, ol-data-platform |
+| False-positive registry | clean; 93 verdicts, 30 documented exemptions, 0 open bugs |
+
 ## Headline metrics
 
 | Metric | Value | Enterprise gate |
@@ -12,7 +22,7 @@ Snapshot: [`tests/benchmarks/evidence/v2.4.json`](../../../tests/benchmarks/evid
 | Overall sampled precision | 97.2% | ≥ 80% |
 | High-severity sampled precision | 99.8% | ≥ 90% |
 | Per-rule sampled precision | see tier table | ≥ 70% each classified rule |
-| Rules passing TP census | 44/45 | 44/44 behavioral |
+| Rules passing TP census | 44/44 | 44/44 behavioral |
 
 ## Precision tiers
 

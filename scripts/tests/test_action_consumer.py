@@ -71,7 +71,7 @@ def git(root: Path, *args: str) -> None:
 
 class ActionConsumerTest(unittest.TestCase):
     def test_floating_major_action_uses_exact_workspace_release(self) -> None:
-        self.assertEqual(load_driver_module().action_release_version(), "v2.4.0")
+        self.assertEqual(load_driver_module().action_release_version(), "v2.5.0")
 
     def test_release_install_from_local_server(self) -> None:
         binary = ROOT / "target" / "release" / "costguard"
@@ -95,7 +95,7 @@ class ActionConsumerTest(unittest.TestCase):
             github_path = root / "github-path"
             with file_server(root) as base_url:
                 completed = run_driver(
-                    ["install", "--mode", "release", "--version", "v2.4.0"],
+                    ["install", "--mode", "release", "--version", "v2.5.0"],
                     env={
                         "COSTGUARD_RELEASE_BASE_URL": base_url,
                         "RUNNER_TEMP": str(root / "runner"),
@@ -357,6 +357,49 @@ class ActionConsumerTest(unittest.TestCase):
             self.assertIn("--policy-organization", arguments)
             self.assertIn("--policy-repository", arguments)
             self.assertNotIn("--policy-team", arguments)
+
+    def test_run_writes_step_summary_and_forwards_receipt_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            bin_dir = workspace / "bin"
+            bin_dir.mkdir()
+            args_path = workspace / "args.txt"
+            step_summary = workspace / "step-summary.md"
+            fake = bin_dir / "costguard"
+            fake.write_text(
+                "#!/bin/sh\n"
+                f"printf '%s\\n' \"$@\" > '{args_path}'\n"
+                "while [ \"$#\" -gt 0 ]; do\n"
+                "  if [ \"$1\" = '--summary-file' ]; then\n"
+                "    shift\n"
+                "    printf '# Costguard passed\\n' > \"$1\"\n"
+                "  fi\n"
+                "  shift\n"
+                "done\n"
+                "printf 'github annotations\\n'\n",
+                encoding="utf-8",
+            )
+            fake.chmod(0o755)
+            completed = run_driver(
+                ["run"],
+                env={
+                    "GITHUB_WORKSPACE": str(workspace),
+                    "GITHUB_STEP_SUMMARY": str(step_summary),
+                    "RUNNER_TEMP": str(workspace / "runner"),
+                    "RECEIPT_PATH_INPUT": "costguard-receipt.json",
+                    "COMPARE_RECEIPT_INPUT": "previous.json",
+                    "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+                },
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(completed.stdout, "github annotations\n")
+            self.assertIn("# Costguard passed", step_summary.read_text(encoding="utf-8"))
+            arguments = args_path.read_text(encoding="utf-8").splitlines()
+            self.assertIn("--summary-file", arguments)
+            self.assertIn("--receipt-file", arguments)
+            self.assertIn("costguard-receipt.json", arguments)
+            self.assertIn("--compare-receipt", arguments)
+            self.assertIn("previous.json", arguments)
 
     def test_requested_missing_manifest_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

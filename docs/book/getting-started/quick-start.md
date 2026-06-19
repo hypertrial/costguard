@@ -26,7 +26,7 @@ Use the published composite action after your existing dbt compile step:
   with:
     fetch-depth: 0
 - run: dbt compile --target dev
-- uses: hypertrial/costguard/.github/actions/costguard@v2.4.0
+- uses: hypertrial/costguard/.github/actions/costguard@v2.5.0
   with:
     base: origin/main
     warehouse: snowflake
@@ -34,6 +34,7 @@ Use the published composite action after your existing dbt compile step:
     fail-on: high
     min-confidence: high
     format: github
+    receipt-path: costguard-receipt.json
 ```
 
 For Costguard contributor workflows that need to run the checked-out source instead of a release binary, add:
@@ -42,7 +43,7 @@ For Costguard contributor workflows that need to run the checked-out source inst
     install-mode: source
 ```
 
-Core inputs: `base`, `warehouse`, `manifest`, `fail-on`, and `baseline`. The Action also supports `min-confidence`, `format`, `analysis-policy`, optional cost flags, and signed-policy inputs. Pin `@v2.4.0` for immutable behavior or use `@v2` for compatible stable updates.
+Core inputs: `base`, `warehouse`, `manifest`, `fail-on`, and `baseline`. The Action also supports `min-confidence`, `format`, `analysis-policy`, optional cost flags, signed-policy inputs, `receipt-path`, and `compare-receipt`. It always writes markdown to the GitHub step summary while preserving the selected stdout format.
 
 Costguard 2.1 requires baseline v3 and policy v2 with `identity_scheme: "semantic-v1"`. See [Compatibility policy](../reference/compatibility.md).
 
@@ -77,6 +78,8 @@ costguard pr --base origin/main --warehouse snowflake --fail-on high --min-confi
 - `markdown` — PR-summary-oriented report
 - `json` — structured `diagnostics` and optional `pr_summary`
 - `sarif` — retained by your CI platform for audit and triage
+
+For non-Action CI, combine `--format github --summary-file summary.md --receipt-file receipt.json` to produce annotations, a human summary, and a machine receipt from one scan. Pass `--compare-receipt` on a later run to record trend deltas.
 
 See [Output formats](../reference/output.md) for the JSON schema.
 

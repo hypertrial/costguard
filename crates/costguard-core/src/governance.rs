@@ -114,6 +114,9 @@ pub(crate) fn validate_local_policy_controls(
     {
         anyhow::bail!("organization policy forbids local rule overrides");
     }
+    if !config.waivers.is_empty() && !permissions.allow_local_waivers {
+        anyhow::bail!("organization policy forbids local waivers");
+    }
     Ok(())
 }
 

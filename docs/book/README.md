@@ -51,6 +51,8 @@ For CI, scan changed files against a git base:
 costguard pr --base origin/main --warehouse snowflake --fail-on high --min-confidence high
 ```
 
+Costguard can route findings to dbt/CODEOWNERS owners, apply scoped PR gates and expiring waivers, and write GitHub annotations, markdown, and a JSON v4 receipt from one scan.
+
 The CLI default for `--base` is `main`. In CI, prefer `origin/main` after `actions/checkout` with `fetch-depth: 0`.
 
 See [Local scan and explain](getting-started/local-scan.md) for the zero-config local workflow, [Quick start (PR check)](getting-started/quick-start.md) for GitHub Action setup, and [CLI reference](reference/cli.md) for all commands.

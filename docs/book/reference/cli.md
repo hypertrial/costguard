@@ -33,6 +33,9 @@ Source: `crates/costguard-cli/src/main.rs`
 | `--policy-organization` | scan, explain, pr, cost | Organization slug for signed policy resolution |
 | `--policy-team` | scan, explain, pr, cost | Optional team slug for signed policy resolution |
 | `--policy-repository` | scan, explain, pr, cost | Repository slug (`owner/repo`) for signed policy resolution |
+| `--summary-file` | scan, pr | Write markdown from the same scan while stdout keeps `--format` |
+| `--receipt-file` | scan, pr | Write the full JSON v4 receipt from the same scan |
+| `--compare-receipt` | scan, pr | Compare with a prior JSON v4 receipt and add `pr_summary.trend` |
 
 ## `scan`
 
@@ -50,6 +53,8 @@ costguard scan [PATHS...] [OPTIONS]
 | `--cost` | unset | Enable per-finding savings estimates and cost prioritization summary |
 | `--fail-on-cost-delta` | unset | Optional **addressable finding savings** p50 gate (USD) on new findings |
 | `--min-cost-coverage` | unset | Optional mapped-spend coverage floor (0.0–1.0); implies `--cost` |
+| `--summary-file` / `--receipt-file` | unset | Optional markdown summary and JSON v4 receipt files |
+| `--compare-receipt` | unset | Prior JSON v4 receipt used for trend deltas |
 
 ## `explain`
 
@@ -86,6 +91,8 @@ costguard pr [OPTIONS]
 | `--cost` | unset | Enable per-finding savings estimates and cost prioritization summary |
 | `--fail-on-cost-delta` | unset | Optional **addressable finding savings** p50 gate (USD) on new findings |
 | `--min-cost-coverage` | unset | Optional mapped-spend coverage floor (0.0–1.0); implies `--cost` |
+| `--summary-file` / `--receipt-file` | unset | Optional markdown summary and JSON v4 receipt files |
+| `--compare-receipt` | unset | Prior JSON v4 receipt used for trend deltas |
 
 Invalid git bases and non-git directories fail the check instead of silently scanning zero files. Unchanged parse failures and other project-wide issues appear in the optional `context` report only; they do not fail the PR gate.
 
@@ -128,7 +135,7 @@ costguard rules [--format text|json|markdown|sarif]
 | Code | Meaning |
 | --- | --- |
 | `0` | Success: scan/pr passed gates; `explain` analysis complete; `rules` listed |
-| `1` | scan/pr: analysis incomplete, findings at/above `--fail-on` (with optional `--min-confidence`), or cost gate exceeded; `explain`: analysis incomplete only |
+| `1` | scan/pr: analysis incomplete, a blocking `[gate]` failed, findings met `--fail-on` (with optional `--min-confidence`), or a cost gate exceeded; `explain`: analysis incomplete only |
 | `2` | Configuration error (invalid config, missing manifest, unsupported baseline or policy schema) |
 | `3` | Runtime error (unexpected failure) |
 

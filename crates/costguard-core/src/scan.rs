@@ -3,10 +3,12 @@ use crate::config::ScanConfig;
 use crate::context::{ContextIssue, ContextReport};
 use crate::dbt_graph::enrich_pr_summary;
 use crate::dbt_load::load_dbt_project;
+use crate::gates::evaluate_gates;
 use crate::governance::{
     apply_managed_governance, load_managed_policy, normalized_path, validate_local_policy_controls,
     ManagedPolicy,
 };
+use crate::owners::{assign_diagnostic_owners, OwnerResolver};
 use crate::pipeline::{
     apply_baseline_filter, apply_enabled_and_severity, apply_inline_suppressions,
     assign_semantic_identities, effective_rule_overrides, suppression_scope,
@@ -17,6 +19,7 @@ use crate::sql_analysis::{
     analyze_sql_documents, build_file_parse_status, build_scan_metrics, dbt_models_by_path,
     parse_failure_diagnostics,
 };
+use crate::waivers::apply_local_waivers;
 use crate::{
     AnalysisReport, AnalysisViolation, PolicyMetadata, PrSummary, Project, RunMetadata, ScanResult,
 };
@@ -38,6 +41,7 @@ use std::path::{Path, PathBuf};
 
 /// Run a full project scan and return diagnostics, metrics, and optional cost summary.
 pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
+    crate::validate_scan_config(config)?;
     run_scan(config)
 }
 
@@ -88,6 +92,7 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
         files: plan.targets.clone(),
         dbt,
     };
+    let owner_resolver = OwnerResolver::load(&root, &config.owners)?;
 
     let compiled_by_path = project
         .dbt
@@ -152,6 +157,8 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
 
     let policy_violations =
         apply_managed_governance(&mut diagnostics, managed_policy.as_ref(), started_at)?;
+    assign_diagnostic_owners(&mut diagnostics, &owner_resolver, project.dbt.as_ref());
+    let waiver_violations = apply_local_waivers(&mut diagnostics, &config.waivers, started_at);
     let policy_digest = managed_policy
         .as_ref()
         .map(|policy| policy.digest.clone())
@@ -249,17 +256,21 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
         None
     };
 
-    let pr_summary = if plan.pr_mode {
+    let mut pr_summary = if plan.pr_mode {
         Some(enrich_pr_summary(
             PrSummary {
                 changed_files: plan.changed_paths.iter().cloned().collect(),
                 ..PrSummary::default()
             },
             &project,
+            &owner_resolver,
         ))
     } else {
         None
     };
+    if let Some(summary) = pr_summary.as_mut() {
+        summary.gate_results = evaluate_gates(config.gate.as_ref(), &diagnostics, summary);
+    }
 
     let mut analysis = evaluate_analysis(
         config,
@@ -278,6 +289,7 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
             allowed: 0.0,
         });
     }
+    analysis.violations.extend(waiver_violations);
     if let Some(violation) = evaluate_cost_coverage(config.cost.as_ref(), cost_summary.as_ref()) {
         analysis.violations.push(violation);
     }

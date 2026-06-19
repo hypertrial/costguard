@@ -127,6 +127,8 @@ class ActionContractTest(unittest.TestCase):
             "policy-organization:",
             "policy-team:",
             "policy-repository:",
+            "receipt-path:",
+            "compare-receipt:",
         ]:
             self.assertIn(policy_input, action)
 

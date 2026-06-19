@@ -57,6 +57,8 @@ pub struct PolicyPermissions {
     pub allow_local_severity_overrides: bool,
     #[serde(default)]
     pub allow_cli_overrides: bool,
+    #[serde(default)]
+    pub allow_local_waivers: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

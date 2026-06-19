@@ -37,6 +37,16 @@ fn parse_yaml_value(value: Value) -> DbtProject {
                 continue;
             };
             let tags = string_or_string_array(model.get("tags"));
+            let mut owners = owners_from_meta(model.get("meta"));
+            merge_strings(
+                &mut owners,
+                owners_from_meta(model.get("config").and_then(|config| config.get("meta"))),
+            );
+            let group = model
+                .get("group")
+                .or_else(|| model.get("config").and_then(|config| config.get("group")))
+                .and_then(Value::as_str)
+                .map(str::to_string);
             let tests = parse_tests(model.get("tests"));
             let yaml_config = model
                 .get("config")
@@ -61,6 +71,8 @@ fn parse_yaml_value(value: Value) -> DbtProject {
                     full_refresh: yaml_config.full_refresh,
                     on_schema_change: yaml_config.on_schema_change,
                     tags,
+                    owners,
+                    group,
                     tests,
                     columns,
                     ..DbtModel::default()
@@ -105,11 +117,14 @@ fn parse_yaml_value(value: Value) -> DbtProject {
                 .filter_map(Value::as_str)
                 .map(str::to_string)
                 .collect();
+            let mut owners = owners_from_value(exposure.get("owner"));
+            merge_strings(&mut owners, owners_from_meta(exposure.get("meta")));
             project.exposures.insert(
                 name.to_string(),
                 DbtExposure {
                     name: name.to_string(),
                     depends_on,
+                    owners,
                 },
             );
         }
@@ -133,6 +148,8 @@ pub fn merge_yaml_project(target: &mut DbtProject, yaml: DbtProject) {
                     unique_id: Some(synthesized_model_id(None, None, &name)),
                     name,
                     tags: yaml_model.tags.clone(),
+                    owners: yaml_model.owners.clone(),
+                    group: yaml_model.group.clone(),
                     tests: yaml_model.tests.clone(),
                     columns: yaml_model.columns.clone(),
                     materialized: yaml_model.materialized.clone(),
@@ -169,7 +186,12 @@ pub fn merge_yaml_project(target: &mut DbtProject, yaml: DbtProject) {
         }
     }
     for (name, exposure) in yaml.exposures {
-        target.exposures.entry(name).or_insert(exposure);
+        if let Some(existing) = target.exposures.get_mut(&name) {
+            merge_strings(&mut existing.owners, exposure.owners);
+            merge_strings(&mut existing.depends_on, exposure.depends_on);
+        } else {
+            target.exposures.insert(name, exposure);
+        }
     }
 }
 
@@ -183,9 +205,46 @@ fn merge_model_metadata(model: &mut DbtModel, yaml_model: &DbtModel) {
             }
         }
     }
+    merge_strings(&mut model.owners, yaml_model.owners.clone());
+    if model.group.is_none() {
+        model.group = yaml_model.group.clone();
+    }
     merge_model_config_fields(model, yaml_model);
     merge_columns(&mut model.columns, yaml_model.columns.clone());
     merge_tests(&mut model.tests, yaml_model.tests.clone());
+}
+
+fn merge_strings(target: &mut Vec<String>, values: Vec<String>) {
+    for value in values {
+        if !target.contains(&value) {
+            target.push(value);
+        }
+    }
+}
+
+fn owners_from_meta(meta: Option<&Value>) -> Vec<String> {
+    let mut owners = Vec::new();
+    let Some(meta) = meta else { return owners };
+    merge_strings(&mut owners, owners_from_value(meta.get("owner")));
+    merge_strings(&mut owners, owners_from_value(meta.get("owners")));
+    owners
+}
+
+fn owners_from_value(value: Option<&Value>) -> Vec<String> {
+    match value {
+        Some(Value::String(owner)) => vec![owner.clone()],
+        Some(Value::Array(owners)) => owners
+            .iter()
+            .flat_map(|owner| owners_from_value(Some(owner)))
+            .collect(),
+        Some(Value::Object(owner)) => [owner.get("name"), owner.get("email")]
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .map(str::to_string)
+            .collect(),
+        _ => Vec::new(),
+    }
 }
 
 pub fn synthesized_model_id(package_name: Option<&str>, path: Option<&Path>, name: &str) -> String {

@@ -31,9 +31,9 @@ Structured scan result:
 | `analysis` | Always | Completeness report: `policy`, `passed`, and optional `violations` with `code`, `message`, `observed`, and `allowed` |
 | `metrics` | Always | Scan counters including parse metrics (see [Parse metrics](parse-metrics.md)) |
 | `cost` | `[cost]` enabled | Project cost summary: current/post-fix/potential savings, addressable finding savings (deduplicated), top models, grade mix, disclaimer (see [Cost estimates](cost-estimates.md)) |
-| `diagnostics` | Always | Gated findings on changed files in PR mode; full scan findings otherwise. Each entry includes `rule_id`, `severity`, `message`, `path`, `line`, `confidence`, and governance fields (`finding_id`, `evidence_key`); optional advisory `rule_precision_tier` (measured benchmark tier, does not gate CI); optional `cost_estimate` when `[cost]` is enabled (`p50_usd_per_month` is **savings**, not model total; may include `downstream_model_count` and `downstream_monthly_p50_usd`); compiled-only unmapped findings include `source_provenance`, `compiled_line`, and `compiled_column` |
+| `diagnostics` | Always | Gated findings on changed files in PR mode; full scan findings otherwise. Entries include governance fields (`finding_id`, `evidence_key`, optional `owners` and `exception`), advisory `rule_precision_tier`, and optional cost data including `prior_basis`, downstream count, and savings |
 | `files` | Always | Per-model parse metadata (`parse_input`, `parsed_raw`, `parsed_compiled`, `feature_extraction_used_ast`) |
-| `pr_summary` | PR mode | Changed files, affected downstream models/exposures, recommended `dbt build --select` |
+| `pr_summary` | PR mode, or receipt comparison | Receipt version, changed model details/owners, owner counts, gate results, downstream models/exposures, recommended `dbt build --select`, and optional trend deltas |
 | `context` | PR mode | Nonblocking full-project report (see below) |
 
 ### PR `context` report
@@ -64,6 +64,8 @@ Compiled-only unmapped diagnostics annotate the raw model path at line 1 and inc
 
 PR-summary-oriented report with grouped findings, context footer, suppression guidance, and (when `[cost]` is enabled in PR mode) a **PR Cost Impact** section before diagnostics: net/introduced/avoided cost delta, efficiency/volume split, blast radius, coverage, addressable savings, grade mix, and top models. Per-finding lines include severity, confidence, precision tier, and savings when priced.
 
+`--summary-file` writes this report without changing stdout. `--receipt-file` writes the same run as JSON v4. `--compare-receipt` reads a prior JSON v4 receipt and adds diagnostic, high-finding, USD, and GB-month trend deltas under `pr_summary.trend`.
+
 ## SARIF (`sarif`)
 
 [SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html) for GitHub Code Scanning, GitLab SAST (`reports: sast`), and Jenkins SARIF plugins.
@@ -79,7 +81,7 @@ Use `--write-baseline` / `--baseline` (or `[output].baseline` in config) to gran
 | `baselined_findings` | Findings suppressed by the baseline file |
 | `new_findings` | Findings reported after baseline filtering |
 
-Exit code `1` applies when analysis completeness checks fail (`analysis.passed = false`), to **new** findings at or above `--fail-on`, when **addressable finding savings** p50 on new findings exceeds `--fail-on-cost-delta` (USD) or `fail_on_monthly_delta_gb` (GB-months) when set, or when mapped-spend coverage is below `--min-cost-coverage` / `[cost].min_mapped_spend_fraction` when set (`analysis.violations` code `cost_coverage`).
+Exit code `1` applies when analysis completeness checks fail (`analysis.passed = false`), a blocking scoped gate fails, to **new** findings at or above `--fail-on`, when **addressable finding savings** p50 on new findings exceeds `--fail-on-cost-delta` (USD) or `fail_on_monthly_delta_gb` (GB-months) when set, or when mapped-spend coverage is below `--min-cost-coverage` / `[cost].min_mapped_spend_fraction` when set (`analysis.violations` code `cost_coverage`).
 
 PR markdown output includes a reminder:
 
@@ -92,7 +94,7 @@ Suppress only intentional exceptions with `-- costguard: disable-next-line=RULE`
 | Code | Meaning |
 | --- | --- |
 | `0` | Analysis completeness checks passed; no diagnostics at or above `--fail-on` / `fail_on` (and `--min-confidence` / `min_confidence` when set); cost delta and optional cost-coverage gates not exceeded; `explain` completed with `analysis.passed = true` |
-| `1` | Analysis completeness checks failed (including optional `cost_coverage` when mapped-spend fraction is below threshold), one or more diagnostics at or above severity threshold with confidence at or above the optional floor, or addressable finding savings cost gate exceeded; `explain` with `analysis.passed = false` |
+| `1` | Analysis completeness failed, a blocking scoped gate failed, diagnostics met severity/confidence thresholds, or an enabled cost threshold was exceeded; `explain` with `analysis.passed = false` |
 | `2` | Configuration error (invalid config, missing manifest path, unsupported baseline or policy schema) |
 | `3` | Runtime error |
 

@@ -98,6 +98,8 @@ pub struct DbtModel {
     pub on_schema_change: Option<String>,
     pub compiled_code: Option<String>,
     pub tags: Vec<String>,
+    pub owners: Vec<String>,
+    pub group: Option<String>,
     pub columns: Vec<DbtColumn>,
     pub tests: Vec<DbtTest>,
     pub refs: Vec<String>,
@@ -123,6 +125,7 @@ pub struct DbtSource {
 pub struct DbtExposure {
     pub name: String,
     pub depends_on: Vec<String>,
+    pub owners: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -269,6 +272,9 @@ where id not in (select id from {{ this }})
 models:
   - name: fct_sessions
     tags: [mart, critical]
+    group: finance
+    meta:
+      owners: ["@finance", "data@example.com"]
     tests:
       - unique:
           column_name: id
@@ -282,17 +288,26 @@ sources:
       - name: events
 exposures:
   - name: dashboard
+    owner:
+      name: Analytics
+      email: analytics@example.com
     depends_on:
       - ref('fct_sessions')
 "#;
         let project = parse_yaml_project(yaml);
         let model = project.model_by_name("fct_sessions").unwrap();
         assert_eq!(model.tags, vec!["mart", "critical"]);
+        assert_eq!(model.owners, vec!["@finance", "data@example.com"]);
+        assert_eq!(model.group.as_deref(), Some("finance"));
         assert_eq!(model.columns[0].tests[0].name, "not_null");
         assert_eq!(project.sources["raw"].tables, vec!["events"]);
         assert_eq!(
             project.exposures["dashboard"].depends_on[0],
             "ref('fct_sessions')"
+        );
+        assert_eq!(
+            project.exposures["dashboard"].owners,
+            vec!["Analytics", "analytics@example.com"]
         );
     }
 
@@ -395,7 +410,9 @@ models:
       "package_name": "pkg",
       "fqn": ["pkg", "marts", "fct_block_time"],
       "original_file_path": "models/marts/fct_block_time.sql",
-      "config": { "materialized": "incremental" },
+      "meta": { "owner": "@manifest-owner" },
+      "group": "finance",
+      "config": { "materialized": "incremental", "meta": { "owners": ["data@example.com"] } },
       "compiled_code": "select tx_hash, block_time from dex.trades"
     },
     "model.pkg.legacy_model": {
@@ -416,6 +433,8 @@ models:
         assert_eq!(compiled.identity(), "model.pkg.fct_block_time");
         assert_eq!(compiled.package_name.as_deref(), Some("pkg"));
         assert_eq!(compiled.fqn, vec!["pkg", "marts", "fct_block_time"]);
+        assert_eq!(compiled.owners, vec!["@manifest-owner", "data@example.com"]);
+        assert_eq!(compiled.group.as_deref(), Some("finance"));
         let legacy = project.model_by_name("legacy_model").unwrap();
         assert_eq!(legacy.compiled_code.as_deref(), Some("select 1 as id"));
 

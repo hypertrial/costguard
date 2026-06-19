@@ -219,6 +219,121 @@ fn pr_mode_scans_changed_files_but_uses_transitive_context() {
 }
 
 #[test]
+fn pr_receipt_routes_owners_applies_waiver_and_reports_trend() {
+    let tempdir = tempfile::tempdir().expect("tempdir");
+    let root = tempdir.path();
+    fs::create_dir_all(root.join("models/finance")).unwrap();
+    fs::write(
+        root.join("models/finance/orders.sql"),
+        "select id from raw_orders\n",
+    )
+    .unwrap();
+    git(root, &["init"]);
+    git(root, &["config", "user.email", "costguard@example.com"]);
+    git(root, &["config", "user.name", "Costguard Test"]);
+    git(root, &["add", "."]);
+    git(root, &["commit", "-m", "initial"]);
+    fs::write(
+        root.join("models/finance/orders.sql"),
+        "select * from raw_orders cross join raw_customers\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("costguard.toml"),
+        r#"[owners.paths]
+"models/finance/**" = "@finance"
+
+[gate]
+fail_on = "high"
+require_owner = true
+
+[[waivers]]
+id = "CG-1"
+rule_id = "SQLCOST012"
+path = "models/finance/**"
+owner = "@finance"
+reason = "approved migration"
+ticket_url = "https://example.com/CG-1"
+approver = "@lead"
+created_at = "2026-01-01T00:00:00Z"
+expires_at = "2099-01-01T00:00:00Z"
+"#,
+    )
+    .unwrap();
+    let receipt = root.join("receipt.json");
+    let summary = root.join("summary.md");
+    let output = costguard_command()
+        .args(["pr", "--base", "HEAD", "--format", "json", "--cost"])
+        .arg("--warehouse")
+        .arg("bigquery")
+        .arg("--summary-file")
+        .arg(&summary)
+        .arg("--receipt-file")
+        .arg(&receipt)
+        .current_dir(root)
+        .output()
+        .unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "stdout={}\nstderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let payload: serde_json::Value = serde_json::from_slice(&fs::read(&receipt).unwrap()).unwrap();
+    assert_eq!(payload["pr_summary"]["receipt_version"], 1);
+    assert_eq!(
+        payload["pr_summary"]["changed_model_details"][0]["owners"][0],
+        "@finance"
+    );
+    assert_eq!(payload["pr_summary"]["gate_results"][0]["status"], "pass");
+    let diagnostic = payload["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|diagnostic| diagnostic["rule_id"] == "SQLCOST012")
+        .unwrap();
+    assert_eq!(diagnostic["enforcement"], "excepted");
+    assert_eq!(
+        diagnostic["cost_estimate"]["prior_basis"],
+        "warehouse-prior:bigquery"
+    );
+    assert!(fs::read_to_string(&summary).unwrap().contains("## Gates"));
+
+    let next = root.join("next.json");
+    let compared = costguard_command()
+        .args(["pr", "--base", "HEAD", "--format", "json"])
+        .arg("--compare-receipt")
+        .arg(&receipt)
+        .arg("--receipt-file")
+        .arg(&next)
+        .current_dir(root)
+        .output()
+        .unwrap();
+    assert_eq!(compared.status.code(), Some(0));
+    let compared: serde_json::Value = serde_json::from_slice(&fs::read(&next).unwrap()).unwrap();
+    assert_eq!(compared["pr_summary"]["trend"]["diagnostics_delta"], 0);
+    assert_eq!(compared["pr_summary"]["trend"]["high_findings_delta"], 0);
+
+    let config = fs::read_to_string(root.join("costguard.toml"))
+        .unwrap()
+        .replace("2099-01-01T00:00:00Z", "2026-02-01T00:00:00Z");
+    fs::write(root.join("costguard.toml"), config).unwrap();
+    let expired = costguard_command()
+        .args(["pr", "--base", "HEAD", "--format", "json"])
+        .current_dir(root)
+        .output()
+        .unwrap();
+    assert_eq!(expired.status.code(), Some(1));
+    let expired: serde_json::Value = serde_json::from_slice(&expired.stdout).unwrap();
+    assert!(expired["analysis"]["violations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|violation| violation["code"] == "expired_waiver"));
+}
+
+#[test]
 fn pr_mode_scans_newline_filename_without_bypass() {
     let tempdir = tempfile::tempdir().expect("tempdir");
     let root = tempdir.path();
@@ -349,7 +464,7 @@ fn version_reports_workspace_version() {
     assert!(output.status.success());
     assert_eq!(
         String::from_utf8_lossy(&output.stdout).trim(),
-        "costguard 2.4.0"
+        "costguard 2.5.0"
     );
 }
 
@@ -363,7 +478,7 @@ fn version_propagates_to_every_subcommand() {
         assert!(output.status.success(), "{subcommand}");
         assert_eq!(
             String::from_utf8_lossy(&output.stdout).trim(),
-            format!("costguard-{subcommand} 2.4.0"),
+            format!("costguard-{subcommand} 2.5.0"),
             "{subcommand}"
         );
     }

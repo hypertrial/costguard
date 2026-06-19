@@ -25,7 +25,7 @@ Generic SQL, Snowflake, BigQuery, and Trino scanning are production-ready; Datab
 curl -fsSL https://raw.githubusercontent.com/hypertrial/costguard/main/scripts/install.sh | sh
 ```
 
-Pin a version: `... | sh -s -- v2.4.0`. Or build from source: `cargo install --git https://github.com/hypertrial/costguard --tag v2.4.0 costguard-cli`.
+Pin a version: `... | sh -s -- v2.5.0`. Or build from source: `cargo install --git https://github.com/hypertrial/costguard --tag v2.5.0 costguard-cli`.
 
 See [Installation](docs/book/getting-started/installation.md) for pinned/airgapped manual install and Windows.
 
@@ -56,15 +56,16 @@ Or add the Action manually after your existing dbt compile step:
   with:
     fetch-depth: 0
 - run: dbt compile --target dev
-- uses: hypertrial/costguard/.github/actions/costguard@v2.4.0
+- uses: hypertrial/costguard/.github/actions/costguard@v2.5.0
   with:
     base: origin/main
     warehouse: snowflake
     fail-on: high
     min-confidence: high
+    receipt-path: costguard-receipt.json
 ```
 
-Pin the exact Action tag `@v2.4.0` or use the moving compatible major tag `@v2`. Release binaries are checksum-protected and include provenance attestations.
+Pin the exact Action tag `@v2.5.0` or use the moving compatible major tag `@v2`. Release binaries are checksum-protected and include provenance attestations.
 
 **2.1 requirements:** Use baseline v3 and policy v2 with `identity_scheme: "semantic-v1"`. Older baseline and policy schemas are rejected at scan time. See [Compatibility policy](docs/book/reference/compatibility.md).
 
@@ -142,7 +143,7 @@ HIGH SQLCOST014 models/staging/stg_events.sql:18:5
 exit code: 1
 ```
 
-Use `--format github` for workflow annotations or `--format markdown` for PR comments.
+Use `--format github` for workflow annotations. Add `--summary-file summary.md` and `--receipt-file receipt.json` to write markdown and JSON v4 from the same scan; `--compare-receipt previous.json` adds trend deltas. The Action writes its markdown step summary automatically.
 
 ## What it detects
 
@@ -184,6 +185,15 @@ fail_on = "high"
 
 [dbt]
 manifest_path = "target/manifest.json"
+
+[owners]
+codeowners = true
+default = "@data-platform"
+
+[gate]
+fail_on = "high"
+min_confidence = "high"
+require_owner = true
 ```
 
 Full schema: [Configuration](docs/book/reference/configuration.md).
@@ -193,12 +203,12 @@ Full schema: [Configuration](docs/book/reference/configuration.md).
 | Code | Meaning |
 | --- | --- |
 | `0` | Pass |
-| `1` | Findings at or above `--fail-on` with confidence at or above `--min-confidence` when set, or estimated monthly p50 cost at or above `--fail-on-cost-delta` when set |
+| `1` | Analysis incomplete, a blocking PR gate failed, findings met `--fail-on`/`--min-confidence`, or an enabled cost threshold was exceeded |
 | `2` | Config error |
 | `3` | Runtime error |
 
 ## Status
 
-`v2.4.0` adds lineage-aware downstream cost propagation (`downstream_monthly_p50_usd`, `pr_impact.blast_radius`), warehouse-specific cost priors (Snowflake/BigQuery/Databricks), committed [benchmark evidence](docs/book/reference/benchmarks.md) and measured precision tiers (`rule_precision_tier` advisory field). Non-breaking: JSON schema v4, baseline v3, and policy v2 unchanged. `v2.3.0` added stale-manifest detection (`SQLCOST045`), `costguard init`, the `install.sh` one-liner, `--min-confidence-filter`, and broad false-positive fixes across join and shape rules. `v2.2.0` added observation-based cost inputs, corrected savings counterfactual, and JSON schema v4 cost reporting. `v2.1.0` added semantic finding identity (`semantic-v1`), baseline v3, policy v2, and PR context reporting. Generic SQL, Snowflake, BigQuery, and Trino are supported; Databricks, Redshift, Postgres, and DuckDB remain preview. Cost estimates are advisory, warehouse connectivity is out of scope, and manifest-backed analysis requires the caller's dbt compile step. See the [support policy](SUPPORT.md), [compatibility policy](docs/book/reference/compatibility.md), and [security policy](SECURITY.md).
+`v2.5.0` adds owner-aware routing, scoped PR gates, expiring local waivers controlled by signed policy, one-scan markdown/JSON receipts with trend comparison, and explicit warehouse-prior provenance. JSON schema v4, baseline v3, policy v2, rule IDs, and default exit behavior remain compatible. `v2.4.0` added lineage-aware downstream cost propagation, warehouse cost priors, committed [benchmark evidence](docs/book/reference/benchmarks.md), and measured precision tiers. Generic SQL, Snowflake, BigQuery, and Trino are supported; Databricks, Redshift, Postgres, and DuckDB remain preview. Cost estimates are advisory, warehouse connectivity is out of scope, and manifest-backed analysis requires the caller's dbt compile step. See the [support policy](SUPPORT.md), [compatibility policy](docs/book/reference/compatibility.md), and [security policy](SECURITY.md).
 
 Licensed under [MIT](LICENSE). Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).

@@ -4,6 +4,7 @@ use costguard_diagnostics::{Confidence, Severity};
 use costguard_rules::{RuleOverrides, RuleRegistry};
 use costguard_sql::Platform;
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
@@ -126,6 +127,9 @@ pub struct ScanConfig {
     pub cost: Option<CostConfig>,
     pub analysis: AnalysisConfig,
     pub signed_policy: SignedPolicyConfig,
+    pub owners: OwnersConfig,
+    pub gate: Option<GateConfig>,
+    pub waivers: Vec<Waiver>,
 }
 
 impl Default for ScanConfig {
@@ -149,6 +153,9 @@ impl Default for ScanConfig {
             cost: None,
             analysis: AnalysisConfig::default(),
             signed_policy: SignedPolicyConfig::default(),
+            owners: OwnersConfig::default(),
+            gate: None,
+            waivers: Vec::new(),
         }
     }
 }
@@ -165,6 +172,103 @@ pub struct FileConfig {
     pub cost: Option<CostSection>,
     pub analysis: Option<AnalysisSection>,
     pub policy: Option<SignedPolicySection>,
+    pub owners: Option<OwnersConfig>,
+    pub gate: Option<GateConfig>,
+    #[serde(default)]
+    pub waivers: Vec<Waiver>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OwnersConfig {
+    #[serde(default)]
+    pub default: OwnerValue,
+    #[serde(default)]
+    pub codeowners: bool,
+    #[serde(default)]
+    pub paths: BTreeMap<String, OwnerValue>,
+    #[serde(default)]
+    pub tags: BTreeMap<String, OwnerValue>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(untagged)]
+pub enum OwnerValue {
+    #[default]
+    Empty,
+    One(String),
+    Many(Vec<String>),
+}
+
+impl OwnerValue {
+    pub fn values(&self) -> Vec<String> {
+        match self {
+            Self::Empty => Vec::new(),
+            Self::One(value) => vec![value.clone()],
+            Self::Many(values) => values.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GateMode {
+    #[default]
+    Block,
+    Warn,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GateConfig {
+    pub name: Option<String>,
+    #[serde(default)]
+    pub mode: GateMode,
+    pub fail_on: Option<Severity>,
+    pub min_confidence: Option<Confidence>,
+    pub fail_on_monthly_delta: Option<f64>,
+    pub fail_on_monthly_delta_gb: Option<f64>,
+    pub fail_on_blast_radius: Option<usize>,
+    #[serde(default)]
+    pub require_owner: bool,
+    #[serde(default)]
+    pub scopes: Vec<GateScope>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GateScope {
+    pub name: String,
+    #[serde(default)]
+    pub mode: GateMode,
+    #[serde(default)]
+    pub paths: Vec<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub owners: Vec<String>,
+    pub fail_on: Option<Severity>,
+    pub min_confidence: Option<Confidence>,
+    pub fail_on_monthly_delta: Option<f64>,
+    pub fail_on_monthly_delta_gb: Option<f64>,
+    pub fail_on_blast_radius: Option<usize>,
+    #[serde(default)]
+    pub require_owner: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Waiver {
+    pub id: String,
+    pub finding_id: Option<String>,
+    pub rule_id: Option<String>,
+    pub path: String,
+    pub owner: String,
+    pub reason: String,
+    pub ticket_url: String,
+    pub approver: String,
+    pub created_at: String,
+    pub expires_at: String,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -320,6 +424,11 @@ pub fn apply_file_config(mut config: ScanConfig, file_config: FileConfig) -> Res
         config.signed_policy.repository = policy.repository;
         config.signed_policy.required = policy.required.unwrap_or(false);
     }
+    if let Some(owners) = file_config.owners {
+        config.owners = owners;
+    }
+    config.gate = file_config.gate;
+    config.waivers = file_config.waivers;
     Ok(config)
 }
 
@@ -448,6 +557,11 @@ pub fn validate_scan_config(config: &ScanConfig) -> Result<()> {
     if let Some(cost) = &config.cost {
         cost.validate()?;
     }
+    validate_owners(&config.owners)?;
+    if let Some(gate) = &config.gate {
+        validate_gate(gate)?;
+    }
+    validate_waivers(&config.waivers)?;
     if config.signed_policy.required && config.signed_policy.bundle_path.is_none() {
         anyhow::bail!("signed policy is required but no bundle is configured");
     }
@@ -471,6 +585,118 @@ pub fn validate_scan_config(config: &ScanConfig) -> Result<()> {
             if !resolved.is_file() {
                 anyhow::bail!("{label} does not exist: {}", resolved.display());
             }
+        }
+    }
+    Ok(())
+}
+
+fn validate_owners(config: &OwnersConfig) -> Result<()> {
+    for owner in config
+        .default
+        .values()
+        .into_iter()
+        .chain(config.paths.values().flat_map(OwnerValue::values))
+        .chain(config.tags.values().flat_map(OwnerValue::values))
+    {
+        if owner.trim().is_empty() {
+            anyhow::bail!("owners entries cannot be empty");
+        }
+    }
+    for pattern in config.paths.keys() {
+        globset::Glob::new(pattern)
+            .with_context(|| format!("invalid owners.paths glob '{pattern}'"))?;
+    }
+    Ok(())
+}
+
+fn validate_gate(gate: &GateConfig) -> Result<()> {
+    validate_gate_values(
+        gate.name.as_deref().unwrap_or("default"),
+        gate.fail_on_monthly_delta,
+        gate.fail_on_monthly_delta_gb,
+        gate.fail_on_blast_radius,
+    )?;
+    let mut names = HashSet::new();
+    for scope in &gate.scopes {
+        if !names.insert(scope.name.as_str()) {
+            anyhow::bail!("duplicate gate scope name '{}'", scope.name);
+        }
+        if scope.paths.is_empty() && scope.tags.is_empty() && scope.owners.is_empty() {
+            anyhow::bail!(
+                "gate scope '{}' must specify paths, tags, or owners",
+                scope.name
+            );
+        }
+        for pattern in &scope.paths {
+            globset::Glob::new(pattern).with_context(|| {
+                format!("invalid gate scope '{}' path glob '{pattern}'", scope.name)
+            })?;
+        }
+        validate_gate_values(
+            &scope.name,
+            scope.fail_on_monthly_delta,
+            scope.fail_on_monthly_delta_gb,
+            scope.fail_on_blast_radius,
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_gate_values(
+    name: &str,
+    monthly: Option<f64>,
+    monthly_gb: Option<f64>,
+    blast_radius: Option<usize>,
+) -> Result<()> {
+    if name.trim().is_empty() {
+        anyhow::bail!("gate name cannot be empty");
+    }
+    for (field, value) in [
+        ("fail_on_monthly_delta", monthly),
+        ("fail_on_monthly_delta_gb", monthly_gb),
+    ] {
+        if value.is_some_and(|value| !value.is_finite() || value <= 0.0) {
+            anyhow::bail!("gate '{name}' {field} must be finite and positive");
+        }
+    }
+    if blast_radius == Some(0) {
+        anyhow::bail!("gate '{name}' fail_on_blast_radius must be positive");
+    }
+    Ok(())
+}
+
+fn validate_waivers(waivers: &[Waiver]) -> Result<()> {
+    let mut ids = HashSet::new();
+    for waiver in waivers {
+        if !ids.insert(waiver.id.as_str()) {
+            anyhow::bail!("duplicate waiver id '{}'", waiver.id);
+        }
+        for (field, value) in [
+            ("id", waiver.id.as_str()),
+            ("path", waiver.path.as_str()),
+            ("owner", waiver.owner.as_str()),
+            ("reason", waiver.reason.as_str()),
+            ("ticket_url", waiver.ticket_url.as_str()),
+            ("approver", waiver.approver.as_str()),
+        ] {
+            if value.trim().is_empty() {
+                anyhow::bail!("waiver '{}' {field} cannot be empty", waiver.id);
+            }
+        }
+        if waiver.finding_id.is_some() == waiver.rule_id.is_some() {
+            anyhow::bail!(
+                "waiver '{}' must specify exactly one of finding_id or rule_id",
+                waiver.id
+            );
+        }
+        globset::Glob::new(&waiver.path)
+            .with_context(|| format!("invalid waiver '{}' path glob", waiver.id))?;
+        let created = chrono::DateTime::parse_from_rfc3339(&waiver.created_at)
+            .with_context(|| format!("waiver '{}' created_at must be RFC3339", waiver.id))?;
+        let expires = chrono::DateTime::parse_from_rfc3339(&waiver.expires_at)
+            .with_context(|| format!("waiver '{}' expires_at must be RFC3339", waiver.id))?;
+        if expires <= created {
+            anyhow::bail!("waiver '{}' expires_at must be after created_at", waiver.id);
         }
     }
     Ok(())
@@ -533,5 +759,109 @@ max_skipped_files = 10
         assert_eq!(effective.max_parse_failure_rate, 0.0);
         assert_eq!(effective.max_skipped_files, 0);
         assert!(effective.fail_on_metadata_errors);
+    }
+
+    #[test]
+    fn parses_and_validates_owners_gates_and_waivers() {
+        let file: FileConfig = toml::from_str(
+            r#"
+[owners]
+default = "@data"
+codeowners = true
+
+[owners.paths]
+"models/finance/**" = ["@finance"]
+
+[owners.tags]
+critical = "@platform"
+
+[gate]
+name = "default"
+fail_on = "high"
+min_confidence = "medium"
+require_owner = true
+
+[[gate.scopes]]
+name = "finance"
+mode = "warn"
+paths = ["models/finance/**"]
+owners = ["@finance"]
+fail_on_monthly_delta = 100.0
+fail_on_blast_radius = 2
+
+[[waivers]]
+id = "CG-1"
+rule_id = "SQLCOST001"
+path = "models/finance/**"
+owner = "@finance"
+reason = "migration"
+ticket_url = "https://example.com/CG-1"
+approver = "@lead"
+created_at = "2026-01-01T00:00:00Z"
+expires_at = "2026-12-01T00:00:00Z"
+"#,
+        )
+        .unwrap();
+        let config = apply_file_config(ScanConfig::default(), file).unwrap();
+        validate_scan_config(&config).unwrap();
+        assert_eq!(config.owners.default.values(), vec!["@data"]);
+        assert_eq!(config.gate.unwrap().scopes.len(), 1);
+        assert_eq!(config.waivers.len(), 1);
+    }
+
+    #[test]
+    fn rejects_unscoped_gate_scope() {
+        let file: FileConfig = toml::from_str(
+            r#"
+[gate]
+[[gate.scopes]]
+name = "bad"
+
+[[waivers]]
+id = "CG-1"
+finding_id = "finding"
+rule_id = "SQLCOST001"
+path = "models/**"
+owner = "@data"
+reason = "migration"
+ticket_url = "https://example.com/CG-1"
+approver = "@lead"
+created_at = "2026-01-01T00:00:00Z"
+expires_at = "2026-12-01T00:00:00Z"
+"#,
+        )
+        .unwrap();
+        let config = apply_file_config(ScanConfig::default(), file).unwrap();
+        let error = validate_scan_config(&config).unwrap_err().to_string();
+        assert!(
+            error.contains("must specify paths, tags, or owners"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn rejects_ambiguous_waiver_matcher() {
+        let file: FileConfig = toml::from_str(
+            r#"
+[[waivers]]
+id = "CG-1"
+finding_id = "finding"
+rule_id = "SQLCOST001"
+path = "models/**"
+owner = "@data"
+reason = "migration"
+ticket_url = "https://example.com/CG-1"
+approver = "@lead"
+created_at = "2026-01-01T00:00:00Z"
+expires_at = "2026-12-01T00:00:00Z"
+"#,
+        )
+        .unwrap();
+        let config = apply_file_config(ScanConfig::default(), file).unwrap();
+        let error = validate_scan_config(&config).unwrap_err().to_string();
+        assert!(
+            error.contains("exactly one of finding_id or rule_id"),
+            "{error}"
+        );
     }
 }

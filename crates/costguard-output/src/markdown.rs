@@ -1,4 +1,4 @@
-use costguard_core::{PrSummary, ScanResult};
+use costguard_core::{GateStatus, PrSummary, ScanResult};
 use costguard_cost::format_cost_line;
 use costguard_diagnostics::{Diagnostic, Severity};
 
@@ -12,8 +12,21 @@ pub(crate) fn render_markdown(result: &ScanResult) -> String {
     let high_count = result
         .diagnostics
         .iter()
-        .filter(|diagnostic| diagnostic.severity >= Severity::High)
+        .filter(|diagnostic| {
+            diagnostic.severity >= Severity::High
+                && diagnostic.governance.enforcement
+                    != costguard_protocol::EnforcementOutcome::Excepted
+                && (result.policy.digest == "local-unmanaged"
+                    || diagnostic.governance.enforcement
+                        == costguard_protocol::EnforcementOutcome::Blocked)
+        })
         .count();
+    let blocking_gate = result.pr_summary.as_ref().is_some_and(|summary| {
+        summary
+            .gate_results
+            .iter()
+            .any(|gate| gate.status == GateStatus::Fail)
+    });
     if !result.analysis.passed {
         output.push_str("# Costguard analysis incomplete\n\n");
         for violation in &result.analysis.violations {
@@ -24,14 +37,18 @@ pub(crate) fn render_markdown(result: &ScanResult) -> String {
             ));
         }
         output.push('\n');
-    } else if high_count > 0 {
-        output.push_str(&format!(
-            "# Costguard failed this PR\n\n{high_count} high-risk cost finding"
-        ));
-        if high_count != 1 {
-            output.push('s');
+    } else if blocking_gate || high_count > 0 {
+        output.push_str("# Costguard failed this PR\n\n");
+        if high_count > 0 {
+            output.push_str(&format!("{high_count} high-risk cost finding"));
+            if high_count != 1 {
+                output.push('s');
+            }
+            output.push_str(".\n\n");
         }
-        output.push_str(".\n\n");
+        if blocking_gate {
+            output.push_str("A blocking PR gate failed.\n\n");
+        }
     } else {
         output.push_str("# Costguard passed\n\nNo high-risk cost findings.\n\n");
     }
@@ -43,6 +60,25 @@ pub(crate) fn render_markdown(result: &ScanResult) -> String {
     }
 
     if let Some(summary) = &result.pr_summary {
+        if !summary.gate_results.is_empty() {
+            output.push_str("## Gates\n\n");
+            for gate in &summary.gate_results {
+                output.push_str(&format!(
+                    "- **{}:** {}",
+                    escape_markdown(&gate.name),
+                    match gate.status {
+                        GateStatus::Pass => "pass",
+                        GateStatus::Warn => "warn",
+                        GateStatus::Fail => "fail",
+                    }
+                ));
+                if !gate.reasons.is_empty() {
+                    output.push_str(&format!(" — {}", escape_markdown(&gate.reasons.join("; "))));
+                }
+                output.push('\n');
+            }
+            output.push('\n');
+        }
         output.push_str("## PR Impact\n\n");
         markdown_list(&mut output, "Changed dbt models", &summary.changed_models);
         markdown_list(
@@ -50,6 +86,29 @@ pub(crate) fn render_markdown(result: &ScanResult) -> String {
             "Affected downstream",
             &summary.affected_downstream,
         );
+        if !summary.owner_summary.is_empty() {
+            output.push_str("Changed model owners:\n");
+            for (owner, count) in &summary.owner_summary {
+                output.push_str(&format!(
+                    "- {}: {} model(s)\n",
+                    escape_markdown(owner),
+                    count
+                ));
+            }
+            output.push('\n');
+        }
+        if let Some(trend) = &summary.trend {
+            output.push_str(&format!(
+                "Receipt trend: {:+} findings, {:+} high findings",
+                trend.diagnostics_delta, trend.high_findings_delta
+            ));
+            if let Some(delta) = trend.monthly_savings_delta_usd {
+                output.push_str(&format!(", {delta:+.0} USD/mo"));
+            } else if let Some(delta) = trend.monthly_savings_delta_gb {
+                output.push_str(&format!(", {delta:+.0} GB-mo"));
+            }
+            output.push_str(".\n\n");
+        }
         markdown_list(
             &mut output,
             "Affected exposures",

@@ -46,7 +46,8 @@ pub use model_cost::{
     ModelCostIndex, PrCostImpact, ProjectCostSummary, RealizedSavings, TopModelCost,
 };
 pub use multipliers::{
-    is_cost_bearing_rule, is_infrastructure_rule, rule_multiplier, unestimated_reason,
+    is_cost_bearing_rule, is_infrastructure_rule, rule_multiplier, rule_multiplier_with_basis,
+    unestimated_reason,
 };
 pub use observations::{load_observations, ObservationStats, ObservedModelCost};
 pub use query_history::QueryHistoryStats;

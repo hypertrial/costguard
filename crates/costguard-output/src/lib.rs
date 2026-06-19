@@ -146,6 +146,9 @@ pub(crate) fn format_diagnostic_meta(diagnostic: &Diagnostic) -> String {
     if let Some(tier) = &diagnostic.rule_precision_tier {
         parts.push(format!("precision {tier}"));
     }
+    if !diagnostic.governance.owners.is_empty() {
+        parts.push(format!("owners {}", diagnostic.governance.owners.join("/")));
+    }
     parts.join(", ")
 }
 
@@ -545,7 +548,7 @@ pub(crate) fn append_analysis_text(output: &mut String, result: &ScanResult) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use costguard_core::{ScanMetrics, ScanResult};
+    use costguard_core::{GateMode, GateResult, GateStatus, ScanMetrics, ScanResult};
     use costguard_diagnostics::{Confidence, Diagnostic, Severity, SourceProvenance};
     use costguard_scanner::ScanCounts;
     use std::collections::BTreeMap;
@@ -633,6 +636,26 @@ mod tests {
     fn escape_github_message_preserves_newlines_as_pct() {
         let rendered = render_github(&sample_result(true));
         assert!(rendered.contains("line1%0Aline2"));
+    }
+
+    #[test]
+    fn github_output_reports_gate_failures_and_downgrades_exceptions() {
+        let mut result = sample_result(true);
+        result.diagnostics[0].governance.enforcement =
+            costguard_protocol::EnforcementOutcome::Excepted;
+        result.pr_summary.as_mut().unwrap().gate_results = vec![GateResult {
+            name: "finance".into(),
+            mode: GateMode::Block,
+            status: GateStatus::Fail,
+            matched_findings: 1,
+            reasons: vec!["cost threshold exceeded".into()],
+        }];
+        let rendered = render_github(&result);
+        assert!(rendered.contains("::notice file="), "{rendered}");
+        assert!(
+            rendered.contains("::error title=Costguard gate finance::cost threshold exceeded"),
+            "{rendered}"
+        );
     }
 
     #[test]

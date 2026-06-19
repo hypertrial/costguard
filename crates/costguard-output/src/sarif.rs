@@ -31,6 +31,7 @@ pub(crate) fn render_sarif(result: &ScanResult) -> Result<String> {
                     "policy": result.policy,
                     "analysis": result.analysis,
                     "metrics": result.metrics,
+                    "pr_summary": result.pr_summary,
                     "context": result.context,
                     "identity_scheme": result.identity_scheme
                 }
@@ -69,6 +70,7 @@ pub(crate) fn sarif_results(result: &ScanResult) -> Vec<serde_json::Value> {
                     "enforcementOutcome": diagnostic.governance.enforcement,
                     "policyProvenance": diagnostic.governance.policy,
                     "appliedException": diagnostic.governance.exception
+                    ,"owners": diagnostic.governance.owners
                 }
             });
             if let Some(cost) = &diagnostic.cost_estimate {

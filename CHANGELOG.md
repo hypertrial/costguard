@@ -4,6 +4,21 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-06-19
+
+### Added
+
+- One-scan PR receipts: `--summary-file`, `--receipt-file`, and `--compare-receipt` for `scan` and `pr`; the GitHub Action writes a markdown step summary and can persist or compare JSON v4 receipts.
+- Owner routing from dbt model/exposure metadata, Costguard tag/path maps, CODEOWNERS, dbt groups, and a default owner.
+- Global and path/tag/owner-scoped `[gate]` checks for severity/confidence, cost, blast radius, and required ownership.
+- Expiring `[[waivers]]` with finding/rule/path matching and signed-policy permission `allow_local_waivers`.
+- Warehouse-specific rule multiplier priors with additive `cost_estimate.prior_basis` provenance.
+- Generated benchmark quality ledger covering the release version, precision tiers, TP census, pinned smoke/full repositories, and FP registry status.
+
+### Changed
+
+- Non-breaking release: JSON output remains schema v4; baseline v3 and policy v2 remain compatible; existing CLI defaults and rule IDs are unchanged.
+
 ## [2.4.0] - 2026-06-18
 
 ### Added

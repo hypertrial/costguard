@@ -186,6 +186,14 @@ def resolve_manifest(root: Path) -> str:
 
 def command_run() -> int:
     root = consumer_root()
+    summary = env("GITHUB_STEP_SUMMARY")
+    summary_file: Path | None = None
+    if summary:
+        runner_temp = Path(env("RUNNER_TEMP", tempfile.gettempdir()))
+        runner_temp.mkdir(parents=True, exist_ok=True)
+        handle, name = tempfile.mkstemp(prefix="costguard-summary-", suffix=".md", dir=runner_temp)
+        os.close(handle)
+        summary_file = Path(name)
     command = [
         "costguard",
         "pr",
@@ -200,6 +208,8 @@ def command_run() -> int:
         "--analysis-policy",
         env("ANALYSIS_POLICY_INPUT", "standard"),
     ]
+    if summary_file:
+        command.extend(["--summary-file", str(summary_file)])
     min_confidence = env("MIN_CONFIDENCE_INPUT")
     if min_confidence:
         command.extend(["--min-confidence", min_confidence])
@@ -223,6 +233,8 @@ def command_run() -> int:
         ("POLICY_ORGANIZATION_INPUT", "--policy-organization"),
         ("POLICY_TEAM_INPUT", "--policy-team"),
         ("POLICY_REPOSITORY_INPUT", "--policy-repository"),
+        ("RECEIPT_PATH_INPUT", "--receipt-file"),
+        ("COMPARE_RECEIPT_INPUT", "--compare-receipt"),
     ]
     for env_name, flag in optional_pairs:
         value = env(env_name)
@@ -231,9 +243,10 @@ def command_run() -> int:
     completed = subprocess.run(command, cwd=root, capture_output=True, text=True, check=False)
     sys.stdout.write(completed.stdout)
     sys.stderr.write(completed.stderr)
-    summary = env("GITHUB_STEP_SUMMARY")
-    if env("FORMAT_INPUT") == "markdown" and summary:
-        append_file(Path(summary), completed.stdout.rstrip("\n"))
+    if summary_file:
+        if summary_file.stat().st_size:
+            append_file(Path(summary), summary_file.read_text(encoding="utf-8").rstrip("\n"))
+        summary_file.unlink(missing_ok=True)
     return completed.returncode
 
 

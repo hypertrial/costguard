@@ -8,7 +8,7 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use costguard_core::{
     apply_file_config, explain, init_project, load_config, rules, scan, validate_scan_config,
-    InitOptions, OutputFormat, ScanConfig, ScanRuntimeOverrides,
+    InitOptions, OutputFormat, PrSummary, ReceiptTrend, ScanConfig, ScanRuntimeOverrides,
 };
 use costguard_cost::{normalize_cost_export, CostExportFormat, NormalizeCostOptions};
 use costguard_output::{render, render_rules};
@@ -110,6 +110,8 @@ struct ScanArgs {
     fail_on_cost_delta: Option<f64>,
     #[arg(long, value_name = "0.0..1.0")]
     min_cost_coverage: Option<f64>,
+    #[command(flatten)]
+    receipt: ReceiptArgs,
 }
 
 #[derive(Debug, Parser)]
@@ -198,6 +200,18 @@ struct PrArgs {
     fail_on_cost_delta: Option<f64>,
     #[arg(long, value_name = "0.0..1.0")]
     min_cost_coverage: Option<f64>,
+    #[command(flatten)]
+    receipt: ReceiptArgs,
+}
+
+#[derive(Debug, Parser, Default)]
+struct ReceiptArgs {
+    #[arg(long)]
+    summary_file: Option<PathBuf>,
+    #[arg(long)]
+    receipt_file: Option<PathBuf>,
+    #[arg(long)]
+    compare_receipt: Option<PathBuf>,
 }
 
 #[derive(Debug, Parser, Default)]
@@ -298,11 +312,11 @@ fn run() -> Result<u8> {
     let cli = Cli::parse();
     match cli.command {
         Command::Scan(args) => {
-            let config = match config_from_scan_args(args).context("configuration error") {
+            let config = match config_from_scan_args(&args).context("configuration error") {
                 Ok(config) => config,
                 Err(err) => return configuration_error(err),
             };
-            scan_render_exit(&config)
+            scan_render_exit(&config, &args.receipt)
         }
         Command::Explain(args) => {
             let config = match config_from_explain_args(&args).context("configuration error") {
@@ -314,11 +328,11 @@ fn run() -> Result<u8> {
             Ok(if result.analysis.passed { 0 } else { 1 })
         }
         Command::Pr(args) => {
-            let config = match config_from_pr_args(args).context("configuration error") {
+            let config = match config_from_pr_args(&args).context("configuration error") {
                 Ok(config) => config,
                 Err(err) => return configuration_error(err),
             };
-            scan_render_exit(&config)
+            scan_render_exit(&config, &args.receipt)
         }
         Command::Cost(args) => run_cost_command(args.command),
         Command::Rules(args) => {
@@ -564,8 +578,10 @@ fn write_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<()> {
 
 fn write_text(path: &Path, text: &str) -> Result<()> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("failed to create {}", parent.display()))?;
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("failed to create {}", parent.display()))?;
+        }
     }
     std::fs::write(path, text).with_context(|| format!("failed to write {}", path.display()))
 }
@@ -596,8 +612,25 @@ fn base_config() -> Result<ScanConfig> {
     apply_file_config(config, file_config)
 }
 
-fn scan_render_exit(config: &ScanConfig) -> Result<u8> {
-    let result = scan(config)?;
+fn scan_render_exit(config: &ScanConfig, receipt: &ReceiptArgs) -> Result<u8> {
+    validate_receipt_args(receipt)?;
+    let mut result = scan(config)?;
+    if receipt.receipt_file.is_some() || receipt.compare_receipt.is_some() {
+        result.pr_summary.get_or_insert_with(PrSummary::default);
+    }
+    if let Some(path) = &receipt.compare_receipt {
+        let trend = compare_receipt(path, &result)?;
+        result
+            .pr_summary
+            .get_or_insert_with(PrSummary::default)
+            .trend = Some(trend);
+    }
+    if let Some(path) = &receipt.summary_file {
+        write_text(path, &(render(&result, OutputFormat::Markdown)? + "\n"))?;
+    }
+    if let Some(path) = &receipt.receipt_file {
+        write_text(path, &(render(&result, OutputFormat::Json)? + "\n"))?;
+    }
     print!("{}", render(&result, config.format)?);
     Ok(
         if result.should_fail(
@@ -613,20 +646,20 @@ fn scan_render_exit(config: &ScanConfig) -> Result<u8> {
     )
 }
 
-fn config_from_scan_args(args: ScanArgs) -> Result<ScanConfig> {
+fn config_from_scan_args(args: &ScanArgs) -> Result<ScanConfig> {
     let mut config = base_config()?;
     if !args.paths.is_empty() {
-        config.paths = args.paths;
+        config.paths = args.paths.clone();
     }
     let mut overrides = ScanRuntimeOverrides::default();
     args.common.apply_common(&mut overrides);
-    overrides.fail_on = args.fail_on;
-    overrides.min_confidence = args.min_confidence;
+    overrides.fail_on = args.fail_on.clone();
+    overrides.min_confidence = args.min_confidence.clone();
     if args.min_confidence_filter {
         overrides.min_confidence_filter = Some(true);
     }
-    overrides.baseline_path = args.baseline;
-    overrides.write_baseline_path = args.write_baseline;
+    overrides.baseline_path = args.baseline.clone();
+    overrides.write_baseline_path = args.write_baseline.clone();
     overrides.cost = args.cost;
     overrides.fail_on_cost_delta = args.fail_on_cost_delta;
     overrides.min_cost_coverage = args.min_cost_coverage;
@@ -658,24 +691,105 @@ fn config_from_cost_args(args: CostReportArgs) -> Result<ScanConfig> {
     Ok(config)
 }
 
-fn config_from_pr_args(args: PrArgs) -> Result<ScanConfig> {
+fn config_from_pr_args(args: &PrArgs) -> Result<ScanConfig> {
     let mut config = base_config()?;
     config.changed_only = true;
-    config.base_branch = Some(args.base);
+    config.base_branch = Some(args.base.clone());
     let mut overrides = ScanRuntimeOverrides::default();
     args.common.apply_common(&mut overrides);
-    overrides.fail_on = args.fail_on;
-    overrides.min_confidence = args.min_confidence;
+    overrides.fail_on = args.fail_on.clone();
+    overrides.min_confidence = args.min_confidence.clone();
     if args.min_confidence_filter {
         overrides.min_confidence_filter = Some(true);
     }
-    overrides.baseline_path = args.baseline;
+    overrides.baseline_path = args.baseline.clone();
     overrides.cost = args.cost;
     overrides.fail_on_cost_delta = args.fail_on_cost_delta;
     overrides.min_cost_coverage = args.min_cost_coverage;
     overrides.apply_to(&mut config)?;
     validate_scan_config(&config)?;
     Ok(config)
+}
+
+fn validate_receipt_args(args: &ReceiptArgs) -> Result<()> {
+    if args
+        .summary_file
+        .as_ref()
+        .is_some_and(|summary| args.receipt_file.as_ref() == Some(summary))
+    {
+        anyhow::bail!("--summary-file and --receipt-file must use different paths");
+    }
+    for (flag, path) in [
+        ("--summary-file", args.summary_file.as_ref()),
+        ("--receipt-file", args.receipt_file.as_ref()),
+    ] {
+        if path.is_some_and(|path| path.is_dir()) {
+            anyhow::bail!("{flag} path cannot be a directory");
+        }
+    }
+    if let Some(path) = &args.compare_receipt {
+        if !path.is_file() {
+            anyhow::bail!("--compare-receipt path does not exist: {}", path.display());
+        }
+    }
+    Ok(())
+}
+
+fn compare_receipt(path: &Path, current: &costguard_core::ScanResult) -> Result<ReceiptTrend> {
+    let text = std::fs::read_to_string(path)
+        .with_context(|| format!("failed to read receipt {}", path.display()))?;
+    let previous: serde_json::Value = serde_json::from_str(&text)
+        .with_context(|| format!("invalid receipt JSON {}", path.display()))?;
+    if previous
+        .get("schema_version")
+        .and_then(|value| value.as_u64())
+        != Some(4)
+    {
+        anyhow::bail!("receipt {} must use JSON schema version 4", path.display());
+    }
+    let previous_diagnostics = previous
+        .get("diagnostics")
+        .and_then(|value| value.as_array())
+        .context("receipt diagnostics must be an array")?;
+    let previous_high = previous_diagnostics
+        .iter()
+        .filter(|diagnostic| {
+            matches!(
+                diagnostic.get("severity").and_then(|value| value.as_str()),
+                Some("high" | "critical")
+            )
+        })
+        .count();
+    let current_high = current
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.severity >= costguard_diagnostics::Severity::High)
+        .count();
+    let previous_usd = previous
+        .pointer("/cost/savings_p50_usd")
+        .and_then(|value| value.as_f64());
+    let current_usd = current
+        .cost_summary
+        .as_ref()
+        .map(|cost| cost.savings_p50_usd);
+    let previous_gb = previous
+        .pointer("/cost/savings_gb_months")
+        .and_then(|value| value.as_f64());
+    let current_gb = current
+        .cost_summary
+        .as_ref()
+        .map(|cost| cost.savings_gb_months);
+    Ok(ReceiptTrend {
+        diagnostics_delta: current.diagnostics.len() as i64 - previous_diagnostics.len() as i64,
+        high_findings_delta: current_high as i64 - previous_high as i64,
+        monthly_savings_delta_usd: delta(previous_usd, current_usd),
+        monthly_savings_delta_gb: delta(previous_gb, current_gb),
+    })
+}
+
+fn delta(previous: Option<f64>, current: Option<f64>) -> Option<f64> {
+    (previous.is_some() || current.is_some())
+        .then(|| current.unwrap_or(0.0) - previous.unwrap_or(0.0))
 }
 
 fn fail_on_monthly_delta(config: &ScanConfig) -> Option<f64> {

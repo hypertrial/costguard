@@ -15,8 +15,9 @@ These capabilities are production-ready or actively maintained as part of the cu
 | **45 SQLCOST rules** | Severity and confidence are the enforcement contract |
 | **Multi-warehouse parsing** | Generic SQL, Snowflake, BigQuery, Trino (GA); Databricks, Redshift, Postgres, DuckDB (preview) |
 | **Advisory cost estimates** | Local priors and offline inputs only — never a live bill |
-| **Governance** | Baseline v3, signed policy v2, semantic finding identity (`semantic-v1`), suppressions |
-| **Output formats** | `github`, `markdown`, `json` plus documented exit-code contract |
+| **Governance** | Baseline v3, signed policy v2, semantic finding identity, owner routing, scoped gates, and expiring waivers |
+| **PR receipts** | One-scan GitHub annotations, markdown summary, JSON v4 receipt, and optional trend comparison |
+| **Output formats** | `github`, `markdown`, `json`, `sarif` plus documented exit-code contract |
 | **Privacy / local-only** | No warehouse credentials, no network calls during scan |
 | **Measured benchmark evidence** | Public precision snapshot plus classification metrics pipeline and IRR judge for calibration (see [Benchmark evidence](../book/reference/benchmarks.md), [Classification metrics](classification-metrics.md), [LLM judge IRR](llm-judge-irr.md)) |
 

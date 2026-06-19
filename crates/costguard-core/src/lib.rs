@@ -10,13 +10,16 @@ mod config;
 mod context;
 mod dbt_graph;
 mod dbt_load;
+mod gates;
 mod git;
 mod governance;
 mod init;
+mod owners;
 mod pipeline;
 mod scan;
 mod scan_plan;
 mod sql_analysis;
+mod waivers;
 
 pub use baseline::{
     apply_finding_baseline, load_finding_baseline, merge_baseline_findings,
@@ -24,8 +27,9 @@ pub use baseline::{
 };
 pub use config::{
     apply_file_config, load_config, validate_scan_config, AnalysisConfig, AnalysisPolicy,
-    AnalysisSection, DbtSection, FileConfig, OutputFormat, OutputSection, ScanConfig,
-    ScanRuntimeOverrides, ScanSection, SignedPolicyConfig, SignedPolicySection,
+    AnalysisSection, DbtSection, FileConfig, GateConfig, GateMode, GateScope, OutputFormat,
+    OutputSection, OwnerValue, OwnersConfig, ScanConfig, ScanRuntimeOverrides, ScanSection,
+    SignedPolicyConfig, SignedPolicySection, Waiver,
 };
 pub use context::{ContextIssue, ContextReport};
 pub use costguard_cost::ProjectCostSummary;
@@ -139,11 +143,20 @@ impl ScanResult {
         if !self.analysis.passed {
             return true;
         }
+        if self.pr_summary.as_ref().is_some_and(|summary| {
+            summary
+                .gate_results
+                .iter()
+                .any(|gate| gate.status == GateStatus::Fail)
+        }) {
+            return true;
+        }
         if let Some(threshold) = fail_on {
             let managed = self.policy.digest != "local-unmanaged";
             if self.diagnostics.iter().any(|diagnostic| {
                 diagnostic.severity >= threshold
                     && min_confidence.is_none_or(|mc| diagnostic.confidence >= mc)
+                    && diagnostic.governance.enforcement != EnforcementOutcome::Excepted
                     && (!managed
                         || diagnostic.governance.enforcement == EnforcementOutcome::Blocked)
             }) {
@@ -205,13 +218,87 @@ pub struct AnalysisViolation {
     pub allowed: f64,
 }
 
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct PrSummary {
+    pub receipt_version: u8,
     pub changed_files: Vec<PathBuf>,
     pub changed_models: Vec<String>,
+    pub changed_model_details: Vec<ChangedModelDetail>,
+    pub owner_summary: BTreeMap<String, usize>,
     pub affected_downstream: Vec<String>,
     pub affected_exposures: Vec<String>,
     pub recommended_dbt_command: Option<String>,
+    pub gate_results: Vec<GateResult>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trend: Option<ReceiptTrend>,
+}
+
+impl Default for PrSummary {
+    fn default() -> Self {
+        Self {
+            receipt_version: 1,
+            changed_files: Vec::new(),
+            changed_models: Vec::new(),
+            changed_model_details: Vec::new(),
+            owner_summary: BTreeMap::new(),
+            affected_downstream: Vec::new(),
+            affected_exposures: Vec::new(),
+            recommended_dbt_command: None,
+            gate_results: Vec::new(),
+            trend: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ChangedModelDetail {
+    pub id: String,
+    pub name: String,
+    pub path: PathBuf,
+    pub tags: Vec<String>,
+    pub owners: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
+    pub affected_downstream: Vec<String>,
+    pub affected_exposures: Vec<String>,
+    pub affected_exposure_owners: BTreeMap<String, Vec<String>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GateStatus {
+    Pass,
+    Warn,
+    Fail,
+}
+
+impl std::fmt::Display for GateStatus {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::Pass => "pass",
+            Self::Warn => "warn",
+            Self::Fail => "fail",
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GateResult {
+    pub name: String,
+    pub mode: GateMode,
+    pub status: GateStatus,
+    pub matched_findings: usize,
+    pub reasons: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct ReceiptTrend {
+    pub diagnostics_delta: i64,
+    pub high_findings_delta: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub monthly_savings_delta_usd: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub monthly_savings_delta_gb: Option<f64>,
 }
 
 #[cfg(test)]
@@ -298,6 +385,7 @@ mod tests {
             relative_index: 100.0,
             grade: costguard_diagnostics::CostGrade::C,
             basis: "test".into(),
+            prior_basis: None,
             currency: "USD".into(),
             model_id: None,
             model_monthly_p50_usd: None,

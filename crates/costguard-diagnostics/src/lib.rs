@@ -154,6 +154,8 @@ pub struct DiagnosticGovernance {
     pub policy: Option<costguard_protocol::PolicyProvenanceV1>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub exception: Option<costguard_protocol::AppliedExceptionV1>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub owners: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -180,6 +182,8 @@ pub struct CostEstimate {
     pub relative_index: f64,
     pub grade: CostGrade,
     pub basis: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prior_basis: Option<String>,
     pub currency: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model_id: Option<String>,

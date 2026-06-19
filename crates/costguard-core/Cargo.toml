@@ -17,6 +17,7 @@ costguard-protocol = { path = "../costguard-protocol" }
 costguard-rules = { path = "../costguard-rules" }
 costguard-scanner = { path = "../costguard-scanner" }
 costguard-sql = { path = "../costguard-sql" }
+globset.workspace = true
 rayon.workspace = true
 serde.workspace = true
 serde_json.workspace = true

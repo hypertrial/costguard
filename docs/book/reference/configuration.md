@@ -25,6 +25,15 @@ fail_on = "high"
 [dbt]
 manifest_path = "target/manifest.json"
 
+[owners]
+codeowners = true
+default = "@data-platform"
+
+[gate]
+fail_on = "high"
+min_confidence = "high"
+require_owner = true
+
 [rules.SQLCOST002]
 threshold = 3
 
@@ -63,6 +72,53 @@ severity = "high"
 | Key | Type | Description |
 | --- | --- | --- |
 | `manifest_path` | string | Default manifest for compiled SQL metrics |
+
+## `[owners]`
+
+Owner resolution is additive metadata for diagnostics and PR receipts. Precedence is: dbt model `meta.owner`/`meta.owners`, Costguard tag and path maps, CODEOWNERS, dbt group, then `default`.
+
+| Key | Type | Description |
+| --- | --- | --- |
+| `default` | string or string array | Fallback owner(s) |
+| `codeowners` | bool | Read the first CODEOWNERS file from `.github/`, repository root, or `docs/`; last matching rule wins |
+| `[owners.paths]` | glob to owner(s) map | Repository-relative model path routing |
+| `[owners.tags]` | tag to owner(s) map | dbt tag routing |
+
+## `[gate]` and `[[gate.scopes]]`
+
+PR-only policy-as-code gates run after signed policy, waivers, baselines, lineage, and cost attribution. Existing `[output].fail_on` remains unchanged. A `mode = "warn"` gate records a warning but does not change the exit code.
+
+| Key | Type | Description |
+| --- | --- | --- |
+| `name` | string | Receipt label; global default is `default` |
+| `mode` | string | `block` (default) or `warn` |
+| `fail_on` | severity | Fail/warn when an actionable finding meets the severity threshold |
+| `min_confidence` | confidence | Optional floor used with `fail_on` |
+| `fail_on_monthly_delta` | positive float | Addressable finding savings threshold in USD/month |
+| `fail_on_monthly_delta_gb` | positive float | Addressable finding savings threshold in GB-months |
+| `fail_on_blast_radius` | positive integer | Unique downstream-model threshold |
+| `require_owner` | bool | Require matched changed model/finding paths to resolve an owner |
+
+Each `[[gate.scopes]]` requires a unique `name` and at least one matcher: `paths`, `tags`, or `owners`. Values within a matcher are ORed; different matcher categories are ANDed. Baselined and excepted findings do not participate.
+
+## `[[waivers]]`
+
+Local waivers are lightweight, expiring enforcement exceptions. Required fields are `id`, exactly one of `finding_id` or `rule_id`, `path`, `owner`, `reason`, `ticket_url`, `approver`, `created_at`, and `expires_at`. Paths are repository-relative globs and timestamps are RFC3339.
+
+```toml
+[[waivers]]
+id = "CG-123"
+rule_id = "SQLCOST012"
+path = "models/finance/**"
+owner = "@finance"
+reason = "approved migration window"
+ticket_url = "https://tracker.example/CG-123"
+approver = "@data-lead"
+created_at = "2026-06-01T00:00:00Z"
+expires_at = "2026-07-01T00:00:00Z"
+```
+
+Active matches are emitted with `enforcement = "excepted"`. An expired waiver creates `analysis.violations[].code = "expired_waiver"`. Signed policy rejects local waivers unless `permissions.allow_local_waivers = true`.
 
 ## `[rules.RULE_ID]`
 

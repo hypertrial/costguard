@@ -21,6 +21,8 @@ PR opened
 -> changed SQL/dbt files scanned
 -> dbt cost/performance risks annotated
 -> optional downstream blast radius and advisory savings reported
+-> owners routed and global/scoped policy gates evaluated
+-> markdown summary and JSON receipt written from the same scan
 -> fail on high-confidence, high-severity findings
 -> merge safer analytics code
 ```
@@ -56,8 +58,7 @@ costguard pr --base origin/main --warehouse snowflake --fail-on high --min-confi
 costguard pr --base origin/main --warehouse snowflake --fail-on high --min-confidence high --format json
 ```
 
-`github` emits annotation commands. `markdown` emits a PR-summary-oriented report.
-`json` preserves the `diagnostics` array and includes `pr_summary` when PR mode is used.
+`github` emits annotation commands. `markdown` emits a PR-summary-oriented report. `json` preserves diagnostics and `pr_summary`. `--summary-file` and `--receipt-file` write both artifacts from the same result while stdout retains `--format`; `--compare-receipt` adds trend deltas.
 PR mode should scan changed files first, then use manifest/YAML/SQL graph context only for
 blast-radius summaries and rule context. Invalid git bases and non-git directories must fail
 the check instead of silently scanning zero files.
@@ -67,6 +68,8 @@ Expected PR output should include:
 - pass/fail status
 - GitHub annotations
 - PR summary
+- owner routing and gate outcomes
+- versioned JSON receipt and optional trend
 - changed-file diagnostics
 - optional downstream blast radius
 - recommended fixes

@@ -1,9 +1,15 @@
-use crate::{PrSummary, Project};
+use crate::owners::OwnerResolver;
+use crate::{ChangedModelDetail, PrSummary, Project};
 use costguard_dbt::{DbtModel, DbtProject};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
-pub(crate) fn enrich_pr_summary(mut summary: PrSummary, project: &Project) -> PrSummary {
+pub(crate) fn enrich_pr_summary(
+    mut summary: PrSummary,
+    project: &Project,
+    owners: &OwnerResolver,
+) -> PrSummary {
+    summary.changed_files.sort();
     let Some(dbt) = &project.dbt else {
         return summary;
     };
@@ -23,6 +29,46 @@ pub(crate) fn enrich_pr_summary(mut summary: PrSummary, project: &Project) -> Pr
     let graph = DbtDependencyGraph::from_project(dbt);
     summary.changed_models = graph.labels_for(&changed_model_ids);
     summary.changed_models.sort();
+
+    summary.changed_model_details = changed_model_ids
+        .iter()
+        .filter_map(|id| {
+            let model = dbt.models.values().find(|model| model.identity() == id)?;
+            let path = model.path.clone()?;
+            let downstream_ids = graph.transitive_downstream(std::slice::from_ref(id));
+            let affected_exposures = graph.affected_exposures(
+                &[std::slice::from_ref(id), downstream_ids.as_slice()].concat(),
+            );
+            let affected_exposure_owners = affected_exposures
+                .iter()
+                .filter_map(|name| {
+                    let exposure = dbt.exposures.get(name)?;
+                    (!exposure.owners.is_empty()).then(|| (name.clone(), exposure.owners.clone()))
+                })
+                .collect();
+            let mut tags = model.tags.clone();
+            tags.sort();
+            Some(ChangedModelDetail {
+                id: id.clone(),
+                name: graph.labels.get(id).cloned().unwrap_or_else(|| id.clone()),
+                path,
+                tags,
+                owners: owners.owners_for_model(model),
+                group: model.group.clone(),
+                affected_downstream: graph.labels_for(&downstream_ids),
+                affected_exposures,
+                affected_exposure_owners,
+            })
+        })
+        .collect();
+    summary
+        .changed_model_details
+        .sort_by(|left, right| left.path.cmp(&right.path));
+    for detail in &summary.changed_model_details {
+        for owner in &detail.owners {
+            *summary.owner_summary.entry(owner.clone()).or_insert(0) += 1;
+        }
+    }
 
     let downstream_ids = graph.transitive_downstream(&changed_model_ids);
     summary.affected_downstream = graph.labels_for(&downstream_ids);
@@ -267,6 +313,7 @@ mod tests {
             DbtExposure {
                 name: "growth_dashboard".into(),
                 depends_on: vec!["model.pkg.c".into()],
+                owners: Vec::new(),
             },
         );
         let project = Project {
@@ -274,12 +321,15 @@ mod tests {
             files: Vec::new(),
             dbt: Some(dbt),
         };
+        let owners =
+            OwnerResolver::load(PathBuf::from(".").as_path(), &Default::default()).unwrap();
         let summary = enrich_pr_summary(
             PrSummary {
                 changed_files: vec![PathBuf::from("models/a.sql")],
                 ..PrSummary::default()
             },
             &project,
+            &owners,
         );
         assert_eq!(summary.changed_models, vec!["a"]);
         assert_eq!(summary.affected_downstream, vec!["b", "c"]);
@@ -320,12 +370,15 @@ mod tests {
             files: Vec::new(),
             dbt: Some(dbt),
         };
+        let owners =
+            OwnerResolver::load(PathBuf::from(".").as_path(), &Default::default()).unwrap();
         let summary = enrich_pr_summary(
             PrSummary {
                 changed_files: vec![PathBuf::from("models/a.sql")],
                 ..PrSummary::default()
             },
             &project,
+            &owners,
         );
         assert_eq!(summary.affected_downstream, vec!["b", "c"]);
     }
@@ -370,12 +423,15 @@ mod tests {
             files: Vec::new(),
             dbt: Some(dbt),
         };
+        let owners =
+            OwnerResolver::load(PathBuf::from(".").as_path(), &Default::default()).unwrap();
         let summary = enrich_pr_summary(
             PrSummary {
                 changed_files: vec![PathBuf::from("beta/models/orders.sql")],
                 ..PrSummary::default()
             },
             &project,
+            &owners,
         );
         assert_eq!(summary.changed_models, vec!["beta.orders"]);
         assert_eq!(summary.affected_downstream, vec!["order_rollup"]);

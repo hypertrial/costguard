@@ -18,7 +18,7 @@ SPEC.loader.exec_module(MODULE)
 
 
 class PublicVersionPinTest(unittest.TestCase):
-    def check_text(self, text: str, current: str = "2.4.0") -> list[str]:
+    def check_text(self, text: str, current: str = "2.5.0") -> list[str]:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "README.md"
             path.write_text(text, encoding="utf-8")
@@ -28,13 +28,13 @@ class PublicVersionPinTest(unittest.TestCase):
         errors = self.check_text(
             "\n".join(
                 [
-                    "- uses: hypertrial/costguard/.github/actions/costguard@v2.4.0",
-                    "cargo install --git https://github.com/hypertrial/costguard --tag v2.4.0 costguard-cli",
-                    "curl -fsSL https://example.invalid/install.sh | sh -s -- v2.4.0",
-                    "VERSION=v2.4.0",
-                    'COSTGUARD_VERSION: "v2.4.0"',
-                    "COSTGUARD_VERSION = 'v2.4.0'",
-                    "rev: v2.4.0",
+                    "- uses: hypertrial/costguard/.github/actions/costguard@v2.5.0",
+                    "cargo install --git https://github.com/hypertrial/costguard --tag v2.5.0 costguard-cli",
+                    "curl -fsSL https://example.invalid/install.sh | sh -s -- v2.5.0",
+                    "VERSION=v2.5.0",
+                    'COSTGUARD_VERSION: "v2.5.0"',
+                    "COSTGUARD_VERSION = 'v2.5.0'",
+                    "rev: v2.5.0",
                 ]
             )
         )
@@ -55,7 +55,7 @@ class PublicVersionPinTest(unittest.TestCase):
             )
         )
         self.assertEqual(len(errors), 7)
-        self.assertTrue(all("does not match workspace version v2.4.0" in error for error in errors))
+        self.assertTrue(all("does not match workspace version v2.5.0" in error for error in errors))
 
     def test_historical_version_prose_is_ignored(self) -> None:
         errors = self.check_text(

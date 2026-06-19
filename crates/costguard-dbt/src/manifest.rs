@@ -105,6 +105,12 @@ pub fn parse_manifest_text(text: &str) -> Result<DbtProject> {
                 .filter_map(Value::as_str)
                 .map(str::to_string)
                 .collect();
+            let owners = metadata_owners(node, config);
+            let group = node
+                .get("group")
+                .or_else(|| config.get("group"))
+                .and_then(Value::as_str)
+                .map(str::to_string);
             let columns = node
                 .get("columns")
                 .and_then(Value::as_object)
@@ -143,6 +149,8 @@ pub fn parse_manifest_text(text: &str) -> Result<DbtProject> {
                     on_schema_change,
                     compiled_code,
                     tags,
+                    owners,
+                    group,
                     columns,
                     tests: Vec::new(),
                     refs,
@@ -166,11 +174,18 @@ pub fn parse_manifest_text(text: &str) -> Result<DbtProject> {
                 .filter_map(Value::as_str)
                 .map(str::to_string)
                 .collect();
+            let mut owners = owners_from_value(exposure.get("owner"));
+            append_owners(&mut owners, exposure.get("meta"));
+            append_owners(
+                &mut owners,
+                exposure.get("config").and_then(|config| config.get("meta")),
+            );
             project.exposures.insert(
                 name.to_string(),
                 DbtExposure {
                     name: name.to_string(),
                     depends_on,
+                    owners,
                 },
             );
         }
@@ -202,6 +217,41 @@ pub fn parse_manifest_text(text: &str) -> Result<DbtProject> {
     }
 
     Ok(project)
+}
+
+fn metadata_owners(node: &Value, config: &Value) -> Vec<String> {
+    let mut owners = Vec::new();
+    append_owners(&mut owners, node.get("meta"));
+    append_owners(&mut owners, config.get("meta"));
+    owners
+}
+
+fn append_owners(owners: &mut Vec<String>, meta: Option<&Value>) {
+    let Some(meta) = meta else { return };
+    for value in [meta.get("owner"), meta.get("owners")] {
+        for owner in owners_from_value(value) {
+            if !owners.contains(&owner) {
+                owners.push(owner);
+            }
+        }
+    }
+}
+
+fn owners_from_value(value: Option<&Value>) -> Vec<String> {
+    match value {
+        Some(Value::String(owner)) => vec![owner.clone()],
+        Some(Value::Array(owners)) => owners
+            .iter()
+            .flat_map(|owner| owners_from_value(Some(owner)))
+            .collect(),
+        Some(Value::Object(owner)) => [owner.get("name"), owner.get("email")]
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .map(str::to_string)
+            .collect(),
+        _ => Vec::new(),
+    }
 }
 
 fn parse_config_value_string(value: &Value) -> Option<String> {

@@ -3,7 +3,7 @@ use crate::estimate::{
     combined_multiplier, round_sig2, savings_fraction, sum_lognormals, Estimate,
 };
 use crate::model_cost::{lookup_model_entry, CostFigure, ModelCostIndex, ProjectCostSummary};
-use crate::multipliers::{is_cost_bearing_rule, rule_multiplier, unestimated_reason};
+use crate::multipliers::{is_cost_bearing_rule, rule_multiplier_with_basis, unestimated_reason};
 use crate::pricing::{price_per_byte, pricing_label};
 use crate::volume::{model_for_path, model_identity, VolumeContext};
 use costguard_dbt::DbtProject;
@@ -25,6 +25,7 @@ struct PendingAttribution {
     diagnostic_index: usize,
     model_id: String,
     rule_multiplier: Estimate,
+    prior_basis: String,
     savings_fraction: Estimate,
     raw_savings: Estimate,
     gb_months_savings: f64,
@@ -168,13 +169,15 @@ pub fn attribute_findings(
         if !is_cost_bearing_rule(&rule_id) {
             continue;
         }
-        let Some(multiplier) = rule_multiplier(&rule_id, ctx.config) else {
+        let Some((multiplier, prior_basis)) = rule_multiplier_with_basis(&rule_id, ctx.config)
+        else {
             if let Some(reason) = unestimated_reason(&rule_id, ctx.config) {
                 rules_unestimated += 1;
                 diagnostics[index].cost_estimate = Some(CostEstimate {
                     relative_index: 0.0,
                     grade: costguard_diagnostics::CostGrade::C,
                     basis: format!("Unestimated: {reason}"),
+                    prior_basis: None,
                     currency: "USD".into(),
                     model_id: None,
                     model_monthly_p50_usd: None,
@@ -270,6 +273,7 @@ pub fn attribute_findings(
             diagnostic_index: index,
             model_id,
             rule_multiplier: multiplier,
+            prior_basis,
             savings_fraction: fraction,
             raw_savings,
             gb_months_savings,
@@ -470,6 +474,7 @@ fn apply_attributions(
             relative_index,
             grade: item.grade,
             basis,
+            prior_basis: Some(item.prior_basis.clone()),
             currency: "USD".into(),
             model_id: Some(item.model_id.clone()),
             model_monthly_p50_usd: model_monthly_p50,

@@ -16,6 +16,22 @@ pub(crate) fn render_text(result: &ScanResult) -> String {
         }
     }
     if let Some(summary) = &result.pr_summary {
+        if !summary.gate_results.is_empty() {
+            output.push_str("PR gates:\n");
+            for gate in &summary.gate_results {
+                output.push_str(&format!(
+                    "  - {}: {}{}\n",
+                    gate.name,
+                    gate.status,
+                    if gate.reasons.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" ({})", gate.reasons.join("; "))
+                    }
+                ));
+            }
+            output.push('\n');
+        }
         output.push_str("Changed files:\n");
         if summary.changed_files.is_empty() {
             output.push_str("  none\n");
