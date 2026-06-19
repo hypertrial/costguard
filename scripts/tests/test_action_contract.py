@@ -53,6 +53,8 @@ class ActionContractTest(unittest.TestCase):
         self.assertIn("--trust-push-ci", release)
         self.assertIn("release_consumer_smoke.py", release)
         self.assertIn("timeout-minutes: 5", release)
+        build = release.split("  build:", 1)[1].split("  publish:", 1)[0]
+        self.assertIn("timeout-minutes: 10", build)
 
     def test_ci_reuses_cached_tools_and_single_release_build(self) -> None:
         ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")

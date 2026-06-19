@@ -80,7 +80,7 @@ jobs:
           - os: windows-2025
             target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 5
+    timeout-minutes: 10
     env:
       CARGO_INCREMENTAL: "0"
     permissions:
