@@ -65,7 +65,7 @@ fn warehouse_label(warehouse: Warehouse) -> &'static str {
 pub fn is_infrastructure_rule(rule_id: &str) -> bool {
     matches!(
         rule_id.to_ascii_uppercase().as_str(),
-        "SQLCOST023" | "SQLCOST024" | "SQLCOST025" | "SQLCOST026" | "SQLCOST027" | "SQLCOST045"
+        "SQLCOST023" | "SQLCOST024" | "SQLCOST025" | "SQLCOST026" | "SQLCOST027" | "SQLCOST045" | "SQLCOST046"
     )
 }
 

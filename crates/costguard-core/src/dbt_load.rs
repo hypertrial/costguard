@@ -83,9 +83,8 @@ fn model_key_for_file(index: &ModelIndex, path: &Path, name: &str) -> String {
         .unwrap_or_else(|| synthesized_model_id(None, Some(path), name))
 }
 
-// ponytail: mtime heuristic. In a fresh CI checkout git normalizes mtimes, so this
-// can under-report; the real guarantee remains the user's dbt compile step.
-// Upgrade path: compare each manifest node's `checksum` against the current file hash.
+// ponytail: mtime heuristic when manifest nodes lack sha256 checksums; checksum
+// comparison is preferred when dbt wrote checksum.name = "sha256".
 fn manifest_is_stale(
     manifest_mtime: SystemTime,
     mut source_mtimes: impl Iterator<Item = SystemTime>,
@@ -93,12 +92,27 @@ fn manifest_is_stale(
     source_mtimes.any(|mtime| mtime > manifest_mtime)
 }
 
-fn detect_stale_manifest(manifest_path: &Path, files: &[ProjectFile]) -> Option<MetadataWarning> {
+fn detect_stale_manifest(
+    manifest_path: &Path,
+    files: &[ProjectFile],
+    project: &DbtProject,
+) -> Option<MetadataWarning> {
     let manifest_mtime = std::fs::metadata(manifest_path).ok()?.modified().ok()?;
+    let models_by_path = project
+        .models
+        .values()
+        .filter_map(|model| model.path.as_ref().map(|path| (path.clone(), model)))
+        .collect::<HashMap<_, _>>();
     let mut source_mtimes = Vec::new();
     let mut newer_count = 0usize;
     for file in files {
         if file.kind != FileKind::DbtSqlModel {
+            continue;
+        }
+        if models_by_path
+            .get(&file.root_relative_path)
+            .is_some_and(|model| model_has_sha256_checksum(model))
+        {
             continue;
         }
         let Some(source_mtime) = std::fs::metadata(&file.path)
@@ -122,6 +136,58 @@ fn detect_stale_manifest(manifest_path: &Path, files: &[ProjectFile]) -> Option<
             "dbt manifest is older than {newer_count} modified model file(s); compiled SQL may be stale"
         ),
     })
+}
+
+pub(crate) fn detect_checksum_mismatches(
+    project: &DbtProject,
+    files: &[ProjectFile],
+    changed_paths: &std::collections::HashSet<PathBuf>,
+) -> Vec<MetadataWarning> {
+    let models_by_path = project
+        .models
+        .values()
+        .filter_map(|model| model.path.as_ref().map(|path| (path.clone(), model)))
+        .collect::<HashMap<_, _>>();
+    let mut warnings = Vec::new();
+    for file in files {
+        if file.kind != FileKind::DbtSqlModel {
+            continue;
+        }
+        if !changed_paths.contains(&file.root_relative_path) {
+            continue;
+        }
+        let Some(model) = models_by_path.get(&file.root_relative_path) else {
+            continue;
+        };
+        if !model_has_sha256_checksum(model) {
+            continue;
+        }
+        let expected = model.checksum.as_deref().expect("checksum checked");
+        let actual = costguard_diagnostics::hex_sha256(file.text.as_bytes());
+        if actual == expected {
+            continue;
+        }
+        warnings.push(MetadataWarning {
+            kind: MetadataWarningKind::ManifestChecksumMismatch,
+            path: Some(file.path.clone()),
+            message: format!(
+                "model {} source checksum does not match manifest (head file may be newer than dbt compile)",
+                file.root_relative_path.display()
+            ),
+        });
+    }
+    warnings
+}
+
+fn model_has_sha256_checksum(model: &costguard_dbt::DbtModel) -> bool {
+    model
+        .checksum
+        .as_ref()
+        .is_some_and(|value| !value.is_empty())
+        && model
+            .checksum_kind
+            .as_deref()
+            .is_some_and(|kind| kind.eq_ignore_ascii_case("sha256"))
 }
 
 pub(crate) fn load_dbt_project(
@@ -156,17 +222,17 @@ pub(crate) fn load_dbt_project(
                 .map(|file| file.path.clone())
         });
 
+    let loaded_manifest = manifest_path.is_some();
+    let mut project = match manifest_path.as_ref() {
+        Some(path) => parse_manifest(path)?,
+        None => DbtProject::default(),
+    };
+
     if let Some(path) = manifest_path.as_ref() {
-        if let Some(warning) = detect_stale_manifest(path, files) {
+        if let Some(warning) = detect_stale_manifest(path, files, &project) {
             warnings.push(warning);
         }
     }
-
-    let loaded_manifest = manifest_path.is_some();
-    let mut project = match manifest_path {
-        Some(path) => parse_manifest(&path)?,
-        None => DbtProject::default(),
-    };
     let has_dbt_files = files.iter().any(|file| {
         matches!(
             file.kind,
@@ -424,5 +490,44 @@ mod tests {
         let newer = UNIX_EPOCH + Duration::from_secs(150);
         assert!(!manifest_is_stale(manifest, [older, manifest].into_iter()));
         assert!(manifest_is_stale(manifest, [older, newer].into_iter()));
+    }
+
+    #[test]
+    fn detect_checksum_mismatch_when_file_content_differs() {
+        let text = "select 1";
+        let checksum = costguard_diagnostics::hex_sha256(text.as_bytes());
+        let mut project = DbtProject::default();
+        project.models.insert(
+            "model.pkg.orders".into(),
+            DbtModel {
+                unique_id: Some("model.pkg.orders".into()),
+                name: "orders".into(),
+                path: Some(PathBuf::from("models/orders.sql")),
+                checksum: Some(checksum),
+                checksum_kind: Some("sha256".into()),
+                ..DbtModel::default()
+            },
+        );
+        let files = vec![ProjectFile {
+            path: PathBuf::from("/repo/models/orders.sql"),
+            root_relative_path: PathBuf::from("models/orders.sql"),
+            kind: FileKind::DbtSqlModel,
+            line_index: costguard_diagnostics::LineIndex::new("select 2"),
+            text: "select 2".into(),
+        }];
+        let changed = HashSet::from([PathBuf::from("models/orders.sql")]);
+        let warnings = detect_checksum_mismatches(&project, &files, &changed);
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(warnings[0].kind, MetadataWarningKind::ManifestChecksumMismatch);
+
+        let matching = detect_checksum_mismatches(
+            &project,
+            &[ProjectFile {
+                text: text.into(),
+                ..files[0].clone()
+            }],
+            &changed,
+        );
+        assert!(matching.is_empty());
     }
 }

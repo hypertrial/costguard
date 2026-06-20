@@ -63,6 +63,7 @@ pub struct DbtSourceRef {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DbtProject {
     pub models: HashMap<String, DbtModel>,
+    pub macros: HashMap<String, DbtMacro>,
     pub sources: HashMap<String, DbtSource>,
     pub exposures: HashMap<String, DbtExposure>,
     pub graph: DbtGraph,
@@ -79,6 +80,7 @@ impl DbtProject {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DbtGraph {
     pub depends_on: HashMap<String, Vec<String>>,
+    pub depends_on_macros: HashMap<String, Vec<String>>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -104,6 +106,8 @@ pub struct DbtModel {
     pub tests: Vec<DbtTest>,
     pub refs: Vec<String>,
     pub sources: Vec<DbtSourceRef>,
+    pub checksum: Option<String>,
+    pub checksum_kind: Option<String>,
 }
 
 impl DbtModel {
@@ -113,6 +117,14 @@ impl DbtModel {
             .or(self.node_id.as_deref())
             .unwrap_or(&self.name)
     }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct DbtMacro {
+    pub unique_id: String,
+    pub name: String,
+    pub path: Option<PathBuf>,
+    pub depends_on_macros: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -147,6 +159,7 @@ pub enum MetadataWarningKind {
     DbtProjectAmbiguousModels,
     NoManifest,
     StaleManifest,
+    ManifestChecksumMismatch,
     FileSkipped,
 }
 
@@ -445,6 +458,49 @@ models:
                 .get(&PathBuf::from("models/marts/fct_block_time.sql"))
                 .map(String::as_str),
             Some("select tx_hash, block_time from dex.trades")
+        );
+    }
+
+    #[test]
+    fn parses_manifest_checksum_macros_and_macro_dependencies() {
+        let manifest = r#"{
+  "nodes": {
+    "model.pkg.fct_orders": {
+      "resource_type": "model",
+      "name": "fct_orders",
+      "original_file_path": "models/fct_orders.sql",
+      "checksum": { "name": "sha256", "checksum": "abc123" },
+      "depends_on": {
+        "nodes": ["source.pkg.raw.events"],
+        "macros": ["macro.pkg.generate_schema_name"]
+      }
+    }
+  },
+  "macros": {
+    "macro.pkg.generate_schema_name": {
+      "name": "generate_schema_name",
+      "original_file_path": "macros/generate_schema_name.sql",
+      "depends_on": { "macros": ["macro.dbt.generate_schema_name"] }
+    }
+  }
+}"#;
+        let project = parse_manifest_text(manifest).expect("parse manifest");
+        let model = project.model_by_name("fct_orders").unwrap();
+        assert_eq!(model.checksum.as_deref(), Some("abc123"));
+        assert_eq!(model.checksum_kind.as_deref(), Some("sha256"));
+        assert_eq!(
+            project.graph.depends_on_macros["model.pkg.fct_orders"],
+            vec!["macro.pkg.generate_schema_name"]
+        );
+        let dbt_macro = project.macros.get("macro.pkg.generate_schema_name").unwrap();
+        assert_eq!(dbt_macro.name, "generate_schema_name");
+        assert_eq!(
+            dbt_macro.path.as_deref(),
+            Some(Path::new("macros/generate_schema_name.sql"))
+        );
+        assert_eq!(
+            dbt_macro.depends_on_macros,
+            vec!["macro.dbt.generate_schema_name"]
         );
     }
 

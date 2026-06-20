@@ -34,6 +34,7 @@ impl FromStr for AnalysisPolicy {
 pub struct AnalysisConfig {
     pub policy: AnalysisPolicy,
     pub require_manifest: bool,
+    pub require_manifest_integrity: bool,
     pub max_parse_failure_rate: f64,
     pub max_compiled_parse_failures: usize,
     pub max_skipped_files: usize,
@@ -45,6 +46,7 @@ impl Default for AnalysisConfig {
         Self {
             policy: AnalysisPolicy::Standard,
             require_manifest: false,
+            require_manifest_integrity: false,
             max_parse_failure_rate: 1.0,
             max_compiled_parse_failures: usize::MAX,
             max_skipped_files: usize::MAX,
@@ -59,6 +61,7 @@ impl AnalysisConfig {
             Self {
                 policy: AnalysisPolicy::Strict,
                 require_manifest: true,
+                require_manifest_integrity: self.require_manifest_integrity,
                 max_parse_failure_rate: 0.0,
                 max_compiled_parse_failures: 0,
                 max_skipped_files: 0,
@@ -114,6 +117,7 @@ pub struct ScanConfig {
     pub platform: Platform,
     pub format: OutputFormat,
     pub manifest_path: Option<PathBuf>,
+    pub base_manifest_path: Option<PathBuf>,
     pub ignore: Vec<PathBuf>,
     pub max_file_bytes: Option<u64>,
     pub base_branch: Option<String>,
@@ -140,6 +144,7 @@ impl Default for ScanConfig {
             platform: Platform::Generic,
             format: OutputFormat::Text,
             manifest_path: None,
+            base_manifest_path: None,
             ignore: Vec::new(),
             max_file_bytes: None,
             base_branch: None,
@@ -232,6 +237,8 @@ pub struct GateConfig {
     #[serde(default)]
     pub require_owner: bool,
     #[serde(default)]
+    pub block_only_new: bool,
+    #[serde(default)]
     pub scopes: Vec<GateScope>,
 }
 
@@ -293,6 +300,7 @@ pub struct OutputSection {
 #[serde(deny_unknown_fields)]
 pub struct DbtSection {
     pub manifest_path: Option<PathBuf>,
+    pub base_manifest_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -300,6 +308,7 @@ pub struct DbtSection {
 pub struct AnalysisSection {
     pub policy: Option<String>,
     pub require_manifest: Option<bool>,
+    pub require_manifest_integrity: Option<bool>,
     pub max_parse_failure_rate: Option<f64>,
     pub max_compiled_parse_failures: Option<usize>,
     pub max_skipped_files: Option<usize>,
@@ -372,7 +381,12 @@ pub fn apply_file_config(mut config: ScanConfig, file_config: FileConfig) -> Res
         }
     }
     if let Some(dbt) = file_config.dbt {
-        config.manifest_path = dbt.manifest_path;
+        if let Some(path) = dbt.manifest_path {
+            config.manifest_path = Some(path);
+        }
+        if let Some(path) = dbt.base_manifest_path {
+            config.base_manifest_path = Some(path);
+        }
     }
     if let Some(rules) = file_config.rules {
         let known = RuleRegistry::default_rules()
@@ -402,6 +416,9 @@ pub fn apply_file_config(mut config: ScanConfig, file_config: FileConfig) -> Res
         }
         if let Some(value) = analysis.require_manifest {
             config.analysis.require_manifest = value;
+        }
+        if let Some(value) = analysis.require_manifest_integrity {
+            config.analysis.require_manifest_integrity = value;
         }
         if let Some(value) = analysis.max_parse_failure_rate {
             config.analysis.max_parse_failure_rate = value;
@@ -438,6 +455,7 @@ pub struct ScanRuntimeOverrides {
     pub dialect: Option<String>,
     pub format: Option<OutputFormat>,
     pub manifest_path: Option<PathBuf>,
+    pub base_manifest_path: Option<PathBuf>,
     pub fail_on: Option<String>,
     pub min_confidence: Option<String>,
     pub min_confidence_filter: Option<bool>,
@@ -466,6 +484,9 @@ impl ScanRuntimeOverrides {
         }
         if let Some(manifest) = &self.manifest_path {
             config.manifest_path = Some(manifest.clone());
+        }
+        if let Some(base_manifest) = &self.base_manifest_path {
+            config.base_manifest_path = Some(base_manifest.clone());
         }
         if let Some(fail_on) = &self.fail_on {
             config.fail_on = Some(fail_on.parse::<Severity>().map_err(anyhow::Error::msg)?);
@@ -532,6 +553,16 @@ impl ScanRuntimeOverrides {
 
 pub fn validate_scan_config(config: &ScanConfig) -> Result<()> {
     config.analysis.validate()?;
+    if let Some(path) = &config.base_manifest_path {
+        let resolved = if path.is_absolute() {
+            path.clone()
+        } else {
+            config.root.join(path)
+        };
+        if !resolved.exists() {
+            anyhow::bail!("base manifest path does not exist: {}", resolved.display());
+        }
+    }
     if let Some(path) = &config.manifest_path {
         let resolved = if path.is_absolute() {
             path.clone()

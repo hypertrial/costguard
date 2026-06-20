@@ -147,7 +147,7 @@ Use `--format github` for workflow annotations. Add `--summary-file summary.md` 
 
 ## What it detects
 
-Costguard ships **45 SQLCOST rules** for incremental safety, join risk, warehouse cost patterns, and dbt anti-patterns. Optional **[cost estimates](docs/book/reference/cost-estimates.md)** attach per-finding savings and project-level current/post-fix/potential savings for prioritization—advisory priors from local files, not a bill. Severity and confidence remain the enforcement contract. See the [rule catalog](docs/book/rules/index.md) for severity and fix guidance.
+Costguard ships **46 SQLCOST rules** for incremental safety, join risk, warehouse cost patterns, and dbt anti-patterns. Optional **[cost estimates](docs/book/reference/cost-estimates.md)** attach per-finding savings and project-level current/post-fix/potential savings for prioritization—advisory priors from local files, not a bill. Severity and confidence remain the enforcement contract. See the [rule catalog](docs/book/rules/index.md) for severity and fix guidance.
 
 ## Benchmark smoke tests
 

@@ -2,7 +2,7 @@ use crate::baseline::{load_finding_baseline, validate_finding_baseline, write_fi
 use crate::config::ScanConfig;
 use crate::context::{ContextIssue, ContextReport};
 use crate::dbt_graph::enrich_pr_summary;
-use crate::dbt_load::load_dbt_project;
+use crate::dbt_load::{detect_checksum_mismatches, load_dbt_project};
 use crate::gates::evaluate_gates;
 use crate::governance::{
     apply_managed_governance, load_managed_policy, normalized_path, validate_local_policy_controls,
@@ -19,9 +19,11 @@ use crate::sql_analysis::{
     analyze_sql_documents, build_file_parse_status, build_scan_metrics, dbt_models_by_path,
     parse_failure_diagnostics,
 };
+use crate::state_diff::classify_findings;
 use crate::waivers::apply_local_waivers;
 use crate::{
-    AnalysisReport, AnalysisViolation, PolicyMetadata, PrSummary, Project, RunMetadata, ScanResult,
+    AnalysisReport, AnalysisViolation, EnforcementPreview, ManifestIntegrity, PolicyMetadata,
+    PrSummary, Project, RunMetadata, ScanResult,
 };
 use anyhow::{Context, Result};
 use costguard_cost::{
@@ -29,8 +31,8 @@ use costguard_cost::{
     summarize_features, CostAnalysisResult, CostInputs, ModelFeatureSummary,
 };
 use costguard_dbt::{
-    compiled_code_by_model_path, extract_sql_features, parse_manifest_text, DbtProject,
-    MetadataWarning, MetadataWarningKind,
+    compiled_code_by_model_path, extract_sql_features, parse_manifest, parse_manifest_text,
+    DbtProject, MetadataWarning, MetadataWarningKind,
 };
 use costguard_diagnostics::{EvidenceBuilder, Severity};
 use costguard_rules::{ProjectIndexes, RuleRegistry};
@@ -60,11 +62,23 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
 
     let union_files = plan.union_files();
     let dbt_load = load_dbt_project(&root, config, &union_files)?;
+    let mut checksum_warnings = Vec::new();
+    if plan.pr_mode {
+        if let Some(dbt) = &dbt_load.project {
+            checksum_warnings =
+                detect_checksum_mismatches(dbt, &union_files, &plan.changed_paths);
+        }
+    }
     let metadata_only = dbt_load.metadata_only;
     let manifest_stale = dbt_load
         .warnings
         .iter()
+        .chain(checksum_warnings.iter())
         .any(|warning| warning.kind == MetadataWarningKind::StaleManifest);
+    let checksum_mismatch_count = checksum_warnings
+        .iter()
+        .filter(|warning| warning.kind == MetadataWarningKind::ManifestChecksumMismatch)
+        .count();
     let yaml_parse_failures = dbt_load
         .warnings
         .iter()
@@ -84,6 +98,8 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
 
     let (metadata_warnings, context_skip_warnings) =
         partition_metadata_warnings(&dbt_load.warnings, &plan, &skipped_files_all(&plan));
+    let mut metadata_warnings = metadata_warnings;
+    metadata_warnings.extend(checksum_warnings);
     let metadata_diagnostics = metadata_diagnostics(&root, &metadata_warnings);
 
     let dbt = dbt_load.project;
@@ -177,6 +193,12 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
     let (mut diagnostics, baselined_findings) =
         apply_baseline_filter(diagnostics, baseline.as_ref());
 
+    let head_for_delta = if plan.pr_mode {
+        Some(diagnostics.clone())
+    } else {
+        None
+    };
+
     diagnostics = crate::pipeline::filter_by_min_confidence(
         diagnostics,
         config.min_confidence,
@@ -196,6 +218,12 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
         .as_ref()
         .map(|analysis| analysis.summary.clone());
 
+    let base_branch_scan = if plan.pr_mode {
+        run_base_branch_scan(config, &root, &plan, project.dbt.as_ref())?
+    } else {
+        None
+    };
+
     if plan.pr_mode {
         if let (Some(summary), Some(analysis), Some(cost_config)) = (
             cost_summary.as_mut(),
@@ -203,8 +231,9 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
             config.cost.as_ref(),
         ) {
             if cost_config.enabled {
-                if let Some(base_summary) =
-                    run_base_branch_cost(config, &root, &plan, project.dbt.as_ref())?
+                if let Some(base_summary) = base_branch_scan
+                    .as_ref()
+                    .and_then(|scan| scan.cost_summary.clone())
                 {
                     let downstream_ids = project
                         .dbt
@@ -270,6 +299,23 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
     };
     if let Some(summary) = pr_summary.as_mut() {
         summary.gate_results = evaluate_gates(config.gate.as_ref(), &diagnostics, summary);
+        if let Some(base_scan) = &base_branch_scan {
+            summary.finding_delta = Some(classify_findings(
+                head_for_delta.as_deref().unwrap_or(&diagnostics),
+                &base_scan.diagnostics,
+            ));
+        }
+        summary.manifest_integrity = Some(ManifestIntegrity {
+            checksum_mismatches: checksum_mismatch_count,
+            verified: checksum_mismatch_count == 0,
+        });
+        summary.enforcement_preview = Some(EnforcementPreview {
+            block_only_new: config
+                .gate
+                .as_ref()
+                .is_some_and(|gate| gate.block_only_new),
+            require_manifest_integrity: config.analysis.require_manifest_integrity,
+        });
     }
 
     let mut analysis = evaluate_analysis(
@@ -445,22 +491,28 @@ fn run_optional_cost(
     Ok(None)
 }
 
-fn run_base_branch_cost(
+struct BaseBranchScan {
+    diagnostics: Vec<costguard_diagnostics::Diagnostic>,
+    cost_summary: Option<costguard_cost::ProjectCostSummary>,
+}
+
+fn run_base_branch_scan(
     config: &ScanConfig,
     root: &Path,
     plan: &ScanPlan,
     head_dbt: Option<&DbtProject>,
-) -> Result<Option<costguard_cost::ProjectCostSummary>> {
-    let cost_config = match &config.cost {
-        Some(cost) if cost.enabled => cost,
-        _ => return Ok(None),
-    };
+) -> Result<Option<BaseBranchScan>> {
+    if !plan.pr_mode {
+        return Ok(None);
+    }
     let base = config.base_branch.as_deref().unwrap_or("main");
-    let inputs = CostInputs::load(root, cost_config)?;
     let base_dbt = load_base_dbt_project(root, base, config)?.or_else(|| head_dbt.cloned());
     let base_files = base_sql_files_at_ref(root, base, &plan.changed_paths, base_dbt.as_ref())?;
     if base_files.is_empty() {
-        return Ok(Some(costguard_cost::ProjectCostSummary::default()));
+        return Ok(Some(BaseBranchScan {
+            diagnostics: Vec::new(),
+            cost_summary: None,
+        }));
     }
 
     let compiled_by_path = base_dbt
@@ -505,17 +557,33 @@ fn run_base_branch_cost(
         base_diagnostics.extend(registry.run(&ctx));
     }
 
-    let base_features = feature_summaries_by_path(&base_docs);
-    Ok(Some(
-        run_cost_analysis(
-            cost_config,
-            base_dbt.as_ref(),
-            &inputs,
-            &mut base_diagnostics,
-            &base_features,
-        )
-        .summary,
-    ))
+    let cost_summary = if let Some(cost_config) = config.cost.as_ref() {
+        if cost_config.enabled {
+            let inputs = CostInputs::load(root, cost_config)?;
+            let base_features = feature_summaries_by_path(&base_docs);
+            let mut cost_diagnostics = base_diagnostics.clone();
+            Some(
+                run_cost_analysis(
+                    cost_config,
+                    base_dbt.as_ref(),
+                    &inputs,
+                    &mut cost_diagnostics,
+                    &base_features,
+                )
+                .summary,
+            )
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let IdentityResult { diagnostics } = assign_semantic_identities(base_diagnostics)?;
+    Ok(Some(BaseBranchScan {
+        diagnostics,
+        cost_summary,
+    }))
 }
 
 fn load_base_dbt_project(
@@ -523,6 +591,14 @@ fn load_base_dbt_project(
     base: &str,
     config: &ScanConfig,
 ) -> Result<Option<DbtProject>> {
+    if let Some(path) = &config.base_manifest_path {
+        let resolved = if path.is_absolute() {
+            path.clone()
+        } else {
+            root.join(path)
+        };
+        return Ok(Some(parse_manifest(&resolved)?));
+    }
     let manifest_rel = base_manifest_rel_path(root, config);
     let Some(text) = crate::git::file_at_ref(root, base, &manifest_rel)? else {
         return Ok(None);
@@ -805,6 +881,12 @@ fn metadata_warning_to_diagnostic(
             Severity::Info,
             "re-run 'dbt compile' so target/manifest.json reflects current models, then scan again",
             "stale_manifest",
+        ),
+        MetadataWarningKind::ManifestChecksumMismatch => (
+            "SQLCOST046",
+            Severity::Low,
+            "re-run 'dbt compile' so the manifest checksum matches current model SQL",
+            "manifest_checksum_mismatch",
         ),
         MetadataWarningKind::YamlParseFailed => (
             "SQLCOST024",

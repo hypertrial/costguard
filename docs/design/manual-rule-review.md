@@ -1,6 +1,6 @@
 # Manual rule review playbook
 
-Costguard ships 45 rules (`SQLCOST001`–`SQLCOST045`). Automated corpus tests prove each rule *can* fire and *can* stay silent on authored negatives, but real dbt projects surface patterns that require human judgment: bucket-specific exemptions, compiled-SQL-only signals, and repo idioms that regex classifiers approximate. `SQLCOST045` (stale dbt manifest) is a manifest-state marker validated by integration tests, not the cost-pattern census.
+Costguard ships 46 rules (`SQLCOST001`–`SQLCOST046`). Automated corpus tests prove each rule *can* fire and *can* stay silent on authored negatives, but real dbt projects surface patterns that require human judgment: bucket-specific exemptions, compiled-SQL-only signals, and repo idioms that regex classifiers approximate. `SQLCOST045` (stale dbt manifest) and `SQLCOST046` (manifest checksum mismatch) are manifest-state markers validated by integration tests, not the cost-pattern census.
 
 This document is the **canonical workflow** for manually reviewing rule findings, recording verdicts, and closing the loop with code fixes or registry entries. Outcome scoreboards live in [Rule TP coverage](rule-tp-coverage.md) (44 cost/behavioral rules, `SQLCOST001`–`SQLCOST044`; `SQLCOST045` excluded); Spellbook cost triage case studies live in [Spellbook top-10 cost review](spellbook-top10-cost-review.md).
 

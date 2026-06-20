@@ -35,8 +35,9 @@ INFRASTRUCTURE_RULES = {
     "SQLCOST026",
     "SQLCOST027",
     "SQLCOST045",
+    "SQLCOST046",
 }
-CENSUS_EXCLUDED_RULES = {"SQLCOST045"}
+CENSUS_EXCLUDED_RULES = {"SQLCOST045", "SQLCOST046"}
 ENTERPRISE_GATES = {
     "high_severity_sampled_precision_min": 0.90,
     "overall_sampled_precision_min": 0.80,

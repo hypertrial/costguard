@@ -109,6 +109,42 @@ pub(crate) fn render_markdown(result: &ScanResult) -> String {
             }
             output.push_str(".\n\n");
         }
+        if let Some(delta) = &summary.finding_delta {
+            output.push_str(&format!(
+                "Finding delta vs base: {} introduced, {} regressed, {} resolved, {} unchanged.\n\n",
+                delta.introduced, delta.regressed, delta.resolved, delta.unchanged
+            ));
+        }
+        if !summary.indirectly_affected.is_empty() {
+            output.push_str("Indirect impact:\n");
+            for impact in &summary.indirectly_affected {
+                output.push_str(&format!(
+                    "- {} — {}\n",
+                    escape_markdown(&impact.model),
+                    escape_markdown(&impact.reason)
+                ));
+            }
+            output.push('\n');
+        }
+        if let Some(integrity) = &summary.manifest_integrity {
+            output.push_str(&format!(
+                "Manifest integrity: {} ({} checksum mismatch(es)).\n\n",
+                if integrity.verified {
+                    "verified"
+                } else {
+                    "cannot verify head"
+                },
+                integrity.checksum_mismatches
+            ));
+        }
+        if let Some(preview) = &summary.enforcement_preview {
+            if preview.block_only_new || preview.require_manifest_integrity {
+                output.push_str(&format!(
+                    "Enforcement preview (advisory): block_only_new={}, require_manifest_integrity={}.\n\n",
+                    preview.block_only_new, preview.require_manifest_integrity
+                ));
+            }
+        }
         markdown_list(
             &mut output,
             "Affected exposures",

@@ -1,4 +1,4 @@
-use crate::{DbtColumn, DbtExposure, DbtModel, DbtProject, DbtSource, DbtSourceRef};
+use crate::{DbtColumn, DbtExposure, DbtMacro, DbtModel, DbtProject, DbtSource, DbtSourceRef};
 use anyhow::{Context, Result};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -130,7 +130,23 @@ pub fn parse_manifest_text(text: &str) -> Result<DbtProject> {
                 .filter_map(Value::as_str)
                 .map(str::to_string)
                 .collect::<Vec<_>>();
+            let depends_on_macros = node
+                .get("depends_on")
+                .and_then(|depends| depends.get("macros"))
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect::<Vec<_>>();
+            let (checksum, checksum_kind) = parse_node_checksum(node);
             project.graph.depends_on.insert(node_id.clone(), depends_on);
+            if !depends_on_macros.is_empty() {
+                project
+                    .graph
+                    .depends_on_macros
+                    .insert(node_id.clone(), depends_on_macros);
+            }
             project.models.insert(
                 node_id.clone(),
                 DbtModel {
@@ -155,6 +171,41 @@ pub fn parse_manifest_text(text: &str) -> Result<DbtProject> {
                     tests: Vec::new(),
                     refs,
                     sources,
+                    checksum,
+                    checksum_kind,
+                },
+            );
+        }
+    }
+
+    if let Some(macros) = manifest.get("macros").and_then(Value::as_object) {
+        for (macro_id, node) in macros {
+            let name = node
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or(macro_id)
+                .to_string();
+            let path = node
+                .get("original_file_path")
+                .or_else(|| node.get("path"))
+                .and_then(Value::as_str)
+                .map(PathBuf::from);
+            let depends_on_macros = node
+                .get("depends_on")
+                .and_then(|depends| depends.get("macros"))
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect::<Vec<_>>();
+            project.macros.insert(
+                macro_id.clone(),
+                DbtMacro {
+                    unique_id: macro_id.clone(),
+                    name,
+                    path,
+                    depends_on_macros,
                 },
             );
         }
@@ -217,6 +268,15 @@ pub fn parse_manifest_text(text: &str) -> Result<DbtProject> {
     }
 
     Ok(project)
+}
+
+fn parse_node_checksum(node: &Value) -> (Option<String>, Option<String>) {
+    let Some(checksum) = node.get("checksum") else {
+        return (None, None);
+    };
+    let kind = checksum.get("name").and_then(Value::as_str).map(str::to_string);
+    let value = checksum.get("checksum").and_then(Value::as_str).map(str::to_string);
+    (value, kind)
 }
 
 fn metadata_owners(node: &Value, config: &Value) -> Vec<String> {

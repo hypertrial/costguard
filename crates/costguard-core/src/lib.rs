@@ -19,6 +19,7 @@ mod pipeline;
 mod scan;
 mod scan_plan;
 mod sql_analysis;
+mod state_diff;
 mod waivers;
 
 pub use baseline::{
@@ -46,6 +47,7 @@ pub use costguard_sql::{
 };
 pub use init::{detect_warehouse, init_project, InitOptions, InitOutcome};
 pub use scan::{explain, rules, scan};
+pub use state_diff::{classify_findings, FindingDelta};
 
 use costguard_dbt::DbtProject;
 use costguard_diagnostics::Diagnostic;
@@ -231,12 +233,38 @@ pub struct PrSummary {
     pub gate_results: Vec<GateResult>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub trend: Option<ReceiptTrend>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub finding_delta: Option<FindingDelta>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub indirectly_affected: Vec<IndirectImpact>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub manifest_integrity: Option<ManifestIntegrity>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enforcement_preview: Option<EnforcementPreview>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct IndirectImpact {
+    pub model: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ManifestIntegrity {
+    pub checksum_mismatches: usize,
+    pub verified: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct EnforcementPreview {
+    pub block_only_new: bool,
+    pub require_manifest_integrity: bool,
 }
 
 impl Default for PrSummary {
     fn default() -> Self {
         Self {
-            receipt_version: 1,
+            receipt_version: 2,
             changed_files: Vec::new(),
             changed_models: Vec::new(),
             changed_model_details: Vec::new(),
@@ -246,6 +274,10 @@ impl Default for PrSummary {
             recommended_dbt_command: None,
             gate_results: Vec::new(),
             trend: None,
+            finding_delta: None,
+            indirectly_affected: Vec::new(),
+            manifest_integrity: None,
+            enforcement_preview: None,
         }
     }
 }

@@ -239,6 +239,8 @@ struct CommonScanArgs {
     #[arg(long)]
     manifest: Option<PathBuf>,
     #[arg(long)]
+    base_manifest: Option<PathBuf>,
+    #[arg(long)]
     analysis_policy: Option<String>,
     #[command(flatten)]
     policy: PolicyArgs,
@@ -250,6 +252,7 @@ impl CommonScanArgs {
         overrides.dialect = self.dialect.clone();
         overrides.format = self.format.map(Into::into);
         overrides.manifest_path = self.manifest.clone();
+        overrides.base_manifest_path = self.base_manifest.clone();
         overrides.analysis_policy = self.analysis_policy.clone();
         overrides.policy_bundle_path = self.policy.bundle.clone();
         overrides.trust_store_path = self.policy.trust_store.clone();

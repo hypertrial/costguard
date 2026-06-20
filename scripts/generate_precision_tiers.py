@@ -21,6 +21,7 @@ INFRASTRUCTURE_RULES = {
     "SQLCOST026",
     "SQLCOST027",
     "SQLCOST045",
+    "SQLCOST046",
 }
 BUILTIN_RULE_IDS = [f"SQLCOST{i:03d}" for i in range(1, 46)]
 

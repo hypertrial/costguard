@@ -33,7 +33,7 @@ Structured scan result:
 | `cost` | `[cost]` enabled | Project cost summary: current/post-fix/potential savings, addressable finding savings (deduplicated), top models, grade mix, disclaimer (see [Cost estimates](cost-estimates.md)) |
 | `diagnostics` | Always | Gated findings on changed files in PR mode; full scan findings otherwise. Entries include governance fields (`finding_id`, `evidence_key`, optional `owners` and `exception`), advisory `rule_precision_tier`, and optional cost data including `prior_basis`, downstream count, and savings |
 | `files` | Always | Per-model parse metadata (`parse_input`, `parsed_raw`, `parsed_compiled`, `feature_extraction_used_ast`) |
-| `pr_summary` | PR mode, or receipt comparison | Receipt version, changed model details/owners, owner counts, gate results, downstream models/exposures, recommended `dbt build --select`, and optional trend deltas |
+| `pr_summary` | PR mode, or receipt comparison | Receipt version `2` adds base-vs-head `finding_delta`, macro/source `indirectly_affected`, `manifest_integrity`, and reserved `enforcement_preview`; plus changed model details/owners, gate results, downstream models/exposures, recommended `dbt build --select`, and optional trend deltas |
 | `context` | PR mode | Nonblocking full-project report (see below) |
 
 ### PR `context` report

@@ -281,7 +281,7 @@ expires_at = "2099-01-01T00:00:00Z"
         String::from_utf8_lossy(&output.stderr)
     );
     let payload: serde_json::Value = serde_json::from_slice(&fs::read(&receipt).unwrap()).unwrap();
-    assert_eq!(payload["pr_summary"]["receipt_version"], 1);
+    assert_eq!(payload["pr_summary"]["receipt_version"], 2);
     assert_eq!(
         payload["pr_summary"]["changed_model_details"][0]["owners"][0],
         "@finance"

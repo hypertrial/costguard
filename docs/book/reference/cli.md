@@ -22,6 +22,7 @@ Source: `crates/costguard-cli/src/main.rs`
 | `--dialect` | scan, explain, pr | Alias for `--warehouse` (config file uses either key) |
 | `--format` | scan, explain, pr, rules | `text`, `json`, `github`, `markdown`, `sarif` (config also accepts `md`) |
 | `--manifest` | scan, explain, pr | Path to dbt `manifest.json` with `compiled_code` |
+| `--base-manifest` | scan, explain, pr | Optional production/state manifest for PR base-vs-head comparison |
 | `--baseline` | scan, pr | Finding baseline JSON (grandfather known findings) |
 | `--write-baseline` | scan | Write current findings to a baseline JSON file |
 | `--cost` | scan, explain, pr | Enable cost estimates (uses `[cost]` in `costguard.toml` when present) |

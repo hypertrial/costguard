@@ -5,7 +5,7 @@ Review census corpus: spellbook (Trino), jaffle-shop (duckdb), mattermost-wareho
 Pass bar: **≤100 cost-ranked examples per rule** (100% if fewer) with **0 `fp_bug` + 0 `unknown`** in the examined sample.  
 Tool: [`scripts/rule_tp_census.py`](../../scripts/rule_tp_census.py); evidence: [`tests/benchmarks/rule_tp_evidence.json`](../../tests/benchmarks/rule_tp_evidence.json). Supplemental tail evidence lives in [`tests/benchmarks/evidence/rule_tp_stratified_supplemental.json`](../../tests/benchmarks/evidence/rule_tp_stratified_supplemental.json).
 
-The census covers the 44 cost/behavioral rules (`SQLCOST001`–`SQLCOST044`). `SQLCOST045` (stale dbt manifest) is excluded like infrastructure rules `SQLCOST023`–`027` and is validated by [`crates/costguard-core/tests/stale_manifest.rs`](../../crates/costguard-core/tests/stale_manifest.rs).
+The census covers the 44 cost/behavioral rules (`SQLCOST001`–`SQLCOST044`). `SQLCOST045` (stale dbt manifest) and `SQLCOST046` (manifest checksum mismatch) are excluded like infrastructure rules `SQLCOST023`–`027` and are validated by integration tests.
 
 For the full manual review workflow (adjudication loop, registry contracts, bucket taxonomy), see [Manual rule review playbook](manual-rule-review.md).
 

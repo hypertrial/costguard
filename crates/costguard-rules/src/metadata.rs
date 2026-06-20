@@ -7,6 +7,7 @@ pub(crate) struct DbtProjectMetadataRule;
 pub(crate) struct FileSkippedRule;
 pub(crate) struct SqlParseFailedRule;
 pub(crate) struct StaleManifestRule;
+pub(crate) struct ManifestChecksumMismatchRule;
 
 impl Rule for MetadataOnlyScanRule {
     fn id(&self) -> &'static str {
@@ -110,6 +111,24 @@ impl Rule for StaleManifestRule {
     }
     fn default_severity(&self) -> Severity {
         Severity::Info
+    }
+    fn check(&self, _ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
+        Vec::new()
+    }
+}
+
+impl Rule for ManifestChecksumMismatchRule {
+    fn id(&self) -> &'static str {
+        "SQLCOST046"
+    }
+    fn name(&self) -> &'static str {
+        "Manifest checksum mismatch"
+    }
+    fn description(&self) -> &'static str {
+        "Reports when a changed model file's sha256 checksum does not match the loaded manifest."
+    }
+    fn default_severity(&self) -> Severity {
+        Severity::Low
     }
     fn check(&self, _ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
         Vec::new()

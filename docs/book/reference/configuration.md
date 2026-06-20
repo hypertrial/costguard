@@ -71,7 +71,8 @@ severity = "high"
 
 | Key | Type | Description |
 | --- | --- | --- |
-| `manifest_path` | string | Default manifest for compiled SQL metrics |
+| `manifest_path` | string | Head manifest for compiled SQL metrics |
+| `base_manifest_path` | string | Optional production/state manifest for PR base-vs-head comparison (falls back to the git base ref when unset) |
 
 ## `[owners]`
 
@@ -98,6 +99,7 @@ PR-only policy-as-code gates run after signed policy, waivers, baselines, lineag
 | `fail_on_monthly_delta_gb` | positive float | Addressable finding savings threshold in GB-months |
 | `fail_on_blast_radius` | positive integer | Unique downstream-model threshold |
 | `require_owner` | bool | Require matched changed model/finding paths to resolve an owner |
+| `block_only_new` | bool | Reserved: when enabled in a future release, gates will block only introduced/regressed PR findings (default `false`; advisory preview only today) |
 
 Each `[[gate.scopes]]` requires a unique `name` and at least one matcher: `paths`, `tags`, or `owners`. Values within a matcher are ORed; different matcher categories are ANDed. Baselined and excepted findings do not participate.
 
@@ -138,6 +140,7 @@ Optional analysis completeness policy. CLI and GitHub Action default is `standar
 | --- | --- | --- |
 | `policy` | string | `standard` (best effort) or `strict` (fail closed) |
 | `require_manifest` | bool | Require a dbt manifest for dbt projects |
+| `require_manifest_integrity` | bool | Reserved: when enabled in a future release, fail when changed model checksums do not match the head manifest (default `false`; advisory preview only today) |
 | `max_parse_failure_rate` | float | Maximum allowed SQL parse failure rate (`0.0`–`1.0`) |
 | `max_compiled_parse_failures` | integer | Maximum allowed compiled-SQL parse failures |
 | `max_skipped_files` | integer | Maximum allowed skipped or unreadable files |

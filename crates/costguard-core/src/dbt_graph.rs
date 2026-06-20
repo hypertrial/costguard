@@ -1,8 +1,8 @@
 use crate::owners::OwnerResolver;
-use crate::{ChangedModelDetail, PrSummary, Project};
+use crate::{ChangedModelDetail, IndirectImpact, PrSummary, Project};
 use costguard_dbt::{DbtModel, DbtProject};
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub(crate) fn enrich_pr_summary(
     mut summary: PrSummary,
@@ -27,6 +27,11 @@ pub(crate) fn enrich_pr_summary(
         .collect::<Vec<_>>();
 
     let graph = DbtDependencyGraph::from_project(dbt);
+    let indirect = discover_indirect_impacts(dbt, &changed_set, &graph);
+    summary.indirectly_affected = indirect.impacts;
+    let mut affected_seed_ids = changed_model_ids.clone();
+    affected_seed_ids.extend(indirect.model_ids);
+
     summary.changed_models = graph.labels_for(&changed_model_ids);
     summary.changed_models.sort();
 
@@ -70,10 +75,17 @@ pub(crate) fn enrich_pr_summary(
         }
     }
 
-    let downstream_ids = graph.transitive_downstream(&changed_model_ids);
-    summary.affected_downstream = graph.labels_for(&downstream_ids);
-    summary.affected_downstream.sort();
-    let affected_ids = changed_model_ids
+    let downstream_ids = graph.transitive_downstream(&affected_seed_ids);
+    let mut affected_downstream = graph.labels_for(&downstream_ids);
+    for impact in &summary.indirectly_affected {
+        if !affected_downstream.contains(&impact.model) {
+            affected_downstream.push(impact.model.clone());
+        }
+    }
+    affected_downstream.sort();
+    affected_downstream.dedup();
+    summary.affected_downstream = affected_downstream;
+    let affected_ids = affected_seed_ids
         .iter()
         .chain(downstream_ids.iter())
         .cloned()
@@ -93,10 +105,92 @@ pub(crate) fn enrich_pr_summary(
     summary
 }
 
+struct IndirectDiscovery {
+    impacts: Vec<IndirectImpact>,
+    model_ids: Vec<String>,
+}
+
+fn discover_indirect_impacts(
+    dbt: &DbtProject,
+    changed_files: &HashSet<PathBuf>,
+    graph: &DbtDependencyGraph,
+) -> IndirectDiscovery {
+    let mut impacts = Vec::new();
+    let mut model_ids = HashSet::new();
+
+    if changed_files.iter().any(|path| is_dbt_project_file(path)) {
+        impacts.push(IndirectImpact {
+            model: "(all models)".into(),
+            reason: "dbt_project.yml changed".into(),
+        });
+        for model in dbt.models.values() {
+            model_ids.insert(model.identity().to_string());
+        }
+    }
+
+    let changed_macros = graph.changed_macro_ids(changed_files);
+    for macro_id in &changed_macros {
+        let affected_macros = graph.transitive_macro_dependents(std::slice::from_ref(macro_id));
+        for model_id in graph.models_for_macros(&affected_macros) {
+            let label = graph
+                .labels
+                .get(&model_id)
+                .cloned()
+                .unwrap_or(model_id.clone());
+            if model_ids.insert(model_id.clone()) {
+                let macro_name = graph.macro_label(macro_id);
+                impacts.push(IndirectImpact {
+                    model: label,
+                    reason: format!("macro `{macro_name}` changed"),
+                });
+            }
+        }
+    }
+
+    for path in changed_files {
+        if is_source_yaml(path) {
+            for model_id in graph.models_for_source_path(dbt, path) {
+                let label = graph
+                    .labels
+                    .get(&model_id)
+                    .cloned()
+                    .unwrap_or(model_id.clone());
+                if model_ids.insert(model_id.clone()) {
+                    impacts.push(IndirectImpact {
+                        model: label,
+                        reason: format!("source metadata changed ({})", path.display()),
+                    });
+                }
+            }
+        }
+    }
+
+    impacts.sort_by(|left, right| left.model.cmp(&right.model).then(left.reason.cmp(&right.reason)));
+    IndirectDiscovery {
+        impacts,
+        model_ids: model_ids.into_iter().collect(),
+    }
+}
+
+fn is_dbt_project_file(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name == "dbt_project.yml")
+}
+
+fn is_source_yaml(path: &Path) -> bool {
+    let normalized = costguard_diagnostics::posix_path(path).to_ascii_lowercase();
+    normalized.contains("/sources/") || normalized.starts_with("sources/")
+}
+
 struct DbtDependencyGraph {
     reverse_dependencies: HashMap<String, Vec<String>>,
     exposure_dependencies: HashMap<String, Vec<String>>,
     labels: HashMap<String, String>,
+    macro_path_to_id: HashMap<PathBuf, String>,
+    macro_to_models: HashMap<String, Vec<String>>,
+    macro_dependents: HashMap<String, Vec<String>>,
+    source_dependencies: HashMap<String, Vec<String>>,
 }
 
 impl DbtDependencyGraph {
@@ -133,6 +227,7 @@ impl DbtDependencyGraph {
             },
         );
         let mut reverse_dependencies: HashMap<String, Vec<String>> = HashMap::new();
+        let mut source_dependencies: HashMap<String, Vec<String>> = HashMap::new();
 
         for model in project.models.values() {
             let dependent = model.identity().to_string();
@@ -148,6 +243,12 @@ impl DbtDependencyGraph {
                 for dependency in depends_on {
                     let dependency_name =
                         normalize_dependency_id(dependency, &labels, &name_to_ids);
+                    if dependency.starts_with("source.") {
+                        source_dependencies
+                            .entry(dependency_name.clone())
+                            .or_default()
+                            .push(dependent.clone());
+                    }
                     reverse_dependencies
                         .entry(dependency_name)
                         .or_default()
@@ -157,6 +258,10 @@ impl DbtDependencyGraph {
         }
 
         for dependents in reverse_dependencies.values_mut() {
+            dependents.sort();
+            dependents.dedup();
+        }
+        for dependents in source_dependencies.values_mut() {
             dependents.sort();
             dependents.dedup();
         }
@@ -178,11 +283,122 @@ impl DbtDependencyGraph {
             })
             .collect();
 
+        let macro_path_to_id = project
+            .macros
+            .values()
+            .filter_map(|dbt_macro| {
+                dbt_macro
+                    .path
+                    .as_ref()
+                    .map(|path| (path.clone(), dbt_macro.unique_id.clone()))
+            })
+            .collect::<HashMap<_, _>>();
+        let mut macro_to_models: HashMap<String, Vec<String>> = HashMap::new();
+        for (model_id, macros) in &project.graph.depends_on_macros {
+            for macro_id in macros {
+                macro_to_models
+                    .entry(macro_id.clone())
+                    .or_default()
+                    .push(model_id.clone());
+            }
+        }
+        for models in macro_to_models.values_mut() {
+            models.sort();
+            models.dedup();
+        }
+        let mut macro_dependents: HashMap<String, Vec<String>> = HashMap::new();
+        for dbt_macro in project.macros.values() {
+            for dependency in &dbt_macro.depends_on_macros {
+                macro_dependents
+                    .entry(dependency.clone())
+                    .or_default()
+                    .push(dbt_macro.unique_id.clone());
+            }
+        }
+        for dependents in macro_dependents.values_mut() {
+            dependents.sort();
+            dependents.dedup();
+        }
+
         Self {
             reverse_dependencies,
             exposure_dependencies,
             labels,
+            macro_path_to_id,
+            macro_to_models,
+            macro_dependents,
+            source_dependencies,
         }
+    }
+
+    fn changed_macro_ids(&self, changed_files: &HashSet<PathBuf>) -> Vec<String> {
+        changed_files
+            .iter()
+            .filter_map(|path| self.macro_path_to_id.get(path).cloned())
+            .collect()
+    }
+
+    fn transitive_macro_dependents(&self, changed_macro_ids: &[String]) -> HashSet<String> {
+        let mut seen = changed_macro_ids.iter().cloned().collect::<HashSet<_>>();
+        let mut stack = changed_macro_ids.to_vec();
+        while let Some(macro_id) = stack.pop() {
+            if let Some(dependents) = self.macro_dependents.get(&macro_id) {
+                for dependent in dependents {
+                    if seen.insert(dependent.clone()) {
+                        stack.push(dependent.clone());
+                    }
+                }
+            }
+        }
+        seen
+    }
+
+    fn models_for_macros(&self, macro_ids: &HashSet<String>) -> Vec<String> {
+        let mut models = HashSet::new();
+        for macro_id in macro_ids {
+            if let Some(model_ids) = self.macro_to_models.get(macro_id) {
+                models.extend(model_ids.iter().cloned());
+            }
+        }
+        let mut models = models.into_iter().collect::<Vec<_>>();
+        models.sort();
+        models
+    }
+
+    fn models_for_source_path(&self, dbt: &DbtProject, path: &Path) -> Vec<String> {
+        let source_name = path
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .unwrap_or_default()
+            .to_string();
+        let mut models = HashSet::new();
+        for (source_id, dependents) in &self.source_dependencies {
+            if source_id.contains(&format!(".{source_name}."))
+                || source_id.ends_with(&format!(".{source_name}"))
+            {
+                models.extend(dependents.iter().cloned());
+            }
+        }
+        if models.is_empty() {
+            for model in dbt.models.values() {
+                for source in &model.sources {
+                    if source.source_name == source_name {
+                        models.insert(model.identity().to_string());
+                    }
+                }
+            }
+        }
+        let mut models = models.into_iter().collect::<Vec<_>>();
+        models.sort();
+        models
+    }
+
+    fn macro_label(&self, macro_id: &str) -> String {
+        macro_id
+            .rsplit('.')
+            .next()
+            .unwrap_or(macro_id)
+            .to_string()
     }
 
     fn transitive_downstream(&self, changed_model_ids: &[String]) -> Vec<String> {
@@ -270,7 +486,7 @@ fn normalize_dependency_id(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use costguard_dbt::{DbtExposure, DbtModel};
+    use costguard_dbt::{DbtExposure, DbtMacro, DbtModel};
 
     #[test]
     fn pr_summary_uses_transitive_manifest_graph_and_exposures() {
@@ -435,5 +651,66 @@ mod tests {
         );
         assert_eq!(summary.changed_models, vec!["beta.orders"]);
         assert_eq!(summary.affected_downstream, vec!["order_rollup"]);
+    }
+
+    #[test]
+    fn pr_summary_tracks_macro_driven_indirect_impact() {
+        let mut dbt = DbtProject::default();
+        dbt.macros.insert(
+            "macro.pkg.helper".into(),
+            DbtMacro {
+                unique_id: "macro.pkg.helper".into(),
+                name: "helper".into(),
+                path: Some(PathBuf::from("macros/helper.sql")),
+                depends_on_macros: Vec::new(),
+            },
+        );
+        dbt.models.insert(
+            "model.pkg.a".into(),
+            DbtModel {
+                unique_id: Some("model.pkg.a".into()),
+                node_id: Some("model.pkg.a".into()),
+                name: "a".into(),
+                path: Some(PathBuf::from("models/a.sql")),
+                ..DbtModel::default()
+            },
+        );
+        dbt.models.insert(
+            "model.pkg.b".into(),
+            DbtModel {
+                unique_id: Some("model.pkg.b".into()),
+                node_id: Some("model.pkg.b".into()),
+                name: "b".into(),
+                path: Some(PathBuf::from("models/b.sql")),
+                ..DbtModel::default()
+            },
+        );
+        dbt.graph.depends_on_macros.insert(
+            "model.pkg.a".into(),
+            vec!["macro.pkg.helper".into()],
+        );
+        dbt.graph
+            .depends_on
+            .insert("model.pkg.b".into(), vec!["model.pkg.a".into()]);
+        let project = Project {
+            root: PathBuf::from("."),
+            files: Vec::new(),
+            dbt: Some(dbt),
+        };
+        let owners =
+            OwnerResolver::load(PathBuf::from(".").as_path(), &Default::default()).unwrap();
+        let summary = enrich_pr_summary(
+            PrSummary {
+                changed_files: vec![PathBuf::from("macros/helper.sql")],
+                ..PrSummary::default()
+            },
+            &project,
+            &owners,
+        );
+        assert_eq!(summary.changed_models, Vec::<String>::new());
+        assert_eq!(summary.indirectly_affected.len(), 1);
+        assert_eq!(summary.indirectly_affected[0].model, "a");
+        assert!(summary.indirectly_affected[0].reason.contains("helper"));
+        assert_eq!(summary.affected_downstream, vec!["a", "b"]);
     }
 }
