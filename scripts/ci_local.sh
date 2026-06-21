@@ -31,11 +31,20 @@ require_tool() {
 }
 
 eval_python() {
-  if [ ! -x "${ROOT}/.venv-eval/bin/python" ]; then
+  local lock_digest python_version fingerprint marker
+  lock_digest="$(python3 -c 'import hashlib, pathlib, sys; print(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest())' "${ROOT}/requirements-eval.lock")"
+  python_version="$(python3 -c 'import platform; print(platform.python_version())')"
+  fingerprint="python=${python_version};lock=${lock_digest}"
+  marker="${ROOT}/.venv-eval/.costguard-lock-fingerprint"
+  if [ ! -x "${ROOT}/.venv-eval/bin/python" ] \
+    || [ ! -f "${marker}" ] \
+    || [ "$(cat "${marker}" 2>/dev/null || true)" != "${fingerprint}" ]; then
+    rm -rf "${ROOT}/.venv-eval"
     echo "+ python3 -m venv .venv-eval" >&2
     python3 -m venv "${ROOT}/.venv-eval"
-    echo "+ .venv-eval/bin/pip install -r requirements-eval.txt" >&2
-    "${ROOT}/.venv-eval/bin/pip" install -q -r "${ROOT}/requirements-eval.txt"
+    echo "+ .venv-eval/bin/pip install --require-hashes -r requirements-eval.lock" >&2
+    "${ROOT}/.venv-eval/bin/pip" install -q --require-hashes -r "${ROOT}/requirements-eval.lock"
+    printf '%s\n' "${fingerprint}" > "${marker}"
   fi
   echo "${ROOT}/.venv-eval/bin/python"
 }
@@ -43,6 +52,7 @@ eval_python() {
 require_tool ruff
 require_tool mdbook
 require_tool cargo-deny
+run python3 scripts/lock_python_deps.py --check
 EVAL_PY="$(eval_python)"
 run python3 scripts/validate_workspace_deps.py
 run ruff check scripts .github/actions/costguard/scripts

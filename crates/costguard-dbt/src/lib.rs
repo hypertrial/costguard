@@ -9,7 +9,7 @@ mod project_config;
 mod sql_features;
 mod yaml;
 
-pub use manifest::{parse_manifest, parse_manifest_text};
+pub use manifest::{parse_manifest, parse_manifest_text, parse_manifest_with_limit};
 use project_config::{
     apply_folder_config_to_model, discover_dbt_project_files_in_roots_with_warnings,
     find_dbt_project_for_model, resolve_folder_config_for_model,
@@ -177,19 +177,27 @@ pub fn apply_dbt_project_configs_in_roots(
 ) -> Vec<MetadataWarning> {
     let (project_files, warnings) =
         discover_dbt_project_files_in_roots_with_warnings(root, scan_roots);
+    apply_dbt_project_configs_from_files(root, &project_files, project);
+    warnings
+}
+
+pub fn apply_dbt_project_configs_from_files(
+    root: &Path,
+    project_files: &[DbtProjectFile],
+    project: &mut DbtProject,
+) {
     for model in project.models.values_mut() {
         let Some(model_path) = model.path.as_ref() else {
             continue;
         };
         let absolute_model_path = root.join(model_path);
-        let Some(project_file) = find_dbt_project_for_model(&absolute_model_path, &project_files)
+        let Some(project_file) = find_dbt_project_for_model(&absolute_model_path, project_files)
         else {
             continue;
         };
         let folder_config = resolve_folder_config_for_model(&absolute_model_path, project_file);
         apply_folder_config_to_model(model, &folder_config);
     }
-    warnings
 }
 
 #[cfg(test)]
@@ -492,7 +500,10 @@ models:
             project.graph.depends_on_macros["model.pkg.fct_orders"],
             vec!["macro.pkg.generate_schema_name"]
         );
-        let dbt_macro = project.macros.get("macro.pkg.generate_schema_name").unwrap();
+        let dbt_macro = project
+            .macros
+            .get("macro.pkg.generate_schema_name")
+            .unwrap();
         assert_eq!(dbt_macro.name, "generate_schema_name");
         assert_eq!(
             dbt_macro.path.as_deref(),

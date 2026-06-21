@@ -115,7 +115,7 @@ Warehouse detection is best-effort: reads `dbt_project.yml` `profile`, then `pro
 ## `policy`
 
 ```bash
-costguard policy keygen KEY_ID --private-key PATH --trust-store PATH
+costguard policy keygen KEY_ID --private-key PATH --trust-store PATH [--force]
 costguard policy compile INPUT.toml OUTPUT.json
 costguard policy sign POLICY.json KEY.private.json OUTPUT.signed.json
 costguard policy verify BUNDLE.json TRUST.json
@@ -124,6 +124,8 @@ costguard policy inspect BUNDLE.json TRUST.json
 ```
 
 Signed policy bundles are distributed as pinned git artifacts. Compiled policy documents require `schema_version: 2` and `identity_scheme: "semantic-v1"`. See [Signed policy and exceptions](../governance/policy.md).
+
+`policy keygen` refuses either existing output unless `--force` is supplied. Forced replacement accepts regular files only; identical paths, symlinks, directories, and special files are rejected. Private keys are atomically persisted with mode `0600` on Unix.
 
 ## `rules`
 

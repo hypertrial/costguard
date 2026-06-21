@@ -2,7 +2,7 @@
 
 Public snapshot of Costguard precision/recall evidence from real dbt benchmark repos and the corpus regression suite.
 
-Snapshot: [`tests/benchmarks/evidence/v2.5.json`](../../../tests/benchmarks/evidence/v2.5.json) (generated 2026-06-19).
+Snapshot: [`tests/benchmarks/evidence/v2.5.json`](../../../tests/benchmarks/evidence/v2.5.json).
 
 <!-- generated:evidence:start -->
 ## Quality ledger
@@ -26,7 +26,7 @@ Snapshot: [`tests/benchmarks/evidence/v2.5.json`](../../../tests/benchmarks/evid
 
 ## Precision tiers
 
-- **informational:** 15
+- **informational:** 16
 - **verified-high:** 27
 - **verified-low:** 1
 - **verified-medium:** 2

@@ -24,6 +24,7 @@ fail_on = "high"
 
 [dbt]
 manifest_path = "target/manifest.json"
+max_manifest_bytes = 536870912
 
 [owners]
 codeowners = true
@@ -73,6 +74,9 @@ severity = "high"
 | --- | --- | --- |
 | `manifest_path` | string | Head manifest for compiled SQL metrics |
 | `base_manifest_path` | string | Optional production/state manifest for PR base-vs-head comparison (falls back to the git base ref when unset) |
+| `max_manifest_bytes` | integer | Maximum bytes loaded from any head or base manifest (default `536870912`, 512 MiB; omitted or `0` uses the default) |
+
+Manifest limits are enforced with a metadata preflight and a bounded read. Oversized head or base manifests fail the run without emitting a partial PR delta.
 
 ## `[owners]`
 

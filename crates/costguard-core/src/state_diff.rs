@@ -84,11 +84,7 @@ mod tests {
     use costguard_diagnostics::{Confidence, CostEstimate, CostGrade, Severity};
     use std::path::PathBuf;
 
-    fn diagnostic(
-        evidence_suffix: &str,
-        severity: Severity,
-        savings: Option<f64>,
-    ) -> Diagnostic {
+    fn diagnostic(evidence_suffix: &str, severity: Severity, savings: Option<f64>) -> Diagnostic {
         let evidence_key = format!("sem-v1:test:{evidence_suffix}");
         let mut diagnostic = Diagnostic {
             governance: costguard_diagnostics::DiagnosticGovernance {
@@ -152,5 +148,14 @@ mod tests {
         assert_eq!(delta.unchanged, 1);
         assert_eq!(delta.introduced_ids.len(), 1);
         assert_eq!(delta.regressed_ids.len(), 1);
+    }
+
+    #[test]
+    fn deterministic_cost_increase_is_a_regression() {
+        let base = vec![diagnostic("cost", Severity::Medium, Some(10.0))];
+        let head = vec![diagnostic("cost", Severity::Medium, Some(10.5))];
+        let delta = classify_findings(&head, &base);
+        assert_eq!(delta.regressed, 1);
+        assert_eq!(delta.unchanged, 0);
     }
 }

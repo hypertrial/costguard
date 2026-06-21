@@ -1,11 +1,43 @@
 use crate::{DbtColumn, DbtExposure, DbtMacro, DbtModel, DbtProject, DbtSource, DbtSourceRef};
 use anyhow::{Context, Result};
 use serde_json::Value;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 pub fn parse_manifest(path: &Path) -> Result<DbtProject> {
     let text = std::fs::read_to_string(path)
         .with_context(|| format!("failed to read manifest {}", path.display()))?;
+    parse_manifest_text(&text)
+}
+
+pub fn parse_manifest_with_limit(path: &Path, max_bytes: u64) -> Result<DbtProject> {
+    let metadata = std::fs::metadata(path)
+        .with_context(|| format!("failed to inspect manifest {}", path.display()))?;
+    if metadata.len() > max_bytes {
+        anyhow::bail!(
+            "manifest {} is {} bytes, exceeding configured limit of {} bytes",
+            path.display(),
+            metadata.len(),
+            max_bytes
+        );
+    }
+
+    let file = std::fs::File::open(path)
+        .with_context(|| format!("failed to read manifest {}", path.display()))?;
+    let mut bytes = Vec::new();
+    file.take(max_bytes.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .with_context(|| format!("failed to read manifest {}", path.display()))?;
+    if bytes.len() as u64 > max_bytes {
+        anyhow::bail!(
+            "manifest {} is at least {} bytes, exceeding configured limit of {} bytes",
+            path.display(),
+            bytes.len(),
+            max_bytes
+        );
+    }
+    let text = String::from_utf8(bytes)
+        .with_context(|| format!("manifest {} is not valid UTF-8", path.display()))?;
     parse_manifest_text(&text)
 }
 
@@ -274,8 +306,14 @@ fn parse_node_checksum(node: &Value) -> (Option<String>, Option<String>) {
     let Some(checksum) = node.get("checksum") else {
         return (None, None);
     };
-    let kind = checksum.get("name").and_then(Value::as_str).map(str::to_string);
-    let value = checksum.get("checksum").and_then(Value::as_str).map(str::to_string);
+    let kind = checksum
+        .get("name")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let value = checksum
+        .get("checksum")
+        .and_then(Value::as_str)
+        .map(str::to_string);
     (value, kind)
 }
 
@@ -321,5 +359,23 @@ fn parse_config_value_string(value: &Value) -> Option<String> {
         Value::Bool(b) => Some(b.to_string()),
         Value::Number(n) => Some(n.to_string()),
         other => Some(other.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bounded_manifest_accepts_limit_and_rejects_limit_plus_one() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("manifest.json");
+        std::fs::write(&path, "{}").expect("write manifest");
+        parse_manifest_with_limit(&path, 2).expect("manifest at limit");
+        let error = parse_manifest_with_limit(&path, 1).expect_err("oversized manifest");
+        let message = error.to_string();
+        assert!(message.contains(&path.display().to_string()));
+        assert!(message.contains("2 bytes"));
+        assert!(message.contains("1 bytes"));
     }
 }

@@ -2,7 +2,7 @@
 mod common;
 
 use chrono::Utc;
-use common::{write_managed_policy_bundle, write_managed_scan_model};
+use common::{run_git, write_managed_policy_bundle, write_managed_scan_model};
 use costguard_core::{scan, FindingBaseline, ScanConfig, SignedPolicyConfig, Waiver};
 use costguard_diagnostics::Severity;
 use costguard_policy::{
@@ -270,6 +270,57 @@ fn managed_scan_keeps_findings_when_exception_is_expired() {
         .iter()
         .any(|violation| violation.code == "expired_exception"));
     assert!(!result.analysis.passed);
+}
+
+#[test]
+fn active_signed_policy_exceptions_are_excluded_from_pr_delta() {
+    let now = Utc::now();
+    let result = managed_scan_custom(
+        EnforcementMode::Block,
+        PolicyPermissions::default(),
+        |policy| {
+            policy.scopes[0].exceptions.push(PolicyException {
+                id: "active-select-star".into(),
+                finding_id: None,
+                rule_id: Some("SQLCOST001".into()),
+                repository: "acme/warehouse".into(),
+                path: "models/**".into(),
+                owner: "data-platform".into(),
+                reason: "approved migration".into(),
+                ticket_url: "https://tickets.example/active".into(),
+                approver: "security".into(),
+                created_at: (now - chrono::Duration::days(1)).to_rfc3339(),
+                expires_at: (now + chrono::Duration::days(1)).to_rfc3339(),
+            });
+        },
+        |_signed, _trust| {},
+        |temp, config| {
+            run_git(temp.path(), &["init"]);
+            run_git(
+                temp.path(),
+                &["config", "user.email", "costguard@example.com"],
+            );
+            run_git(temp.path(), &["config", "user.name", "Costguard Test"]);
+            run_git(temp.path(), &["add", "."]);
+            run_git(temp.path(), &["commit", "-m", "initial"]);
+            fs::write(
+                temp.path().join("models/marts/orders.sql"),
+                "select * from raw.orders\n-- changed\n",
+            )
+            .unwrap();
+            config.changed_only = true;
+            config.base_branch = Some("HEAD".into());
+        },
+    )
+    .unwrap();
+    assert!(result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.rule_id == "SQLCOST001"
+            && diagnostic.governance.enforcement == EnforcementOutcome::Excepted
+    }));
+    let delta = result.pr_summary.unwrap().finding_delta.unwrap();
+    assert_eq!(delta.introduced, 0);
+    assert_eq!(delta.regressed, 0);
+    assert_eq!(delta.resolved, 0);
 }
 
 #[test]

@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
 use std::path::{Path, PathBuf};
 
-const DEFAULT_MAX_FILE_BYTES: u64 = 5 * 1024 * 1024;
+pub const DEFAULT_MAX_FILE_BYTES: u64 = 5 * 1024 * 1024;
 const DEFAULT_EXCLUDED_DIRS: &[&str] = &[
     ".git",
     "target",
@@ -213,12 +213,14 @@ pub fn read_existing_paths_with_options(
 
 fn resolve_discovery_options(root: &Path, options: &DiscoveryOptions) -> (Vec<PathBuf>, u64) {
     let ignored = normalize_ignored(root, &options.ignore);
-    let max_file_bytes = if options.max_file_bytes == 0 {
-        DEFAULT_MAX_FILE_BYTES
-    } else {
-        options.max_file_bytes
-    };
+    let max_file_bytes = effective_max_file_bytes(Some(options.max_file_bytes));
     (ignored, max_file_bytes)
+}
+
+pub fn effective_max_file_bytes(configured: Option<u64>) -> u64 {
+    configured
+        .filter(|value| *value > 0)
+        .unwrap_or(DEFAULT_MAX_FILE_BYTES)
 }
 
 fn collect_scannable_path(

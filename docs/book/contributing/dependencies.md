@@ -13,7 +13,7 @@ Costguard keeps a small, explicit set of third-party crates. New dependencies re
 | `anyhow` | CLI and integration error handling |
 | `clap` | CLI parsing (trimmed features; no ANSI/color stack) |
 | `toml` | `costguard.toml` config |
-| `tempfile` | Dev/test fixtures only (not in release binary) |
+| `tempfile` | Dev/test fixtures and same-directory atomic CLI key persistence |
 
 Internal crates (`costguard-core`, `costguard-sql`, etc.) should prefer workspace deps and avoid adding new external crates without updating the allowlist.
 
@@ -32,6 +32,17 @@ python3 scripts/validate_workspace_deps.py
 ```
 
 The local CI gate runs both for developer feedback. GitHub Actions is the authoritative publication and hosted qualification environment.
+
+## Python locks
+
+`requirements-eval.txt` and `requirements-judge.txt` contain direct maintainer inputs. Their pip-compatible `.lock` files are authoritative for installation and include universal hashes for Python 3.11 and newer. Regenerate both with maintainer-installed `uv` and verify them offline with:
+
+```bash
+python3 scripts/lock_python_deps.py
+python3 scripts/lock_python_deps.py --check
+```
+
+CI uses standard pip with `--require-hashes`; `uv` is not a CI dependency.
 
 ## Audit binary feature
 

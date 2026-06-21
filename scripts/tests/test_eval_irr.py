@@ -336,7 +336,7 @@ class JudgeLibTests(unittest.TestCase):
 
 
 class EvalIrrTests(unittest.TestCase):
-    @unittest.skipIf(not EVAL_DEPS, "eval deps not installed (pip install -r requirements-eval.txt)")
+    @unittest.skipIf(not EVAL_DEPS, "eval deps not installed (pip install --require-hashes -r requirements-eval.lock)")
     def test_perfect_kappa(self) -> None:
         manifest = JudgeManifest(model_file_sha256="modelsha", prompt_version=PROMPT_VERSION)
         records = [
@@ -353,7 +353,7 @@ class EvalIrrTests(unittest.TestCase):
         self.assertEqual(report["overall"]["kappa_binary_non_abstain"], 1.0)
         self.assertEqual(report["counts"]["scorable_non_abstain"], 2)
 
-    @unittest.skipIf(not EVAL_DEPS, "eval deps not installed (pip install -r requirements-eval.txt)")
+    @unittest.skipIf(not EVAL_DEPS, "eval deps not installed (pip install --require-hashes -r requirements-eval.lock)")
     def test_unsure_excluded_from_kappa(self) -> None:
         manifest = JudgeManifest(model_file_sha256="modelsha", prompt_version=PROMPT_VERSION)
         records = [
@@ -369,21 +369,21 @@ class EvalIrrTests(unittest.TestCase):
         self.assertEqual(report["counts"]["scorable_non_abstain"], 1)
         self.assertIsNone(report["overall"]["kappa_binary_non_abstain"])
 
-    @unittest.skipIf(not EVAL_DEPS, "eval deps not installed (pip install -r requirements-eval.txt)")
+    @unittest.skipIf(not EVAL_DEPS, "eval deps not installed (pip install --require-hashes -r requirements-eval.lock)")
     def test_validate_rejects_mismatched_manifest(self) -> None:
         manifest = JudgeManifest(model_file_sha256="expected", prompt_version=PROMPT_VERSION)
         record = sample_record(model_sha256="other")
         errors = validate_records([record], manifest)
         self.assertTrue(errors)
 
-    @unittest.skipIf(not EVAL_DEPS, "eval deps not installed (pip install -r requirements-eval.txt)")
+    @unittest.skipIf(not EVAL_DEPS, "eval deps not installed (pip install --require-hashes -r requirements-eval.lock)")
     def test_empty_report(self) -> None:
         manifest = JudgeManifest()
         report = build_report([], manifest)
         self.assertEqual(report["counts"]["total"], 0)
         self.assertIsNone(report["overall"]["kappa_binary_non_abstain"])
 
-    @unittest.skipIf(not EVAL_DEPS, "eval deps not installed (pip install -r requirements-eval.txt)")
+    @unittest.skipIf(not EVAL_DEPS, "eval deps not installed (pip install --require-hashes -r requirements-eval.lock)")
     def test_manifest_round_trip(self) -> None:
         manifest = JudgeManifest(
             model_file_sha256="abc123",
@@ -406,7 +406,7 @@ class EvalIrrTests(unittest.TestCase):
         self.assertEqual(loaded.mode, MODE_PREFIX)
         self.assertEqual(loaded.prompt_version, PROMPT_VERSION)
 
-    @unittest.skipIf(not EVAL_DEPS, "eval deps not installed (pip install -r requirements-eval.txt)")
+    @unittest.skipIf(not EVAL_DEPS, "eval deps not installed (pip install --require-hashes -r requirements-eval.lock)")
     def test_registry_fp_recall(self) -> None:
         manifest = JudgeManifest(model_file_sha256="modelsha", prompt_version=PROMPT_VERSION)
         records = [
@@ -428,13 +428,13 @@ class EvalIrrTests(unittest.TestCase):
         self.assertEqual(report["overall"]["registry_fp_recall"], 0.5)
         self.assertEqual(report["overall"]["registry_tp_recall"], 1.0)
 
-    @unittest.skipIf(not EVAL_DEPS, "eval deps not installed (pip install -r requirements-eval.txt)")
+    @unittest.skipIf(not EVAL_DEPS, "eval deps not installed (pip install --require-hashes -r requirements-eval.lock)")
     def test_grouped_prompt_version(self) -> None:
         manifest = JudgeManifest(mode=MODE_GROUPED, prompt_version=PROMPT_VERSION_GROUPED)
         self.assertEqual(manifest.prompt_version, PROMPT_VERSION_GROUPED)
         self.assertEqual(PROMPT_VERSION, "irr_judge_v3")
 
-    @unittest.skipIf(not EVAL_DEPS, "eval deps not installed (pip install -r requirements-eval.txt)")
+    @unittest.skipIf(not EVAL_DEPS, "eval deps not installed (pip install --require-hashes -r requirements-eval.lock)")
     def test_fewshots_sha_stable(self) -> None:
         digest = fewshots_file_sha(DEFAULT_FEWSHOTS)
         self.assertEqual(len(digest), 64)

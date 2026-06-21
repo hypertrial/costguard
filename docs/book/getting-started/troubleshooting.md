@@ -16,6 +16,19 @@ dbt compile && costguard scan
 
 In CI, run `dbt compile` before Costguard so compiled SQL and manifest metadata match the PR. See [Requirements](requirements.md).
 
+## Manifest exceeds the configured limit
+
+**Symptoms:** Exit code `3` with an error naming a manifest path, its observed size, and `[dbt].max_manifest_bytes`.
+
+**Cause:** A head, explicit base, or git-base manifest exceeds the 512 MiB default. Costguard stops rather than emitting a partial or misleading finding delta.
+
+**Fix:** Confirm the file is the intended dbt manifest and remove unexpected/generated bloat. For a legitimate larger project, set an explicit reviewed limit:
+
+```toml
+[dbt]
+max_manifest_bytes = 805306368 # 768 MiB
+```
+
 ## SQL parse failures
 
 **Symptoms:** `SQLCOST027` (SQL parse failure), high `sql_parse_failures` in metrics, or strict-policy `parse_failure_rate` violations.

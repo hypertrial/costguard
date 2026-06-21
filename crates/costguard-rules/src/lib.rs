@@ -2,7 +2,7 @@
 //!
 //! Each rule implements the [`Rule`] trait and inspects a [`RuleContext`] built
 //! from parsed SQL, dbt model metadata, and project indexes. The default
-//! [`RuleRegistry`] registers all 45 built-in SQLCOST rules.
+//! [`RuleRegistry`] registers all 46 built-in SQLCOST rules.
 
 mod cost_patterns;
 mod cross_file;

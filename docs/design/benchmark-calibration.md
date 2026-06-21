@@ -41,7 +41,7 @@ python3 scripts/validate_fp_registry.py
 python3 scripts/recall_report.py
 
 # Corpus binary-classification metrics (precision/recall/F1/MCC/PR-AUC)
-python3 -m venv .venv-eval && .venv-eval/bin/pip install -r requirements-eval.txt
+python3 -m venv .venv-eval && .venv-eval/bin/pip install --require-hashes -r requirements-eval.lock
 .venv-eval/bin/python scripts/eval_metrics.py --split corpus
 .venv-eval/bin/python scripts/eval_irr.py
 

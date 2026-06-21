@@ -8,6 +8,8 @@ use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
+pub const DEFAULT_MAX_MANIFEST_BYTES: u64 = 512 * 1024 * 1024;
+
 /// Strictness policy controlling parse-failure and metadata error tolerance.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -118,6 +120,7 @@ pub struct ScanConfig {
     pub format: OutputFormat,
     pub manifest_path: Option<PathBuf>,
     pub base_manifest_path: Option<PathBuf>,
+    pub max_manifest_bytes: u64,
     pub ignore: Vec<PathBuf>,
     pub max_file_bytes: Option<u64>,
     pub base_branch: Option<String>,
@@ -145,6 +148,7 @@ impl Default for ScanConfig {
             format: OutputFormat::Text,
             manifest_path: None,
             base_manifest_path: None,
+            max_manifest_bytes: DEFAULT_MAX_MANIFEST_BYTES,
             ignore: Vec::new(),
             max_file_bytes: None,
             base_branch: None,
@@ -301,6 +305,7 @@ pub struct OutputSection {
 pub struct DbtSection {
     pub manifest_path: Option<PathBuf>,
     pub base_manifest_path: Option<PathBuf>,
+    pub max_manifest_bytes: Option<u64>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -386,6 +391,13 @@ pub fn apply_file_config(mut config: ScanConfig, file_config: FileConfig) -> Res
         }
         if let Some(path) = dbt.base_manifest_path {
             config.base_manifest_path = Some(path);
+        }
+        if let Some(max_manifest_bytes) = dbt.max_manifest_bytes {
+            config.max_manifest_bytes = if max_manifest_bytes == 0 {
+                DEFAULT_MAX_MANIFEST_BYTES
+            } else {
+                max_manifest_bytes
+            };
         }
     }
     if let Some(rules) = file_config.rules {
@@ -768,6 +780,23 @@ max_file_bytes = 1024
         )
         .expect("apply config");
         assert_eq!(config.max_file_bytes, Some(1024));
+    }
+
+    #[test]
+    fn manifest_limit_applies_and_zero_restores_default() {
+        let configured = apply_file_config(
+            ScanConfig::default(),
+            toml::from_str("[dbt]\nmax_manifest_bytes = 1024\n").expect("parse config"),
+        )
+        .expect("apply config");
+        assert_eq!(configured.max_manifest_bytes, 1024);
+
+        let defaulted = apply_file_config(
+            configured,
+            toml::from_str("[dbt]\nmax_manifest_bytes = 0\n").expect("parse config"),
+        )
+        .expect("apply config");
+        assert_eq!(defaulted.max_manifest_bytes, DEFAULT_MAX_MANIFEST_BYTES);
     }
 
     #[test]

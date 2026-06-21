@@ -50,6 +50,14 @@ In PR mode, changed files drive pass/fail. The optional `context` object reports
 
 Context issues are informational in PR mode. Fix them on the default branch; do not suppress them to pass a PR gate.
 
+### PR finding-delta semantics
+
+`pr_summary.finding_delta` compares only changed targets after rule configuration, inline suppression, semantic identity, governance, owners, waivers, baseline filtering, confidence filtering, and cost annotation. Additions exist on the head only, deletions on the base only, renames use the old base path and new head path, and modifications exist on both sides. Full base-project SQL/dbt files remain analysis context but cannot be reported as resolved unless their base-side path changed.
+
+Both branches use the current invocation's HEAD `costguard.toml`, signed policy, waivers, baseline, confidence, and cost configuration. Historical configuration is not loaded. Baselined findings, signed-policy exceptions, local waivers, and infrastructure/metadata findings do not enter the delta. Head analysis remains the only source of policy/waiver completeness violations and output-metadata diagnostics.
+
+Missing semantic IDs are `introduced` or `resolved`; severity increases are `regressed`; deterministic cost increases above floating-point epsilon are also `regressed`; all remaining matched IDs are `unchanged`. The JSON schema remains v4 and `block_only_new` remains advisory.
+
 ## GitHub (`github`)
 
 Emits workflow commands for annotations:

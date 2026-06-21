@@ -127,7 +127,7 @@ class DatasetBuilderTests(unittest.TestCase):
 
 
 class EvalMetricsTests(unittest.TestCase):
-    @unittest.skipIf(not EVAL_DEPS, "eval deps not installed (pip install -r requirements-eval.txt)")
+    @unittest.skipIf(not EVAL_DEPS, "eval deps not installed (pip install --require-hashes -r requirements-eval.lock)")
     def test_perfect_confusion_matrix(self) -> None:
         y_true = np.array([1, 1, 0, 0])
         y_pred = np.array([1, 1, 0, 0])
@@ -139,7 +139,7 @@ class EvalMetricsTests(unittest.TestCase):
         self.assertEqual(block["recall"], 1.0)
         self.assertEqual(block["mcc"], 1.0)
 
-    @unittest.skipIf(not EVAL_DEPS, "eval deps not installed (pip install -r requirements-eval.txt)")
+    @unittest.skipIf(not EVAL_DEPS, "eval deps not installed (pip install --require-hashes -r requirements-eval.lock)")
     def test_weighted_rows_to_arrays(self) -> None:
         from eval_metrics import EvalRow
 

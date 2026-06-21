@@ -144,7 +144,7 @@ CI is **report-only** — no κ floor gate yet.
 ```bash
 # One-time local judge env (not used by CI)
 python3 -m venv .venv-judge
-.venv-judge/bin/pip install -r requirements-judge.txt
+.venv-judge/bin/pip install --require-hashes -r requirements-judge.lock
 
 # Ensure spellbook benchmark cache exists
 python3 scripts/benchmark_external_repo.py --repo spellbook

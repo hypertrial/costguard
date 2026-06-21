@@ -48,6 +48,7 @@ pub fn precision_tier(rule_id: &str) -> Option<&'static str> {
         "SQLCOST043" => Some("informational"),
         "SQLCOST044" => Some("verified-high"),
         "SQLCOST045" => Some("informational"),
+        "SQLCOST046" => Some("informational"),
         _ => None,
     }
 }

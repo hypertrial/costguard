@@ -9,7 +9,6 @@ import subprocess
 import sys
 import tomllib
 from collections import Counter
-from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -128,7 +127,6 @@ def build_snapshot(
 
     return {
         "version": WORKSPACE_VERSION,
-        "generated_at": date.today().isoformat(),
         "quality_ledger": {
             "evidence_snapshot": str(SNAPSHOT_OUT.relative_to(ROOT)),
             "full_repositories": [repo["name"] for repo in repos],
@@ -224,8 +222,7 @@ python3 scripts/build_benchmark_evidence.py
             "Public snapshot of Costguard precision/recall evidence from real dbt benchmark repos "
             "and the corpus regression suite.",
             "",
-            f"Snapshot: [`tests/benchmarks/evidence/v{RELEASE_LINE}.json`](../../../tests/benchmarks/evidence/v{RELEASE_LINE}.json) "
-            f"(generated {snapshot['generated_at']}).",
+            f"Snapshot: [`tests/benchmarks/evidence/v{RELEASE_LINE}.json`](../../../tests/benchmarks/evidence/v{RELEASE_LINE}.json).",
             "",
             GENERATED_START,
             generated.rstrip(),

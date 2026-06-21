@@ -17,7 +17,7 @@ Deterministic mini dbt projects under [`tests/fixtures/corpus/`](../../../tests/
 
 ```bash
 cargo test -p costguard-core --test corpus
-python3 -m venv .venv-eval && .venv-eval/bin/pip install -r requirements-eval.txt
+python3 -m venv .venv-eval && .venv-eval/bin/pip install --require-hashes -r requirements-eval.lock
 .venv-eval/bin/python scripts/eval_metrics.py --split corpus
 ```
 

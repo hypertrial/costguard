@@ -165,7 +165,11 @@ fn discover_indirect_impacts(
         }
     }
 
-    impacts.sort_by(|left, right| left.model.cmp(&right.model).then(left.reason.cmp(&right.reason)));
+    impacts.sort_by(|left, right| {
+        left.model
+            .cmp(&right.model)
+            .then(left.reason.cmp(&right.reason))
+    });
     IndirectDiscovery {
         impacts,
         model_ids: model_ids.into_iter().collect(),
@@ -394,11 +398,7 @@ impl DbtDependencyGraph {
     }
 
     fn macro_label(&self, macro_id: &str) -> String {
-        macro_id
-            .rsplit('.')
-            .next()
-            .unwrap_or(macro_id)
-            .to_string()
+        macro_id.rsplit('.').next().unwrap_or(macro_id).to_string()
     }
 
     fn transitive_downstream(&self, changed_model_ids: &[String]) -> Vec<String> {
@@ -685,10 +685,9 @@ mod tests {
                 ..DbtModel::default()
             },
         );
-        dbt.graph.depends_on_macros.insert(
-            "model.pkg.a".into(),
-            vec!["macro.pkg.helper".into()],
-        );
+        dbt.graph
+            .depends_on_macros
+            .insert("model.pkg.a".into(), vec!["macro.pkg.helper".into()]);
         dbt.graph
             .depends_on
             .insert("model.pkg.b".into(), vec!["model.pkg.a".into()]);

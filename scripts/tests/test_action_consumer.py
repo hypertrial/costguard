@@ -247,13 +247,41 @@ class ActionConsumerTest(unittest.TestCase):
                 ) as urlopen,
                 mock.patch.object(driver.time, "sleep") as sleep,
             ):
-                driver.download("https://example.invalid/asset", destination)
+                driver.download("https://example.invalid/asset", destination, 1024)
             self.assertEqual(destination.read_bytes(), b"ok")
             self.assertEqual(urlopen.call_count, 3)
             self.assertEqual(
                 urlopen.call_args.kwargs["timeout"], driver.DOWNLOAD_TIMEOUT_SECONDS
             )
             self.assertEqual(sleep.call_count, 2)
+
+    def test_download_rejects_oversized_content_length_without_retry(self) -> None:
+        driver = load_driver_module()
+        response = io.BytesIO(b"ignored")
+        response.headers = {"Content-Length": "5"}
+        with tempfile.TemporaryDirectory() as tmp:
+            destination = Path(tmp) / "asset"
+            with mock.patch.object(
+                driver.urllib.request, "urlopen", return_value=response
+            ) as urlopen:
+                with self.assertRaisesRegex(SystemExit, "5 bytes.*4 bytes"):
+                    driver.download("https://example.invalid/asset", destination, 4)
+            self.assertEqual(urlopen.call_count, 1)
+            self.assertFalse(destination.exists())
+
+    def test_download_rejects_oversized_stream_and_removes_partial_file(self) -> None:
+        driver = load_driver_module()
+        response = io.BytesIO(b"12345")
+        response.headers = {"Content-Length": "1"}
+        with tempfile.TemporaryDirectory() as tmp:
+            destination = Path(tmp) / "asset"
+            with mock.patch.object(
+                driver.urllib.request, "urlopen", return_value=response
+            ) as urlopen:
+                with self.assertRaisesRegex(SystemExit, "streaming"):
+                    driver.download("https://example.invalid/asset", destination, 4)
+            self.assertEqual(urlopen.call_count, 1)
+            self.assertFalse(destination.exists())
 
     def test_source_install_uses_action_repository(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

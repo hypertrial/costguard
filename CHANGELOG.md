@@ -4,6 +4,18 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ## [Unreleased]
 
+### Added
+
+- Bounded manifest loading via `[dbt].max_manifest_bytes` (512 MiB default), immutable git-base blob preflights, and fixed GitHub Action limits of 64 MiB for release archives and 4 KiB for checksum sidecars.
+- Secure `costguard policy keygen --force` replacement with regular-file validation, same-directory atomic persistence, and Unix private-key mode `0600`.
+- Universal pip-compatible hashed evaluation and judge locks with offline source-hash verification and Python-version/lock-digest environment fingerprints.
+
+### Changed
+
+- PR finding deltas now compare rename-aware base/head targets through the same current configuration, policy, suppression, waiver, baseline, confidence, and cost pipeline; approved and infrastructure findings are excluded.
+- Precision tiers now derive canonical IDs from `costguard rules --format json`, include `SQLCOST046`, and reject orphan infrastructure IDs.
+- Current benchmark evidence and generated precision tiers are byte-deterministic and no longer contain wall-clock dates.
+
 ## [2.5.0] - 2026-06-19
 
 ### Added

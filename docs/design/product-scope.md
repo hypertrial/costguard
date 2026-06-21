@@ -92,7 +92,7 @@ These constraints preserve Costguard's local-only ethos and keep the judge advis
 ```bash
 # One-time local judge env
 python3 -m venv .venv-judge
-.venv-judge/bin/pip install -r requirements-judge.txt
+.venv-judge/bin/pip install --require-hashes -r requirements-judge.lock
 
 export COSTGUARD_JUDGE_GGUF=/path/to/model.gguf
 

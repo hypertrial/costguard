@@ -128,7 +128,7 @@ PR-equivalent local gate mirrored by the required `pr-gate` job in [`.github/wor
 ./scripts/ci_local.sh --precision
 ```
 
-The gate runs workspace dependency validation, `ruff check` on Python scripts, Rust fmt/clippy/rustdoc/build/test, Python unit tests (via `.venv-eval` so eval metrics tests can import numpy/scikit-learn), fp-registry and recall coverage checks, corpus classification metrics (`eval_metrics.py --split corpus`), LLM judge IRR validation (`eval_irr.py`), vendored benchmarks, rule-doc sync, internal link validation, mdBook build, and `cargo deny` when installed.
+The gate runs offline Python lock verification, workspace dependency validation, `ruff check` on Python scripts, Rust fmt/clippy/rustdoc/build/test, Python unit tests (via a lock/Python-fingerprinted `.venv-eval` so eval metrics tests can import numpy/scikit-learn), fp-registry and recall coverage checks, corpus classification metrics (`eval_metrics.py --split corpus`), LLM judge IRR validation (`eval_irr.py`), vendored benchmarks, rule-doc sync, internal link validation, mdBook build, and `cargo deny` when installed.
 
 Unit tests:
 
@@ -323,7 +323,7 @@ Compute binary-classification metrics (precision, recall, F1, MCC, balanced accu
 
 ```bash
 python3 -m venv .venv-eval
-.venv-eval/bin/pip install -r requirements-eval.txt
+.venv-eval/bin/pip install --require-hashes -r requirements-eval.lock
 .venv-eval/bin/python scripts/eval_metrics.py --split corpus
 .venv-eval/bin/python scripts/eval_metrics.py --split real
 .venv-eval/bin/python scripts/eval_metrics.py --split all --json-out triage/eval.json
@@ -342,11 +342,11 @@ The corpus split is hard-gated in `./scripts/ci_local.sh`. The real split runs b
 
 Local-only tool that runs a pinned Qwen3-30B-A3B GGUF judge (via llama-cpp-python + Metal) over spellbook findings and writes committed inter-rater labels. **Not run in CI.**
 
-Requires a local GGUF and `requirements-judge.txt`:
+Requires a local GGUF and the hashed `requirements-judge.lock`:
 
 ```bash
 python3 -m venv .venv-judge
-.venv-judge/bin/pip install -r requirements-judge.txt
+.venv-judge/bin/pip install --require-hashes -r requirements-judge.lock
 export COSTGUARD_JUDGE_GGUF=/path/to/model.gguf
 .venv-judge/bin/python scripts/build_llm_judge_labels.py --model "$COSTGUARD_JUDGE_GGUF"
 python3 scripts/build_llm_judge_labels.py --dry-run
@@ -370,6 +370,15 @@ python3 scripts/build_llm_judge_labels.py --dry-run
 | `--manifest-out` | Manifest TOML (default `tests/benchmarks/llm_judge_manifest.toml`) |
 
 See [LLM judge IRR](../../design/llm-judge-irr.md).
+
+## `lock_python_deps.py`
+
+Regenerate both Python locks with maintainer-installed `uv`, or verify their embedded direct-input SHA-256 metadata without network access or `uv`:
+
+```bash
+python3 scripts/lock_python_deps.py
+python3 scripts/lock_python_deps.py --check
+```
 
 ## `eval_irr.py`
 

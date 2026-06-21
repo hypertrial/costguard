@@ -18,6 +18,23 @@ fn fixture(name: &str) -> PathBuf {
         .join(name)
 }
 
+fn keygen(
+    private_key: &std::path::Path,
+    trust_store: &std::path::Path,
+    force: bool,
+) -> std::process::Output {
+    let mut command = costguard_command();
+    command
+        .args(["policy", "keygen", "root-2026", "--private-key"])
+        .arg(private_key)
+        .arg("--trust-store")
+        .arg(trust_store);
+    if force {
+        command.arg("--force");
+    }
+    command.output().expect("run keygen")
+}
+
 #[test]
 fn policy_cli_compiles_signs_and_verifies() {
     let temp = tempfile::tempdir().unwrap();
@@ -63,6 +80,14 @@ enforcement = "block"
         "{}",
         String::from_utf8_lossy(&keygen.stderr)
     );
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            fs::metadata(&private_key).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+    }
 
     let commands = [
         vec![source.clone(), compiled.clone()],
@@ -82,6 +107,72 @@ enforcement = "block"
             String::from_utf8_lossy(&output.stderr)
         );
     }
+}
+
+#[test]
+fn policy_keygen_refuses_existing_outputs_without_force() {
+    let temp = tempfile::tempdir().unwrap();
+    let private = temp.path().join("private.json");
+    let trust = temp.path().join("trust.json");
+    fs::write(&private, "keep-private").unwrap();
+    fs::write(&trust, "keep-trust").unwrap();
+    let output = keygen(&private, &trust, false);
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("--force"));
+    assert_eq!(fs::read_to_string(private).unwrap(), "keep-private");
+    assert_eq!(fs::read_to_string(trust).unwrap(), "keep-trust");
+}
+
+#[test]
+fn policy_keygen_force_replaces_regular_files() {
+    let temp = tempfile::tempdir().unwrap();
+    let private = temp.path().join("private.json");
+    let trust = temp.path().join("trust.json");
+    fs::write(&private, "old-private").unwrap();
+    fs::write(&trust, "old-trust").unwrap();
+    let output = keygen(&private, &trust, true);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(fs::read_to_string(private).unwrap().contains("private_key"));
+    assert!(fs::read_to_string(trust).unwrap().contains("public_key"));
+}
+
+#[test]
+fn policy_keygen_rejects_identical_paths_and_directories() {
+    let temp = tempfile::tempdir().unwrap();
+    let same = temp.path().join("same.json");
+    let identical = keygen(&same, &same, true);
+    assert!(!identical.status.success());
+    assert!(String::from_utf8_lossy(&identical.stderr).contains("must be different"));
+
+    let private = temp.path().join("private.json");
+    let trust_dir = temp.path().join("trust-dir");
+    fs::create_dir(&trust_dir).unwrap();
+    let directory = keygen(&private, &trust_dir, true);
+    assert!(!directory.status.success());
+    assert!(String::from_utf8_lossy(&directory.stderr).contains("non-regular"));
+    assert!(!private.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn policy_keygen_force_rejects_symlinks() {
+    use std::os::unix::fs::symlink;
+
+    let temp = tempfile::tempdir().unwrap();
+    let target = temp.path().join("target.json");
+    let private = temp.path().join("private.json");
+    let trust = temp.path().join("trust.json");
+    fs::write(&target, "do-not-replace").unwrap();
+    symlink(&target, &private).unwrap();
+    let output = keygen(&private, &trust, true);
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("non-regular"));
+    assert_eq!(fs::read_to_string(target).unwrap(), "do-not-replace");
+    assert!(!trust.exists());
 }
 
 #[test]

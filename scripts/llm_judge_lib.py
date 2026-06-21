@@ -362,7 +362,7 @@ def verify_gguf_chat_template(model_path: Path) -> None:
     except ImportError as exc:  # pragma: no cover - local-only dep
         raise SystemExit(
             "llama-cpp-python is required for build_llm_judge_labels.py; "
-            "install with: pip install -r requirements-judge.txt"
+            "install with: pip install --require-hashes -r requirements-judge.lock"
         ) from exc
     model = Llama(model_path=str(model_path), vocab_only=True, verbose=False)
     if "tokenizer.chat_template" not in model.metadata:
@@ -839,7 +839,7 @@ class LlamaJudge:
         except ImportError as exc:  # pragma: no cover - local-only dep
             raise SystemExit(
                 "llama-cpp-python is required for build_llm_judge_labels.py; "
-                "install with: pip install -r requirements-judge.txt"
+                "install with: pip install --require-hashes -r requirements-judge.lock"
             ) from exc
         self._seed = seed
         self._json_grammar = LlamaGrammar.from_string(JSON_VERDICT_GRAMMAR.strip())

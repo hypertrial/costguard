@@ -1,9 +1,9 @@
 use crate::config::ScanConfig;
 use anyhow::Result;
 use costguard_dbt::{
-    apply_dbt_project_configs_in_roots, extract_sql_features, merge_yaml_project, parse_manifest,
-    parse_yaml_project_with_warnings, synthesized_model_id, DbtModel, DbtProject, MetadataWarning,
-    MetadataWarningKind,
+    apply_dbt_project_configs_in_roots, extract_sql_features, merge_yaml_project,
+    parse_manifest_with_limit, parse_yaml_project_with_warnings, synthesized_model_id, DbtModel,
+    DbtProject, MetadataWarning, MetadataWarningKind,
 };
 use costguard_scanner::{FileKind, ProjectFile};
 use std::collections::{HashMap, HashSet};
@@ -224,7 +224,7 @@ pub(crate) fn load_dbt_project(
 
     let loaded_manifest = manifest_path.is_some();
     let mut project = match manifest_path.as_ref() {
-        Some(path) => parse_manifest(path)?,
+        Some(path) => parse_manifest_with_limit(path, config.max_manifest_bytes)?,
         None => DbtProject::default(),
     };
 
@@ -247,16 +247,41 @@ pub(crate) fn load_dbt_project(
         });
     }
 
+    enrich_dbt_project_from_files(&mut project, files, &mut warnings);
+    warnings.extend(apply_dbt_project_configs_in_roots(
+        root,
+        &scan_roots(root, &config.paths),
+        &mut project,
+    ));
+
+    let metadata_only = !loaded_manifest && has_dbt_files;
+    let project = if project.models.is_empty() {
+        None
+    } else {
+        Some(project)
+    };
+
+    Ok(DbtLoadOutcome {
+        project,
+        warnings,
+        metadata_only,
+    })
+}
+
+pub(crate) fn enrich_dbt_project_from_files(
+    project: &mut DbtProject,
+    files: &[ProjectFile],
+    warnings: &mut Vec<MetadataWarning>,
+) {
     for file in files {
         if file.kind == FileKind::DbtYaml {
             let (yaml_project, yaml_warnings) =
                 parse_yaml_project_with_warnings(&file.text, &file.path);
-            merge_yaml_project(&mut project, yaml_project);
+            merge_yaml_project(project, yaml_project);
             warnings.extend(yaml_warnings);
         }
     }
-
-    let mut model_index = ModelIndex::from_project(&project);
+    let mut model_index = ModelIndex::from_project(project);
 
     for file in files {
         if file.kind != FileKind::DbtSqlModel {
@@ -327,25 +352,6 @@ pub(crate) fn load_dbt_project(
             .entry(dependency_key)
             .or_insert(dependencies);
     }
-
-    warnings.extend(apply_dbt_project_configs_in_roots(
-        root,
-        &scan_roots(root, &config.paths),
-        &mut project,
-    ));
-
-    let metadata_only = !loaded_manifest && has_dbt_files;
-    let project = if project.models.is_empty() {
-        None
-    } else {
-        Some(project)
-    };
-
-    Ok(DbtLoadOutcome {
-        project,
-        warnings,
-        metadata_only,
-    })
 }
 
 pub(crate) fn scan_roots(root: &Path, paths: &[PathBuf]) -> Vec<PathBuf> {
@@ -518,7 +524,10 @@ mod tests {
         let changed = HashSet::from([PathBuf::from("models/orders.sql")]);
         let warnings = detect_checksum_mismatches(&project, &files, &changed);
         assert_eq!(warnings.len(), 1);
-        assert_eq!(warnings[0].kind, MetadataWarningKind::ManifestChecksumMismatch);
+        assert_eq!(
+            warnings[0].kind,
+            MetadataWarningKind::ManifestChecksumMismatch
+        );
 
         let matching = detect_checksum_mismatches(
             &project,

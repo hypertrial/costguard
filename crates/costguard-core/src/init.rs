@@ -190,6 +190,7 @@ warehouse = "{warehouse}"
 
 # [dbt]
 # manifest_path = "target/manifest.json"
+# max_manifest_bytes = 536870912
 "#
     )
 }

@@ -185,6 +185,7 @@ fail_on = "high"
 
 [dbt]
 manifest_path = "target/manifest.json"
+max_manifest_bytes = 536870912
 
 [owners]
 codeowners = true

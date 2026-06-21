@@ -2,7 +2,9 @@ use crate::baseline::{load_finding_baseline, validate_finding_baseline, write_fi
 use crate::config::ScanConfig;
 use crate::context::{ContextIssue, ContextReport};
 use crate::dbt_graph::enrich_pr_summary;
-use crate::dbt_load::{detect_checksum_mismatches, load_dbt_project};
+use crate::dbt_load::{
+    detect_checksum_mismatches, enrich_dbt_project_from_files, load_dbt_project,
+};
 use crate::gates::evaluate_gates;
 use crate::governance::{
     apply_managed_governance, load_managed_policy, normalized_path, validate_local_policy_controls,
@@ -27,14 +29,16 @@ use crate::{
 };
 use anyhow::{Context, Result};
 use costguard_cost::{
-    build_downstream_ids, compute_blast_radius, compute_pr_impact, run_cost_analysis,
-    summarize_features, CostAnalysisResult, CostInputs, ModelFeatureSummary,
+    build_downstream_ids, compute_blast_radius, compute_pr_impact, is_infrastructure_rule,
+    run_cost_analysis, summarize_features, CostAnalysisResult, CostInputs, ModelFeatureSummary,
 };
 use costguard_dbt::{
-    compiled_code_by_model_path, extract_sql_features, parse_manifest, parse_manifest_text,
-    DbtProject, MetadataWarning, MetadataWarningKind,
+    apply_dbt_project_configs_from_files, compiled_code_by_model_path,
+    parse_dbt_project_with_warnings, parse_manifest_text, parse_manifest_with_limit, DbtProject,
+    MetadataWarning, MetadataWarningKind,
 };
 use costguard_diagnostics::{EvidenceBuilder, Severity};
+use costguard_protocol::EnforcementOutcome;
 use costguard_rules::{ProjectIndexes, RuleRegistry};
 use costguard_scanner::{DiscoveryOptions, ProjectFile, ScanCounts, SkippedFile};
 use costguard_sql::{JoinKind, SqlDocument};
@@ -65,8 +69,7 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
     let mut checksum_warnings = Vec::new();
     if plan.pr_mode {
         if let Some(dbt) = &dbt_load.project {
-            checksum_warnings =
-                detect_checksum_mismatches(dbt, &union_files, &plan.changed_paths);
+            checksum_warnings = detect_checksum_mismatches(dbt, &union_files, &plan.changed_paths);
         }
     }
     let metadata_only = dbt_load.metadata_only;
@@ -110,116 +113,54 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
     };
     let owner_resolver = OwnerResolver::load(&root, &config.owners)?;
 
-    let compiled_by_path = project
-        .dbt
-        .as_ref()
-        .map(compiled_code_by_model_path)
-        .unwrap_or_default();
-    let union_sql_documents =
-        analyze_sql_documents(&union_files, config.platform, &compiled_by_path);
-    let project_indexes = ProjectIndexes::from_sql_documents(&union_sql_documents);
-    let sql_by_path = union_sql_documents
-        .iter()
-        .map(|doc| (doc.path.clone(), doc))
-        .collect::<HashMap<_, _>>();
-    let dbt_by_path = dbt_models_by_path(&project);
-    let registry = RuleRegistry::default_rules();
-    validate_rule_registration(&registry)?;
-
-    let mut raw_diagnostics = metadata_diagnostics;
-    let file_texts = file_text_map(&plan.targets);
-    let file_scopes = file_scope_map(&plan.targets);
-
-    for file in &plan.targets {
-        let sql = sql_by_path.get(&file.path).copied();
-        let dbt_model = dbt_by_path.get(&file.root_relative_path).copied();
-        let policy_path = normalized_path(&file.root_relative_path);
-        let resolved = managed_policy
-            .as_ref()
-            .map(|policy| policy.resolve(Some(&policy_path)))
-            .transpose()?;
-        let overrides = effective_rule_overrides(config, resolved.as_ref());
-        let ctx = costguard_rules::RuleContext {
-            warehouse: config.platform,
-            file,
-            sql,
-            dbt_model,
-            all_sql: &union_sql_documents,
-            project_indexes: &project_indexes,
-            overrides: &overrides,
-        };
-        let mut file_diagnostics = registry.run(&ctx);
-        if let Some(policy) = &resolved {
-            file_diagnostics.extend(registry.run_declarative(&ctx, &policy.custom_rules)?);
-        }
-        file_diagnostics = apply_enabled_and_severity(file_diagnostics, &overrides);
-        raw_diagnostics.extend(file_diagnostics);
-    }
-
-    let target_docs: Vec<SqlDocument> = union_sql_documents
-        .iter()
-        .filter(|doc| plan.is_target(&doc.path))
-        .cloned()
-        .collect();
-    raw_diagnostics.extend(parse_failure_diagnostics(&target_docs, &root));
-
-    let allow_inline = managed_policy
-        .as_ref()
-        .is_none_or(|policy| policy.document.permissions.allow_inline_suppressions);
-    let diagnostics =
-        apply_inline_suppressions(raw_diagnostics, &file_texts, &file_scopes, allow_inline);
-
-    let IdentityResult { mut diagnostics } = assign_semantic_identities(diagnostics)?;
-
-    let policy_violations =
-        apply_managed_governance(&mut diagnostics, managed_policy.as_ref(), started_at)?;
-    assign_diagnostic_owners(&mut diagnostics, &owner_resolver, project.dbt.as_ref());
-    let waiver_violations = apply_local_waivers(&mut diagnostics, &config.waivers, started_at);
     let policy_digest = managed_policy
         .as_ref()
         .map(|policy| policy.digest.clone())
         .unwrap_or_else(|| "local-unmanaged".into());
-
-    if let Some(path) = &config.write_baseline_path {
-        write_baseline_from_scan(config, &root, &diagnostics, &policy_digest, path)?;
-    }
-
     let baseline = load_scan_baseline(config, &root)?;
     if let Some(baseline) = &baseline {
         validate_finding_baseline(baseline, config.platform)?;
         validate_baseline_policy(baseline, &policy_digest)?;
     }
-
-    let (mut diagnostics, baselined_findings) =
-        apply_baseline_filter(diagnostics, baseline.as_ref());
-
-    let head_for_delta = if plan.pr_mode {
-        Some(diagnostics.clone())
-    } else {
-        None
-    };
-
-    diagnostics = crate::pipeline::filter_by_min_confidence(
-        diagnostics,
-        config.min_confidence,
-        config.min_confidence_filter,
-    );
-
-    for diagnostic in &mut diagnostics {
-        if let Some(tier) = costguard_protocol::precision_tier(&diagnostic.rule_id) {
-            diagnostic.rule_precision_tier = Some(tier.to_string());
-        }
-    }
-
-    let features_by_path = feature_summaries_by_path(&union_sql_documents);
-    let cost_analysis =
-        run_optional_cost(config, &root, &project, &mut diagnostics, &features_by_path)?;
+    let mut head_scan = run_branch_diagnostics(
+        config,
+        &root,
+        &project,
+        &union_files,
+        metadata_diagnostics,
+        &owner_resolver,
+        managed_policy.as_ref(),
+        started_at,
+        baseline.as_ref(),
+        config.write_baseline_path.as_deref(),
+        &policy_digest,
+    )?;
+    let mut diagnostics = std::mem::take(&mut head_scan.diagnostics);
+    let union_sql_documents = std::mem::take(&mut head_scan.sql_documents);
+    let target_docs = std::mem::take(&mut head_scan.target_documents);
+    let policy_violations = std::mem::take(&mut head_scan.policy_violations);
+    let waiver_violations = std::mem::take(&mut head_scan.waiver_violations);
+    let baselined_findings = head_scan.baselined_findings;
+    let cost_analysis = head_scan.cost_analysis.take();
     let mut cost_summary = cost_analysis
         .as_ref()
         .map(|analysis| analysis.summary.clone());
 
+    let head_for_delta = plan
+        .pr_mode
+        .then(|| finding_delta_diagnostics(&diagnostics));
+
     let base_branch_scan = if plan.pr_mode {
-        run_base_branch_scan(config, &root, &plan, project.dbt.as_ref())?
+        run_base_branch_scan(
+            config,
+            &root,
+            &plan,
+            &owner_resolver,
+            managed_policy.as_ref(),
+            started_at,
+            baseline.as_ref(),
+            &policy_digest,
+        )?
     } else {
         None
     };
@@ -286,9 +227,11 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
     };
 
     let mut pr_summary = if plan.pr_mode {
+        let mut changed_files = plan.changed_paths.iter().cloned().collect::<Vec<_>>();
+        changed_files.sort();
         Some(enrich_pr_summary(
             PrSummary {
-                changed_files: plan.changed_paths.iter().cloned().collect(),
+                changed_files,
                 ..PrSummary::default()
             },
             &project,
@@ -310,10 +253,7 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
             verified: checksum_mismatch_count == 0,
         });
         summary.enforcement_preview = Some(EnforcementPreview {
-            block_only_new: config
-                .gate
-                .as_ref()
-                .is_some_and(|gate| gate.block_only_new),
+            block_only_new: config.gate.as_ref().is_some_and(|gate| gate.block_only_new),
             require_manifest_integrity: config.analysis.require_manifest_integrity,
         });
     }
@@ -469,6 +409,134 @@ fn evaluate_cost_coverage(
     })
 }
 
+struct BranchDiagnostics {
+    diagnostics: Vec<costguard_diagnostics::Diagnostic>,
+    sql_documents: Vec<SqlDocument>,
+    target_documents: Vec<SqlDocument>,
+    policy_violations: Vec<costguard_policy::PolicyViolation>,
+    waiver_violations: Vec<AnalysisViolation>,
+    baselined_findings: usize,
+    cost_analysis: Option<CostAnalysisResult>,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_branch_diagnostics(
+    config: &ScanConfig,
+    root: &Path,
+    project: &Project,
+    analysis_files: &[ProjectFile],
+    metadata_diagnostics: Vec<costguard_diagnostics::Diagnostic>,
+    owner_resolver: &OwnerResolver,
+    managed_policy: Option<&ManagedPolicy>,
+    started_at: chrono::DateTime<chrono::Utc>,
+    baseline: Option<&crate::FindingBaseline>,
+    write_baseline_path: Option<&Path>,
+    policy_digest: &str,
+) -> Result<BranchDiagnostics> {
+    let compiled_by_path = project
+        .dbt
+        .as_ref()
+        .map(compiled_code_by_model_path)
+        .unwrap_or_default();
+    let sql_documents = analyze_sql_documents(analysis_files, config.platform, &compiled_by_path);
+    let project_indexes = ProjectIndexes::from_sql_documents(&sql_documents);
+    let sql_by_path = sql_documents
+        .iter()
+        .map(|doc| (doc.path.clone(), doc))
+        .collect::<HashMap<_, _>>();
+    let dbt_by_path = dbt_models_by_path(project);
+    let registry = RuleRegistry::default_rules();
+    validate_rule_registration(&registry)?;
+
+    let mut raw_diagnostics = metadata_diagnostics;
+    let file_texts = file_text_map(&project.files);
+    let file_scopes = file_scope_map(&project.files);
+    for file in &project.files {
+        let sql = sql_by_path.get(&file.path).copied();
+        let dbt_model = dbt_by_path.get(&file.root_relative_path).copied();
+        let policy_path = normalized_path(&file.root_relative_path);
+        let resolved = managed_policy
+            .map(|policy| policy.resolve(Some(&policy_path)))
+            .transpose()?;
+        let overrides = effective_rule_overrides(config, resolved.as_ref());
+        let ctx = costguard_rules::RuleContext {
+            warehouse: config.platform,
+            file,
+            sql,
+            dbt_model,
+            all_sql: &sql_documents,
+            project_indexes: &project_indexes,
+            overrides: &overrides,
+        };
+        let mut file_diagnostics = registry.run(&ctx);
+        if let Some(policy) = &resolved {
+            file_diagnostics.extend(registry.run_declarative(&ctx, &policy.custom_rules)?);
+        }
+        raw_diagnostics.extend(apply_enabled_and_severity(file_diagnostics, &overrides));
+    }
+
+    let target_paths = project
+        .files
+        .iter()
+        .map(|file| &file.path)
+        .collect::<std::collections::HashSet<_>>();
+    let target_documents = sql_documents
+        .iter()
+        .filter(|document| target_paths.contains(&document.path))
+        .cloned()
+        .collect::<Vec<_>>();
+    raw_diagnostics.extend(parse_failure_diagnostics(&target_documents, root));
+
+    let allow_inline =
+        managed_policy.is_none_or(|policy| policy.document.permissions.allow_inline_suppressions);
+    let diagnostics =
+        apply_inline_suppressions(raw_diagnostics, &file_texts, &file_scopes, allow_inline);
+    let IdentityResult { mut diagnostics } = assign_semantic_identities(diagnostics)?;
+    let policy_violations = apply_managed_governance(&mut diagnostics, managed_policy, started_at)?;
+    assign_diagnostic_owners(&mut diagnostics, owner_resolver, project.dbt.as_ref());
+    let waiver_violations = apply_local_waivers(&mut diagnostics, &config.waivers, started_at);
+
+    if let Some(path) = write_baseline_path {
+        write_baseline_from_scan(config, root, &diagnostics, policy_digest, path)?;
+    }
+    let (diagnostics, baselined_findings) = apply_baseline_filter(diagnostics, baseline);
+    let mut diagnostics = crate::pipeline::filter_by_min_confidence(
+        diagnostics,
+        config.min_confidence,
+        config.min_confidence_filter,
+    );
+    for diagnostic in &mut diagnostics {
+        if let Some(tier) = costguard_protocol::precision_tier(&diagnostic.rule_id) {
+            diagnostic.rule_precision_tier = Some(tier.to_string());
+        }
+    }
+    let features_by_path = feature_summaries_by_path(&sql_documents);
+    let cost_analysis =
+        run_optional_cost(config, root, project, &mut diagnostics, &features_by_path)?;
+    Ok(BranchDiagnostics {
+        diagnostics,
+        sql_documents,
+        target_documents,
+        policy_violations,
+        waiver_violations,
+        baselined_findings,
+        cost_analysis,
+    })
+}
+
+fn finding_delta_diagnostics(
+    diagnostics: &[costguard_diagnostics::Diagnostic],
+) -> Vec<costguard_diagnostics::Diagnostic> {
+    diagnostics
+        .iter()
+        .filter(|diagnostic| {
+            diagnostic.governance.enforcement != EnforcementOutcome::Excepted
+                && !is_infrastructure_rule(&diagnostic.rule_id)
+        })
+        .cloned()
+        .collect()
+}
+
 fn run_optional_cost(
     config: &ScanConfig,
     root: &Path,
@@ -496,99 +564,76 @@ struct BaseBranchScan {
     cost_summary: Option<costguard_cost::ProjectCostSummary>,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_base_branch_scan(
     config: &ScanConfig,
     root: &Path,
     plan: &ScanPlan,
-    head_dbt: Option<&DbtProject>,
+    owner_resolver: &OwnerResolver,
+    managed_policy: Option<&ManagedPolicy>,
+    started_at: chrono::DateTime<chrono::Utc>,
+    baseline: Option<&crate::FindingBaseline>,
+    policy_digest: &str,
 ) -> Result<Option<BaseBranchScan>> {
     if !plan.pr_mode {
         return Ok(None);
     }
-    let base = config.base_branch.as_deref().unwrap_or("main");
-    let base_dbt = load_base_dbt_project(root, base, config)?.or_else(|| head_dbt.cloned());
-    let base_files = base_sql_files_at_ref(root, base, &plan.changed_paths, base_dbt.as_ref())?;
-    if base_files.is_empty() {
-        return Ok(Some(BaseBranchScan {
-            diagnostics: Vec::new(),
-            cost_summary: None,
-        }));
-    }
-
-    let compiled_by_path = base_dbt
-        .as_ref()
-        .map(compiled_code_by_model_path)
-        .unwrap_or_default();
-    let mut base_docs = Vec::new();
-    for file in &base_files {
-        let line_index = costguard_diagnostics::LineIndex::new(&file.text);
-        base_docs.push(costguard_sql::analyze_sql(
-            file.path.clone(),
-            &file.text,
-            config.platform,
-            &line_index,
-            compiled_by_path
-                .get(&file.root_relative_path)
-                .map(String::as_str),
-            file.kind == costguard_scanner::FileKind::DbtSqlModel,
-            extract_sql_features(&file.text),
-        ));
-    }
-
-    let base_indexes = ProjectIndexes::from_sql_documents(&base_docs);
-    let base_dbt_by_path = base_dbt
-        .as_ref()
-        .map(dbt_models_by_path_from_dbt)
-        .unwrap_or_default();
-    let registry = RuleRegistry::default_rules();
-    let mut base_diagnostics = Vec::new();
-    for file in &base_files {
-        let sql = base_docs.iter().find(|doc| doc.path == file.path);
-        let dbt_model = base_dbt_by_path.get(&file.root_relative_path).copied();
-        let ctx = costguard_rules::RuleContext {
-            warehouse: config.platform,
-            file,
-            sql,
-            dbt_model,
-            all_sql: &base_docs,
-            project_indexes: &base_indexes,
-            overrides: &costguard_rules::RuleOverrides::default(),
-        };
-        base_diagnostics.extend(registry.run(&ctx));
-    }
-
-    let cost_summary = if let Some(cost_config) = config.cost.as_ref() {
-        if cost_config.enabled {
-            let inputs = CostInputs::load(root, cost_config)?;
-            let base_features = feature_summaries_by_path(&base_docs);
-            let mut cost_diagnostics = base_diagnostics.clone();
-            Some(
-                run_cost_analysis(
-                    cost_config,
-                    base_dbt.as_ref(),
-                    &inputs,
-                    &mut cost_diagnostics,
-                    &base_features,
-                )
-                .summary,
-            )
-        } else {
-            None
-        }
-    } else {
-        None
+    let commit = plan
+        .base_commit
+        .as_deref()
+        .context("PR scan plan is missing its resolved base commit")?;
+    let base_dbt = load_base_dbt_project(root, commit, config)?;
+    let base_files = load_base_branch_files(root, commit, plan, config)?;
+    let mut base_dbt = base_dbt.unwrap_or_default();
+    let mut base_metadata_warnings = Vec::new();
+    enrich_dbt_project_from_files(
+        &mut base_dbt,
+        &base_files.context,
+        &mut base_metadata_warnings,
+    );
+    let base_project_files = base_files
+        .context
+        .iter()
+        .filter(|file| {
+            file.path
+                .file_name()
+                .is_some_and(|name| name == "dbt_project.yml")
+        })
+        .map(|file| {
+            let (project, warnings) = parse_dbt_project_with_warnings(&file.text, &file.path);
+            base_metadata_warnings.extend(warnings);
+            project
+        })
+        .collect::<Vec<_>>();
+    apply_dbt_project_configs_from_files(root, &base_project_files, &mut base_dbt);
+    let base_dbt = (!base_dbt.models.is_empty()).then_some(base_dbt);
+    let project = Project {
+        root: root.to_path_buf(),
+        files: base_files.targets,
+        dbt: base_dbt,
     };
-
-    let IdentityResult { diagnostics } = assign_semantic_identities(base_diagnostics)?;
+    let branch = run_branch_diagnostics(
+        config,
+        root,
+        &project,
+        &base_files.context,
+        Vec::new(),
+        owner_resolver,
+        managed_policy,
+        started_at,
+        baseline,
+        None,
+        policy_digest,
+    )?;
     Ok(Some(BaseBranchScan {
-        diagnostics,
-        cost_summary,
+        diagnostics: finding_delta_diagnostics(&branch.diagnostics),
+        cost_summary: branch.cost_analysis.map(|analysis| analysis.summary),
     }))
 }
 
 fn load_base_dbt_project(
     root: &Path,
-    base: &str,
+    commit: &str,
     config: &ScanConfig,
 ) -> Result<Option<DbtProject>> {
     if let Some(path) = &config.base_manifest_path {
@@ -597,10 +642,18 @@ fn load_base_dbt_project(
         } else {
             root.join(path)
         };
-        return Ok(Some(parse_manifest(&resolved)?));
+        return Ok(Some(parse_manifest_with_limit(
+            &resolved,
+            config.max_manifest_bytes,
+        )?));
     }
     let manifest_rel = base_manifest_rel_path(root, config);
-    let Some(text) = crate::git::file_at_ref(root, base, &manifest_rel)? else {
+    let mut files = crate::git::files_at_commit_with_limit(
+        root,
+        commit,
+        &[(manifest_rel.clone(), config.max_manifest_bytes)],
+    )?;
+    let Some(text) = files.remove(&manifest_rel).flatten() else {
         return Ok(None);
     };
     Ok(Some(parse_manifest_text(&text)?))
@@ -624,60 +677,79 @@ fn base_manifest_rel_path(root: &Path, config: &ScanConfig) -> PathBuf {
         .unwrap_or_else(|_| PathBuf::from("target/manifest.json"))
 }
 
-fn base_sql_files_at_ref(
+struct BaseBranchFiles {
+    targets: Vec<ProjectFile>,
+    context: Vec<ProjectFile>,
+}
+
+fn load_base_branch_files(
     root: &Path,
-    base: &str,
-    changed_paths: &std::collections::HashSet<PathBuf>,
-    base_dbt: Option<&DbtProject>,
-) -> Result<Vec<ProjectFile>> {
-    let mut rel_paths = changed_paths
+    commit: &str,
+    plan: &ScanPlan,
+    config: &ScanConfig,
+) -> Result<BaseBranchFiles> {
+    let mut rel_paths = plan
+        .context
         .iter()
-        .filter(|path| {
-            matches!(
-                costguard_scanner::classify(path, root),
-                costguard_scanner::FileKind::Sql | costguard_scanner::FileKind::DbtSqlModel
-            )
-        })
-        .cloned()
-        .collect::<std::collections::HashSet<_>>();
-    if let Some(dbt) = base_dbt {
-        for model in dbt.models.values() {
-            if let Some(path) = &model.path {
-                rel_paths.insert(path.clone());
-            }
+        .map(|file| file.root_relative_path.clone())
+        .chain(
+            plan.base_changed_paths
+                .iter()
+                .filter(|path| !base_path_is_ignored(root, path, &config.ignore))
+                .cloned(),
+        )
+        .collect::<std::collections::BTreeSet<_>>();
+    for scan_root in crate::dbt_load::scan_roots(root, &config.paths) {
+        let project_file = scan_root.join("dbt_project.yml");
+        if let Ok(relative) = project_file.strip_prefix(root) {
+            rel_paths.insert(relative.to_path_buf());
         }
     }
 
-    let mut files = Vec::new();
+    rel_paths.retain(|rel_path| {
+        matches!(
+            costguard_scanner::classify(&root.join(rel_path), root),
+            costguard_scanner::FileKind::Sql
+                | costguard_scanner::FileKind::DbtSqlModel
+                | costguard_scanner::FileKind::DbtYaml
+                | costguard_scanner::FileKind::Python
+        )
+    });
+    let max_file_bytes = costguard_scanner::effective_max_file_bytes(config.max_file_bytes);
+    let requests = rel_paths
+        .iter()
+        .cloned()
+        .map(|path| (path, max_file_bytes))
+        .collect::<Vec<_>>();
+    let mut contents = crate::git::files_at_commit_with_limit(root, commit, &requests)?;
+    let mut context = Vec::new();
     for rel_path in rel_paths {
-        let kind = costguard_scanner::classify(&rel_path, root);
-        if !matches!(
-            kind,
-            costguard_scanner::FileKind::Sql | costguard_scanner::FileKind::DbtSqlModel
-        ) {
-            continue;
-        }
-        let Some(text) = crate::git::file_at_ref(root, base, &rel_path)? else {
+        let Some(text) = contents.remove(&rel_path).flatten() else {
             continue;
         };
-        files.push(ProjectFile {
-            path: root.join(&rel_path),
-            root_relative_path: rel_path,
-            kind,
+        let path = root.join(&rel_path);
+        context.push(ProjectFile {
+            kind: costguard_scanner::classify(&path, root),
+            path,
+            root_relative_path: rel_path.clone(),
             line_index: costguard_diagnostics::LineIndex::new(&text),
             text,
         });
     }
-    files.sort_by(|left, right| left.path.cmp(&right.path));
-    Ok(files)
+    context.sort_by(|left, right| left.path.cmp(&right.path));
+    let targets = context
+        .iter()
+        .filter(|file| plan.base_changed_paths.contains(&file.root_relative_path))
+        .cloned()
+        .collect();
+    Ok(BaseBranchFiles { targets, context })
 }
 
-fn dbt_models_by_path_from_dbt(project: &DbtProject) -> HashMap<PathBuf, &costguard_dbt::DbtModel> {
-    project
-        .models
-        .values()
-        .filter_map(|model| model.path.as_ref().map(|path| (path.clone(), model)))
-        .collect()
+fn base_path_is_ignored(root: &Path, path: &Path, ignored: &[PathBuf]) -> bool {
+    ignored.iter().any(|ignored| {
+        let relative = ignored.strip_prefix(root).unwrap_or(ignored);
+        path == relative || path.starts_with(relative)
+    })
 }
 
 fn evaluate_analysis(
@@ -1010,4 +1082,30 @@ fn file_scope_map(files: &[ProjectFile]) -> HashMap<PathBuf, SuppressionScope> {
         .iter()
         .map(|file| (file.root_relative_path.clone(), suppression_scope(file)))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn infrastructure_findings_do_not_enter_finding_deltas() {
+        let metadata = costguard_diagnostics::Diagnostic::new(
+            "SQLCOST046",
+            Severity::Low,
+            PathBuf::from("target/manifest.json"),
+            None,
+            "stale manifest",
+        );
+        let behavioral = costguard_diagnostics::Diagnostic::new(
+            "SQLCOST001",
+            Severity::High,
+            PathBuf::from("models/a.sql"),
+            None,
+            "select star",
+        );
+        let filtered = finding_delta_diagnostics(&[metadata, behavioral]);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].rule_id, "SQLCOST001");
+    }
 }

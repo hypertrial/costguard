@@ -4,12 +4,32 @@
 //! and untracked) for the `costguard pr` workflow.
 
 use anyhow::{Context, Result};
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::error::Error;
 use std::ffi::OsString;
 use std::fmt;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitStatus};
+use std::process::{Command, ExitStatus, Stdio};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChangedFileSets {
+    pub base_commit: String,
+    pub base: Vec<PathBuf>,
+    pub head: Vec<PathBuf>,
+}
+
+impl ChangedFileSets {
+    pub fn union(&self) -> Vec<PathBuf> {
+        self.base
+            .iter()
+            .chain(&self.head)
+            .cloned()
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect()
+    }
+}
 
 #[derive(Debug)]
 pub struct GitCommandError {
@@ -49,27 +69,55 @@ pub fn is_git_repository(root: &Path) -> bool {
     }
 }
 
+#[cfg(test)]
 pub fn changed_files(root: &Path, base: &str) -> Result<Vec<PathBuf>> {
+    Ok(changed_file_sets(root, base)?.union())
+}
+
+pub fn changed_file_sets(root: &Path, base: &str) -> Result<ChangedFileSets> {
     if !is_git_repository(root) {
         anyhow::bail!("{} is not a git repository", root.display());
     }
-    let mut paths = BTreeSet::new();
-    for path in committed_diff(root, base)? {
-        paths.insert(path);
+    let base_commit = resolve_base_commit(root, base)?;
+    let output = run_git(root, &["diff", "--name-status", "-z", "-M", &base_commit])?;
+    if !output.status.success() {
+        return Err(GitCommandError::from_output(
+            "git diff --name-status -z -M",
+            output.status,
+            &output.stderr,
+        )
+        .into());
     }
-    for args in [
-        &["diff", "--name-only", "-z"][..],
-        &["diff", "--cached", "--name-only", "-z"][..],
-        &["ls-files", "--others", "--exclude-standard", "-z"][..],
-    ] {
-        for path in git_paths(root, args)? {
-            paths.insert(path);
-        }
+    let (base_paths, mut head_paths) = parse_name_status(&output.stdout)?;
+    for path in git_paths(root, &["ls-files", "--others", "--exclude-standard", "-z"])? {
+        head_paths.insert(path);
     }
-    Ok(paths.into_iter().collect())
+    Ok(ChangedFileSets {
+        base_commit,
+        base: base_paths.into_iter().collect(),
+        head: head_paths.into_iter().collect(),
+    })
+}
+
+pub fn resolve_base_commit(root: &Path, base: &str) -> Result<String> {
+    let output = run_git(root, &["merge-base", base, "HEAD"])?;
+    if !output.status.success() {
+        return Err(GitCommandError::from_output(
+            &format!("git merge-base {base} HEAD"),
+            output.status,
+            &output.stderr,
+        )
+        .into());
+    }
+    let commit = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if commit.is_empty() {
+        anyhow::bail!("git merge-base {base} HEAD returned no commit");
+    }
+    Ok(commit)
 }
 
 /// Returns file contents at `base:path`, or `None` when the path is new on HEAD.
+#[cfg(test)]
 pub fn file_at_ref(root: &Path, base: &str, path: &Path) -> Result<Option<String>> {
     if !is_git_repository(root) {
         anyhow::bail!("{} is not a git repository", root.display());
@@ -92,15 +140,156 @@ pub fn file_at_ref(root: &Path, base: &str, path: &Path) -> Result<Option<String
     )
 }
 
-fn committed_diff(root: &Path, base: &str) -> Result<Vec<PathBuf>> {
-    let range = format!("{base}...HEAD");
-    let merge_base_args = ["diff", "--name-only", "-z", range.as_str()];
-    let paths = git_paths(root, &merge_base_args)?;
+pub fn files_at_commit_with_limit(
+    root: &Path,
+    commit: &str,
+    paths: &[(PathBuf, u64)],
+) -> Result<HashMap<PathBuf, Option<String>>> {
     if paths.is_empty() {
-        git_paths(root, &["diff", "--name-only", "-z", base])
-    } else {
-        Ok(paths)
+        return Ok(HashMap::new());
     }
+    let specs = paths
+        .iter()
+        .map(|(path, _)| format!("{commit}:{}", path.to_string_lossy()))
+        .collect::<Vec<_>>();
+    let mut child = Command::new("git")
+        .args([
+            "cat-file",
+            "--batch-check=%(objecttype) %(objectsize)",
+            "-Z",
+        ])
+        .current_dir(root)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("failed to execute git cat-file --batch-check -Z")?;
+    {
+        let stdin = child
+            .stdin
+            .as_mut()
+            .context("failed to open git cat-file stdin")?;
+        for spec in &specs {
+            stdin.write_all(spec.as_bytes())?;
+            stdin.write_all(&[0])?;
+        }
+    }
+    let output = child.wait_with_output()?;
+    if !output.status.success() {
+        return Err(GitCommandError::from_output(
+            "git cat-file --batch-check -Z",
+            output.status,
+            &output.stderr,
+        )
+        .into());
+    }
+    let records = output
+        .stdout
+        .split(|byte| *byte == 0)
+        .filter(|record| !record.is_empty())
+        .collect::<Vec<_>>();
+    if records.len() != paths.len() {
+        anyhow::bail!(
+            "git cat-file returned {} records for {} requested paths",
+            records.len(),
+            paths.len()
+        );
+    }
+
+    let mut result = HashMap::new();
+    for (((path, limit), spec), record) in paths.iter().zip(specs).zip(records) {
+        if record.ends_with(b" missing") {
+            result.insert(path.clone(), None);
+            continue;
+        }
+        let record = String::from_utf8_lossy(record);
+        let mut fields = record.split_whitespace();
+        let object_type = fields.next().unwrap_or_default();
+        let observed = fields
+            .next()
+            .and_then(|value| value.parse::<u64>().ok())
+            .with_context(|| format!("invalid git blob size for {}", path.display()))?;
+        if object_type != "blob" {
+            anyhow::bail!("git object for {} is not a file", path.display());
+        }
+        if observed > *limit {
+            anyhow::bail!(
+                "base file {} is {} bytes, exceeding configured limit of {} bytes",
+                path.display(),
+                observed,
+                limit
+            );
+        }
+        let content = run_git(root, &["show", &spec])?;
+        if !content.status.success() {
+            return Err(GitCommandError::from_output(
+                &format!("git show {spec}"),
+                content.status,
+                &content.stderr,
+            )
+            .into());
+        }
+        if content.stdout.len() as u64 > *limit {
+            anyhow::bail!(
+                "base file {} is {} bytes, exceeding configured limit of {} bytes",
+                path.display(),
+                content.stdout.len(),
+                limit
+            );
+        }
+        let text = String::from_utf8(content.stdout)
+            .with_context(|| format!("base file {} is not valid UTF-8", path.display()))?;
+        result.insert(path.clone(), Some(text));
+    }
+    Ok(result)
+}
+
+fn parse_name_status(bytes: &[u8]) -> Result<(BTreeSet<PathBuf>, BTreeSet<PathBuf>)> {
+    let fields = bytes
+        .split(|byte| *byte == 0)
+        .filter(|field| !field.is_empty())
+        .collect::<Vec<_>>();
+    let mut base = BTreeSet::new();
+    let mut head = BTreeSet::new();
+    let mut index = 0;
+    while index < fields.len() {
+        let status = fields[index];
+        index += 1;
+        let code = status.first().copied().unwrap_or_default();
+        match code {
+            b'R' => {
+                let old = fields.get(index).context("rename missing old path")?;
+                let new = fields.get(index + 1).context("rename missing new path")?;
+                base.insert(path_from_git_bytes(old));
+                head.insert(path_from_git_bytes(new));
+                index += 2;
+            }
+            b'C' => {
+                fields.get(index).context("copy missing old path")?;
+                let new = fields.get(index + 1).context("copy missing new path")?;
+                head.insert(path_from_git_bytes(new));
+                index += 2;
+            }
+            b'A' => {
+                let path = fields.get(index).context("addition missing path")?;
+                head.insert(path_from_git_bytes(path));
+                index += 1;
+            }
+            b'D' => {
+                let path = fields.get(index).context("deletion missing path")?;
+                base.insert(path_from_git_bytes(path));
+                index += 1;
+            }
+            _ => {
+                let path = fields.get(index).context("change missing path")?;
+                let path = path_from_git_bytes(path);
+                base.insert(path.clone());
+                head.insert(path);
+                index += 1;
+            }
+        }
+    }
+    Ok((base, head))
 }
 
 fn git_paths(root: &Path, args: &[&str]) -> Result<Vec<PathBuf>> {
@@ -171,6 +360,7 @@ mod tests {
         let root = tempdir.path();
         fs::create_dir_all(root.join("models")).expect("create models");
         fs::write(root.join("models/base.sql"), "select 1\n").expect("write base");
+        fs::write(root.join("models/deleted.sql"), "select 0\n").expect("write deleted");
 
         git(root, &["init"]);
         git(root, &["checkout", "-b", "main"]);
@@ -187,13 +377,26 @@ mod tests {
         fs::write(root.join("models/staged.sql"), "select 3\n").expect("write staged");
         git(root, &["add", "models/staged.sql"]);
         fs::write(root.join("models/base.sql"), "select 4\n").expect("write unstaged");
+        fs::remove_file(root.join("models/deleted.sql")).expect("delete tracked");
         fs::write(root.join("models/untracked.sql"), "select 5\n").expect("write untracked");
+
+        let sets = changed_file_sets(root, "main").expect("changed file sets");
+        assert!(sets.base.contains(&PathBuf::from("models/base.sql")));
+        assert!(sets.head.contains(&PathBuf::from("models/base.sql")));
+        assert!(sets.base.contains(&PathBuf::from("models/deleted.sql")));
+        assert!(!sets.head.contains(&PathBuf::from("models/deleted.sql")));
+        for added in ["committed.sql", "staged.sql", "untracked.sql"] {
+            let path = PathBuf::from("models").join(added);
+            assert!(sets.head.contains(&path));
+            assert!(!sets.base.contains(&path));
+        }
 
         let changed = changed_files(root, "main").expect("changed files");
         assert!(changed.contains(&PathBuf::from("models/committed.sql")));
         assert!(changed.contains(&PathBuf::from("models/staged.sql")));
         assert!(changed.contains(&PathBuf::from("models/base.sql")));
         assert!(changed.contains(&PathBuf::from("models/untracked.sql")));
+        assert!(changed.contains(&PathBuf::from("models/deleted.sql")));
     }
 
     #[test]
@@ -260,6 +463,18 @@ mod tests {
         git(root, &["mv", "models/rename me.sql", "models/renamed.sql"]);
         fs::write(root.join("models/untracked\nmodel.sql"), "select 3\n").expect("write untracked");
 
+        let sets = changed_file_sets(root, "main").expect("changed file sets");
+        assert!(sets.base.contains(&PathBuf::from("models/rename me.sql")));
+        assert!(!sets.head.contains(&PathBuf::from("models/rename me.sql")));
+        assert!(sets.head.contains(&PathBuf::from("models/renamed.sql")));
+        assert!(!sets.base.contains(&PathBuf::from("models/renamed.sql")));
+        assert!(sets
+            .head
+            .contains(&PathBuf::from("models/untracked\nmodel.sql")));
+        assert!(!sets
+            .base
+            .contains(&PathBuf::from("models/untracked\nmodel.sql")));
+
         let changed = changed_files(root, "main").expect("changed files");
         for name in [
             " leading.sql",
@@ -281,6 +496,30 @@ mod tests {
     fn is_git_repository_false_for_plain_directory() {
         let tempdir = tempfile::tempdir().expect("tempdir");
         assert!(!is_git_repository(tempdir.path()));
+    }
+
+    #[test]
+    fn blob_size_is_checked_before_base_content_is_loaded() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let root = tempdir.path();
+        fs::write(root.join("model.sql"), "12345").expect("write model");
+        git(root, &["init"]);
+        git(root, &["config", "user.email", "costguard@example.com"]);
+        git(root, &["config", "user.name", "Costguard Test"]);
+        git(root, &["add", "."]);
+        git(root, &["commit", "-m", "initial"]);
+        let commit = resolve_base_commit(root, "HEAD").expect("base commit");
+
+        let error = files_at_commit_with_limit(root, &commit, &[(PathBuf::from("model.sql"), 4)])
+            .expect_err("oversized blob");
+        let message = error.to_string();
+        assert!(message.contains("model.sql"));
+        assert!(message.contains("5 bytes"));
+        assert!(message.contains("4 bytes"));
+
+        let files = files_at_commit_with_limit(root, &commit, &[(PathBuf::from("model.sql"), 5)])
+            .expect("blob at limit");
+        assert_eq!(files[Path::new("model.sql")].as_deref(), Some("12345"));
     }
 
     fn git(root: &Path, args: &[&str]) {

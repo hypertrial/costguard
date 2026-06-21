@@ -10,6 +10,8 @@ pub struct ScanPlan {
     pub target_skips: Vec<SkippedFile>,
     pub context_skips: Vec<SkippedFile>,
     pub changed_paths: HashSet<PathBuf>,
+    pub base_changed_paths: HashSet<PathBuf>,
+    pub base_commit: Option<String>,
     pub pr_mode: bool,
 }
 
@@ -44,11 +46,11 @@ pub(crate) fn build_scan_plan(
             anyhow::bail!("{} is not a git repository", root.display());
         }
         let base = config.base_branch.as_deref().unwrap_or("main");
-        let changed_files = crate::git::changed_files(root, base)
+        let changed = crate::git::changed_file_sets(root, base)
             .with_context(|| format!("failed to resolve changed files against base '{base}'"))?;
         let changed_discovery = costguard_scanner::read_existing_paths_with_options(
             root,
-            &changed_files,
+            &changed.head,
             discovery_options,
         )?;
         let context_discovery =
@@ -63,7 +65,9 @@ pub(crate) fn build_scan_plan(
             context: context_files,
             target_skips: changed_discovery.skipped_files,
             context_skips: context_discovery.skipped_files,
-            changed_paths: changed_files.into_iter().collect(),
+            changed_paths: changed.union().into_iter().collect(),
+            base_changed_paths: changed.base.into_iter().collect(),
+            base_commit: Some(changed.base_commit),
             pr_mode: true,
         })
     } else {
@@ -75,6 +79,8 @@ pub(crate) fn build_scan_plan(
             target_skips: discovery.skipped_files.clone(),
             context_skips: discovery.skipped_files,
             changed_paths: HashSet::new(),
+            base_changed_paths: HashSet::new(),
+            base_commit: None,
             pr_mode: false,
         })
     }
@@ -86,6 +92,7 @@ fn is_context_file(file: &ProjectFile) -> bool {
         costguard_scanner::FileKind::Sql
             | costguard_scanner::FileKind::DbtSqlModel
             | costguard_scanner::FileKind::DbtYaml
+            | costguard_scanner::FileKind::Python
             | costguard_scanner::FileKind::ManifestJson
     )
 }

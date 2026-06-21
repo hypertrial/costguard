@@ -51,7 +51,7 @@ Install eval dependencies once:
 
 ```bash
 python3 -m venv .venv-eval
-.venv-eval/bin/pip install -r requirements-eval.txt
+.venv-eval/bin/pip install --require-hashes -r requirements-eval.lock
 ```
 
 Regenerate the frozen dataset:

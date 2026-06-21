@@ -18,6 +18,7 @@ use costguard_policy::{
     ResolutionContext, TrustStoreV1, TrustedKeyV1,
 };
 use std::collections::BTreeMap;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -57,6 +58,8 @@ enum PolicyCommand {
         trust_store: PathBuf,
         #[arg(long)]
         valid_until: Option<String>,
+        #[arg(long)]
+        force: bool,
     },
     Compile {
         input: PathBuf,
@@ -438,7 +441,9 @@ fn run_policy_command(command: PolicyCommand) -> Result<u8> {
             private_key,
             trust_store,
             valid_until,
+            force,
         } => {
+            validate_keygen_destinations(&private_key, &trust_store, force)?;
             let now = chrono::Utc::now();
             let valid_until = valid_until
                 .map(|value| {
@@ -452,7 +457,6 @@ fn run_policy_command(command: PolicyCommand) -> Result<u8> {
                 anyhow::bail!("--valid-until must be in the future");
             }
             let key = generate_key(&key_id, now)?;
-            write_private_json(&private_key, &key)?;
             let trust = TrustStoreV1 {
                 version: 1,
                 keys: vec![TrustedKeyV1 {
@@ -464,7 +468,7 @@ fn run_policy_command(command: PolicyCommand) -> Result<u8> {
                     revoked: false,
                 }],
             };
-            write_json(&trust_store, &trust)?;
+            persist_keygen_outputs(&private_key, &key, &trust_store, &trust, force)?;
             println!(
                 "created private key {} and trust store {}",
                 private_key.display(),
@@ -589,15 +593,110 @@ fn write_text(path: &Path, text: &str) -> Result<()> {
     std::fs::write(path, text).with_context(|| format!("failed to write {}", path.display()))
 }
 
-fn write_private_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<()> {
-    write_json(path, value)?;
+fn validate_keygen_destinations(private_key: &Path, trust_store: &Path, force: bool) -> Result<()> {
+    if normalize_destination(private_key)? == normalize_destination(trust_store)? {
+        anyhow::bail!("private key and trust store paths must be different");
+    }
+    for (label, path) in [("private key", private_key), ("trust store", trust_store)] {
+        match std::fs::symlink_metadata(path) {
+            Ok(metadata) if !force => {
+                anyhow::bail!(
+                    "{label} output already exists: {} (use --force to replace it)",
+                    path.display()
+                );
+            }
+            Ok(metadata) if !metadata.file_type().is_file() => {
+                anyhow::bail!(
+                    "refusing to replace non-regular {label} output: {}",
+                    path.display()
+                );
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(error).with_context(|| format!("failed to inspect {}", path.display()));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn normalize_destination(path: &Path) -> Result<PathBuf> {
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()?.join(path)
+    };
+    let mut normalized = PathBuf::new();
+    for component in absolute.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                normalized.pop();
+            }
+            other => normalized.push(other.as_os_str()),
+        }
+    }
+    Ok(normalized)
+}
+
+fn persist_keygen_outputs<K: serde::Serialize, T: serde::Serialize>(
+    private_key_path: &Path,
+    private_key: &K,
+    trust_store_path: &Path,
+    trust_store: &T,
+    force: bool,
+) -> Result<()> {
+    let private_bytes = serde_json::to_vec_pretty(private_key)?;
+    let trust_bytes = serde_json::to_vec_pretty(trust_store)?;
+    let private_temp = prepare_keygen_temp(private_key_path, &private_bytes, true)?;
+    let trust_temp = prepare_keygen_temp(trust_store_path, &trust_bytes, false)?;
+    persist_keygen_temp(private_temp, private_key_path, force)?;
+    persist_keygen_temp(trust_temp, trust_store_path, force)?;
+    Ok(())
+}
+
+fn prepare_keygen_temp(
+    path: &Path,
+    bytes: &[u8],
+    private: bool,
+) -> Result<tempfile::NamedTempFile> {
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
+    std::fs::create_dir_all(parent)
+        .with_context(|| format!("failed to create {}", parent.display()))?;
+    let mut temp = tempfile::NamedTempFile::new_in(parent)
+        .with_context(|| format!("failed to create temporary output in {}", parent.display()))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
-            .with_context(|| format!("failed to secure {}", path.display()))?;
+        let mode = if private { 0o600 } else { 0o644 };
+        temp.as_file()
+            .set_permissions(std::fs::Permissions::from_mode(mode))
+            .with_context(|| format!("failed to set permissions for {}", path.display()))?;
     }
-    Ok(())
+    temp.write_all(bytes)
+        .with_context(|| format!("failed to write temporary output for {}", path.display()))?;
+    temp.write_all(b"\n")
+        .with_context(|| format!("failed to write temporary output for {}", path.display()))?;
+    temp.as_file_mut()
+        .sync_all()
+        .with_context(|| format!("failed to flush temporary output for {}", path.display()))?;
+    Ok(temp)
+}
+
+fn persist_keygen_temp(temp: tempfile::NamedTempFile, path: &Path, force: bool) -> Result<()> {
+    let result = if force {
+        temp.persist(path)
+    } else {
+        temp.persist_noclobber(path)
+    };
+    result
+        .map(|_| ())
+        .map_err(|error| error.error)
+        .with_context(|| format!("failed to persist {}", path.display()))
 }
 
 fn configuration_error(err: anyhow::Error) -> Result<u8> {

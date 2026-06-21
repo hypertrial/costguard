@@ -13,6 +13,8 @@ costguard policy resolve policy.signed.json .costguard/trust.json \
   --organization acme --repository acme/warehouse --path models/marts/orders.sql
 ```
 
+Key generation never overwrites by default. Use `--force` only for deliberate rotation into existing regular files. Private-key and trust-store destinations must differ; symlinks, directories, and special files are always rejected. Outputs are serialized first and atomically persisted from same-directory temporary files; Unix private keys are created with `0600` permissions before key bytes are written.
+
 Commit only the public trust store (`.costguard/trust.json`). Protect policy, exception, and trust-store changes with CODEOWNERS and branch protection rules. Rotate keys by overlapping validity windows, publish the new public key before signing with it, and mark compromised keys revoked. Unknown, revoked, expired, malformed, non-canonical, or invalid signatures fail closed.
 
 ## Policy schema v2

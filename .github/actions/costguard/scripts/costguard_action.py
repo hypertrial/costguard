@@ -20,6 +20,13 @@ DEFAULT_MANIFEST = "target/manifest.json"
 PRODUCER_REPOSITORY = "hypertrial/costguard"
 DOWNLOAD_ATTEMPTS = 3
 DOWNLOAD_TIMEOUT_SECONDS = 30
+RELEASE_ARCHIVE_MAX_BYTES = 67_108_864
+CHECKSUM_MAX_BYTES = 4_096
+DOWNLOAD_CHUNK_BYTES = 64 * 1024
+
+
+class DownloadTooLarge(Exception):
+    """Deterministic download-size failure that must not be retried."""
 
 
 def env(name: str, default: str = "") -> str:
@@ -63,15 +70,40 @@ def runner_target() -> tuple[str, str]:
     return host_target()
 
 
-def download(url: str, destination: Path) -> None:
+def download(url: str, destination: Path, max_bytes: int) -> None:
     last_error: Exception | None = None
     for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):
         try:
-            with urllib.request.urlopen(
-                url, timeout=DOWNLOAD_TIMEOUT_SECONDS
-            ) as response, destination.open("wb") as output:
-                shutil.copyfileobj(response, output)
+            with urllib.request.urlopen(url, timeout=DOWNLOAD_TIMEOUT_SECONDS) as response:
+                content_length = (
+                    response.headers.get("Content-Length")
+                    if hasattr(response, "headers")
+                    else None
+                )
+                if content_length is not None:
+                    try:
+                        declared = int(content_length)
+                    except ValueError as exc:
+                        raise OSError(f"invalid Content-Length: {content_length}") from exc
+                    if declared > max_bytes:
+                        raise DownloadTooLarge(
+                            f"download {url} declares {declared} bytes, "
+                            f"exceeding limit of {max_bytes} bytes"
+                        )
+                observed = 0
+                with destination.open("wb") as output:
+                    while chunk := response.read(DOWNLOAD_CHUNK_BYTES):
+                        observed += len(chunk)
+                        if observed > max_bytes:
+                            raise DownloadTooLarge(
+                                f"download {url} exceeded limit of {max_bytes} bytes "
+                                f"while streaming ({observed} bytes observed)"
+                            )
+                        output.write(chunk)
             return
+        except DownloadTooLarge as exc:
+            destination.unlink(missing_ok=True)
+            raise SystemExit(str(exc)) from exc
         except (OSError, URLError) as exc:
             last_error = exc
             destination.unlink(missing_ok=True)
@@ -101,8 +133,8 @@ def install_release(version: str) -> None:
         temp_dir = Path(tmp)
         asset = temp_dir / asset_name
         checksum = temp_dir / f"{asset_name}.sha256"
-        download(f"{base_url}/{asset_name}", asset)
-        download(f"{base_url}/{asset_name}.sha256", checksum)
+        download(f"{base_url}/{asset_name}", asset, RELEASE_ARCHIVE_MAX_BYTES)
+        download(f"{base_url}/{asset_name}.sha256", checksum, CHECKSUM_MAX_BYTES)
         if env("VERIFY_ATTESTATION_INPUT", "true").lower() == "true":
             verify_attestation(asset)
         checksum_fields = checksum.read_text(encoding="utf-8").split()
