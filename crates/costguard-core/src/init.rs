@@ -170,6 +170,8 @@ jobs:
           warehouse: {warehouse}
           fail-on: high
           min-confidence: high
+          block-only-new: true
+          # fail-on-pr-cost-increase: "500" # requires priced [cost] configuration
 "#
     )
 }
@@ -187,6 +189,11 @@ warehouse = "{warehouse}"
 # fail_on = "high"
 # min_confidence = "high"
 # min_confidence_filter = true
+
+[gate]
+block_only_new = true
+# fail_on_pr_cost_increase = 500
+# Requires enabled [cost] and [cost.pricing].model = "scan" or "compute".
 
 # [dbt]
 # manifest_path = "target/manifest.json"

@@ -240,6 +240,10 @@ def command_run() -> int:
         "--analysis-policy",
         env("ANALYSIS_POLICY_INPUT", "standard"),
     ]
+    block_only_new = env("BLOCK_ONLY_NEW_INPUT", "true").lower()
+    if block_only_new not in {"true", "false"}:
+        raise SystemExit("block-only-new must be true or false")
+    command.append(f"--block-only-new={block_only_new}")
     if summary_file:
         command.extend(["--summary-file", str(summary_file)])
     min_confidence = env("MIN_CONFIDENCE_INPUT")
@@ -253,6 +257,9 @@ def command_run() -> int:
     fail_on_cost_delta = env("FAIL_ON_COST_DELTA_INPUT")
     if fail_on_cost_delta:
         command.extend(["--fail-on-cost-delta", fail_on_cost_delta])
+    fail_on_pr_cost_increase = env("FAIL_ON_PR_COST_INCREASE_INPUT")
+    if fail_on_pr_cost_increase:
+        command.extend(["--fail-on-pr-cost-increase", fail_on_pr_cost_increase])
     manifest = resolve_manifest(root)
     if manifest:
         manifest_path = (root / manifest).resolve()

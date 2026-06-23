@@ -2,7 +2,7 @@
 
 Costguard attaches **estimated monthly savings** to each behavioral finding for **prioritization**. Estimates are computed entirely from local files—no warehouse connections or credentials.
 
-> **Disclaimer:** Cost figures are advisory priors derived only from local files (dbt manifest, catalog stats, optional offline exports). They are order-of-magnitude prioritization signals, not a bill and not a guarantee of realized savings. Accuracy depends on input grade (A/B/C); grade C is a pure size prior. Savings assume a fix fully removes the modeled inefficiency and ignore fix-interaction effects. No warehouse connection is made. **Severity and confidence, not cost, are the enforcement contract.**
+> **Disclaimer:** Cost figures are advisory priors derived only from local files (dbt manifest, catalog stats, optional offline exports). They are order-of-magnitude prioritization signals, not a bill and not a guarantee of realized savings. Accuracy depends on input grade (A/B/C); grade C is a pure size prior. Savings assume a fix fully removes the modeled inefficiency and ignore fix-interaction effects. No warehouse connection is made. Severity and confidence are the default enforcement contract; dollar gates are explicit opt-ins for calibrated projects.
 
 Canonical term definitions: [Glossary — Cost estimate terms](../glossary.md#cost-estimate-terms).
 
@@ -37,7 +37,7 @@ When `[cost]` is enabled, scan output includes a `cost` block (JSON) or **Cost s
 | `post_fix_cost` | **Post-fix cost** — counterfactual cost if all current findings were fixed |
 | `potential_savings` | **Potential savings** — `current_cost − post_fix_cost` (top-down, per model) |
 | `coverage` | **Coverage** — mapped-spend fraction, observation age, rules estimated/unestimated |
-| `pr_impact` | **PR impact** — base vs head delta in PR mode (`introduced`, `avoided`, `net`, `efficiency`, `volume`, `blast_radius`) |
+| `pr_impact` | **PR impact** — base vs head delta in PR mode (`introduced`, `avoided`, `net`, `efficiency`, `volume`, `blast_radius`); `net.monthly_p50` gates `fail_on_pr_cost_increase` |
 | `realized_savings` | **Realized savings** — before/after observation bundles (`observations_before` + `observations_after`) |
 | `project_gb_months` | Sum of model scan volumes in GB-months |
 | `savings_p50_usd` | **Addressable finding savings (deduplicated)** — bottom-up sum of per-finding savings; gates `fail_on_monthly_delta` |
@@ -53,7 +53,7 @@ Cost summary reports two related but differently computed savings totals:
 | **Potential savings (current − post-fix)** | `potential_savings` | Top-down: `current_cost − post_fix_cost`, per model then aggregated | Whole-project counterfactual reduction |
 | **Addressable savings on flagged findings (deduplicated)** | `savings_p50_usd` | Bottom-up: sum of per-finding attributed shares with structure/fan-out weights and per-model caps (~95% max) | PR/scan cost gating (`--fail-on-cost-delta`) |
 
-They are close but not identical by construction. Gating uses the addressable finding sum.
+They are close but not identical by construction. `--fail-on-cost-delta` uses the addressable finding sum. The separate project-wide `fail_on_pr_cost_increase` gate uses PR net cost, not either savings total.
 
 ## Modes
 
@@ -77,6 +77,10 @@ default_runs_per_month = 30
 default_table_size = "medium"
 fail_on_monthly_delta = 500
 fail_on_monthly_delta_gb = 1000
+
+[gate]
+block_only_new = true
+fail_on_pr_cost_increase = 1000
 
 [cost.pricing]
 model = "scan"
@@ -105,6 +109,7 @@ multiplier = { p10 = 2, p90 = 6 }
 costguard scan --cost
 costguard scan --cost --fail-on-cost-delta 500
 costguard pr --cost --fail-on-cost-delta 500
+costguard pr --fail-on-pr-cost-increase 1000
 costguard scan --cost --min-cost-coverage 0.8
 costguard explain models/marts/fct.sql --cost
 costguard cost report . --manifest target/manifest.json
@@ -112,6 +117,8 @@ costguard cost report . --manifest target/manifest.json
 
 - `--cost` on `scan`, `pr`, and `explain` enables cost annotation
 - `--fail-on-cost-delta` gates on **addressable finding savings** p50 (deduplicated sum; also enables cost)
+- `--fail-on-pr-cost-increase` gates on project-wide priced **net PR impact** p50; it requires `[cost.pricing].model = "scan"` or `"compute"` and also enables cost
+- With `block_only_new`, addressable-savings gates count introduced/regressed diagnostics only. The net PR gate already compares the full base and head project cost.
 - `--min-cost-coverage` gates on **mapped-spend coverage** (`coverage.mapped_spend_fraction`; also enables cost). Config equivalent: `[cost].min_mapped_spend_fraction`
 - `costguard cost report` renders a local cost prioritization summary without requiring findings
 - `costguard cost normalize` converts offline warehouse exports into the normalized metadata-only cost schema
@@ -133,11 +140,13 @@ JSON schema version is **4** with an optional top-level `cost` object. Per-findi
   with:
     cost: "true"
     fail-on-cost-delta: "500"
+    block-only-new: "true"
+    fail-on-pr-cost-increase: "1000"
 ```
 
 ## Calibration
 
-Tune `[cost.pricing]` and `[cost.compute]` in `costguard.toml` using warehouse query-history exports. Validate bytes-per-run interval coverage and compute conversion bounds against your repo's observed spend.
+Offline query-history enrichment is shipped through `[cost.inputs].query_history` and `costguard cost normalize`. Tune `[cost.pricing]` using those exports, then validate bytes-per-run coverage and compute conversion bounds against your repo's observed spend before enabling dollar gates.
 
 ## Related
 

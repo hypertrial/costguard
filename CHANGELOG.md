@@ -6,12 +6,17 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ### Added
 
+- Active base/head regression-only enforcement through `[gate].block_only_new`, PR CLI `--block-only-new[=<true|false>]`, default-on GitHub Action input, and `costguard init` scaffolding.
+- Project-wide priced PR net-cost enforcement through `[gate].fail_on_pr_cost_increase`, `--fail-on-pr-cost-increase`, and the matching Action input.
+- Version-dated Costguard vs SlowQL comparison and expanded regression/cost/evidence documentation.
 - Bounded manifest loading via `[dbt].max_manifest_bytes` (512 MiB default), immutable git-base blob preflights, and fixed GitHub Action limits of 64 MiB for release archives and 4 KiB for checksum sidecars.
 - Secure `costguard policy keygen --force` replacement with regular-file validation, same-directory atomic persistence, and Unix private-key mode `0600`.
 - Universal pip-compatible hashed evaluation and judge locks with offline source-hash verification and Python-version/lock-digest environment fingerprints.
 
 ### Changed
 
+- Regression-only mode now applies consistently to top-level, global/scoped severity, and addressable finding-savings gates while preserving every diagnostic in JSON v4/receipt v2 evidence; required-owner and blast-radius controls still cover every changed model.
+- Markdown and GitHub output distinguish introduced/regressed blockers from unchanged notices and report priced net PR impact in the PR summary.
 - PR finding deltas now compare rename-aware base/head targets through the same current configuration, policy, suppression, waiver, baseline, confidence, and cost pipeline; approved and infrastructure findings are excluded.
 - Precision tiers now derive canonical IDs from `costguard rules --format json`, include `SQLCOST046`, and reject orphan infrastructure IDs.
 - Current benchmark evidence and generated precision tiers are byte-deterministic and no longer contain wall-clock dates.
@@ -112,7 +117,7 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 - Savings counterfactual uses `1 - 1/multiplier` (not `multiplier - 1`); per-model caps are multiplicative. Recalibrate `fail_on_monthly_delta` thresholds if tuned under the old formula.
 - Measured observations and query-history bytes skip partition/view/incremental priors.
-- `fail_on_monthly_delta` prefers `pr_impact.net` when PR mode produces a base/head comparison.
+- `fail_on_monthly_delta` gates addressable finding savings; project-wide PR net impact is reported separately.
 
 ### Removed
 

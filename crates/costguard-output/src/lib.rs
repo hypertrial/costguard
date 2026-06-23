@@ -548,7 +548,9 @@ pub(crate) fn append_analysis_text(output: &mut String, result: &ScanResult) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use costguard_core::{GateMode, GateResult, GateStatus, ScanMetrics, ScanResult};
+    use costguard_core::{
+        EnforcementPreview, FindingDelta, GateMode, GateResult, GateStatus, ScanMetrics, ScanResult,
+    };
     use costguard_diagnostics::{Confidence, Diagnostic, Severity, SourceProvenance};
     use costguard_scanner::ScanCounts;
     use std::collections::BTreeMap;
@@ -624,6 +626,23 @@ mod tests {
         }
     }
 
+    fn unchanged_regression_only_result() -> ScanResult {
+        let mut result = sample_result(true);
+        result.diagnostics[0].assign_identity("sem-v1:unchanged");
+        let finding_id = result.diagnostics[0].governance.finding_id.clone();
+        let summary = result.pr_summary.as_mut().expect("PR summary");
+        summary.finding_delta = Some(FindingDelta {
+            unchanged: 1,
+            ..FindingDelta::default()
+        });
+        summary.enforcement_preview = Some(EnforcementPreview {
+            block_only_new: true,
+            require_manifest_integrity: false,
+        });
+        assert!(!finding_id.is_empty());
+        result
+    }
+
     #[test]
     fn escape_github_property_escapes_commas_and_colons() {
         let rendered = render_github(&sample_result(true));
@@ -663,6 +682,60 @@ mod tests {
         let rendered = render_markdown(&sample_result(true));
         assert!(rendered.contains("# Costguard failed this PR"));
         assert!(rendered.contains("1 high-risk cost finding."));
+    }
+
+    #[test]
+    fn regression_only_output_keeps_unchanged_finding_nonblocking() {
+        let result = unchanged_regression_only_result();
+        let markdown = render_markdown(&result);
+        assert!(markdown.contains("# Costguard passed"), "{markdown}");
+        assert!(
+            markdown.contains("No introduced or regressed high-risk cost findings"),
+            "{markdown}"
+        );
+        assert!(
+            markdown.contains("PR delta: unchanged (nonblocking)"),
+            "{markdown}"
+        );
+        assert!(markdown.contains("Active enforcement:"), "{markdown}");
+
+        let github = render_github(&result);
+        assert!(github.contains("::notice file="), "{github}");
+        assert!(
+            github.contains("PR delta: unchanged (nonblocking)"),
+            "{github}"
+        );
+    }
+
+    #[test]
+    fn regression_only_missing_identity_remains_blocking() {
+        let mut result = unchanged_regression_only_result();
+        result.diagnostics[0].governance.finding_id.clear();
+        let markdown = render_markdown(&result);
+        assert!(
+            markdown.contains("# Costguard failed this PR"),
+            "{markdown}"
+        );
+        assert!(markdown.contains("PR delta: unknown"), "{markdown}");
+    }
+
+    #[test]
+    fn github_pr_summary_includes_finding_delta_and_priced_net_impact() {
+        let mut result = unchanged_regression_only_result();
+        result.cost_summary = Some(ProjectCostSummary {
+            project_p50_usd: Some(1_000.0),
+            pr_impact: Some(PrCostImpact {
+                net: CostFigure {
+                    monthly_p50: Some(125.0),
+                    ..CostFigure::default()
+                },
+                ..PrCostImpact::default()
+            }),
+            ..ProjectCostSummary::default()
+        });
+        let github = render_github(&result);
+        assert!(github.contains("finding delta: 0 introduced"), "{github}");
+        assert!(github.contains("net PR impact: $125/mo"), "{github}");
     }
 
     #[test]

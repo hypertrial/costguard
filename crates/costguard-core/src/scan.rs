@@ -241,13 +241,18 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
         None
     };
     if let Some(summary) = pr_summary.as_mut() {
-        summary.gate_results = evaluate_gates(config.gate.as_ref(), &diagnostics, summary);
         if let Some(base_scan) = &base_branch_scan {
             summary.finding_delta = Some(classify_findings(
                 head_for_delta.as_deref().unwrap_or(&diagnostics),
                 &base_scan.diagnostics,
             ));
         }
+        summary.gate_results = evaluate_gates(
+            config.gate.as_ref(),
+            &diagnostics,
+            summary,
+            cost_summary.as_ref(),
+        );
         summary.manifest_integrity = Some(ManifestIntegrity {
             checksum_mismatches: checksum_mismatch_count,
             verified: checksum_mismatch_count == 0,

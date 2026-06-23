@@ -83,14 +83,15 @@ Backward-compatible JSON fields:
 
 ## Gating
 
-- `fail_on_monthly_delta` — **addressable finding savings** p50 across new (post-baseline) findings
-- `fail_on_monthly_delta_gb` — sum of savings `relative_index` (GB-months) when pricing is disabled
+- `fail_on_monthly_delta` — **addressable finding savings** p50 across post-baseline findings; with `block_only_new`, only introduced/regressed diagnostics contribute
+- `fail_on_monthly_delta_gb` — sum of savings `relative_index` (GB-months); with `block_only_new`, only introduced/regressed diagnostics contribute
+- `fail_on_pr_cost_increase` — project-wide `pr_impact.net.monthly_p50` in priced PR mode; equal to or above the threshold fails, negative/avoided net cost passes
 
 Either condition fails the check (OR with severity gate). Failure messages print the computed total and threshold.
 
 ## Calibration
 
-Offline query-history calibration is not shipped as a script. Tune `[cost.pricing]` and `[cost.compute]` in `costguard.toml` using warehouse exports and validate interval coverage manually.
+Offline query-history input is shipped through `[cost.inputs].query_history`, and `costguard cost normalize` converts supported warehouse exports to the normalized observation schema. Tune `[cost.pricing]` with local exports and validate interval coverage manually.
 
 ## Implementation
 
@@ -106,4 +107,4 @@ Cost figures are advisory priors derived only from local files. They are order-o
 - Savings assume a fix fully removes the modeled inefficiency; fix-interaction effects are not modeled
 - Per-model caps prevent double counting but do not model overlapping fix benefits
 - Compute-priced intervals remain wide until query-history calibration narrows `tb_per_credit_hour`
-- No warehouse connection is made; severity and confidence, not cost, are the enforcement contract
+- No warehouse connection is made; severity and confidence are the default gate, while calibrated cost gates are explicit opt-ins

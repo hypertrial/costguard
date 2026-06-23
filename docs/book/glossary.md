@@ -91,7 +91,7 @@ Canonical definitions for cost and savings terminology. Prefer these in README, 
 
 **Two savings numbers:** **Potential savings** is top-down (`current − post_fix`, per model). **Addressable finding savings** is bottom-up (sum of per-finding shares with structure/fan-out weights and per-model caps). They are close but not identical; PR/scan cost gating uses the finding sum.
 
-**Disclaimer:** Cost figures are advisory priors from local files only. They prioritize findings at order-of-magnitude fidelity—they are not a bill and not a guarantee of realized savings. Severity and confidence, not cost, are the enforcement contract. Full disclaimer: [Cost estimates](reference/cost-estimates.md).
+**Disclaimer:** Cost figures are advisory priors from local files only. They prioritize findings at order-of-magnitude fidelity—they are not a bill and not a guarantee of realized savings. Severity and confidence are the default gate; calibrated cost gates are explicit opt-ins. Full disclaimer: [Cost estimates](reference/cost-estimates.md).
 
 ## Documentation style
 

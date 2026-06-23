@@ -21,13 +21,26 @@ pub(crate) fn render_github(result: &ScanResult) -> String {
             Severity::Low | Severity::Info => "notice",
         };
         let managed = result.policy.digest != "local-unmanaged";
-        let level = match (managed, diagnostic.governance.enforcement) {
+        let mut level = match (managed, diagnostic.governance.enforcement) {
             (_, costguard_protocol::EnforcementOutcome::Excepted) => "notice",
             (false, _) => severity_level,
             (true, costguard_protocol::EnforcementOutcome::Observed) => "notice",
             (true, costguard_protocol::EnforcementOutcome::Warned) => "warning",
             (true, costguard_protocol::EnforcementOutcome::Blocked) => severity_level,
         };
+        if result.block_only_new() && !result.diagnostic_is_blocking(diagnostic) {
+            level = "notice";
+        }
+        let delta = result
+            .diagnostic_delta_status(diagnostic)
+            .map(|status| {
+                if result.block_only_new() && !result.diagnostic_is_blocking(diagnostic) {
+                    format!(" | PR delta: {status} (nonblocking)")
+                } else {
+                    format!(" | PR delta: {status}")
+                }
+            })
+            .unwrap_or_default();
         output.push_str(&format!(
             "::{level} file={},line={},col={},title={} {}::{}\n",
             escape_github_property(&diagnostic.path.display().to_string()),
@@ -35,7 +48,7 @@ pub(crate) fn render_github(result: &ScanResult) -> String {
             diagnostic.column,
             escape_github_property(&diagnostic.rule_id),
             escape_github_property(diagnostic.severity.label()),
-            escape_github_message(&github_message(diagnostic))
+            escape_github_message(&format!("{}{delta}", github_message(diagnostic)))
         ));
     }
     if let Some(summary) = &result.pr_summary {
@@ -51,9 +64,27 @@ pub(crate) fn render_github(result: &ScanResult) -> String {
                 escape_github_message(&gate.reasons.join("; "))
             ));
         }
+        let mut summary_message = summary_sentence(summary);
+        if let Some(delta) = &summary.finding_delta {
+            summary_message.push_str(&format!(
+                "; finding delta: {} introduced, {} regressed, {} resolved, {} unchanged",
+                delta.introduced, delta.regressed, delta.resolved, delta.unchanged
+            ));
+        }
+        if let Some(cost) = result.cost_summary.as_ref() {
+            if cost.project_p50_usd.is_some() {
+                if let Some(net) = cost
+                    .pr_impact
+                    .as_ref()
+                    .and_then(|impact| impact.net.monthly_p50)
+                {
+                    summary_message.push_str(&format!("; net PR impact: ${net:.0}/mo"));
+                }
+            }
+        }
         output.push_str(&format!(
             "::notice title=Costguard PR Summary::{}\n",
-            escape_github_message(&summary_sentence(summary))
+            escape_github_message(&summary_message)
         ));
     }
     output

@@ -4,10 +4,10 @@ Automated PR review is Costguard's primary workflow. The local CLI powers GitHub
 
 For a zero-config local scan with no flags or config file, see [Local scan and explain](local-scan.md). Install with [Installation](installation.md); scaffold CI with `costguard init`.
 
-## MVP command
+## PR command
 
 ```bash
-costguard pr --base origin/main --warehouse snowflake --fail-on high --min-confidence high
+costguard pr --base origin/main --warehouse snowflake --fail-on high --min-confidence high --block-only-new
 ```
 
 | Flag | Notes |
@@ -16,6 +16,8 @@ costguard pr --base origin/main --warehouse snowflake --fail-on high --min-confi
 | `--warehouse` | SQL dialect for parsing heuristics. See [Platforms](../reference/platforms.md). |
 | `--fail-on` | Minimum severity that fails the run. Default when unset in config: `high`. |
 | `--min-confidence` | Optional confidence floor for fail logic. Recommended for PR gates: `high` (suppresses regex-only shape hits on Jinja-heavy models). |
+| `--block-only-new[=true\|false]` | Enforce severity and addressable-savings gates only for introduced or regressed findings. Bare flag means `true`; CLI/config default remains `false`. |
+| `--fail-on-pr-cost-increase` | Optional priced project-wide net-cost threshold in USD/month. Requires `[cost.pricing].model`. |
 
 ## GitHub Action
 
@@ -33,6 +35,7 @@ Use the published composite action after your existing dbt compile step:
     manifest: target/manifest.json
     fail-on: high
     min-confidence: high
+    block-only-new: true
     format: github
     receipt-path: costguard-receipt.json
 ```
@@ -43,7 +46,7 @@ For Costguard contributor workflows that need to run the checked-out source inst
     install-mode: source
 ```
 
-Core inputs: `base`, `warehouse`, `manifest`, `fail-on`, and `baseline`. The Action also supports `min-confidence`, `format`, `analysis-policy`, optional cost flags, signed-policy inputs, `receipt-path`, and `compare-receipt`. It always writes markdown to the GitHub step summary while preserving the selected stdout format.
+Core inputs: `base`, `warehouse`, `manifest`, `fail-on`, and `baseline`. The Action defaults `block-only-new` to `true` and always forwards the explicit value; set it to `false` during an upgrade if all-findings enforcement is still required. It also supports `min-confidence`, `format`, `analysis-policy`, `fail-on-cost-delta`, `fail-on-pr-cost-increase`, signed-policy inputs, `receipt-path`, and `compare-receipt`. It always writes markdown to the GitHub step summary while preserving the selected stdout format.
 
 Costguard 2.1 requires baseline v3 and policy v2 with `identity_scheme: "semantic-v1"`. See [Compatibility policy](../reference/compatibility.md).
 
@@ -61,6 +64,8 @@ Enterprise strict mode passes only configured governance values:
 The Action does not install or compile dbt. See [Requirements](requirements.md) for manifest, git history, and compile guidance.
 
 Pair `fail-on: high` with `min-confidence: high` on macro-heavy dbt projects so PR gates keep AST-confirmed findings and ignore regex-only noise (for example SQLCOST012 comma joins detected without a successful parse).
+
+For a calibrated project-wide dollar guardrail, configure priced cost inputs and add `fail-on-pr-cost-increase: "1000"`. This gate uses `pr_impact.net.monthly_p50`; avoided or negative net cost passes. `fail-on-cost-delta` remains a separate addressable finding-savings gate.
 
 The Action defaults to `analysis-policy: standard`. Set `analysis-policy: strict` in the Action or committed `costguard.toml` when git-native governance requires manifest-backed analysis. Manifest behavior: [Requirements](requirements.md).
 

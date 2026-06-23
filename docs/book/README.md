@@ -1,6 +1,8 @@
-# dbt cost regression checks for CI
+# Stop expensive dbt regressions before merge.
 
-Costguard reviews dbt pull requests before merge.
+SlowQL finds SQL problems. Costguard governs dbt cost changes.
+
+Costguard reviews dbt pull requests before merge and gates only cost findings introduced or regressed by the change.
 
 It scans changed models against the git base, uses optional dbt manifest and lineage context for downstream impact, and runs without warehouse credentials or live queries.
 
@@ -24,11 +26,11 @@ direct raw-source usage, and row-wise Python logic.
 PR opened -> changed SQL/dbt files scanned -> cost/perf risks annotated -> fail on high-risk findings
 ```
 
-## Costguard vs general SQL analyzers
+## Costguard vs SlowQL
 
-General SQL analyzers are broad linting tools for security, compliance, migrations, app-code SQL extraction, schema validation, autofix, and editor feedback.
+SlowQL is the broader SQL analyzer: security, compliance, reliability, quality, performance, cost, schema checks, autofix, custom rules, and editor integration.
 
-Costguard is narrower by design: a dbt PR cost regression gate for changed models, downstream blast radius, severity/confidence enforcement, advisory savings, and credential-free CI.
+Costguard is the dbt change-control layer: base/head finding and cost deltas, lineage and exposure impact, owners, gates, waivers, coverage, and versioned evidence. See [Costguard vs SlowQL](reference/costguard-vs-slowql.md).
 
 ## Install
 

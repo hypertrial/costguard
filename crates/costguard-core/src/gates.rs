@@ -1,5 +1,7 @@
 use crate::config::{GateConfig, GateMode, GateScope};
-use crate::{ChangedModelDetail, GateResult, GateStatus, PrSummary};
+use crate::{
+    ChangedModelDetail, FindingDelta, GateResult, GateStatus, PrSummary, ProjectCostSummary,
+};
 use costguard_diagnostics::{Confidence, Diagnostic, Severity};
 use costguard_protocol::EnforcementOutcome;
 use globset::Glob;
@@ -15,6 +17,7 @@ struct GateCriteria<'a> {
     min_confidence: Option<Confidence>,
     fail_on_monthly_delta: Option<f64>,
     fail_on_monthly_delta_gb: Option<f64>,
+    fail_on_pr_cost_increase: Option<f64>,
     fail_on_blast_radius: Option<usize>,
     require_owner: bool,
 }
@@ -23,6 +26,7 @@ pub(crate) fn evaluate_gates(
     config: Option<&GateConfig>,
     diagnostics: &[Diagnostic],
     summary: &PrSummary,
+    cost_summary: Option<&ProjectCostSummary>,
 ) -> Vec<GateResult> {
     let Some(config) = config else {
         return Vec::new();
@@ -37,13 +41,28 @@ pub(crate) fn evaluate_gates(
         min_confidence: config.min_confidence,
         fail_on_monthly_delta: config.fail_on_monthly_delta,
         fail_on_monthly_delta_gb: config.fail_on_monthly_delta_gb,
+        fail_on_pr_cost_increase: config.fail_on_pr_cost_increase,
         fail_on_blast_radius: config.fail_on_blast_radius,
         require_owner: config.require_owner,
     };
-    let mut results = vec![evaluate_gate(&global, diagnostics, summary)];
+    let mut results = vec![evaluate_gate(
+        &global,
+        diagnostics,
+        summary,
+        cost_summary,
+        config.block_only_new,
+        summary.finding_delta.as_ref(),
+    )];
     results.extend(config.scopes.iter().map(|scope| {
         let criteria = criteria_for_scope(scope);
-        evaluate_gate(&criteria, diagnostics, summary)
+        evaluate_gate(
+            &criteria,
+            diagnostics,
+            summary,
+            cost_summary,
+            config.block_only_new,
+            summary.finding_delta.as_ref(),
+        )
     }));
     results
 }
@@ -59,6 +78,7 @@ fn criteria_for_scope(scope: &GateScope) -> GateCriteria<'_> {
         min_confidence: scope.min_confidence,
         fail_on_monthly_delta: scope.fail_on_monthly_delta,
         fail_on_monthly_delta_gb: scope.fail_on_monthly_delta_gb,
+        fail_on_pr_cost_increase: None,
         fail_on_blast_radius: scope.fail_on_blast_radius,
         require_owner: scope.require_owner,
     }
@@ -68,6 +88,9 @@ fn evaluate_gate(
     gate: &GateCriteria<'_>,
     diagnostics: &[Diagnostic],
     summary: &PrSummary,
+    cost_summary: Option<&ProjectCostSummary>,
+    block_only_new: bool,
+    finding_delta: Option<&FindingDelta>,
 ) -> GateResult {
     let models = summary
         .changed_model_details
@@ -77,6 +100,12 @@ fn evaluate_gate(
     let actionable = diagnostics
         .iter()
         .filter(|diagnostic| diagnostic.governance.enforcement != EnforcementOutcome::Excepted)
+        .filter(|diagnostic| !costguard_cost::is_infrastructure_rule(&diagnostic.rule_id))
+        .filter(|diagnostic| {
+            !block_only_new
+                || finding_delta
+                    .is_none_or(|delta| delta.is_blocking(&diagnostic.governance.finding_id))
+        })
         .filter(|diagnostic| diagnostic_matches(gate, diagnostic, summary))
         .collect::<Vec<_>>();
     let mut reasons = Vec::new();
@@ -115,6 +144,19 @@ fn evaluate_gate(
         reasons.push(format!(
             "estimated monthly savings ${monthly:.0} meets cost threshold"
         ));
+    }
+
+    if let Some(threshold) = gate.fail_on_pr_cost_increase {
+        match cost_summary
+            .and_then(|summary| summary.pr_impact.as_ref())
+            .and_then(|impact| impact.net.monthly_p50)
+        {
+            Some(net) if net >= threshold => reasons.push(format!(
+                "estimated PR cost increase ${net:.0}/mo meets ${threshold:.0}/mo threshold"
+            )),
+            Some(_) => {}
+            None => reasons.push("PR cost impact unavailable; cannot evaluate cost gate".into()),
+        }
     }
 
     let monthly_gb = actionable
@@ -232,7 +274,8 @@ fn match_fields(gate: &GateCriteria<'_>, path: &str, tags: &[String], owners: &[
 mod tests {
     use super::*;
     use crate::{ChangedModelDetail, PrSummary};
-    use costguard_diagnostics::{Diagnostic, Severity};
+    use costguard_cost::{CostFigure, PrCostImpact, ProjectCostSummary};
+    use costguard_diagnostics::{CostEstimate, CostGrade, Diagnostic, Severity};
     use std::collections::BTreeMap;
     use std::path::PathBuf;
 
@@ -271,7 +314,194 @@ mod tests {
             changed_model_details: vec![detail],
             ..PrSummary::default()
         };
-        let results = evaluate_gates(Some(&config), &[diagnostic], &summary);
+        let results = evaluate_gates(Some(&config), &[diagnostic], &summary, None);
         assert_eq!(results[1].status, GateStatus::Fail);
+    }
+
+    fn identified_diagnostic(id: &str, savings: Option<f64>) -> Diagnostic {
+        let mut diagnostic = Diagnostic::new(
+            "SQLCOST001",
+            Severity::High,
+            PathBuf::from("models/a.sql"),
+            None,
+            "test",
+        );
+        diagnostic.assign_identity(format!("sem-v1:{id}"));
+        diagnostic.cost_estimate = savings.map(|value| CostEstimate {
+            relative_index: value,
+            grade: CostGrade::B,
+            basis: "test".into(),
+            prior_basis: None,
+            currency: "USD".into(),
+            model_id: None,
+            model_monthly_p50_usd: None,
+            savings_p10_usd_per_month: Some(value),
+            savings_p50_usd_per_month: Some(value),
+            savings_p90_usd_per_month: Some(value),
+            current_cost_p50_usd_per_month: None,
+            post_fix_cost_p50_usd_per_month: None,
+            unestimated_reason: None,
+            downstream_model_count: None,
+            downstream_monthly_p50_usd: None,
+        });
+        diagnostic
+    }
+
+    #[test]
+    fn regression_only_filters_unchanged_severity_and_savings() {
+        let unchanged = identified_diagnostic("unchanged", Some(500.0));
+        let introduced = identified_diagnostic("introduced", Some(200.0));
+        let config = GateConfig {
+            block_only_new: true,
+            fail_on: Some(Severity::High),
+            fail_on_monthly_delta: Some(300.0),
+            ..GateConfig::default()
+        };
+        let summary = PrSummary {
+            finding_delta: Some(FindingDelta {
+                introduced: 1,
+                unchanged: 1,
+                introduced_ids: vec![introduced.governance.finding_id.clone()],
+                ..FindingDelta::default()
+            }),
+            ..PrSummary::default()
+        };
+
+        let results = evaluate_gates(Some(&config), &[unchanged, introduced], &summary, None);
+        assert_eq!(results[0].status, GateStatus::Fail);
+        assert_eq!(results[0].matched_findings, 1);
+        assert_eq!(results[0].reasons.len(), 1);
+        assert!(results[0].reasons[0].contains("severity"));
+    }
+
+    #[test]
+    fn regression_only_scoped_savings_exclude_unchanged_findings() {
+        let unchanged = identified_diagnostic("unchanged", Some(500.0));
+        let introduced = identified_diagnostic("introduced", Some(200.0));
+        let config = GateConfig {
+            block_only_new: true,
+            scopes: vec![GateScope {
+                name: "models".into(),
+                paths: vec!["models/**".into()],
+                fail_on_monthly_delta: Some(300.0),
+                ..GateScope::default()
+            }],
+            ..GateConfig::default()
+        };
+        let summary = PrSummary {
+            finding_delta: Some(FindingDelta {
+                introduced: 1,
+                unchanged: 1,
+                introduced_ids: vec![introduced.governance.finding_id.clone()],
+                ..FindingDelta::default()
+            }),
+            ..PrSummary::default()
+        };
+        let results = evaluate_gates(Some(&config), &[unchanged, introduced], &summary, None);
+        assert_eq!(results[1].status, GateStatus::Pass);
+        assert_eq!(results[1].matched_findings, 1);
+    }
+
+    #[test]
+    fn regression_only_unchanged_passes_and_missing_identity_fails_closed() {
+        let unchanged = identified_diagnostic("unchanged", None);
+        let config = GateConfig {
+            block_only_new: true,
+            fail_on: Some(Severity::High),
+            ..GateConfig::default()
+        };
+        let summary = PrSummary {
+            finding_delta: Some(FindingDelta {
+                unchanged: 1,
+                ..FindingDelta::default()
+            }),
+            ..PrSummary::default()
+        };
+        let pass = evaluate_gates(Some(&config), &[unchanged], &summary, None);
+        assert_eq!(pass[0].status, GateStatus::Pass);
+
+        let unidentified = Diagnostic::new(
+            "SQLCOST001",
+            Severity::High,
+            PathBuf::from("models/a.sql"),
+            None,
+            "test",
+        );
+        let fail = evaluate_gates(Some(&config), &[unidentified], &summary, None);
+        assert_eq!(fail[0].status, GateStatus::Fail);
+
+        let infrastructure = Diagnostic::new(
+            "SQLCOST023",
+            Severity::High,
+            PathBuf::from("."),
+            None,
+            "manifest missing",
+        );
+        let excluded = evaluate_gates(Some(&config), &[infrastructure], &summary, None);
+        assert_eq!(excluded[0].status, GateStatus::Pass);
+        assert_eq!(excluded[0].matched_findings, 0);
+    }
+
+    #[test]
+    fn net_pr_cost_gate_uses_project_impact_and_fails_closed() {
+        let config = GateConfig {
+            fail_on_pr_cost_increase: Some(100.0),
+            ..GateConfig::default()
+        };
+        let summary = PrSummary::default();
+        let cost = |net: f64| ProjectCostSummary {
+            pr_impact: Some(PrCostImpact {
+                net: CostFigure {
+                    monthly_p50: Some(net),
+                    ..CostFigure::default()
+                },
+                ..PrCostImpact::default()
+            }),
+            ..ProjectCostSummary::default()
+        };
+
+        assert_eq!(
+            evaluate_gates(Some(&config), &[], &summary, Some(&cost(99.0)))[0].status,
+            GateStatus::Pass
+        );
+        assert_eq!(
+            evaluate_gates(Some(&config), &[], &summary, Some(&cost(100.0)))[0].status,
+            GateStatus::Fail
+        );
+        assert_eq!(
+            evaluate_gates(Some(&config), &[], &summary, Some(&cost(-100.0)))[0].status,
+            GateStatus::Pass
+        );
+        let missing = evaluate_gates(Some(&config), &[], &summary, None);
+        assert_eq!(missing[0].status, GateStatus::Fail);
+        assert!(missing[0].reasons[0].contains("unavailable"));
+    }
+
+    #[test]
+    fn model_change_controls_ignore_finding_regression_filter() {
+        let config = GateConfig {
+            block_only_new: true,
+            require_owner: true,
+            fail_on_blast_radius: Some(1),
+            ..GateConfig::default()
+        };
+        let summary = PrSummary {
+            changed_model_details: vec![ChangedModelDetail {
+                id: "model.pkg.a".into(),
+                name: "a".into(),
+                path: PathBuf::from("models/a.sql"),
+                tags: Vec::new(),
+                owners: Vec::new(),
+                group: None,
+                affected_downstream: vec!["model.pkg.b".into()],
+                affected_exposures: Vec::new(),
+                affected_exposure_owners: BTreeMap::new(),
+            }],
+            finding_delta: Some(FindingDelta::default()),
+            ..PrSummary::default()
+        };
+        let results = evaluate_gates(Some(&config), &[], &summary, None);
+        assert_eq!(results[0].status, GateStatus::Fail);
+        assert_eq!(results[0].reasons.len(), 2);
     }
 }

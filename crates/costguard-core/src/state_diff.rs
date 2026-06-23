@@ -11,6 +11,38 @@ pub struct FindingDelta {
     pub regressed_ids: Vec<String>,
 }
 
+impl FindingDelta {
+    pub fn is_blocking(&self, finding_id: &str) -> bool {
+        finding_id.is_empty()
+            || self
+                .introduced_ids
+                .binary_search_by(|id| id.as_str().cmp(finding_id))
+                .is_ok()
+            || self
+                .regressed_ids
+                .binary_search_by(|id| id.as_str().cmp(finding_id))
+                .is_ok()
+    }
+
+    pub fn status(&self, finding_id: &str) -> &'static str {
+        if self
+            .introduced_ids
+            .binary_search_by(|id| id.as_str().cmp(finding_id))
+            .is_ok()
+        {
+            "introduced"
+        } else if self
+            .regressed_ids
+            .binary_search_by(|id| id.as_str().cmp(finding_id))
+            .is_ok()
+        {
+            "regressed"
+        } else {
+            "unchanged"
+        }
+    }
+}
+
 pub fn classify_findings(head: &[Diagnostic], base: &[Diagnostic]) -> FindingDelta {
     let base_by_id = index_by_finding_id(base);
     let head_by_id = index_by_finding_id(head);
@@ -157,5 +189,21 @@ mod tests {
         let delta = classify_findings(&head, &base);
         assert_eq!(delta.regressed, 1);
         assert_eq!(delta.unchanged, 0);
+    }
+
+    #[test]
+    fn blocking_status_fails_closed_without_identity() {
+        let delta = FindingDelta {
+            introduced_ids: vec!["introduced".into()],
+            regressed_ids: vec!["regressed".into()],
+            ..FindingDelta::default()
+        };
+        assert!(delta.is_blocking("introduced"));
+        assert!(delta.is_blocking("regressed"));
+        assert!(delta.is_blocking(""));
+        assert!(!delta.is_blocking("unchanged"));
+        assert_eq!(delta.status("introduced"), "introduced");
+        assert_eq!(delta.status("regressed"), "regressed");
+        assert_eq!(delta.status("unchanged"), "unchanged");
     }
 }

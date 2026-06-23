@@ -310,6 +310,82 @@ fn pr_mode_scans_changed_files_but_uses_transitive_context() {
 }
 
 #[test]
+fn pr_block_only_new_supports_bare_true_and_false_overrides() {
+    let tempdir = tempfile::tempdir().expect("tempdir");
+    let root = tempdir.path();
+    fs::create_dir_all(root.join("models")).expect("create models");
+    let model = "{{ config(materialized='incremental', unique_key='id') }}\n\nselect id from raw_orders\n{% if is_incremental() %}\nwhere id > 1\n{% endif %}\n";
+    fs::write(root.join("models/a.sql"), model).expect("write model");
+    git(root, &["init"]);
+    git(root, &["config", "user.email", "costguard@example.com"]);
+    git(root, &["config", "user.name", "Costguard Test"]);
+    git(root, &["add", "."]);
+    git(root, &["commit", "-m", "initial"]);
+    fs::write(
+        root.join("models/a.sql"),
+        format!("{model}-- unrelated edit\n"),
+    )
+    .expect("modify model");
+
+    for flag in ["--block-only-new", "--block-only-new=true"] {
+        let output = costguard_command()
+            .args(["pr", "--base", "HEAD", "--fail-on", "high", flag])
+            .current_dir(root)
+            .output()
+            .expect("run regression-only PR scan");
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{flag} should ignore unchanged high findings:\nstdout={}\nstderr={}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    let output = costguard_command()
+        .args([
+            "pr",
+            "--base",
+            "HEAD",
+            "--fail-on",
+            "high",
+            "--block-only-new=false",
+        ])
+        .current_dir(root)
+        .output()
+        .expect("run all-findings PR scan");
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "false override should retain all-findings enforcement:\n{}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn pr_cost_increase_gate_without_dollar_pricing_is_configuration_error() {
+    let tempdir = tempfile::tempdir().expect("tempdir");
+    let root = tempdir.path();
+    fs::create_dir_all(root.join("models")).expect("create models");
+    fs::write(root.join("models/a.sql"), "select 1 as id\n").expect("write model");
+    git(root, &["init"]);
+    git(root, &["config", "user.email", "costguard@example.com"]);
+    git(root, &["config", "user.name", "Costguard Test"]);
+    git(root, &["add", "."]);
+    git(root, &["commit", "-m", "initial"]);
+    fs::write(root.join("models/a.sql"), "select 2 as id\n").expect("modify model");
+
+    let output = costguard_command()
+        .args(["pr", "--base", "HEAD", "--fail-on-pr-cost-increase", "100"])
+        .current_dir(root)
+        .output()
+        .expect("run PR cost gate");
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("[cost.pricing].model"), "{stderr}");
+}
+
+#[test]
 fn pr_receipt_routes_owners_applies_waiver_and_reports_trend() {
     let tempdir = tempfile::tempdir().expect("tempdir");
     let root = tempdir.path();
@@ -1206,6 +1282,10 @@ dev:
     assert!(root.join("costguard.toml").is_file());
     let workflow = fs::read_to_string(root.join(".github/workflows/costguard.yml")).unwrap();
     assert!(workflow.contains("warehouse: snowflake"));
+    assert!(workflow.contains("block-only-new: true"));
+    assert!(workflow.contains("fail-on-pr-cost-increase"));
+    let config = fs::read_to_string(root.join("costguard.toml")).unwrap();
+    assert!(config.contains("block_only_new = true"));
 }
 
 #[test]

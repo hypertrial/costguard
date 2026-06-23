@@ -228,6 +228,21 @@ python3 scripts/build_benchmark_evidence.py
             generated.rstrip(),
             GENERATED_END,
             "",
+            "## Reproduce the proof",
+            "",
+            "The evidence chain is intentionally split so one aggregate metric cannot hide a regression:",
+            "",
+            "| Proof | Source | Validation |",
+            "| --- | --- | --- |",
+            "| Real-repo precision and exemptions | [`tests/benchmarks/fp_registry.toml`](../../../tests/benchmarks/fp_registry.toml) plus vendored repository pins | `python3 scripts/benchmark_external_repo.py --all-vendored` and `python3 scripts/build_benchmark_evidence.py --check` |",
+            "| Behavioral-rule true-positive coverage | [`tests/benchmarks/rule_tp_evidence.json`](../../../tests/benchmarks/rule_tp_evidence.json) | `python3 scripts/rule_tp_census.py --json` (use `--emit-evidence` only for an intentional refresh) |",
+            "| Base/head regression semantics | [`crates/costguard-core/tests/pr_replay.rs`](../../../crates/costguard-core/tests/pr_replay.rs) | `cargo test -p costguard-core --test pr_replay --locked` |",
+            "| Net/introduced/avoided PR cost | [`crates/costguard-core/tests/pr_cost_impact.rs`](../../../crates/costguard-core/tests/pr_cost_impact.rs) | `cargo test -p costguard-core --test pr_cost_impact --locked` |",
+            "| Output, Action, and receipt contract | Output/CLI unit suites and [`scripts/tests/test_action_contract.py`](../../../scripts/tests/test_action_contract.py) | `cargo test -p costguard-output --locked`, `cargo test -p costguard-cli --test cli --locked`, and `python3 -m unittest discover -s scripts/tests -p 'test_*.py'` |",
+            "| Release qualification | [`scripts/release_check.py`](../../../scripts/release_check.py) and the local CI gate | `./scripts/ci_local.sh` followed by `python3 scripts/release_check.py --version <version>` for an actual release |",
+            "",
+            "Documentation and committed evidence are part of the proof surface: run `python3 scripts/check_docs.py` and `mdbook build` after changing rules, metrics, outputs, or public claims.",
+            "",
         ]
     )
 

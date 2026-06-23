@@ -10,11 +10,12 @@ These capabilities are production-ready or actively maintained as part of the cu
 
 | Capability | Notes |
 | --- | --- |
-| **PR cost regression gate** | `costguard pr`, composite GitHub Action, `costguard init` scaffolding |
+| **PR cost regression gate** | Base/head finding classification, regression-only enforcement, and project net-cost gates through `costguard pr`, the composite Action, and `costguard init` |
 | **Local scan and explain** | `costguard scan`, `costguard explain` for developer debugging |
 | **46 SQLCOST rules** | Severity and confidence are the enforcement contract |
 | **Multi-warehouse parsing** | Generic SQL, Snowflake, BigQuery, Trino (GA); Databricks, Redshift, Postgres, DuckDB (preview) |
 | **Advisory cost estimates** | Local priors and offline inputs only — never a live bill |
+| **Offline cost enrichment** | dbt catalog, query-history CSV, and normalized observation bundles; no live warehouse access |
 | **Governance** | Baseline v3, signed policy v2, semantic finding identity, owner routing, scoped gates, and expiring waivers |
 | **PR receipts** | One-scan GitHub annotations, markdown summary, JSON v4 receipt, and optional trend comparison |
 | **Output formats** | `github`, `markdown`, `json`, `sarif` plus documented exit-code contract |
@@ -33,75 +34,16 @@ Primary workflow priority (from [PR check primary workflow](pr-check-primary-wor
 Default PR gate:
 
 ```bash
-costguard pr --base origin/main --warehouse snowflake --fail-on high --min-confidence high
+costguard pr --base origin/main --warehouse snowflake --fail-on high --min-confidence high --block-only-new
 ```
 
-Severity and confidence remain the default failure model. Optional cost deltas (`--fail-on-cost-delta`) require calibrated local inputs.
+Severity and confidence remain the default failure model. `--fail-on-cost-delta` is the addressable finding-savings gate; `--fail-on-pr-cost-increase` is the separate project-wide net PR cost gate. Both dollar gates require calibrated local inputs.
 
 Costguard is intentionally narrower than general SQL analyzers. Broad SQL security/compliance linting, migration analysis, app-code SQL extraction, schema validation, autofix, and editor feedback are adjacent categories; Costguard's product surface is dbt PR cost regression control, downstream blast radius, advisory savings, and credential-free CI.
 
-## LLM judge MVP (in scope, early)
+## Offline LLM judge (advisory and deferred)
 
-An **opt-in, fully-offline, advisory second pass** over Costguard findings. The judge labels each finding as likely true positive, likely false positive, or unsure to help developers triage noise on macro-heavy repos.
-
-This is a **user-facing** capability, distinct from the internal IRR benchmark judge in [LLM judge IRR](llm-judge-irr.md).
-
-### What it does
-
-1. Run a normal Costguard scan or PR check (`costguard scan` / `costguard pr --format json`).
-2. For each diagnostic, apply a local LLM rubric adjudication using the same prompt and verdict mapping as the IRR pipeline.
-3. Emit an advisory report showing the original finding plus the judge verdict.
-
-Verdicts:
-
-| Judge output | Meaning |
-| --- | --- |
-| `tp` | Failure condition clearly met; no documented exemption applies |
-| `fp` | Exemption applies or failure condition not met |
-| `unsure` | SQL context insufficient to judge (abstention) |
-
-### MVP shape
-
-A thin Python entrypoint (planned: `scripts/costguard_judge.py`) that:
-
-1. Invokes `costguard pr` or `costguard scan --format json`.
-2. Reuses [`scripts/llm_judge_lib.py`](../../scripts/llm_judge_lib.py):
-   - `finding_id_for_diagnostic` — stable finding identity
-   - `pack_sql` / `pack_sql_for_file` — deterministic SQL context packing
-   - `build_messages` — rubric + few-shot prompts
-   - `LlamaJudge.judge` — local GGUF inference via llama-cpp-python
-   - `map_structured_verdict` — deterministic post-processing to `tp` / `fp` / `unsure`
-3. Writes an advisory report (JSON or markdown) with judge annotations per finding.
-
-No new model plumbing is required for the MVP; the IRR pipeline already implements the judge core.
-
-### Hard constraints
-
-These constraints preserve Costguard's local-only ethos and keep the judge advisory:
-
-| Constraint | Rationale |
-| --- | --- |
-| **User-provided GGUF** | Model via `COSTGUARD_JUDGE_GGUF`; Costguard does not download or bundle weights |
-| **Fully offline** | No network calls during judge inference |
-| **Advisory only** | Judge output never auto-suppresses findings or changes exit codes |
-| **Never gates CI** | Judge does not run in CI workflows; severity + confidence remain the only enforcement contract |
-| **Opt-in** | Developer explicitly runs the judge wrapper; not enabled by default |
-
-### Expected usage (MVP)
-
-```bash
-# One-time local judge env
-python3 -m venv .venv-judge
-.venv-judge/bin/pip install --require-hashes -r requirements-judge.lock
-
-export COSTGUARD_JUDGE_GGUF=/path/to/model.gguf
-
-# Scan, then judge findings locally (planned entrypoint)
-.venv-judge/bin/python scripts/costguard_judge.py scan --warehouse snowflake
-.venv-judge/bin/python scripts/costguard_judge.py pr --base origin/main --warehouse snowflake
-```
-
-The judge is intended for local triage after a scan — not as a replacement for rule severity and confidence gates.
+The existing local LLM tooling supports internal benchmark inter-rater reliability. A user-facing judge remains deferred and outside the primary PR workflow. If pursued, it must stay opt-in, fully offline, user-model-supplied, and advisory: it may label findings for local triage but must not suppress diagnostics, change exit codes, or run in the default Action. See [LLM judge IRR](llm-judge-irr.md).
 
 ## Out of scope (MVP)
 
@@ -112,17 +54,14 @@ The judge is intended for local triage after a scan — not as a replacement for
 | LLM judge in CI | Judge never auto-fails PRs or runs in GitHub Actions |
 | Bundled model weights | Users supply their own GGUF |
 | Broad SQL analyzer replacement | Security/compliance linting, migrations, app-code SQL extraction, schema validation, autofix, and editor-first linting are not the primary product |
-| VS Code / LSP integration | Later use case (priority 5) |
-| Query history enrichment | Later advanced mode (priority 6) |
 
-## Roadmap (post-MVP)
+## Prioritized follow-on work
 
 | Item | Notes |
 | --- | --- |
-| Native `--judge` CLI flag | Integrate judge into `costguard pr` / `costguard scan` in Rust CLI |
-| κ floor gate | Optional quality gate in `eval_irr.py` once committed labels exist |
-| VS Code / LSP | Inline diagnostics and fix hints |
-| Query history enrichment | Optional offline query-history exports for sharper cost priors |
+| Cost evidence calibration | Improve coverage and interval validation for offline Grade A/B inputs |
+| Change-control fidelity | Deepen dbt state, lineage, ownership, and model-level PR impact evidence |
+| Release evidence | Keep real-repo precision, TP census, PR replay, and cost-impact proof reproducible |
 
 ## Related docs
 

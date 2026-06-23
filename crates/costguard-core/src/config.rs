@@ -237,6 +237,7 @@ pub struct GateConfig {
     pub min_confidence: Option<Confidence>,
     pub fail_on_monthly_delta: Option<f64>,
     pub fail_on_monthly_delta_gb: Option<f64>,
+    pub fail_on_pr_cost_increase: Option<f64>,
     pub fail_on_blast_radius: Option<usize>,
     #[serde(default)]
     pub require_owner: bool,
@@ -476,6 +477,8 @@ pub struct ScanRuntimeOverrides {
     pub cost: bool,
     pub fail_on_cost_delta: Option<f64>,
     pub min_cost_coverage: Option<f64>,
+    pub block_only_new: Option<bool>,
+    pub fail_on_pr_cost_increase: Option<f64>,
     pub analysis_policy: Option<String>,
     pub policy_bundle_path: Option<PathBuf>,
     pub trust_store_path: Option<PathBuf>,
@@ -537,6 +540,18 @@ impl ScanRuntimeOverrides {
             cost_config.enabled = true;
             cost_config.min_mapped_spend_fraction = Some(fraction);
             config.cost = Some(cost_config);
+        }
+        if self.block_only_new.is_some() || self.fail_on_pr_cost_increase.is_some() {
+            let gate = config.gate.get_or_insert_with(GateConfig::default);
+            if let Some(block_only_new) = self.block_only_new {
+                gate.block_only_new = block_only_new;
+            }
+            if let Some(threshold) = self.fail_on_pr_cost_increase {
+                gate.fail_on_pr_cost_increase = Some(threshold);
+                let mut cost = config.cost.take().unwrap_or_default();
+                cost.enabled = true;
+                config.cost = Some(cost);
+            }
         }
         if let Some(policy) = &self.analysis_policy {
             config.analysis.policy = policy.parse().map_err(anyhow::Error::msg)?;
@@ -603,6 +618,16 @@ pub fn validate_scan_config(config: &ScanConfig) -> Result<()> {
     validate_owners(&config.owners)?;
     if let Some(gate) = &config.gate {
         validate_gate(gate)?;
+        if gate.fail_on_pr_cost_increase.is_some()
+            && !config
+                .cost
+                .as_ref()
+                .is_some_and(|cost| cost.enabled && cost.dollar_mode())
+        {
+            anyhow::bail!(
+                "gate fail_on_pr_cost_increase requires enabled [cost] and [cost.pricing].model = 'scan' or 'compute'"
+            );
+        }
     }
     validate_waivers(&config.waivers)?;
     if config.signed_policy.required && config.signed_policy.bundle_path.is_none() {
@@ -659,6 +684,15 @@ fn validate_gate(gate: &GateConfig) -> Result<()> {
         gate.fail_on_monthly_delta_gb,
         gate.fail_on_blast_radius,
     )?;
+    if gate
+        .fail_on_pr_cost_increase
+        .is_some_and(|value| !value.is_finite() || value <= 0.0)
+    {
+        anyhow::bail!(
+            "gate '{}' fail_on_pr_cost_increase must be finite and positive",
+            gate.name.as_deref().unwrap_or("default")
+        );
+    }
     let mut names = HashSet::new();
     for scope in &gate.scopes {
         if !names.insert(scope.name.as_str()) {
@@ -923,5 +957,83 @@ expires_at = "2026-12-01T00:00:00Z"
             error.contains("exactly one of finding_id or rule_id"),
             "{error}"
         );
+    }
+
+    #[test]
+    fn pr_cost_gate_requires_positive_threshold_and_dollar_pricing() {
+        let parse = |source: &str| {
+            apply_file_config(
+                ScanConfig::default(),
+                toml::from_str(source).expect("parse config"),
+            )
+            .expect("apply config")
+        };
+        let missing_pricing = parse(
+            r#"
+[gate]
+fail_on_pr_cost_increase = 100
+
+[cost]
+enabled = true
+"#,
+        );
+        let error = validate_scan_config(&missing_pricing)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("[cost.pricing].model"), "{error}");
+
+        let invalid = parse(
+            r#"
+[gate]
+fail_on_pr_cost_increase = 0
+"#,
+        );
+        let error = validate_scan_config(&invalid).unwrap_err().to_string();
+        assert!(error.contains("finite and positive"), "{error}");
+        for threshold in [f64::NAN, f64::INFINITY, -1.0] {
+            let gate = GateConfig {
+                fail_on_pr_cost_increase: Some(threshold),
+                ..GateConfig::default()
+            };
+            assert!(validate_gate(&gate).is_err(), "accepted {threshold}");
+        }
+
+        let valid = parse(
+            r#"
+[gate]
+fail_on_pr_cost_increase = 100
+
+[cost]
+enabled = true
+
+[cost.pricing]
+model = "scan"
+usd_per_tb = 6.25
+"#,
+        );
+        validate_scan_config(&valid).expect("valid priced PR cost gate");
+    }
+
+    #[test]
+    fn runtime_pr_overrides_enable_cost_and_take_precedence() {
+        let mut config = ScanConfig {
+            gate: Some(GateConfig {
+                block_only_new: false,
+                fail_on_pr_cost_increase: Some(10.0),
+                ..GateConfig::default()
+            }),
+            ..ScanConfig::default()
+        };
+        ScanRuntimeOverrides {
+            block_only_new: Some(true),
+            fail_on_pr_cost_increase: Some(250.0),
+            ..ScanRuntimeOverrides::default()
+        }
+        .apply_to(&mut config)
+        .expect("apply overrides");
+        let gate = config.gate.expect("gate");
+        assert!(gate.block_only_new);
+        assert_eq!(gate.fail_on_pr_cost_increase, Some(250.0));
+        assert!(config.cost.expect("cost").enabled);
     }
 }

@@ -19,6 +19,7 @@ pub(crate) fn render_markdown(result: &ScanResult) -> String {
                 && (result.policy.digest == "local-unmanaged"
                     || diagnostic.governance.enforcement
                         == costguard_protocol::EnforcementOutcome::Blocked)
+                && result.diagnostic_is_blocking(diagnostic)
         })
         .count();
     let blocking_gate = result.pr_summary.as_ref().is_some_and(|summary| {
@@ -50,7 +51,12 @@ pub(crate) fn render_markdown(result: &ScanResult) -> String {
             output.push_str("A blocking PR gate failed.\n\n");
         }
     } else {
-        output.push_str("# Costguard passed\n\nNo high-risk cost findings.\n\n");
+        output.push_str("# Costguard passed\n\n");
+        if result.block_only_new() {
+            output.push_str("No introduced or regressed high-risk cost findings.\n\n");
+        } else {
+            output.push_str("No high-risk cost findings.\n\n");
+        }
     }
 
     if let Some(summary) = result.cost_summary.as_ref() {
@@ -137,12 +143,14 @@ pub(crate) fn render_markdown(result: &ScanResult) -> String {
                 integrity.checksum_mismatches
             ));
         }
-        if let Some(preview) = &summary.enforcement_preview {
-            if preview.block_only_new || preview.require_manifest_integrity {
-                output.push_str(&format!(
-                    "Enforcement preview (advisory): block_only_new={}, require_manifest_integrity={}.\n\n",
-                    preview.block_only_new, preview.require_manifest_integrity
-                ));
+        if let Some(enforcement) = &summary.enforcement_preview {
+            if enforcement.block_only_new {
+                output.push_str("Active enforcement: block_only_new=true.\n\n");
+            }
+            if enforcement.require_manifest_integrity {
+                output.push_str(
+                    "Advisory setting: require_manifest_integrity=true is not yet enforced.\n\n",
+                );
             }
         }
         markdown_list(
@@ -189,6 +197,15 @@ pub(crate) fn render_markdown(result: &ScanResult) -> String {
                 escape_markdown(&diagnostic.message),
                 escape_markdown(&format_diagnostic_meta(diagnostic))
             ));
+            if let Some(status) = result.diagnostic_delta_status(diagnostic) {
+                let enforcement =
+                    if result.block_only_new() && !result.diagnostic_is_blocking(diagnostic) {
+                        " (nonblocking)"
+                    } else {
+                        ""
+                    };
+                output.push_str(&format!("   PR delta: {status}{enforcement}\n"));
+            }
             if let Some(risk) = &diagnostic.risk {
                 output.push_str(&format!("   Risk: {}\n", escape_markdown(risk)));
             }

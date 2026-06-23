@@ -1,11 +1,13 @@
-# dbt cost regression checks for CI
+# Stop expensive dbt regressions before merge.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/hypertrial/costguard/ci.yml?branch=main)](https://github.com/hypertrial/costguard/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/hypertrial/costguard)](https://github.com/hypertrial/costguard/releases)
 [![License: MIT](https://img.shields.io/github/license/hypertrial/costguard)](LICENSE)
 [![Docs](https://img.shields.io/badge/docs-mdBook-blue)](docs/book/README.md)
 
-Costguard reviews dbt pull requests before merge.
+SlowQL finds SQL problems. Costguard governs dbt cost changes.
+
+Costguard reviews dbt pull requests before merge and gates only cost findings introduced or regressed by the change.
 
 It scans changed models against the git base, uses optional dbt manifest and lineage context for downstream impact, and runs without warehouse credentials or live queries.
 
@@ -62,6 +64,7 @@ Or add the Action manually after your existing dbt compile step:
     warehouse: snowflake
     fail-on: high
     min-confidence: high
+    block-only-new: true
     receipt-path: costguard-receipt.json
 ```
 
@@ -75,11 +78,11 @@ Costguard reads **source files, git history, and (optionally) `target/manifest.j
 
 Full table: [Requirements](docs/book/getting-started/requirements.md).
 
-## Costguard vs general SQL analyzers
+## Costguard vs SlowQL
 
-General SQL analyzers are broad linting tools for security, compliance, migrations, app-code SQL extraction, schema validation, autofix, and editor feedback.
+SlowQL is a broad SQL analyzer for security, compliance, reliability, quality, performance, and cost findings. It also provides schema-aware checks, safe autofix, custom rules, and editor integration.
 
-Costguard is narrower by design: a dbt PR cost regression gate for changed models, downstream blast radius, severity/confidence enforcement, advisory savings, and credential-free CI.
+Costguard is narrower by design: it compares the dbt base and head, measures introduced and avoided cost, applies owner and lineage-aware change controls, and preserves a versioned evidence receipt. See the dated [Costguard vs SlowQL comparison](docs/book/reference/costguard-vs-slowql.md).
 
 ## Documentation
 
@@ -122,25 +125,26 @@ Use `install-mode: source` to build the checked-out Action code instead of downl
 
 The Action does not install or compile dbt. See [Requirements](docs/book/getting-started/requirements.md) for manifest and git history needs.
 
-Only high-confidence, high-severity findings fail the PR by default. Pair `fail-on: high` with `min-confidence: high` on macro-heavy dbt repos.
+The Action defaults to regression-only enforcement: unchanged findings remain visible as notices but do not fail the PR. Pair `fail-on: high` with `min-confidence: high` on macro-heavy dbt repos.
 
 See [Quick start (PR check)](docs/book/getting-started/quick-start.md) for inputs and workflow guidance.
 
 ## Example output
 
 ```text
-$ costguard pr --base origin/main --warehouse snowflake --fail-on high --min-confidence high
+# Costguard failed this PR
 
-HIGH SQLCOST006 models/marts/fct_orders.sql:42:12
-  Unbounded join risk: no equality predicate on join keys
-  confidence: high
+PR Cost Impact
+- Net: +$1,240/mo
+- Introduced: +$1,860/mo
+- Avoided: -$620/mo
+- Coverage: 84% mapped spend
 
-HIGH SQLCOST014 models/staging/stg_events.sql:18:5
-  Repeated CTE reference may multiply work
-  confidence: high
-
-2 findings (2 high, 0 medium, 0 low)
-exit code: 1
+Finding delta: 1 introduced, 1 regressed, 2 resolved, 7 unchanged
+Changed model: model.analytics.fct_orders (owner: @finance-data)
+Lineage impact: 14 downstream models, 2 exposures
+Gate: default — fail; net PR increase meets $1,000/mo threshold
+Receipt: JSON schema v4, receipt version 2
 ```
 
 Use `--format github` for workflow annotations. Add `--summary-file summary.md` and `--receipt-file receipt.json` to write markdown and JSON v4 from the same scan; `--compare-receipt previous.json` adds trend deltas. The Action writes its markdown step summary automatically.
@@ -195,6 +199,8 @@ default = "@data-platform"
 fail_on = "high"
 min_confidence = "high"
 require_owner = true
+block_only_new = true
+# fail_on_pr_cost_increase = 1000  # requires priced [cost]
 ```
 
 Full schema: [Configuration](docs/book/reference/configuration.md).

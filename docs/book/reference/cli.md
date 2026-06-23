@@ -91,11 +91,17 @@ costguard pr [OPTIONS]
 | `--baseline` | unset | Suppress findings matching baseline fingerprints (requires baseline v3) |
 | `--cost` | unset | Enable per-finding savings estimates and cost prioritization summary |
 | `--fail-on-cost-delta` | unset | Optional **addressable finding savings** p50 gate (USD) on new findings |
+| `--block-only-new[=true\|false]` | unset (`false` config behavior) | PR-only override. Bare flag means `true`; filters severity and addressable-savings enforcement to introduced/regressed findings. |
+| `--fail-on-pr-cost-increase` | unset | PR-only project net-cost gate in USD/month; requires priced `[cost]` configuration and implies cost analysis. |
 | `--min-cost-coverage` | unset | Optional mapped-spend coverage floor (0.0–1.0); implies `--cost` |
 | `--summary-file` / `--receipt-file` | unset | Optional markdown summary and JSON v4 receipt files |
 | `--compare-receipt` | unset | Prior JSON v4 receipt used for trend deltas |
 
-Invalid git bases and non-git directories fail the check instead of silently scanning zero files. Unchanged parse failures and other project-wide issues appear in the optional `context` report only; they do not fail the PR gate.
+Invalid git bases and non-git directories fail the check instead of silently scanning zero files. With `--block-only-new`, introduced and severity/cost-regressed findings block; unchanged findings remain in evidence as nonblocking diagnostics, resolved findings never block, and a behavioral diagnostic without a semantic ID fails closed. Required-owner and blast-radius controls still evaluate every changed model.
+
+`--fail-on-cost-delta` keeps its addressable finding-savings meaning. `--fail-on-pr-cost-increase` is distinct: it fails when the whole-PR priced `pr_impact.net.monthly_p50` is greater than or equal to the threshold. Missing pricing is configuration exit `2`; missing computed PR impact is an auditable failing gate result.
+
+Unchanged parse failures and other project-wide issues appear in the optional `context` report only; they do not fail the PR gate.
 
 Finding baselines are written with `costguard scan --write-baseline` (baseline v3 with `identity_scheme: "semantic-v1"`).
 
@@ -108,9 +114,9 @@ costguard init [--warehouse PLATFORM] [--force] [--no-workflow] [--no-config]
 Scaffolds Costguard into the current directory (typically a dbt project root):
 
 - `.github/workflows/costguard.yml` — PR check using the published GitHub Action
-- `costguard.toml` — starter config with detected or overridden `warehouse`
+- `costguard.toml` — starter config with detected or overridden `warehouse` and `[gate] block_only_new = true`
 
-Warehouse detection is best-effort: reads `dbt_project.yml` `profile`, then `profiles.yml` (project root or `~/.dbt/profiles.yml`) adapter `type`. Use `--warehouse` when detection fails. Existing files are skipped unless `--force`.
+The generated workflow also sets `block-only-new: true` explicitly. Warehouse detection is best-effort: reads `dbt_project.yml` `profile`, then `profiles.yml` (project root or `~/.dbt/profiles.yml`) adapter `type`. Use `--warehouse` when detection fails. Existing files are skipped unless `--force`.
 
 ## `policy`
 

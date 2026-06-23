@@ -121,6 +121,11 @@ class ActionContractTest(unittest.TestCase):
         self.assertIn("verify-attestation:", action)
         self.assertIn("manifest:", action)
         self.assertIn("baseline:", action)
+        block_only_new = action.split("block-only-new:", 1)[1].split(
+            "fail-on-pr-cost-increase:", 1
+        )[0]
+        self.assertIn('default: "true"', block_only_new)
+        self.assertIn("FAIL_ON_PR_COST_INCREASE_INPUT", action)
         for policy_input in [
             "policy:",
             "trust-store:",

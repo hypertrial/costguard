@@ -93,6 +93,15 @@ pub(crate) fn render_text(result: &ScanResult) -> String {
             "      {}\n",
             escape_text(&format_diagnostic_meta(diagnostic))
         ));
+        if let Some(status) = result.diagnostic_delta_status(diagnostic) {
+            let enforcement =
+                if result.block_only_new() && !result.diagnostic_is_blocking(diagnostic) {
+                    " (nonblocking)"
+                } else {
+                    ""
+                };
+            output.push_str(&format!("      PR delta: {status}{enforcement}\n"));
+        }
         if let Some(risk) = &diagnostic.risk {
             output.push_str(&format!("      Risk: {risk}\n"));
         }

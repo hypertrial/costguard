@@ -58,6 +58,14 @@ inputs:
     description: Fail when addressable finding savings p50 on new findings exceeds this USD threshold
     required: false
     default: ""
+  block-only-new:
+    description: Block only findings introduced or regressed against the PR base
+    required: false
+    default: "true"
+  fail-on-pr-cost-increase:
+    description: Fail when priced project cost increases by at least this USD/month amount
+    required: false
+    default: ""
   policy:
     description: Optional signed policy bundle path
     required: false
@@ -117,6 +125,8 @@ runs:
         BASELINE_INPUT: ${{ inputs.baseline }}
         COST_INPUT: ${{ inputs.cost }}
         FAIL_ON_COST_DELTA_INPUT: ${{ inputs.fail-on-cost-delta }}
+        BLOCK_ONLY_NEW_INPUT: ${{ inputs.block-only-new }}
+        FAIL_ON_PR_COST_INCREASE_INPUT: ${{ inputs.fail-on-pr-cost-increase }}
         MANIFEST_INPUT: ${{ inputs.manifest }}
         WORKING_DIRECTORY_INPUT: ${{ inputs.working-directory }}
         ANALYSIS_POLICY_INPUT: ${{ inputs.analysis-policy }}

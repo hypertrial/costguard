@@ -19,11 +19,11 @@ Workflow:
 ```text
 PR opened
 -> changed SQL/dbt files scanned
--> dbt cost/performance risks annotated
--> optional downstream blast radius and advisory savings reported
+-> base/head findings classified as introduced, regressed, resolved, or unchanged
+-> dbt net/introduced/avoided cost and downstream blast radius reported
 -> owners routed and global/scoped policy gates evaluated
 -> markdown summary and JSON receipt written from the same scan
--> fail on high-confidence, high-severity findings
+-> fail on introduced/regressed high-risk findings and optional calibrated net cost
 -> merge safer analytics code
 ```
 
@@ -37,15 +37,13 @@ Use-case priority:
 | 2 | Local CLI scan | Developer debugging |
 | 3 | Pre-commit hook | Optional fast feedback |
 | 4 | CI scheduled scan | Repo hygiene |
-| 5 | VS Code/LSP | Later |
-| 6 | Query history enrichment | Later advanced mode |
 
-General SQL analyzers cover broader categories such as security, compliance, migrations, app-code SQL extraction, schema validation, autofix, and editor feedback. Costguard should not chase that surface in the PR workflow; it should stay focused on dbt PR cost regression control.
+Offline query-history enrichment is already a shipped cost input, not a future workflow. General SQL analyzers cover broader categories such as security, compliance, migrations, app-code SQL extraction, schema validation, autofix, and editor feedback. Costguard should not chase that surface in the PR workflow; it should stay focused on dbt PR cost regression control.
 
 The MVP should optimize this command:
 
 ```bash
-costguard pr --base origin/main --warehouse snowflake --fail-on high --min-confidence high
+costguard pr --base origin/main --warehouse snowflake --fail-on high --min-confidence high --block-only-new
 ```
 
 > **Note:** CLI default for `--base` is `main`. CI examples use `origin/main` after checkout with `fetch-depth: 0`.
@@ -65,13 +63,14 @@ the check instead of silently scanning zero files.
 
 Expected PR output should include:
 
-- pass/fail status
+- pass/fail status aligned to introduced/regressed enforcement
 - GitHub annotations
 - PR summary
 - owner routing and gate outcomes
 - versioned JSON receipt and optional trend
 - changed-file diagnostics
 - optional downstream blast radius
+- net, introduced, and avoided PR cost with coverage when cost inputs are enabled
 - recommended fixes
 - suppression guidance
 
@@ -79,19 +78,12 @@ Example summary:
 
 ```text
 Costguard failed this PR
-
-2 high-risk cost findings:
-
-1. models/marts/fct_sessions.sql
-   Incremental model has no date predicate.
-   Risk: likely full table scan on every run.
-
-2. models/staging/stg_events.sql
-   Repeated JSON extraction from payload.
-   Risk: expensive semi-structured parsing repeated downstream.
-
-Fix these issues or suppress with:
--- costguard: disable-next-line=SQLCOST005
+Net PR cost: +$1,240/mo ($1,860 introduced; $620 avoided; 84% coverage)
+Finding delta: 1 introduced, 1 regressed, 2 resolved, 7 unchanged
+Lineage impact: 14 downstream models, 2 exposures
+Owner: @finance-data
+Gate: default failed — net increase meets $1,000/mo threshold
+Evidence: JSON schema v4, receipt version 2
 ```
 
 MVP pass/fail should be based on risk severity **and** diagnostic confidence on macro-heavy repos:
@@ -103,6 +95,6 @@ MVP pass/fail should be based on risk severity **and** diagnostic confidence on 
 
 Use both flags together in PR checks. `--fail-on high` alone still fails on regex-only shape findings (low confidence) when raw SQL does not parse; `--min-confidence high` keeps AST-confirmed high-risk hits and suppresses that noise.
 
-Do not make dollar thresholds the **primary** MVP gate. Severity and confidence remain the default PR failure model. Optional cost estimates (see [Cost estimates](../book/reference/cost-estimates.md)) use local catalog stats, offline query-history exports, and configurable priors—never live warehouse connections. Use `--fail-on-cost-delta` only when you have calibrated inputs; otherwise rely on `--fail-on high --min-confidence high`.
+Do not make dollar thresholds the primary default. Severity and confidence remain the default PR failure model. Optional cost estimates use local catalog stats, shipped offline query-history inputs, and configurable priors—never live warehouse connections. `--fail-on-cost-delta` gates addressable finding savings; `--fail-on-pr-cost-increase` gates project-wide net PR cost. Enable either only with calibrated inputs; otherwise rely on `--fail-on high --min-confidence high --block-only-new`.
 
 Suppression directives: prefer SQL comment prefix `-- costguard: ...` (bare `costguard:` also works). See [Suppressions](../book/reference/suppressions.md).

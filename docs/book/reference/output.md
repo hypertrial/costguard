@@ -33,7 +33,7 @@ Structured scan result:
 | `cost` | `[cost]` enabled | Project cost summary: current/post-fix/potential savings, addressable finding savings (deduplicated), top models, grade mix, disclaimer (see [Cost estimates](cost-estimates.md)) |
 | `diagnostics` | Always | Gated findings on changed files in PR mode; full scan findings otherwise. Entries include governance fields (`finding_id`, `evidence_key`, optional `owners` and `exception`), advisory `rule_precision_tier`, and optional cost data including `prior_basis`, downstream count, and savings |
 | `files` | Always | Per-model parse metadata (`parse_input`, `parsed_raw`, `parsed_compiled`, `feature_extraction_used_ast`) |
-| `pr_summary` | PR mode, or receipt comparison | Receipt version `2` adds base-vs-head `finding_delta`, macro/source `indirectly_affected`, `manifest_integrity`, and reserved `enforcement_preview`; plus changed model details/owners, gate results, downstream models/exposures, recommended `dbt build --select`, and optional trend deltas |
+| `pr_summary` | PR mode, or receipt comparison | Receipt version `2` adds base-vs-head `finding_delta`, macro/source `indirectly_affected`, `manifest_integrity`, and compatibility field `enforcement_preview`; plus changed model details/owners, gate results, downstream models/exposures, recommended `dbt build --select`, and optional trend deltas |
 | `context` | PR mode | Nonblocking full-project report (see below) |
 
 ### PR `context` report
@@ -56,7 +56,9 @@ Context issues are informational in PR mode. Fix them on the default branch; do 
 
 Both branches use the current invocation's HEAD `costguard.toml`, signed policy, waivers, baseline, confidence, and cost configuration. Historical configuration is not loaded. Baselined findings, signed-policy exceptions, local waivers, and infrastructure/metadata findings do not enter the delta. Head analysis remains the only source of policy/waiver completeness violations and output-metadata diagnostics.
 
-Missing semantic IDs are `introduced` or `resolved`; severity increases are `regressed`; deterministic cost increases above floating-point epsilon are also `regressed`; all remaining matched IDs are `unchanged`. The JSON schema remains v4 and `block_only_new` remains advisory.
+Severity increases are `regressed`; deterministic cost increases above floating-point epsilon are also `regressed`; all remaining matched IDs are `unchanged`. Behavioral head diagnostics without semantic identity are excluded from the ID delta but remain blocking in regression-only enforcement so identity failure cannot fail open.
+
+When `block_only_new` is active, introduced/regressed findings participate in severity, confidence, and addressable-savings gates. Unchanged findings remain in JSON and receipts, render with an explicit nonblocking delta label, and become GitHub notices. Resolved findings never block. Required-owner and blast-radius gates continue to evaluate all changed models. JSON remains schema v4 and receipt version 2; `pr_summary.enforcement_preview` is retained for compatibility even though `block_only_new` is active rather than advisory.
 
 ## GitHub (`github`)
 
@@ -68,9 +70,11 @@ Emits workflow commands for annotations:
 
 Compiled-only unmapped diagnostics annotate the raw model path at line 1 and include the compiled SQL location in the annotation message.
 
+In regression-only mode, unchanged diagnostics are emitted as `notice`; introduced and regressed diagnostics retain the level selected by severity and governance. The PR summary notice includes introduced, regressed, resolved, and unchanged counts plus priced net monthly impact when available.
+
 ## Markdown (`markdown`)
 
-PR-summary-oriented report with grouped findings, context footer, suppression guidance, and (when `[cost]` is enabled in PR mode) a **PR Cost Impact** section before diagnostics: net/introduced/avoided cost delta, efficiency/volume split, blast radius, coverage, addressable savings, grade mix, and top models. Per-finding lines include severity, confidence, precision tier, and savings when priced.
+PR-summary-oriented report with grouped findings, context footer, suppression guidance, and (when `[cost]` is enabled in PR mode) a **PR Cost Impact** section before diagnostics: net/introduced/avoided cost delta, efficiency/volume split, blast radius, coverage, addressable savings, grade mix, and top models. Per-finding lines include severity, confidence, precision tier, delta classification, enforcement status, and savings when priced. Pass/fail headings count only findings that can actually block under regression-only mode.
 
 `--summary-file` writes this report without changing stdout. `--receipt-file` writes the same run as JSON v4. `--compare-receipt` reads a prior JSON v4 receipt and adds diagnostic, high-finding, USD, and GB-month trend deltas under `pr_summary.trend`.
 
@@ -89,7 +93,7 @@ Use `--write-baseline` / `--baseline` (or `[output].baseline` in config) to gran
 | `baselined_findings` | Findings suppressed by the baseline file |
 | `new_findings` | Findings reported after baseline filtering |
 
-Exit code `1` applies when analysis completeness checks fail (`analysis.passed = false`), a blocking scoped gate fails, to **new** findings at or above `--fail-on`, when **addressable finding savings** p50 on new findings exceeds `--fail-on-cost-delta` (USD) or `fail_on_monthly_delta_gb` (GB-months) when set, or when mapped-spend coverage is below `--min-cost-coverage` / `[cost].min_mapped_spend_fraction` when set (`analysis.violations` code `cost_coverage`).
+Exit code `1` applies when analysis completeness checks fail (`analysis.passed = false`), a blocking gate fails, findings at or above `--fail-on` are enforceable, addressable finding savings reaches `--fail-on-cost-delta` / `fail_on_monthly_delta_gb`, priced PR net cost reaches `fail_on_pr_cost_increase`, or mapped-spend coverage is below `--min-cost-coverage` / `[cost].min_mapped_spend_fraction`. With regression-only enforcement, finding gates count only introduced/regressed diagnostics; model change controls still cover all changed models.
 
 PR markdown output includes a reminder:
 

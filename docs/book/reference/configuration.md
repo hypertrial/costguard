@@ -34,6 +34,8 @@ default = "@data-platform"
 fail_on = "high"
 min_confidence = "high"
 require_owner = true
+block_only_new = true
+# fail_on_pr_cost_increase = 1000
 
 [rules.SQLCOST002]
 threshold = 3
@@ -101,9 +103,14 @@ PR-only policy-as-code gates run after signed policy, waivers, baselines, lineag
 | `min_confidence` | confidence | Optional floor used with `fail_on` |
 | `fail_on_monthly_delta` | positive float | Addressable finding savings threshold in USD/month |
 | `fail_on_monthly_delta_gb` | positive float | Addressable finding savings threshold in GB-months |
+| `fail_on_pr_cost_increase` | positive float | Project-wide priced `pr_impact.net.monthly_p50` threshold in USD/month; global gate only |
 | `fail_on_blast_radius` | positive integer | Unique downstream-model threshold |
 | `require_owner` | bool | Require matched changed model/finding paths to resolve an owner |
-| `block_only_new` | bool | Reserved: when enabled in a future release, gates will block only introduced/regressed PR findings (default `false`; advisory preview only today) |
+| `block_only_new` | bool | Enforce severity/confidence and addressable-savings gates only on introduced/regressed PR findings (default `false`) |
+
+`fail_on_pr_cost_increase` requires enabled `[cost]` and `[cost.pricing].model = "scan"` or `"compute"`; missing pricing is configuration exit `2`. It is project-wide and is not available under `[[gate.scopes]]`.
+
+When `block_only_new = true`, introduced and severity/cost-regressed finding IDs participate in top-level, global, and scoped severity and addressable-savings gates. Unchanged findings remain in JSON/receipts but do not block. Missing semantic identity fails closed. Required owner and blast radius still apply to every changed model because they are change controls rather than finding regressions.
 
 Each `[[gate.scopes]]` requires a unique `name` and at least one matcher: `paths`, `tags`, or `owners`. Values within a matcher are ORed; different matcher categories are ANDed. Baselined and excepted findings do not participate.
 
@@ -188,8 +195,8 @@ Optional cost-estimation settings. See [Cost estimates](cost-estimates.md) for t
 | `interval` | float | Interval coverage for p10/p90 (default `0.80`) |
 | `default_runs_per_month` | float | Default model run frequency (default `30`) |
 | `default_table_size` | string | Size prior when bytes unknown: `small`, `medium`, `large`, `xlarge` |
-| `fail_on_monthly_delta` | float | Fail when **addressable finding savings** p50 on new findings exceeds threshold (USD) |
-| `fail_on_monthly_delta_gb` | float | Fail when addressable finding savings in GB-months on new findings exceeds threshold |
+| `fail_on_monthly_delta` | float | Fail when **addressable finding savings** p50 exceeds threshold (USD); in regression-only mode, only introduced/regressed findings contribute |
+| `fail_on_monthly_delta_gb` | float | Fail when addressable finding savings in GB-months exceeds threshold; in regression-only mode, only introduced/regressed findings contribute |
 | `min_mapped_spend_fraction` | float | Fail when mapped-spend coverage (`coverage.mapped_spend_fraction`) is below threshold (0.0–1.0); opt-in |
 | `incremental_fraction` | float | Fraction of table bytes for incremental models (default `0.05`) |
 

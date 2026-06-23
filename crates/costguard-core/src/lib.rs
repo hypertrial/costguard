@@ -134,6 +134,38 @@ pub struct PolicyMetadata {
 }
 
 impl ScanResult {
+    pub fn block_only_new(&self) -> bool {
+        self.pr_summary
+            .as_ref()
+            .and_then(|summary| summary.enforcement_preview.as_ref())
+            .is_some_and(|enforcement| enforcement.block_only_new)
+    }
+
+    pub fn diagnostic_is_blocking(&self, diagnostic: &Diagnostic) -> bool {
+        if !self.block_only_new() {
+            return true;
+        }
+        if costguard_cost::is_infrastructure_rule(&diagnostic.rule_id) {
+            return false;
+        }
+        self.pr_summary
+            .as_ref()
+            .and_then(|summary| summary.finding_delta.as_ref())
+            .is_none_or(|delta| delta.is_blocking(&diagnostic.governance.finding_id))
+    }
+
+    pub fn diagnostic_delta_status(&self, diagnostic: &Diagnostic) -> Option<&'static str> {
+        if costguard_cost::is_infrastructure_rule(&diagnostic.rule_id) {
+            return None;
+        }
+        let delta = self.pr_summary.as_ref()?.finding_delta.as_ref()?;
+        if diagnostic.governance.finding_id.is_empty() {
+            Some("unknown")
+        } else {
+            Some(delta.status(&diagnostic.governance.finding_id))
+        }
+    }
+
     /// Returns whether the scan should fail CI given severity, confidence, and cost thresholds.
     pub fn should_fail(
         &self,
@@ -159,6 +191,7 @@ impl ScanResult {
                 diagnostic.severity >= threshold
                     && min_confidence.is_none_or(|mc| diagnostic.confidence >= mc)
                     && diagnostic.governance.enforcement != EnforcementOutcome::Excepted
+                    && self.diagnostic_is_blocking(diagnostic)
                     && (!managed
                         || diagnostic.governance.enforcement == EnforcementOutcome::Blocked)
             }) {
@@ -166,11 +199,26 @@ impl ScanResult {
             }
         }
         if let Some(delta) = fail_on_monthly_delta {
-            let savings = self
-                .cost_summary
-                .as_ref()
-                .map(|summary| summary.savings_p50_usd)
-                .unwrap_or_else(|| costguard_cost::total_p50_usd_per_month(&self.diagnostics));
+            let savings = if self.block_only_new() {
+                self.diagnostics
+                    .iter()
+                    .filter(|diagnostic| {
+                        diagnostic.governance.enforcement != EnforcementOutcome::Excepted
+                    })
+                    .filter(|diagnostic| self.diagnostic_is_blocking(diagnostic))
+                    .filter_map(|diagnostic| {
+                        diagnostic
+                            .cost_estimate
+                            .as_ref()
+                            .and_then(|cost| cost.savings_p50_usd_per_month)
+                    })
+                    .sum()
+            } else {
+                self.cost_summary
+                    .as_ref()
+                    .map(|summary| summary.savings_p50_usd)
+                    .unwrap_or_else(|| costguard_cost::total_p50_usd_per_month(&self.diagnostics))
+            };
             if savings >= delta {
                 eprintln!(
                     "cost gate failed: estimated cost impact ${savings:.0}/mo >= threshold ${delta:.0}/mo"
@@ -179,11 +227,22 @@ impl ScanResult {
             }
         }
         if let Some(delta_gb) = fail_on_monthly_delta_gb {
-            let savings_gb = self
-                .cost_summary
-                .as_ref()
-                .map(|summary| summary.savings_gb_months)
-                .unwrap_or_else(|| costguard_cost::total_savings_gb_months(&self.diagnostics));
+            let savings_gb = if self.block_only_new() {
+                self.diagnostics
+                    .iter()
+                    .filter(|diagnostic| {
+                        diagnostic.governance.enforcement != EnforcementOutcome::Excepted
+                    })
+                    .filter(|diagnostic| self.diagnostic_is_blocking(diagnostic))
+                    .filter_map(|diagnostic| diagnostic.cost_estimate.as_ref())
+                    .map(|cost| cost.relative_index)
+                    .sum()
+            } else {
+                self.cost_summary
+                    .as_ref()
+                    .map(|summary| summary.savings_gb_months)
+                    .unwrap_or_else(|| costguard_cost::total_savings_gb_months(&self.diagnostics))
+            };
             if savings_gb >= delta_gb {
                 eprintln!(
                     "cost gate failed: estimated new savings {savings_gb:.0} GB-mo >= threshold {delta_gb:.0} GB-mo"
@@ -453,5 +512,70 @@ mod tests {
         });
         assert!(!result.should_fail(None, None, Some(1.0), None));
         assert!(!result.should_fail(None, None, None, Some(1.0)));
+    }
+
+    #[test]
+    fn top_level_regression_only_gate_ignores_unchanged_finding() {
+        let mut unchanged = diagnostic(Severity::High, Confidence::High);
+        unchanged.assign_identity("sem-v1:unchanged");
+        unchanged.cost_estimate = Some(costguard_diagnostics::CostEstimate {
+            relative_index: 100.0,
+            grade: costguard_diagnostics::CostGrade::C,
+            basis: "test".into(),
+            prior_basis: None,
+            currency: "USD".into(),
+            model_id: None,
+            model_monthly_p50_usd: None,
+            savings_p10_usd_per_month: Some(400.0),
+            savings_p50_usd_per_month: Some(500.0),
+            savings_p90_usd_per_month: Some(900.0),
+            current_cost_p50_usd_per_month: None,
+            post_fix_cost_p50_usd_per_month: None,
+            unestimated_reason: None,
+            downstream_model_count: None,
+            downstream_monthly_p50_usd: None,
+        });
+        let mut result = result_with(vec![unchanged]);
+        result.pr_summary = Some(PrSummary {
+            finding_delta: Some(FindingDelta {
+                unchanged: 1,
+                ..FindingDelta::default()
+            }),
+            enforcement_preview: Some(EnforcementPreview {
+                block_only_new: true,
+                require_manifest_integrity: false,
+            }),
+            ..PrSummary::default()
+        });
+        assert!(!result.should_fail(
+            Some(Severity::High),
+            Some(Confidence::High),
+            Some(1.0),
+            Some(1.0)
+        ));
+
+        result
+            .pr_summary
+            .as_mut()
+            .unwrap()
+            .enforcement_preview
+            .as_mut()
+            .unwrap()
+            .block_only_new = false;
+        assert!(result.should_fail(Some(Severity::High), None, None, None));
+    }
+
+    #[test]
+    fn top_level_regression_only_gate_fails_closed_without_identity() {
+        let mut result = result_with(vec![diagnostic(Severity::High, Confidence::High)]);
+        result.pr_summary = Some(PrSummary {
+            finding_delta: Some(FindingDelta::default()),
+            enforcement_preview: Some(EnforcementPreview {
+                block_only_new: true,
+                require_manifest_integrity: false,
+            }),
+            ..PrSummary::default()
+        });
+        assert!(result.should_fail(Some(Severity::High), None, None, None));
     }
 }

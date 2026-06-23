@@ -201,6 +201,15 @@ struct PrArgs {
     cost: bool,
     #[arg(long)]
     fail_on_cost_delta: Option<f64>,
+    #[arg(
+        long,
+        num_args = 0..=1,
+        default_missing_value = "true",
+        require_equals = true
+    )]
+    block_only_new: Option<bool>,
+    #[arg(long, value_name = "USD_PER_MONTH")]
+    fail_on_pr_cost_increase: Option<f64>,
     #[arg(long, value_name = "0.0..1.0")]
     min_cost_coverage: Option<f64>,
     #[command(flatten)]
@@ -808,6 +817,8 @@ fn config_from_pr_args(args: &PrArgs) -> Result<ScanConfig> {
     overrides.cost = args.cost;
     overrides.fail_on_cost_delta = args.fail_on_cost_delta;
     overrides.min_cost_coverage = args.min_cost_coverage;
+    overrides.block_only_new = args.block_only_new;
+    overrides.fail_on_pr_cost_increase = args.fail_on_pr_cost_increase;
     overrides.apply_to(&mut config)?;
     validate_scan_config(&config)?;
     Ok(config)

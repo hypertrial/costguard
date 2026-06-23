@@ -495,3 +495,40 @@ fn pr_markdown_renders_cost_impact_before_diagnostics_with_metadata() {
         "diagnostics should include cost grade when estimates exist:\n{markdown}"
     );
 }
+
+#[test]
+fn project_net_cost_gate_receives_computed_pr_impact() {
+    let tempdir = tempfile::tempdir().expect("tempdir");
+    let root = tempdir.path();
+    write_cost_repo(root, manifest_one_model());
+    let config_path = root.join("costguard.toml");
+    let config = fs::read_to_string(&config_path).expect("cost config");
+    fs::write(
+        &config_path,
+        format!("{config}\n[gate]\nfail_on_pr_cost_increase = 0.01\n"),
+    )
+    .expect("write gate config");
+    fs::write(
+        root.join("models/marts/a.sql"),
+        "{{ config(materialized='table', partition_by='id') }}\nselect 1 as id\n",
+    )
+    .expect("write a");
+    run_git(root, &["init"]);
+    run_git(root, &["config", "user.email", "costguard@example.com"]);
+    run_git(root, &["config", "user.name", "Costguard Test"]);
+    run_git(root, &["add", "."]);
+    run_git(root, &["commit", "-m", "initial"]);
+
+    fs::write(
+        root.join("models/marts/b.sql"),
+        "{{ config(materialized='table', partition_by='id') }}\nselect 1 as id\n",
+    )
+    .expect("write b");
+    fs::write(root.join("target/manifest.json"), manifest_two_models()).expect("manifest");
+
+    let result = scan_pr(root, "HEAD");
+    let gate = &result.pr_summary.as_ref().expect("summary").gate_results[0];
+    assert_eq!(gate.status, costguard_core::GateStatus::Fail);
+    assert!(gate.reasons[0].contains("estimated PR cost increase"));
+    assert!(result.should_fail(None, None, None, None));
+}

@@ -374,6 +374,8 @@ class ActionConsumerTest(unittest.TestCase):
                     "TRUST_STORE_INPUT": ".costguard/trust.json",
                     "POLICY_ORGANIZATION_INPUT": "acme",
                     "POLICY_REPOSITORY_INPUT": "acme/warehouse",
+                    "BLOCK_ONLY_NEW_INPUT": "false",
+                    "FAIL_ON_PR_COST_INCREASE_INPUT": "250",
                     "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
                 },
             )
@@ -385,6 +387,9 @@ class ActionConsumerTest(unittest.TestCase):
             self.assertIn("--policy-organization", arguments)
             self.assertIn("--policy-repository", arguments)
             self.assertNotIn("--policy-team", arguments)
+            self.assertIn("--block-only-new=false", arguments)
+            self.assertIn("--fail-on-pr-cost-increase", arguments)
+            self.assertIn("250", arguments)
 
     def test_run_writes_step_summary_and_forwards_receipt_inputs(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -423,6 +428,7 @@ class ActionConsumerTest(unittest.TestCase):
             self.assertEqual(completed.stdout, "github annotations\n")
             self.assertIn("# Costguard passed", step_summary.read_text(encoding="utf-8"))
             arguments = args_path.read_text(encoding="utf-8").splitlines()
+            self.assertIn("--block-only-new=true", arguments)
             self.assertIn("--summary-file", arguments)
             self.assertIn("--receipt-file", arguments)
             self.assertIn("costguard-receipt.json", arguments)
