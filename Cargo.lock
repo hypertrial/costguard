@@ -195,8 +195,6 @@ dependencies = [
  "costguard-diagnostics",
  "costguard-output",
  "costguard-policy",
- "costguard-protocol",
- "costguard-rules",
  "serde",
  "serde_json",
  "tempfile",
@@ -301,7 +299,6 @@ version = "2.5.0"
 dependencies = [
  "schemars",
  "serde",
- "serde_json",
 ]
 
 [[package]]

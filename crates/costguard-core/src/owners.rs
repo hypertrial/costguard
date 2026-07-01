@@ -176,7 +176,7 @@ fn pattern_matches(pattern: &str, path: &str) -> bool {
 }
 
 fn posix(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/")
+    costguard_diagnostics::posix_path(path)
 }
 
 fn unique(values: Vec<String>) -> Vec<String> {

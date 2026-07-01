@@ -28,12 +28,8 @@ ALLOWED = frozenset(
         "serde_yaml",
         "sha2",
         "sqlparser",
-        "subtle",
         "tempfile",
         "toml",
-        "tracing",
-        "tracing-subscriber",
-        "uuid",
     }
 )
 

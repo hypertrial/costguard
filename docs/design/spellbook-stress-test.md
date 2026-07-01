@@ -33,8 +33,8 @@ See [`benchmark-calibration.md`](benchmark-calibration.md) for the triage loop a
 
 GitHub Actions:
 
-- **Push to `main`:** Spellbook **smoke** benchmark (`tokens` + root macros) in [`benchmark.yml`](../../.github/workflows/benchmark.yml).
-- **Manual:** run the **benchmark** workflow (`workflow_dispatch`) with target `spellbook` for the full five-subproject gate.
+- **Push to `main`:** Spellbook **smoke** benchmark (`tokens` + root macros) in [`ci.yml`](../../.github/workflows/ci.yml) (`spellbook-smoke` job).
+- **Manual:** run the **benchmark** workflow (`workflow_dispatch`) in [`benchmark.yml`](../../.github/workflows/benchmark.yml) with target `spellbook` for the full five-subproject gate.
 
 Why Spellbook:
 

@@ -53,9 +53,7 @@ pub(crate) fn is_dbt_macro_path(path: &Path) -> bool {
 }
 
 pub(crate) fn normalized_path(path: &Path) -> String {
-    path.to_string_lossy()
-        .replace('\\', "/")
-        .to_ascii_lowercase()
+    costguard_diagnostics::posix_path(path).to_ascii_lowercase()
 }
 
 pub(crate) fn has_bounded_incremental_predicate(text: &str) -> bool {

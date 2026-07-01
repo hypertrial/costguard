@@ -18,8 +18,6 @@ costguard-cost = { path = "../costguard-cost" }
 costguard-diagnostics = { path = "../costguard-diagnostics" }
 costguard-output = { path = "../costguard-output" }
 costguard-policy = { path = "../costguard-policy" }
-costguard-protocol = { path = "../costguard-protocol" }
-costguard-rules = { path = "../costguard-rules" }
 chrono.workspace = true
 serde.workspace = true
 serde_json.workspace = true

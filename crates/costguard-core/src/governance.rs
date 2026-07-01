@@ -137,5 +137,5 @@ pub(crate) fn apply_managed_governance(
 }
 
 pub(crate) fn normalized_path(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/")
+    costguard_diagnostics::posix_path(path)
 }

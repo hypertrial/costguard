@@ -2,7 +2,7 @@ use crate::config::{GateConfig, GateMode, GateScope};
 use crate::{
     ChangedModelDetail, FindingDelta, GateResult, GateStatus, PrSummary, ProjectCostSummary,
 };
-use costguard_diagnostics::{Confidence, Diagnostic, Severity};
+use costguard_diagnostics::{posix_path, Confidence, Diagnostic, Severity};
 use costguard_protocol::EnforcementOutcome;
 use globset::Glob;
 use std::collections::HashSet;
@@ -243,7 +243,7 @@ fn diagnostic_matches(
         .find(|detail| detail.path == diagnostic.path);
     match_fields(
         gate,
-        &diagnostic.path.to_string_lossy().replace('\\', "/"),
+        &posix_path(&diagnostic.path),
         detail.map(|detail| detail.tags.as_slice()).unwrap_or(&[]),
         &diagnostic.governance.owners,
     )
@@ -252,7 +252,7 @@ fn diagnostic_matches(
 fn model_matches(gate: &GateCriteria<'_>, detail: &ChangedModelDetail) -> bool {
     match_fields(
         gate,
-        &detail.path.to_string_lossy().replace('\\', "/"),
+        &posix_path(&detail.path),
         &detail.tags,
         &detail.owners,
     )

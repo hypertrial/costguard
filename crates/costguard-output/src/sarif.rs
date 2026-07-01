@@ -1,6 +1,6 @@
 use anyhow::Result;
 use costguard_core::ScanResult;
-use costguard_diagnostics::Severity;
+use costguard_diagnostics::{posix_path, Severity};
 
 pub(crate) fn sarif_level(severity: Severity) -> &'static str {
     match severity {
@@ -55,7 +55,7 @@ pub(crate) fn sarif_results(result: &ScanResult) -> Vec<serde_json::Value> {
                 "locations": [{
                     "physicalLocation": {
                         "artifactLocation": {
-                            "uri": diagnostic.path.to_string_lossy().replace('\\', "/")
+                            "uri": posix_path(&diagnostic.path)
                         },
                         "region": {
                             "startLine": diagnostic.line,
