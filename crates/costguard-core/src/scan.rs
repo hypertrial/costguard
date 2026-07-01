@@ -64,8 +64,201 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
         DiscoveryOptions::from_scan(config.ignore.clone(), config.max_file_bytes);
     let plan = build_scan_plan(&root, config, &discovery_options)?;
 
+    let loaded = load_project_and_metadata(config, &root, &plan)?;
+    let owner_resolver = OwnerResolver::load(&root, &config.owners)?;
+
+    let policy_digest = managed_policy
+        .as_ref()
+        .map(|policy| policy.digest.clone())
+        .unwrap_or_else(|| "local-unmanaged".into());
+    let baseline = load_scan_baseline(config, &root)?;
+    if let Some(baseline) = &baseline {
+        validate_finding_baseline(baseline, config.platform)?;
+        validate_baseline_policy(baseline, &policy_digest)?;
+    }
+    let branch_input = BranchScanInput {
+        config,
+        root: &root,
+        owner_resolver: &owner_resolver,
+        managed_policy: managed_policy.as_ref(),
+        started_at,
+        baseline: baseline.as_ref(),
+        policy_digest: &policy_digest,
+    };
+    let mut head_scan = run_branch_diagnostics(branch_input.with_scan(BranchScanRun {
+        project: &loaded.project,
+        analysis_files: &plan.union_files(),
+        metadata_diagnostics: loaded.metadata_diagnostics,
+        write_baseline_path: config.write_baseline_path.as_deref(),
+    }))?;
+    let mut diagnostics = std::mem::take(&mut head_scan.diagnostics);
+    let union_sql_documents = std::mem::take(&mut head_scan.sql_documents);
+    let target_docs = std::mem::take(&mut head_scan.target_documents);
+    let policy_violations = std::mem::take(&mut head_scan.policy_violations);
+    let waiver_violations = std::mem::take(&mut head_scan.waiver_violations);
+    let baselined_findings = head_scan.baselined_findings;
+    let cost_analysis = head_scan.cost_analysis.take();
+    let mut cost_summary = cost_analysis
+        .as_ref()
+        .map(|analysis| analysis.summary.clone());
+
+    let head_for_delta = plan
+        .pr_mode
+        .then(|| finding_delta_diagnostics(&diagnostics));
+
+    let base_branch_scan = if plan.pr_mode {
+        run_base_branch_scan(BaseBranchScanInput {
+            config,
+            root: &root,
+            plan: &plan,
+            owner_resolver: &owner_resolver,
+            managed_policy: managed_policy.as_ref(),
+            started_at,
+            baseline: baseline.as_ref(),
+            policy_digest: &policy_digest,
+        })?
+    } else {
+        None
+    };
+
+    if plan.pr_mode {
+        if let (Some(summary), Some(analysis), Some(cost_config)) = (
+            cost_summary.as_mut(),
+            cost_analysis.as_ref(),
+            config.cost.as_ref(),
+        ) {
+            if cost_config.enabled {
+                if let Some(base_summary) = base_branch_scan
+                    .as_ref()
+                    .and_then(|scan| scan.cost_summary.clone())
+                {
+                    let downstream_ids = loaded
+                        .project
+                        .dbt
+                        .as_ref()
+                        .map(build_downstream_ids)
+                        .unwrap_or_default();
+                    let changed_paths: Vec<PathBuf> = plan.changed_paths.iter().cloned().collect();
+                    let blast_radius = compute_blast_radius(
+                        &analysis.model_index,
+                        &downstream_ids,
+                        &changed_paths,
+                        cost_config,
+                    );
+                    summary.pr_impact = Some(compute_pr_impact(
+                        summary,
+                        &base_summary,
+                        cost_config,
+                        blast_radius,
+                    ));
+                }
+            }
+        }
+    }
+
+    diagnostics.sort_by(crate::pipeline::compare_diagnostics);
+
+    let target_counts = ScanCounts::from_files(&plan.targets);
+    let target_parse_status = build_file_parse_status(&target_docs);
+    let mut metrics = build_scan_metrics(
+        &target_docs,
+        &diagnostics,
+        target_counts.clone(),
+        loaded.metadata_only,
+        loaded.metadata_warnings_len,
+        loaded.yaml_parse_failures,
+        loaded.dbt_project_parse_failures,
+    );
+    metrics.baselined_findings = baselined_findings;
+    metrics.new_findings = diagnostics.len();
+
+    let context_report = if plan.pr_mode {
+        Some(build_context_report(
+            &plan,
+            &union_sql_documents,
+            &loaded.context_skip_warnings,
+            &root,
+        ))
+    } else {
+        None
+    };
+
+    let pr_summary = build_pr_summary(PrSummaryInput {
+        config,
+        plan: &plan,
+        project: &loaded.project,
+        owner_resolver: &owner_resolver,
+        diagnostics: &diagnostics,
+        head_for_delta: head_for_delta.as_deref(),
+        base_branch_scan: base_branch_scan.as_ref(),
+        cost_summary: cost_summary.as_ref(),
+        checksum_mismatch_count: loaded.checksum_mismatch_count,
+    });
+
+    let analysis = collect_analysis_violations(AnalysisViolationInput {
+        config,
+        metrics: &metrics,
+        target_skipped_files: plan.target_skips.len(),
+        metadata_only: loaded.metadata_only,
+        manifest_stale: loaded.manifest_stale,
+        pr_mode: plan.pr_mode,
+        context: context_report.as_ref(),
+        policy_violations,
+        waiver_violations,
+        cost_summary: cost_summary.as_ref(),
+    });
+    let completed_at = chrono::Utc::now();
+    Ok(ScanResult {
+        run: RunMetadata {
+            id: format!(
+                "scan-{}-{}",
+                started_at.timestamp_millis(),
+                std::process::id()
+            ),
+            started_at: started_at.to_rfc3339(),
+            completed_at: completed_at.to_rfc3339(),
+            duration_ms: started.elapsed().as_millis().try_into().unwrap_or(u64::MAX),
+            tool_version: env!("CARGO_PKG_VERSION").to_string(),
+        },
+        policy: managed_policy
+            .as_ref()
+            .map(ManagedPolicy::metadata)
+            .unwrap_or_else(|| PolicyMetadata {
+                digest: "local-unmanaged".into(),
+                version: env!("CARGO_PKG_VERSION").into(),
+                scope: "local".into(),
+            }),
+        diagnostics,
+        counts: metrics.counts.clone(),
+        metrics,
+        file_parse_status: target_parse_status,
+        pr_summary,
+        context: context_report,
+        cost_summary,
+        analysis,
+        identity_scheme: Some(costguard_protocol::IDENTITY_SCHEME_SEMANTIC_V1.into()),
+    })
+}
+
+struct ProjectLoad {
+    project: Project,
+    metadata_diagnostics: Vec<costguard_diagnostics::Diagnostic>,
+    context_skip_warnings: Vec<MetadataWarning>,
+    metadata_only: bool,
+    manifest_stale: bool,
+    checksum_mismatch_count: usize,
+    yaml_parse_failures: usize,
+    dbt_project_parse_failures: usize,
+    metadata_warnings_len: usize,
+}
+
+fn load_project_and_metadata(
+    config: &ScanConfig,
+    root: &Path,
+    plan: &ScanPlan,
+) -> Result<ProjectLoad> {
     let union_files = plan.union_files();
-    let dbt_load = load_dbt_project(&root, config, &union_files)?;
+    let dbt_load = load_dbt_project(root, config, &union_files)?;
     let mut checksum_warnings = Vec::new();
     if plan.pr_mode {
         if let Some(dbt) = &dbt_load.project {
@@ -100,177 +293,120 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
         .count();
 
     let (metadata_warnings, context_skip_warnings) =
-        partition_metadata_warnings(&dbt_load.warnings, &plan, &skipped_files_all(&plan));
+        partition_metadata_warnings(&dbt_load.warnings, plan, &skipped_files_all(plan));
     let mut metadata_warnings = metadata_warnings;
     metadata_warnings.extend(checksum_warnings);
-    let metadata_diagnostics = metadata_diagnostics(&root, &metadata_warnings);
+    let metadata_warnings_len = metadata_warnings.len();
+    let metadata_diagnostics = metadata_diagnostics(root, &metadata_warnings);
 
-    let dbt = dbt_load.project;
     let project = Project {
-        root: root.clone(),
+        root: root.to_path_buf(),
         files: plan.targets.clone(),
-        dbt,
+        dbt: dbt_load.project,
     };
-    let owner_resolver = OwnerResolver::load(&root, &config.owners)?;
-
-    let policy_digest = managed_policy
-        .as_ref()
-        .map(|policy| policy.digest.clone())
-        .unwrap_or_else(|| "local-unmanaged".into());
-    let baseline = load_scan_baseline(config, &root)?;
-    if let Some(baseline) = &baseline {
-        validate_finding_baseline(baseline, config.platform)?;
-        validate_baseline_policy(baseline, &policy_digest)?;
-    }
-    let mut head_scan = run_branch_diagnostics(
-        config,
-        &root,
-        &project,
-        &union_files,
+    Ok(ProjectLoad {
+        project,
         metadata_diagnostics,
-        &owner_resolver,
-        managed_policy.as_ref(),
-        started_at,
-        baseline.as_ref(),
-        config.write_baseline_path.as_deref(),
-        &policy_digest,
-    )?;
-    let mut diagnostics = std::mem::take(&mut head_scan.diagnostics);
-    let union_sql_documents = std::mem::take(&mut head_scan.sql_documents);
-    let target_docs = std::mem::take(&mut head_scan.target_documents);
-    let policy_violations = std::mem::take(&mut head_scan.policy_violations);
-    let waiver_violations = std::mem::take(&mut head_scan.waiver_violations);
-    let baselined_findings = head_scan.baselined_findings;
-    let cost_analysis = head_scan.cost_analysis.take();
-    let mut cost_summary = cost_analysis
-        .as_ref()
-        .map(|analysis| analysis.summary.clone());
-
-    let head_for_delta = plan
-        .pr_mode
-        .then(|| finding_delta_diagnostics(&diagnostics));
-
-    let base_branch_scan = if plan.pr_mode {
-        run_base_branch_scan(
-            config,
-            &root,
-            &plan,
-            &owner_resolver,
-            managed_policy.as_ref(),
-            started_at,
-            baseline.as_ref(),
-            &policy_digest,
-        )?
-    } else {
-        None
-    };
-
-    if plan.pr_mode {
-        if let (Some(summary), Some(analysis), Some(cost_config)) = (
-            cost_summary.as_mut(),
-            cost_analysis.as_ref(),
-            config.cost.as_ref(),
-        ) {
-            if cost_config.enabled {
-                if let Some(base_summary) = base_branch_scan
-                    .as_ref()
-                    .and_then(|scan| scan.cost_summary.clone())
-                {
-                    let downstream_ids = project
-                        .dbt
-                        .as_ref()
-                        .map(build_downstream_ids)
-                        .unwrap_or_default();
-                    let changed_paths: Vec<PathBuf> = plan.changed_paths.iter().cloned().collect();
-                    let blast_radius = compute_blast_radius(
-                        &analysis.model_index,
-                        &downstream_ids,
-                        &changed_paths,
-                        cost_config,
-                    );
-                    summary.pr_impact = Some(compute_pr_impact(
-                        summary,
-                        &base_summary,
-                        cost_config,
-                        blast_radius,
-                    ));
-                }
-            }
-        }
-    }
-
-    diagnostics.sort_by(crate::pipeline::compare_diagnostics);
-
-    let target_counts = ScanCounts::from_files(&plan.targets);
-    let target_parse_status = build_file_parse_status(&target_docs);
-    let mut metrics = build_scan_metrics(
-        &target_docs,
-        &diagnostics,
-        target_counts.clone(),
-        metadata_only,
-        metadata_warnings.len(),
-        yaml_parse_failures,
-        dbt_project_parse_failures,
-    );
-    metrics.baselined_findings = baselined_findings;
-    metrics.new_findings = diagnostics.len();
-
-    let context_report = if plan.pr_mode {
-        Some(build_context_report(
-            &plan,
-            &union_sql_documents,
-            &context_skip_warnings,
-            &root,
-        ))
-    } else {
-        None
-    };
-
-    let mut pr_summary = if plan.pr_mode {
-        let mut changed_files = plan.changed_paths.iter().cloned().collect::<Vec<_>>();
-        changed_files.sort();
-        Some(enrich_pr_summary(
-            PrSummary {
-                changed_files,
-                ..PrSummary::default()
-            },
-            &project,
-            &owner_resolver,
-        ))
-    } else {
-        None
-    };
-    if let Some(summary) = pr_summary.as_mut() {
-        if let Some(base_scan) = &base_branch_scan {
-            summary.finding_delta = Some(classify_findings(
-                head_for_delta.as_deref().unwrap_or(&diagnostics),
-                &base_scan.diagnostics,
-            ));
-        }
-        summary.gate_results = evaluate_gates(
-            config.gate.as_ref(),
-            &diagnostics,
-            summary,
-            cost_summary.as_ref(),
-        );
-        summary.manifest_integrity = Some(ManifestIntegrity {
-            checksum_mismatches: checksum_mismatch_count,
-            verified: checksum_mismatch_count == 0,
-        });
-        summary.enforcement_preview = Some(EnforcementPreview {
-            block_only_new: config.gate.as_ref().is_some_and(|gate| gate.block_only_new),
-            require_manifest_integrity: config.analysis.require_manifest_integrity,
-        });
-    }
-
-    let mut analysis = evaluate_analysis(
-        config,
-        &metrics,
-        plan.target_skips.len(),
+        context_skip_warnings,
         metadata_only,
         manifest_stale,
-        plan.pr_mode,
-        context_report.as_ref(),
+        checksum_mismatch_count,
+        yaml_parse_failures,
+        dbt_project_parse_failures,
+        metadata_warnings_len,
+    })
+}
+
+struct PrSummaryInput<'a> {
+    config: &'a ScanConfig,
+    plan: &'a ScanPlan,
+    project: &'a Project,
+    owner_resolver: &'a OwnerResolver,
+    diagnostics: &'a [costguard_diagnostics::Diagnostic],
+    head_for_delta: Option<&'a [costguard_diagnostics::Diagnostic]>,
+    base_branch_scan: Option<&'a BaseBranchScan>,
+    cost_summary: Option<&'a costguard_cost::ProjectCostSummary>,
+    checksum_mismatch_count: usize,
+}
+
+fn build_pr_summary(input: PrSummaryInput<'_>) -> Option<PrSummary> {
+    let PrSummaryInput {
+        config,
+        plan,
+        project,
+        owner_resolver,
+        diagnostics,
+        head_for_delta,
+        base_branch_scan,
+        cost_summary,
+        checksum_mismatch_count,
+    } = input;
+    if !plan.pr_mode {
+        return None;
+    }
+    let mut changed_files = plan.changed_paths.iter().cloned().collect::<Vec<_>>();
+    changed_files.sort();
+    let mut summary = enrich_pr_summary(
+        PrSummary {
+            changed_files,
+            ..PrSummary::default()
+        },
+        project,
+        owner_resolver,
+    );
+    if let Some(base_scan) = base_branch_scan {
+        summary.finding_delta = Some(classify_findings(
+            head_for_delta.unwrap_or(diagnostics),
+            &base_scan.diagnostics,
+        ));
+    }
+    summary.gate_results =
+        evaluate_gates(config.gate.as_ref(), diagnostics, &summary, cost_summary);
+    summary.manifest_integrity = Some(ManifestIntegrity {
+        checksum_mismatches: checksum_mismatch_count,
+        verified: checksum_mismatch_count == 0,
+    });
+    summary.enforcement_preview = Some(EnforcementPreview {
+        block_only_new: config.gate.as_ref().is_some_and(|gate| gate.block_only_new),
+        require_manifest_integrity: config.analysis.require_manifest_integrity,
+    });
+    Some(summary)
+}
+
+struct AnalysisViolationInput<'a> {
+    config: &'a ScanConfig,
+    metrics: &'a crate::ScanMetrics,
+    target_skipped_files: usize,
+    metadata_only: bool,
+    manifest_stale: bool,
+    pr_mode: bool,
+    context: Option<&'a ContextReport>,
+    policy_violations: Vec<costguard_policy::PolicyViolation>,
+    waiver_violations: Vec<AnalysisViolation>,
+    cost_summary: Option<&'a costguard_cost::ProjectCostSummary>,
+}
+
+fn collect_analysis_violations(input: AnalysisViolationInput<'_>) -> AnalysisReport {
+    let AnalysisViolationInput {
+        config,
+        metrics,
+        target_skipped_files,
+        metadata_only,
+        manifest_stale,
+        pr_mode,
+        context,
+        policy_violations,
+        waiver_violations,
+        cost_summary,
+    } = input;
+    let mut analysis = evaluate_analysis(
+        config,
+        metrics,
+        target_skipped_files,
+        metadata_only,
+        manifest_stale,
+        pr_mode,
+        context,
     );
     for violation in policy_violations {
         analysis.violations.push(AnalysisViolation {
@@ -281,41 +417,11 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
         });
     }
     analysis.violations.extend(waiver_violations);
-    if let Some(violation) = evaluate_cost_coverage(config.cost.as_ref(), cost_summary.as_ref()) {
+    if let Some(violation) = evaluate_cost_coverage(config.cost.as_ref(), cost_summary) {
         analysis.violations.push(violation);
     }
     analysis.passed = analysis.violations.is_empty();
-    let completed_at = chrono::Utc::now();
-    Ok(ScanResult {
-        run: RunMetadata {
-            id: format!(
-                "scan-{}-{}",
-                started_at.timestamp_millis(),
-                std::process::id()
-            ),
-            started_at: started_at.to_rfc3339(),
-            completed_at: completed_at.to_rfc3339(),
-            duration_ms: started.elapsed().as_millis().try_into().unwrap_or(u64::MAX),
-            tool_version: env!("CARGO_PKG_VERSION").to_string(),
-        },
-        policy: managed_policy
-            .as_ref()
-            .map(ManagedPolicy::metadata)
-            .unwrap_or_else(|| PolicyMetadata {
-                digest: "local-unmanaged".into(),
-                version: env!("CARGO_PKG_VERSION").into(),
-                scope: "local".into(),
-            }),
-        diagnostics,
-        counts: metrics.counts.clone(),
-        metrics,
-        file_parse_status: target_parse_status,
-        pr_summary,
-        context: context_report,
-        cost_summary,
-        analysis,
-        identity_scheme: Some(costguard_protocol::IDENTITY_SCHEME_SEMANTIC_V1.into()),
-    })
+    analysis
 }
 
 fn validate_baseline_policy(baseline: &crate::FindingBaseline, digest: &str) -> Result<()> {
@@ -424,20 +530,51 @@ struct BranchDiagnostics {
     cost_analysis: Option<CostAnalysisResult>,
 }
 
-#[allow(clippy::too_many_arguments)]
-fn run_branch_diagnostics(
-    config: &ScanConfig,
-    root: &Path,
-    project: &Project,
-    analysis_files: &[ProjectFile],
-    metadata_diagnostics: Vec<costguard_diagnostics::Diagnostic>,
-    owner_resolver: &OwnerResolver,
-    managed_policy: Option<&ManagedPolicy>,
+struct BranchScanInput<'a> {
+    config: &'a ScanConfig,
+    root: &'a Path,
+    owner_resolver: &'a OwnerResolver,
+    managed_policy: Option<&'a ManagedPolicy>,
     started_at: chrono::DateTime<chrono::Utc>,
-    baseline: Option<&crate::FindingBaseline>,
-    write_baseline_path: Option<&Path>,
-    policy_digest: &str,
-) -> Result<BranchDiagnostics> {
+    baseline: Option<&'a crate::FindingBaseline>,
+    policy_digest: &'a str,
+}
+
+struct BranchScanRun<'a> {
+    project: &'a Project,
+    analysis_files: &'a [ProjectFile],
+    metadata_diagnostics: Vec<costguard_diagnostics::Diagnostic>,
+    write_baseline_path: Option<&'a Path>,
+}
+
+impl<'a> BranchScanInput<'a> {
+    fn with_scan(self, run: BranchScanRun<'a>) -> BranchScanRequest<'a> {
+        BranchScanRequest { input: self, run }
+    }
+}
+
+struct BranchScanRequest<'a> {
+    input: BranchScanInput<'a>,
+    run: BranchScanRun<'a>,
+}
+
+fn run_branch_diagnostics(request: BranchScanRequest<'_>) -> Result<BranchDiagnostics> {
+    let BranchScanRequest { input, run } = request;
+    let BranchScanInput {
+        config,
+        root,
+        owner_resolver,
+        managed_policy,
+        started_at,
+        baseline,
+        policy_digest,
+    } = input;
+    let BranchScanRun {
+        project,
+        analysis_files,
+        metadata_diagnostics,
+        write_baseline_path,
+    } = run;
     let compiled_by_path = project
         .dbt
         .as_ref()
@@ -569,17 +706,28 @@ struct BaseBranchScan {
     cost_summary: Option<costguard_cost::ProjectCostSummary>,
 }
 
-#[allow(clippy::too_many_arguments)]
-fn run_base_branch_scan(
-    config: &ScanConfig,
-    root: &Path,
-    plan: &ScanPlan,
-    owner_resolver: &OwnerResolver,
-    managed_policy: Option<&ManagedPolicy>,
+struct BaseBranchScanInput<'a> {
+    config: &'a ScanConfig,
+    root: &'a Path,
+    plan: &'a ScanPlan,
+    owner_resolver: &'a OwnerResolver,
+    managed_policy: Option<&'a ManagedPolicy>,
     started_at: chrono::DateTime<chrono::Utc>,
-    baseline: Option<&crate::FindingBaseline>,
-    policy_digest: &str,
-) -> Result<Option<BaseBranchScan>> {
+    baseline: Option<&'a crate::FindingBaseline>,
+    policy_digest: &'a str,
+}
+
+fn run_base_branch_scan(input: BaseBranchScanInput<'_>) -> Result<Option<BaseBranchScan>> {
+    let BaseBranchScanInput {
+        config,
+        root,
+        plan,
+        owner_resolver,
+        managed_policy,
+        started_at,
+        baseline,
+        policy_digest,
+    } = input;
     if !plan.pr_mode {
         return Ok(None);
     }
@@ -618,17 +766,21 @@ fn run_base_branch_scan(
         dbt: base_dbt,
     };
     let branch = run_branch_diagnostics(
-        config,
-        root,
-        &project,
-        &base_files.context,
-        Vec::new(),
-        owner_resolver,
-        managed_policy,
-        started_at,
-        baseline,
-        None,
-        policy_digest,
+        BranchScanInput {
+            config,
+            root,
+            owner_resolver,
+            managed_policy,
+            started_at,
+            baseline,
+            policy_digest,
+        }
+        .with_scan(BranchScanRun {
+            project: &project,
+            analysis_files: &base_files.context,
+            metadata_diagnostics: Vec::new(),
+            write_baseline_path: None,
+        }),
     )?;
     Ok(Some(BaseBranchScan {
         diagnostics: finding_delta_diagnostics(&branch.diagnostics),
