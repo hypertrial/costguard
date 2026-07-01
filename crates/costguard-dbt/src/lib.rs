@@ -4,11 +4,13 @@
 //! configs to build a [`DbtProject`] graph and extract Jinja-level SQL
 //! features (refs, sources, incremental blocks).
 
+mod graph;
 mod manifest;
 mod project_config;
 mod sql_features;
 mod yaml;
 
+pub use graph::{build_downstream_counts, build_downstream_ids, DependencyGraph};
 pub use manifest::{parse_manifest, parse_manifest_text, parse_manifest_with_limit};
 use project_config::{
     apply_folder_config_to_model, discover_dbt_project_files_in_roots_with_warnings,

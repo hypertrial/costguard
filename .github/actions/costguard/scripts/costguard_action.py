@@ -216,6 +216,38 @@ def resolve_manifest(root: Path) -> str:
     return ""
 
 
+# (env_name, flag, kind, default) — kind: required | optional | bool
+RUN_FLAG_MAPPINGS = [
+    ("BASE_INPUT", "--base", "required", "origin/main"),
+    ("WAREHOUSE_INPUT", "--warehouse", "required", "generic"),
+    ("FAIL_ON_INPUT", "--fail-on", "required", "high"),
+    ("FORMAT_INPUT", "--format", "required", "github"),
+    ("ANALYSIS_POLICY_INPUT", "--analysis-policy", "required", "standard"),
+    ("MIN_CONFIDENCE_INPUT", "--min-confidence", "optional", ""),
+    ("BASELINE_INPUT", "--baseline", "optional", ""),
+    ("FAIL_ON_COST_DELTA_INPUT", "--fail-on-cost-delta", "optional", ""),
+    ("FAIL_ON_PR_COST_INCREASE_INPUT", "--fail-on-pr-cost-increase", "optional", ""),
+    ("POLICY_BUNDLE_INPUT", "--policy", "optional", ""),
+    ("TRUST_STORE_INPUT", "--trust-store", "optional", ""),
+    ("POLICY_ORGANIZATION_INPUT", "--policy-organization", "optional", ""),
+    ("POLICY_TEAM_INPUT", "--policy-team", "optional", ""),
+    ("POLICY_REPOSITORY_INPUT", "--policy-repository", "optional", ""),
+    ("RECEIPT_PATH_INPUT", "--receipt-file", "optional", ""),
+    ("COMPARE_RECEIPT_INPUT", "--compare-receipt", "optional", ""),
+]
+
+
+def append_run_flags(command: list[str]) -> None:
+    for env_name, flag, kind, default in RUN_FLAG_MAPPINGS:
+        value = env(env_name, default)
+        if kind == "required":
+            command.extend([flag, value])
+        elif kind == "optional" and value:
+            command.extend([flag, value])
+        elif kind == "bool" and value.lower() == "true":
+            command.append(flag)
+
+
 def command_run() -> int:
     root = consumer_root()
     summary = env("GITHUB_STEP_SUMMARY")
@@ -226,59 +258,22 @@ def command_run() -> int:
         handle, name = tempfile.mkstemp(prefix="costguard-summary-", suffix=".md", dir=runner_temp)
         os.close(handle)
         summary_file = Path(name)
-    command = [
-        "costguard",
-        "pr",
-        "--base",
-        env("BASE_INPUT", "origin/main"),
-        "--warehouse",
-        env("WAREHOUSE_INPUT", "generic"),
-        "--fail-on",
-        env("FAIL_ON_INPUT", "high"),
-        "--format",
-        env("FORMAT_INPUT", "github"),
-        "--analysis-policy",
-        env("ANALYSIS_POLICY_INPUT", "standard"),
-    ]
+    command = ["costguard", "pr"]
+    append_run_flags(command)
     block_only_new = env("BLOCK_ONLY_NEW_INPUT", "true").lower()
     if block_only_new not in {"true", "false"}:
         raise SystemExit("block-only-new must be true or false")
     command.append(f"--block-only-new={block_only_new}")
     if summary_file:
         command.extend(["--summary-file", str(summary_file)])
-    min_confidence = env("MIN_CONFIDENCE_INPUT")
-    if min_confidence:
-        command.extend(["--min-confidence", min_confidence])
-    baseline = env("BASELINE_INPUT")
-    if baseline:
-        command.extend(["--baseline", baseline])
     if env("COST_INPUT").lower() == "true":
         command.append("--cost")
-    fail_on_cost_delta = env("FAIL_ON_COST_DELTA_INPUT")
-    if fail_on_cost_delta:
-        command.extend(["--fail-on-cost-delta", fail_on_cost_delta])
-    fail_on_pr_cost_increase = env("FAIL_ON_PR_COST_INCREASE_INPUT")
-    if fail_on_pr_cost_increase:
-        command.extend(["--fail-on-pr-cost-increase", fail_on_pr_cost_increase])
     manifest = resolve_manifest(root)
     if manifest:
         manifest_path = (root / manifest).resolve()
         if not manifest_path.is_file():
             raise SystemExit(f"manifest does not exist: {manifest}")
         command.extend(["--manifest", manifest])
-    optional_pairs = [
-        ("POLICY_BUNDLE_INPUT", "--policy"),
-        ("TRUST_STORE_INPUT", "--trust-store"),
-        ("POLICY_ORGANIZATION_INPUT", "--policy-organization"),
-        ("POLICY_TEAM_INPUT", "--policy-team"),
-        ("POLICY_REPOSITORY_INPUT", "--policy-repository"),
-        ("RECEIPT_PATH_INPUT", "--receipt-file"),
-        ("COMPARE_RECEIPT_INPUT", "--compare-receipt"),
-    ]
-    for env_name, flag in optional_pairs:
-        value = env(env_name)
-        if value:
-            command.extend([flag, value])
     completed = subprocess.run(command, cwd=root, capture_output=True, text=True, check=False)
     sys.stdout.write(completed.stdout)
     sys.stderr.write(completed.stderr)

@@ -12,6 +12,25 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
 
+#[cfg(test)]
+thread_local! {
+    // ponytail: per-thread counter avoids parallel-test flake on a process-wide atomic
+    static GIT_SPAWN_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+fn spawn_git(root: &Path, args: &[&str]) -> Result<std::process::Child> {
+    #[cfg(test)]
+    GIT_SPAWN_COUNT.with(|count| count.set(count.get() + 1));
+    Command::new("git")
+        .args(args)
+        .current_dir(root)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .with_context(|| format!("failed to execute git {}", args.join(" ")))
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChangedFileSets {
     pub base_commit: String,
@@ -152,18 +171,7 @@ pub fn files_at_commit_with_limit(
         .iter()
         .map(|(path, _)| format!("{commit}:{}", path.to_string_lossy()))
         .collect::<Vec<_>>();
-    let mut child = Command::new("git")
-        .args([
-            "cat-file",
-            "--batch-check=%(objecttype) %(objectsize)",
-            "-Z",
-        ])
-        .current_dir(root)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .context("failed to execute git cat-file --batch-check -Z")?;
+    let mut child = spawn_git(root, &["cat-file", "--batch", "-Z"])?;
     {
         let stdin = child
             .stdin
@@ -177,33 +185,32 @@ pub fn files_at_commit_with_limit(
     let output = child.wait_with_output()?;
     if !output.status.success() {
         return Err(GitCommandError::from_output(
-            "git cat-file --batch-check -Z",
+            "git cat-file --batch -Z",
             output.status,
             &output.stderr,
         )
         .into());
     }
-    let records = output
-        .stdout
-        .split(|byte| *byte == 0)
-        .filter(|record| !record.is_empty())
-        .collect::<Vec<_>>();
-    if records.len() != paths.len() {
-        anyhow::bail!(
-            "git cat-file returned {} records for {} requested paths",
-            records.len(),
-            paths.len()
-        );
-    }
 
     let mut result = HashMap::new();
-    for (((path, limit), spec), record) in paths.iter().zip(specs).zip(records) {
-        if record.ends_with(b" missing") {
+    let mut offset = 0usize;
+    for (path, limit) in paths {
+        let header_end = output.stdout[offset..]
+            .iter()
+            .position(|byte| *byte == 0)
+            .with_context(|| format!("git cat-file truncated header for {}", path.display()))?
+            + offset;
+        let header = &output.stdout[offset..header_end];
+        offset = header_end + 1;
+
+        if header.ends_with(b" missing") {
             result.insert(path.clone(), None);
             continue;
         }
-        let record = String::from_utf8_lossy(record);
-        let mut fields = record.split_whitespace();
+
+        let header = String::from_utf8_lossy(header);
+        let mut fields = header.split_whitespace();
+        let _object_name = fields.next().unwrap_or_default();
         let object_type = fields.next().unwrap_or_default();
         let observed = fields
             .next()
@@ -220,26 +227,35 @@ pub fn files_at_commit_with_limit(
                 limit
             );
         }
-        let content = run_git(root, &["show", &spec])?;
-        if !content.status.success() {
-            return Err(GitCommandError::from_output(
-                &format!("git show {spec}"),
-                content.status,
-                &content.stderr,
-            )
-            .into());
-        }
-        if content.stdout.len() as u64 > *limit {
+        let size = observed as usize;
+        let content_end = offset
+            .checked_add(size)
+            .context("git cat-file content overflow")?;
+        if output.stdout.len() < content_end + 1 {
             anyhow::bail!(
-                "base file {} is {} bytes, exceeding configured limit of {} bytes",
+                "git cat-file truncated content for {} (expected {} bytes)",
                 path.display(),
-                content.stdout.len(),
-                limit
+                size
             );
         }
-        let text = String::from_utf8(content.stdout)
+        let content = &output.stdout[offset..content_end];
+        if output.stdout[content_end] != 0 {
+            anyhow::bail!(
+                "git cat-file content for {} is not NUL-terminated",
+                path.display()
+            );
+        }
+        offset = content_end + 1;
+        let text = String::from_utf8(content.to_vec())
             .with_context(|| format!("base file {} is not valid UTF-8", path.display()))?;
         result.insert(path.clone(), Some(text));
+    }
+    if offset != output.stdout.len() {
+        anyhow::bail!(
+            "git cat-file returned {} trailing bytes after {} paths",
+            output.stdout.len() - offset,
+            paths.len()
+        );
     }
     Ok(result)
 }
@@ -520,6 +536,41 @@ mod tests {
         let files = files_at_commit_with_limit(root, &commit, &[(PathBuf::from("model.sql"), 5)])
             .expect("blob at limit");
         assert_eq!(files[Path::new("model.sql")].as_deref(), Some("12345"));
+    }
+
+    #[test]
+    fn batch_load_does_not_spawn_per_file_git_commands() {
+        GIT_SPAWN_COUNT.with(|count| count.set(0));
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let root = tempdir.path();
+        fs::create_dir_all(root.join("models")).expect("models dir");
+        for index in 0..20 {
+            fs::write(
+                root.join("models").join(format!("m{index}.sql")),
+                format!("select {index}\n"),
+            )
+            .expect("write model");
+        }
+        git(root, &["init"]);
+        git(root, &["config", "user.email", "costguard@example.com"]);
+        git(root, &["config", "user.name", "Costguard Test"]);
+        git(root, &["add", "."]);
+        git(root, &["commit", "-m", "initial"]);
+        let commit = resolve_base_commit(root, "HEAD").expect("base commit");
+
+        let requests = (0..20)
+            .map(|index| (PathBuf::from(format!("models/m{index}.sql")), 1024u64))
+            .collect::<Vec<_>>();
+        GIT_SPAWN_COUNT.with(|count| count.set(0));
+        let files = files_at_commit_with_limit(root, &commit, &requests).expect("batch load");
+        assert_eq!(files.len(), 20);
+        GIT_SPAWN_COUNT.with(|count| {
+            assert_eq!(
+                count.get(),
+                1,
+                "expected one git subprocess for batch blob load"
+            );
+        });
     }
 
     fn git(root: &Path, args: &[&str]) {

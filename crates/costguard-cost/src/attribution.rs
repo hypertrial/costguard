@@ -8,7 +8,7 @@ use crate::pricing::{price_per_byte, pricing_label};
 use crate::volume::{model_for_path, model_identity, VolumeContext};
 use costguard_dbt::DbtProject;
 use costguard_diagnostics::{CostEstimate, Diagnostic};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Default)]
@@ -49,68 +49,12 @@ pub struct CostAttributionContext<'a> {
 // ponytail: stop at 15 descendants — fan_out_factor() saturates there; recompute if formula changes
 const MAX_DOWNSTREAM: usize = 15;
 
-fn build_reverse_dependencies(dbt: &DbtProject) -> HashMap<String, Vec<String>> {
-    let mut reverse: HashMap<String, Vec<String>> = HashMap::new();
-    for model in dbt.models.values() {
-        let dependent = model_identity(model);
-        for reference in &model.refs {
-            reverse
-                .entry(reference.clone())
-                .or_default()
-                .push(dependent.clone());
-        }
-        let graph_key = model.identity();
-        if let Some(deps) = dbt.graph.depends_on.get(graph_key) {
-            for dep in deps {
-                reverse
-                    .entry(dep.clone())
-                    .or_default()
-                    .push(dependent.clone());
-            }
-        }
-    }
-    for dependents in reverse.values_mut() {
-        dependents.sort();
-        dependents.dedup();
-    }
-    reverse
-}
-
-fn collect_downstream_ids(reverse: &HashMap<String, Vec<String>>, root_id: &str) -> Vec<String> {
-    let mut seen = HashSet::new();
-    let mut stack = reverse.get(root_id).cloned().unwrap_or_default();
-    while let Some(node) = stack.pop() {
-        if !seen.insert(node.clone()) {
-            continue;
-        }
-        if seen.len() >= MAX_DOWNSTREAM {
-            break;
-        }
-        if let Some(next) = reverse.get(&node) {
-            stack.extend(next.iter().cloned());
-        }
-    }
-    let mut ids: Vec<String> = seen.into_iter().collect();
-    ids.sort();
-    ids
-}
-
 pub fn build_downstream_ids(dbt: &DbtProject) -> HashMap<String, Vec<String>> {
-    let reverse = build_reverse_dependencies(dbt);
-    dbt.models
-        .values()
-        .map(|model| {
-            let id = model_identity(model);
-            (id.clone(), collect_downstream_ids(&reverse, &id))
-        })
-        .collect()
+    costguard_dbt::build_downstream_ids(dbt, Some(MAX_DOWNSTREAM))
 }
 
 pub fn build_downstream_counts(dbt: &DbtProject) -> HashMap<String, usize> {
-    build_downstream_ids(dbt)
-        .into_iter()
-        .map(|(id, ids)| (id, ids.len()))
-        .collect()
+    costguard_dbt::build_downstream_counts(dbt, Some(MAX_DOWNSTREAM))
 }
 
 pub fn build_exposure_counts(dbt: &DbtProject) -> HashMap<String, usize> {
@@ -847,5 +791,50 @@ mod tests {
         assert_eq!(ids.len(), 15);
         assert_eq!(ids[0], "model.pkg.child_05");
         assert_eq!(ids[14], "model.pkg.child_19");
+    }
+
+    #[test]
+    fn downstream_ids_match_pr_summary_lineage_for_duplicate_names() {
+        use costguard_dbt::{DbtModel, DependencyGraph};
+        let mut dbt = DbtProject::default();
+        for (package, path) in [
+            ("alpha", "alpha/models/orders.sql"),
+            ("beta", "beta/models/orders.sql"),
+        ] {
+            let id = format!("model.{package}.orders");
+            dbt.models.insert(
+                id.clone(),
+                DbtModel {
+                    unique_id: Some(id.clone()),
+                    node_id: Some(id),
+                    package_name: Some(package.into()),
+                    name: "orders".into(),
+                    path: Some(PathBuf::from(path)),
+                    ..DbtModel::default()
+                },
+            );
+        }
+        dbt.models.insert(
+            "model.beta.order_rollup".into(),
+            DbtModel {
+                unique_id: Some("model.beta.order_rollup".into()),
+                node_id: Some("model.beta.order_rollup".into()),
+                package_name: Some("beta".into()),
+                name: "order_rollup".into(),
+                path: Some(PathBuf::from("beta/models/order_rollup.sql")),
+                ..DbtModel::default()
+            },
+        );
+        dbt.graph.depends_on.insert(
+            "model.beta.order_rollup".into(),
+            vec!["model.beta.orders".into()],
+        );
+        let cost_ids = build_downstream_ids(&dbt)
+            .remove("model.beta.orders")
+            .expect("beta orders downstream");
+        let graph = DependencyGraph::from_project(&dbt);
+        let pr_ids = graph.transitive_downstream(&["model.beta.orders".into()], None);
+        assert_eq!(cost_ids, pr_ids);
+        assert_eq!(graph.labels_for(&pr_ids), vec!["order_rollup".to_string()]);
     }
 }

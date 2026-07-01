@@ -101,6 +101,19 @@ pub fn validate_finding_baseline(baseline: &FindingBaseline, platform: Platform)
     Ok(())
 }
 
+pub fn validate_baseline_policy_digest(baseline: &FindingBaseline, digest: &str) -> Result<()> {
+    if let Some(expected) = &baseline.policy_digest {
+        if expected != digest {
+            anyhow::bail!(
+                "baseline policy digest '{}' does not match active policy '{}'",
+                expected,
+                digest
+            );
+        }
+    }
+    Ok(())
+}
+
 pub fn write_finding_baseline(path: &Path, baseline: &FindingBaseline) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)

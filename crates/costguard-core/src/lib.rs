@@ -5,7 +5,10 @@
 //! a [`ScanResult`]. This crate is the integration layer between the CLI and
 //! the lower-level parsing, rules, and output crates.
 
+mod analysis_report;
+mod base_replay;
 mod baseline;
+mod branch_scan;
 mod config;
 mod context;
 mod dbt_graph;
@@ -14,6 +17,7 @@ mod gates;
 mod git;
 mod governance;
 mod init;
+mod metadata_report;
 mod owners;
 mod pipeline;
 mod scan;

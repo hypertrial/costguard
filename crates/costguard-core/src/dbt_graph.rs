@@ -1,6 +1,6 @@
 use crate::owners::OwnerResolver;
 use crate::{ChangedModelDetail, IndirectImpact, PrSummary, Project};
-use costguard_dbt::{DbtModel, DbtProject};
+use costguard_dbt::{DbtModel, DbtProject, DependencyGraph};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
@@ -55,7 +55,10 @@ pub(crate) fn enrich_pr_summary(
             tags.sort();
             Some(ChangedModelDetail {
                 id: id.clone(),
-                name: graph.labels.get(id).cloned().unwrap_or_else(|| id.clone()),
+                name: graph
+                    .label(id)
+                    .map(str::to_string)
+                    .unwrap_or_else(|| id.clone()),
                 path,
                 tags,
                 owners: owners.owners_for_model(model),
@@ -133,9 +136,8 @@ fn discover_indirect_impacts(
         let affected_macros = graph.transitive_macro_dependents(std::slice::from_ref(macro_id));
         for model_id in graph.models_for_macros(&affected_macros) {
             let label = graph
-                .labels
-                .get(&model_id)
-                .cloned()
+                .label(&model_id)
+                .map(str::to_string)
                 .unwrap_or(model_id.clone());
             if model_ids.insert(model_id.clone()) {
                 let macro_name = graph.macro_label(macro_id);
@@ -151,9 +153,8 @@ fn discover_indirect_impacts(
         if is_source_yaml(path) {
             for model_id in graph.models_for_source_path(dbt, path) {
                 let label = graph
-                    .labels
-                    .get(&model_id)
-                    .cloned()
+                    .label(&model_id)
+                    .map(str::to_string)
                     .unwrap_or(model_id.clone());
                 if model_ids.insert(model_id.clone()) {
                     impacts.push(IndirectImpact {
@@ -188,9 +189,7 @@ fn is_source_yaml(path: &Path) -> bool {
 }
 
 struct DbtDependencyGraph {
-    reverse_dependencies: HashMap<String, Vec<String>>,
-    exposure_dependencies: HashMap<String, Vec<String>>,
-    labels: HashMap<String, String>,
+    graph: DependencyGraph,
     macro_path_to_id: HashMap<PathBuf, String>,
     macro_to_models: HashMap<String, Vec<String>>,
     macro_dependents: HashMap<String, Vec<String>>,
@@ -199,6 +198,7 @@ struct DbtDependencyGraph {
 
 impl DbtDependencyGraph {
     fn from_project(project: &DbtProject) -> Self {
+        let graph = DependencyGraph::from_project(project);
         let name_counts = project
             .models
             .values()
@@ -230,62 +230,26 @@ impl DbtDependencyGraph {
                 map
             },
         );
-        let mut reverse_dependencies: HashMap<String, Vec<String>> = HashMap::new();
         let mut source_dependencies: HashMap<String, Vec<String>> = HashMap::new();
-
         for model in project.models.values() {
             let dependent = model.identity().to_string();
-            for reference in &model.refs {
-                let reference = normalize_dependency_id(reference, &labels, &name_to_ids);
-                reverse_dependencies
-                    .entry(reference)
-                    .or_default()
-                    .push(dependent.clone());
-            }
-            let graph_key = model.identity();
-            if let Some(depends_on) = project.graph.depends_on.get(graph_key) {
+            if let Some(depends_on) = project.graph.depends_on.get(model.identity()) {
                 for dependency in depends_on {
-                    let dependency_name =
-                        normalize_dependency_id(dependency, &labels, &name_to_ids);
                     if dependency.starts_with("source.") {
+                        let dependency_name =
+                            normalize_dependency_id(dependency, &labels, &name_to_ids);
                         source_dependencies
-                            .entry(dependency_name.clone())
+                            .entry(dependency_name)
                             .or_default()
                             .push(dependent.clone());
                     }
-                    reverse_dependencies
-                        .entry(dependency_name)
-                        .or_default()
-                        .push(dependent.clone());
                 }
             }
-        }
-
-        for dependents in reverse_dependencies.values_mut() {
-            dependents.sort();
-            dependents.dedup();
         }
         for dependents in source_dependencies.values_mut() {
             dependents.sort();
             dependents.dedup();
         }
-
-        let exposure_dependencies = project
-            .exposures
-            .values()
-            .map(|exposure| {
-                (
-                    exposure.name.clone(),
-                    exposure
-                        .depends_on
-                        .iter()
-                        .map(|dependency| {
-                            normalize_dependency_id(dependency, &labels, &name_to_ids)
-                        })
-                        .collect::<Vec<_>>(),
-                )
-            })
-            .collect();
 
         let macro_path_to_id = project
             .macros
@@ -325,9 +289,7 @@ impl DbtDependencyGraph {
         }
 
         Self {
-            reverse_dependencies,
-            exposure_dependencies,
-            labels,
+            graph,
             macro_path_to_id,
             macro_to_models,
             macro_dependents,
@@ -401,45 +363,20 @@ impl DbtDependencyGraph {
         macro_id.rsplit('.').next().unwrap_or(macro_id).to_string()
     }
 
+    fn label(&self, id: &str) -> Option<&str> {
+        self.graph.label(id)
+    }
+
     fn transitive_downstream(&self, changed_model_ids: &[String]) -> Vec<String> {
-        let changed = changed_model_ids.iter().cloned().collect::<HashSet<_>>();
-        let mut seen = HashSet::new();
-        let mut stack = changed_model_ids.to_vec();
-        while let Some(model) = stack.pop() {
-            if let Some(dependents) = self.reverse_dependencies.get(&model) {
-                for dependent in dependents {
-                    if changed.contains(dependent) || !seen.insert(dependent.clone()) {
-                        continue;
-                    }
-                    stack.push(dependent.clone());
-                }
-            }
-        }
-        let mut downstream = seen.into_iter().collect::<Vec<_>>();
-        downstream.sort();
-        downstream
+        self.graph.transitive_downstream(changed_model_ids, None)
     }
 
     fn affected_exposures(&self, affected_model_ids: &[String]) -> Vec<String> {
-        let affected = affected_model_ids.iter().cloned().collect::<HashSet<_>>();
-        let mut exposures = self
-            .exposure_dependencies
-            .iter()
-            .filter(|(_, dependencies)| {
-                dependencies
-                    .iter()
-                    .any(|dependency| affected.contains(dependency))
-            })
-            .map(|(name, _)| name.clone())
-            .collect::<Vec<_>>();
-        exposures.sort();
-        exposures
+        self.graph.affected_exposures(affected_model_ids)
     }
 
     fn labels_for(&self, ids: &[String]) -> Vec<String> {
-        ids.iter()
-            .map(|id| self.labels.get(id).cloned().unwrap_or_else(|| id.clone()))
-            .collect()
+        self.graph.labels_for(ids)
     }
 }
 
