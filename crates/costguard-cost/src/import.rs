@@ -12,6 +12,7 @@ pub enum CostExportFormat {
     BigQuery,
     Databricks,
     Trino,
+    Pipeline,
     Generic,
 }
 
@@ -25,6 +26,7 @@ impl FromStr for CostExportFormat {
             "bigquery" => Ok(Self::BigQuery),
             "databricks" => Ok(Self::Databricks),
             "trino" => Ok(Self::Trino),
+            "pipeline" => Ok(Self::Pipeline),
             "generic" => Ok(Self::Generic),
             other => Err(format!("unknown cost export format '{other}'")),
         }
@@ -217,6 +219,42 @@ fn aliases(format: CostExportFormat) -> Aliases {
             model: &["model_id", "query_id", "source"],
             ..common
         },
+        CostExportFormat::Pipeline => Aliases {
+            model: &[
+                "model_id",
+                "model",
+                "relation",
+                "relation_name",
+                "asset_key",
+                "asset",
+                "asset_name",
+                "dbt_model",
+                "dbt_model_id",
+                "resource_name",
+            ],
+            executions: &[
+                "executions",
+                "run_count",
+                "materialization_count",
+                "execution_count",
+                "count",
+            ],
+            compute_seconds: &[
+                "compute_seconds",
+                "duration_seconds",
+                "elapsed_seconds",
+                "execution_seconds",
+                "total_cpu_time_seconds",
+            ],
+            compute_milliseconds: &[
+                "duration_ms",
+                "duration_milliseconds",
+                "elapsed_ms",
+                "execution_time_ms",
+                "wall_time_ms",
+            ],
+            ..common
+        },
         CostExportFormat::Generic | CostExportFormat::Normalized => common,
     }
 }
@@ -326,6 +364,57 @@ mod tests {
         assert_eq!(bundle.observations[0].credits, Some(1.5));
         let value = serde_json::to_string(&bundle).unwrap();
         assert!(!value.contains("query_text"));
+    }
+
+    #[test]
+    fn normalizes_pipeline_csv_aliases_and_ignores_rows() {
+        let input = "relation,window_start,window_end,run_count,bytes_processed,duration_ms,rows_written,usd_cost\norders,2026-06-01T00:00:00Z,2026-06-02T00:00:00Z,2,2048,1500,99,3.50\n";
+        let bundle = normalize_cost_export(input, CostExportFormat::Pipeline, &options()).unwrap();
+        let observation = &bundle.observations[0];
+        assert_eq!(observation.model_id, "model.acme.orders");
+        assert_eq!(observation.executions, 2);
+        assert_eq!(observation.bytes_processed, Some(2048.0));
+        assert_eq!(observation.compute_seconds, Some(1.5));
+        assert_eq!(observation.cost_usd, Some(3.5));
+    }
+
+    #[test]
+    fn normalizes_pipeline_json_rows_with_default_execution_count() {
+        let input = r#"{"rows":[{"asset_key":"model.acme.events","window_start":"2026-06-01 00:00:00","window_end":"2026-06-02 00:00:00","duration_seconds":7}]}"#;
+        let bundle = normalize_cost_export(input, CostExportFormat::Pipeline, &options()).unwrap();
+        let observation = &bundle.observations[0];
+        assert_eq!(observation.model_id, "model.acme.events");
+        assert_eq!(observation.executions, 1);
+        assert_eq!(observation.compute_seconds, Some(7.0));
+    }
+
+    #[test]
+    fn normalizes_pipeline_json_array_and_object_inputs() {
+        let array = r#"[{"dbt_model":"orders","window_start":"2026-06-01T00:00:00Z","window_end":"2026-06-02T00:00:00Z","duration_seconds":4}]"#;
+        let bundle = normalize_cost_export(array, CostExportFormat::Pipeline, &options()).unwrap();
+        assert_eq!(bundle.observations[0].model_id, "model.acme.orders");
+        assert_eq!(bundle.observations[0].compute_seconds, Some(4.0));
+
+        let object = r#"{"relation_name":"model.acme.order_items","window_start":"2026-06-01T00:00:00Z","window_end":"2026-06-02T00:00:00Z","run_count":3}"#;
+        let bundle = normalize_cost_export(object, CostExportFormat::Pipeline, &options()).unwrap();
+        assert_eq!(bundle.observations[0].model_id, "model.acme.order_items");
+        assert_eq!(bundle.observations[0].executions, 3);
+    }
+
+    #[test]
+    fn rejects_pipeline_duplicates_and_negative_values() {
+        let negative = normalize_cost_export(
+            "relation,window_start,window_end,cost_usd\norders,2026-01-01T00:00:00Z,2026-01-02T00:00:00Z,-1\n",
+            CostExportFormat::Pipeline,
+            &options(),
+        );
+        assert!(negative.is_err());
+        let duplicate = normalize_cost_export(
+            "relation,window_start,window_end\norders,2026-01-01T00:00:00Z,2026-01-02T00:00:00Z\norders,2026-01-01T00:00:00Z,2026-01-02T00:00:00Z\n",
+            CostExportFormat::Pipeline,
+            &options(),
+        );
+        assert!(duplicate.is_err());
     }
 
     #[test]

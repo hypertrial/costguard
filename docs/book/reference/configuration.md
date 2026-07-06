@@ -219,6 +219,8 @@ Optional cost-estimation settings. See [Cost estimates](cost-estimates.md) for t
 | `observations_before` | string | Pre-change observation bundle for realized-savings verification |
 | `observations_after` | string | Post-change observation bundle for realized-savings verification |
 
+Create observation bundles from local pipeline exports with `costguard cost normalize --source pipeline`; the normalized bundle is metadata-only and uses the same `CostObservationBundleV1` schema as warehouse exports.
+
 ### `[cost.sources."name"]` / `[cost.models."name"]` / `[cost.rules.RULE_ID]`
 
 Override bytes, runs per month, or rule multiplier priors. Source keys match dbt source or ref names.

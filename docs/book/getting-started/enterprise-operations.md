@@ -11,7 +11,7 @@ Pin an exact stable release in production:
   with:
     fetch-depth: 0
 - run: dbt compile --target ci
-- uses: hypertrial/costguard/.github/actions/costguard@v2.5.0
+- uses: hypertrial/costguard/.github/actions/costguard@v2.6.0
   with:
     base: origin/main
     warehouse: snowflake
@@ -37,7 +37,7 @@ Costguard 2.1 requires **baseline v3** and **policy v2**, both with `identity_sc
 1. Run a full strict scan on the default branch and resolve parse or metadata failures.
 2. Generate a finding baseline with `costguard scan --write-baseline` bound to the active signed-policy digest.
 3. Ensure the signed policy bundle uses schema version 2 and `identity_scheme: "semantic-v1"`.
-4. Bump the Action pin to `@v2.5.0`, commit baseline v3 and signed policy v2 together, and merge in one release window.
+4. Bump the Action pin to `@v2.6.0`, commit baseline v3 and signed policy v2 together, and merge in one release window.
 5. Re-run a full strict scan on default branch and confirm PR checks pass.
 
 See [Compatibility policy](../reference/compatibility.md) for rollback to the saved `v2.0.0` artifacts.

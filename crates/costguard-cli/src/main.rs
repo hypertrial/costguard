@@ -158,6 +158,7 @@ enum CostSourceArg {
     Bigquery,
     Databricks,
     Trino,
+    Pipeline,
     Generic,
 }
 
@@ -169,6 +170,7 @@ impl From<CostSourceArg> for CostExportFormat {
             CostSourceArg::Bigquery => Self::BigQuery,
             CostSourceArg::Databricks => Self::Databricks,
             CostSourceArg::Trino => Self::Trino,
+            CostSourceArg::Pipeline => Self::Pipeline,
             CostSourceArg::Generic => Self::Generic,
         }
     }
@@ -285,6 +287,10 @@ struct InitArgs {
     #[arg(long)]
     warehouse: Option<String>,
     #[arg(long)]
+    profile: Option<String>,
+    #[arg(long)]
+    dbt_dir: Option<PathBuf>,
+    #[arg(long)]
     force: bool,
     #[arg(long)]
     no_workflow: bool,
@@ -369,6 +375,8 @@ fn run_init_command(args: InitArgs) -> Result<u8> {
         &root,
         &InitOptions {
             warehouse: args.warehouse,
+            profile: args.profile,
+            dbt_dir: args.dbt_dir,
             force: args.force,
             no_workflow: args.no_workflow,
             no_config: args.no_config,

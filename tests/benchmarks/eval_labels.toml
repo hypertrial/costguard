@@ -306,6 +306,17 @@ notes = "forbid_rules from case trino_parse"
 repo = "corpus"
 sha = "fixtures"
 rule = "SQLCOST006"
+path = "forbid_unbounded_subquery_distant_on"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case forbid_unbounded_subquery_distant_on"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST006"
 path = "recall_equality_join_ok"
 y_true = 0
 split = "corpus"
@@ -367,6 +378,17 @@ split = "corpus"
 source = "seed:corpus"
 weight = 1.0
 notes = "expect_rules from case recall_order_by_plain"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST007"
+path = "recall_window_partitioned_ok"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case recall_window_partitioned_ok"
 
 [[label]]
 repo = "corpus"
@@ -587,6 +609,17 @@ split = "corpus"
 source = "seed:corpus"
 weight = 1.0
 notes = "forbid_rules from case cte_inner_from"
+
+[[label]]
+repo = "corpus"
+sha = "fixtures"
+rule = "SQLCOST012"
+path = "forbid_cross_join_group_by_comma"
+y_true = 0
+split = "corpus"
+source = "seed:corpus"
+weight = 1.0
+notes = "forbid_rules from case forbid_cross_join_group_by_comma"
 
 [[label]]
 repo = "corpus"
@@ -1667,6 +1700,17 @@ weight = 1.0
 notes = "equality join predicates should not fire unbounded join rule"
 
 [[label]]
+repo = "nba-monte-carlo"
+sha = "494dbe6a1f0adec64b4557014c3995c1f0f7f7af"
+rule = "SQLCOST022"
+path = "__bucket__:other"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "Python models using fetchall/to_pandas collect warehouse data locally"
+
+[[label]]
 repo = "spellbook"
 sha = "e3a7dc9e8a49fa8a9a55d967fa8cabe5dd963738"
 rule = "SQLCOST001"
@@ -2435,3 +2479,25 @@ split = "real"
 source = "seed:fp_registry"
 weight = 1.0
 notes = "recursive CTEs are valid medium-severity cost signals"
+
+[[label]]
+repo = "tuva"
+sha = "434ff3ff70cd1cac53ba80e8291273b668bf281a"
+rule = "SQLCOST009"
+path = "__bucket__:other"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "Tuva appointment joins repeat lower(trim(...)) normalization inline"
+
+[[label]]
+repo = "tuva"
+sha = "434ff3ff70cd1cac53ba80e8291273b668bf281a"
+rule = "SQLCOST011"
+path = "__bucket__:other"
+y_true = 1
+split = "real"
+source = "seed:fp_registry"
+weight = 1.0
+notes = "Tuva semantic-layer mart reads expected_values sources directly"

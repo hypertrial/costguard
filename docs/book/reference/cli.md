@@ -71,10 +71,12 @@ Requires exactly one file path. Supports `--cost`. Does not support `--fail-on`,
 
 ```bash
 costguard cost report [PATHS...] [OPTIONS]
-costguard cost normalize INPUT OUTPUT --source snowflake --organization ORG --repository OWNER/REPO --provenance EXPORT_ID
+costguard cost normalize INPUT OUTPUT --source snowflake|bigquery|databricks|trino|pipeline|generic --organization ORG --repository OWNER/REPO --provenance EXPORT_ID
 ```
 
 Renders a local cost prioritization summary (model totals, top models, optional finding savings). Cost is always enabled; uses `[cost]` from `costguard.toml` when present.
+
+Use `--source pipeline` for local orchestration exports from tools such as dlt, Dagster, DuckDB, and dbt. It accepts common columns including `model_id`, `relation`, `relation_name`, `asset_key`, `dbt_model`, `window_start`, `window_end`, `executions`, `run_count`, `duration_seconds`, `duration_ms`, `bytes_processed`, and `cost_usd`; row-count columns are ignored in v2.6.0.
 
 ## `pr`
 
@@ -108,7 +110,7 @@ Finding baselines are written with `costguard scan --write-baseline` (baseline v
 ## `init`
 
 ```bash
-costguard init [--warehouse PLATFORM] [--force] [--no-workflow] [--no-config]
+costguard init [--warehouse PLATFORM] [--profile local-duckdb] [--dbt-dir PATH] [--force] [--no-workflow] [--no-config]
 ```
 
 Scaffolds Costguard into the current directory (typically a dbt project root):
@@ -117,6 +119,8 @@ Scaffolds Costguard into the current directory (typically a dbt project root):
 - `costguard.toml` — starter config with detected or overridden `warehouse` and `[gate] block_only_new = true`
 
 The generated workflow also sets `block-only-new: true` explicitly. Warehouse detection is best-effort: reads `dbt_project.yml` `profile`, then `profiles.yml` (project root or `~/.dbt/profiles.yml`) adapter `type`. Use `--warehouse` when detection fails. Existing files are skipped unless `--force`.
+
+`--profile local-duckdb` writes active DuckDB/dbt defaults, keeps strict analysis commented as an opt-in hardening step, and rejects non-DuckDB warehouse overrides. Use `--dbt-dir dbt` from a repository root when the dbt project lives in a subdirectory.
 
 ## `policy`
 

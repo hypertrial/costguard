@@ -136,7 +136,7 @@ JSON schema version is **4** with an optional top-level `cost` object. Per-findi
 ## GitHub Action
 
 ```yaml
-- uses: hypertrial/costguard/.github/actions/costguard@v2.5.0
+- uses: hypertrial/costguard/.github/actions/costguard@v2.6.0
   with:
     cost: "true"
     fail-on-cost-delta: "500"
@@ -147,6 +147,19 @@ JSON schema version is **4** with an optional top-level `cost` object. Per-findi
 ## Calibration
 
 Offline query-history enrichment is shipped through `[cost.inputs].query_history` and `costguard cost normalize`. Tune `[cost.pricing]` using those exports, then validate bytes-per-run coverage and compute conversion bounds against your repo's observed spend before enabling dollar gates.
+
+For local dlt/dbt/DuckDB/Dagster-style pipelines, export one row per dbt model and time window, then normalize it:
+
+```bash
+costguard cost normalize pipeline_observations.csv costguard-observations.json \
+  --source pipeline \
+  --organization acme \
+  --repository acme/warehouse \
+  --provenance dagster-run-2026-07-05 \
+  --model-mapping model-mapping.json
+```
+
+Minimum columns are a model identifier such as `model_id`, `relation`, or `asset_key`, plus `window_start` and `window_end`. Optional columns include `executions`/`run_count`, `duration_seconds`/`duration_ms`, `bytes_processed`, `credits`, and `cost_usd`; row counts are accepted but ignored by v2.6.0. Point `[cost.inputs].observations` at the generated JSON after reviewing pricing calibration.
 
 ## Related
 

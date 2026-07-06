@@ -1,0 +1,666 @@
+{
+  "enterprise_gates": {
+    "high_severity_sampled_precision_min": 0.9,
+    "overall_sampled_precision_min": 0.8,
+    "per_rule_sampled_precision_min": 0.7
+  },
+  "examples": [
+    {
+      "bucket": "other",
+      "class": null,
+      "label": "tp",
+      "line": 5,
+      "message": "SELECT * in a non-staging model.",
+      "path": "models/marts/order_items.sql",
+      "repo": "jaffle-shop",
+      "rule_id": "SQLCOST001",
+      "savings": 2100.0,
+      "snippet": "select * from {{ ref('stg_order_items') }}",
+      "verdict": "tp"
+    },
+    {
+      "bucket": "other",
+      "class": null,
+      "label": "tp",
+      "line": 5,
+      "message": "SELECT * in a non-staging model.",
+      "path": "models/marts/locations.sql",
+      "repo": "jaffle-shop",
+      "rule_id": "SQLCOST001",
+      "savings": 1500.0,
+      "snippet": "select * from {{ ref('stg_locations') }}",
+      "verdict": "tp"
+    },
+    {
+      "bucket": "other",
+      "class": null,
+      "label": "tp",
+      "line": 35,
+      "message": "Repeated JSON extraction detected.",
+      "path": "transform/snowflake-dbt/models/blp/enterprise_license_mapping.sql",
+      "repo": "mattermost-warehouse",
+      "rule_id": "SQLCOST002",
+      "savings": 850.0,
+      "snippet": "COALESCE(c.metadata:\"id\"::VARCHAR, c.metadata:\"cws-customer\")                               AS customer_id",
+      "verdict": "tp"
+    },
+    {
+      "bucket": "other",
+      "class": null,
+      "label": "tp",
+      "line": 28,
+      "message": "Repeated JSON extraction detected.",
+      "path": "transform/snowflake-dbt/models/stripe/charges.sql",
+      "repo": "mattermost-warehouse",
+      "rule_id": "SQLCOST002",
+      "savings": 640.0,
+      "snippet": ",charges.payment_method_details:\"card\":\"brand\"::varchar as payment_method_card_brand",
+      "verdict": "tp"
+    },
+    {
+      "bucket": "other",
+      "class": null,
+      "label": "tp",
+      "line": 40,
+      "message": "Repeated regex operations detected.",
+      "path": "transform/snowflake-dbt/models/mattermost/nightly/excludable_servers.sql",
+      "repo": "mattermost-warehouse",
+      "rule_id": "SQLCOST003",
+      "savings": 560.0,
+      "snippet": "regexp_substr(COALESCE(sec.version, '1.2.3'), '^[0-9]{1,2}\\.{1}[0-9]{1,2}\\.{1}[0-9]{1,2}\\.{1}[0-9]{1,2}\\.{1}[0-9]{1,2}\\.{1}[0-9]{1,2}$') is null",
+      "verdict": "tp"
+    },
+    {
+      "bucket": "other",
+      "class": null,
+      "label": "tp",
+      "line": 74,
+      "message": "Repeated regex operations detected.",
+      "path": "transform/snowflake-dbt/models/sales/marketing_funnel.sql",
+      "repo": "mattermost-warehouse",
+      "rule_id": "SQLCOST003",
+      "savings": 560.0,
+      "snippet": "regexp_substr(",
+      "verdict": "tp"
+    },
+    {
+      "bucket": "other",
+      "class": null,
+      "label": "tp",
+      "line": 1,
+      "message": "Incremental model appears to have no unique_key.",
+      "path": "transform/snowflake-dbt/models/events/hourly/incident_response_events.sql",
+      "repo": "mattermost-warehouse",
+      "rule_id": "SQLCOST004",
+      "savings": 3000.0,
+      "snippet": "{{config({",
+      "verdict": "tp"
+    },
+    {
+      "bucket": "other",
+      "class": null,
+      "label": "tp",
+      "line": 1,
+      "message": "Incremental model appears to have no unique_key.",
+      "path": "transform/snowflake-dbt/models/events/hourly/mobile_events.sql",
+      "repo": "mattermost-warehouse",
+      "rule_id": "SQLCOST004",
+      "savings": 3000.0,
+      "snippet": "{{config({",
+      "verdict": "tp"
+    },
+    {
+      "bucket": "missing_predicate",
+      "class": null,
+      "label": "tp",
+      "line": 1,
+      "message": "Incremental model has no obvious date or partition predicate.",
+      "path": "transform/snowflake-dbt/models/orgm/lead_status_hist.sql",
+      "repo": "mattermost-warehouse",
+      "rule_id": "SQLCOST005",
+      "savings": 680.0,
+      "snippet": "{% if execute %}",
+      "verdict": "tp"
+    },
+    {
+      "bucket": "missing_predicate",
+      "class": null,
+      "label": "tp",
+      "line": 1,
+      "message": "Incremental model has no obvious date or partition predicate.",
+      "path": "transform/snowflake-dbt/models/events/nightly/server_events_by_date.sql",
+      "repo": "mattermost-warehouse",
+      "rule_id": "SQLCOST005",
+      "savings": 150.0,
+      "snippet": "{{config({",
+      "verdict": "tp"
+    },
+    {
+      "bucket": "non_equality_join",
+      "class": null,
+      "label": "tp",
+      "line": 13,
+      "message": "Join has no clear equality predicate.",
+      "path": "dbt_subprojects/daily_spellbook/tests/spaceid/bnb/spaceid_registrations_test.sql",
+      "repo": "spellbook",
+      "rule_id": "SQLCOST006",
+      "savings": 6.5,
+      "snippet": "JOIN spaceid_v7_registration ON TRUE",
+      "verdict": "tp"
+    },
+    {
+      "bucket": "other",
+      "class": null,
+      "label": "tp",
+      "line": 3,
+      "message": "Join has no clear equality predicate.",
+      "path": "dbt_subprojects/dex/tests/generic/oneinch_no_cross_chain_placeholder_tokens.sql",
+      "repo": "spellbook",
+      "rule_id": "SQLCOST006",
+      "savings": 6.5,
+      "snippet": "{% set placeholder_tokens = oneinch_cross_chain_placeholder_tokens_cfg_macro() | join(', ') %}",
+      "verdict": "tp"
+    }
+  ],
+  "headline": {
+    "high_severity_sampled_precision": 0.9980879541108987,
+    "overall_sampled_precision": 0.971853425385024,
+    "rules_passing_census": 44,
+    "rules_total": 44,
+    "tier_counts": {
+      "informational": 16,
+      "verified-high": 27,
+      "verified-low": 1,
+      "verified-medium": 2
+    }
+  },
+  "per_rule": [
+    {
+      "examined": 100,
+      "pass": true,
+      "rule_id": "SQLCOST001",
+      "sampled_precision": 1.0,
+      "severity": "medium",
+      "tier": "verified-high",
+      "total": 441,
+      "tp": 100
+    },
+    {
+      "examined": 100,
+      "pass": true,
+      "rule_id": "SQLCOST002",
+      "sampled_precision": 1.0,
+      "severity": "medium",
+      "tier": "verified-high",
+      "total": 396,
+      "tp": 100
+    },
+    {
+      "examined": 32,
+      "pass": true,
+      "rule_id": "SQLCOST003",
+      "sampled_precision": 1.0,
+      "severity": "medium",
+      "tier": "verified-high",
+      "total": 32,
+      "tp": 32
+    },
+    {
+      "examined": 91,
+      "pass": true,
+      "rule_id": "SQLCOST004",
+      "sampled_precision": 1.0,
+      "severity": "high",
+      "tier": "verified-high",
+      "total": 91,
+      "tp": 91
+    },
+    {
+      "examined": 12,
+      "pass": true,
+      "rule_id": "SQLCOST005",
+      "sampled_precision": 0.9166666666666666,
+      "severity": "high",
+      "tier": "verified-high",
+      "total": 12,
+      "tp": 11
+    },
+    {
+      "examined": 38,
+      "pass": true,
+      "rule_id": "SQLCOST006",
+      "sampled_precision": 0.868421052631579,
+      "severity": "medium",
+      "tier": "verified-medium",
+      "total": 38,
+      "tp": 33
+    },
+    {
+      "examined": 57,
+      "pass": true,
+      "rule_id": "SQLCOST007",
+      "sampled_precision": 1.0,
+      "severity": "low",
+      "tier": "verified-high",
+      "total": 57,
+      "tp": 57
+    },
+    {
+      "examined": 100,
+      "pass": true,
+      "rule_id": "SQLCOST008",
+      "sampled_precision": 1.0,
+      "severity": "medium",
+      "tier": "verified-high",
+      "total": 194,
+      "tp": 100
+    },
+    {
+      "examined": 0,
+      "pass": true,
+      "rule_id": "SQLCOST009",
+      "sampled_precision": null,
+      "severity": "low",
+      "tier": "informational",
+      "total": 0,
+      "tp": 0
+    },
+    {
+      "examined": 0,
+      "pass": true,
+      "rule_id": "SQLCOST010",
+      "sampled_precision": null,
+      "severity": "high",
+      "tier": "informational",
+      "total": 0,
+      "tp": 0
+    },
+    {
+      "examined": 0,
+      "pass": true,
+      "rule_id": "SQLCOST011",
+      "sampled_precision": null,
+      "severity": "medium",
+      "tier": "informational",
+      "total": 0,
+      "tp": 0
+    },
+    {
+      "examined": 66,
+      "pass": true,
+      "rule_id": "SQLCOST012",
+      "sampled_precision": 0.7424242424242424,
+      "severity": "medium",
+      "tier": "verified-medium",
+      "total": 66,
+      "tp": 49
+    },
+    {
+      "examined": 100,
+      "pass": true,
+      "rule_id": "SQLCOST013",
+      "sampled_precision": 1.0,
+      "severity": "medium",
+      "tier": "verified-high",
+      "total": 187,
+      "tp": 100
+    },
+    {
+      "examined": 100,
+      "pass": true,
+      "rule_id": "SQLCOST014",
+      "sampled_precision": 0.93,
+      "severity": "low",
+      "tier": "verified-high",
+      "total": 938,
+      "tp": 93
+    },
+    {
+      "examined": 100,
+      "pass": true,
+      "rule_id": "SQLCOST015",
+      "sampled_precision": 1.0,
+      "severity": "medium",
+      "tier": "verified-high",
+      "total": 346,
+      "tp": 100
+    },
+    {
+      "examined": 0,
+      "pass": true,
+      "rule_id": "SQLCOST016",
+      "sampled_precision": null,
+      "severity": "high",
+      "tier": "informational",
+      "total": 0,
+      "tp": 0
+    },
+    {
+      "examined": 34,
+      "pass": true,
+      "rule_id": "SQLCOST017",
+      "sampled_precision": 0.3235294117647059,
+      "severity": "medium",
+      "tier": "verified-low",
+      "total": 34,
+      "tp": 11
+    },
+    {
+      "examined": 100,
+      "pass": true,
+      "rule_id": "SQLCOST018",
+      "sampled_precision": 1.0,
+      "severity": "medium",
+      "tier": "verified-high",
+      "total": 339,
+      "tp": 100
+    },
+    {
+      "examined": 100,
+      "pass": true,
+      "rule_id": "SQLCOST019",
+      "sampled_precision": 1.0,
+      "severity": "high",
+      "tier": "verified-high",
+      "total": 123,
+      "tp": 100
+    },
+    {
+      "examined": 22,
+      "pass": true,
+      "rule_id": "SQLCOST020",
+      "sampled_precision": 1.0,
+      "severity": "medium",
+      "tier": "verified-high",
+      "total": 22,
+      "tp": 22
+    },
+    {
+      "examined": 0,
+      "pass": true,
+      "rule_id": "SQLCOST021",
+      "sampled_precision": null,
+      "severity": "medium",
+      "tier": "informational",
+      "total": 0,
+      "tp": 0
+    },
+    {
+      "examined": 0,
+      "pass": true,
+      "rule_id": "SQLCOST022",
+      "sampled_precision": null,
+      "severity": "medium",
+      "tier": "informational",
+      "total": 0,
+      "tp": 0
+    },
+    {
+      "examined": 0,
+      "pass": true,
+      "rule_id": "SQLCOST023",
+      "sampled_precision": null,
+      "severity": "info",
+      "tier": "informational",
+      "total": 0,
+      "tp": 0
+    },
+    {
+      "examined": 0,
+      "pass": true,
+      "rule_id": "SQLCOST024",
+      "sampled_precision": null,
+      "severity": "low",
+      "tier": "informational",
+      "total": 0,
+      "tp": 0
+    },
+    {
+      "examined": 0,
+      "pass": true,
+      "rule_id": "SQLCOST025",
+      "sampled_precision": null,
+      "severity": "low",
+      "tier": "informational",
+      "total": 0,
+      "tp": 0
+    },
+    {
+      "examined": 1,
+      "pass": true,
+      "rule_id": "SQLCOST026",
+      "sampled_precision": 0.0,
+      "severity": "low",
+      "tier": "informational",
+      "total": 1,
+      "tp": 0
+    },
+    {
+      "examined": 100,
+      "pass": true,
+      "rule_id": "SQLCOST027",
+      "sampled_precision": 0.0,
+      "severity": "info",
+      "tier": "informational",
+      "total": 7650,
+      "tp": 0
+    },
+    {
+      "examined": 100,
+      "pass": true,
+      "rule_id": "SQLCOST028",
+      "sampled_precision": 1.0,
+      "severity": "high",
+      "tier": "verified-high",
+      "total": 171,
+      "tp": 100
+    },
+    {
+      "examined": 100,
+      "pass": true,
+      "rule_id": "SQLCOST029",
+      "sampled_precision": 1.0,
+      "severity": "medium",
+      "tier": "verified-high",
+      "total": 114,
+      "tp": 100
+    },
+    {
+      "examined": 2,
+      "pass": true,
+      "rule_id": "SQLCOST030",
+      "sampled_precision": 1.0,
+      "severity": "high",
+      "tier": "verified-high",
+      "total": 2,
+      "tp": 2
+    },
+    {
+      "examined": 12,
+      "pass": true,
+      "rule_id": "SQLCOST031",
+      "sampled_precision": 1.0,
+      "severity": "medium",
+      "tier": "verified-high",
+      "total": 12,
+      "tp": 12
+    },
+    {
+      "examined": 0,
+      "pass": true,
+      "rule_id": "SQLCOST032",
+      "sampled_precision": null,
+      "severity": "medium",
+      "tier": "informational",
+      "total": 0,
+      "tp": 0
+    },
+    {
+      "examined": 11,
+      "pass": true,
+      "rule_id": "SQLCOST033",
+      "sampled_precision": 1.0,
+      "severity": "high",
+      "tier": "verified-high",
+      "total": 11,
+      "tp": 11
+    },
+    {
+      "examined": 0,
+      "pass": true,
+      "rule_id": "SQLCOST034",
+      "sampled_precision": null,
+      "severity": "medium",
+      "tier": "informational",
+      "total": 0,
+      "tp": 0
+    },
+    {
+      "examined": 100,
+      "pass": true,
+      "rule_id": "SQLCOST035",
+      "sampled_precision": 1.0,
+      "severity": "medium",
+      "tier": "verified-high",
+      "total": 124,
+      "tp": 100
+    },
+    {
+      "examined": 61,
+      "pass": true,
+      "rule_id": "SQLCOST036",
+      "sampled_precision": 1.0,
+      "severity": "high",
+      "tier": "verified-high",
+      "total": 61,
+      "tp": 61
+    },
+    {
+      "examined": 46,
+      "pass": true,
+      "rule_id": "SQLCOST037",
+      "sampled_precision": 1.0,
+      "severity": "high",
+      "tier": "verified-high",
+      "total": 46,
+      "tp": 46
+    },
+    {
+      "examined": 100,
+      "pass": true,
+      "rule_id": "SQLCOST038",
+      "sampled_precision": 1.0,
+      "severity": "high",
+      "tier": "verified-high",
+      "total": 447,
+      "tp": 100
+    },
+    {
+      "examined": 74,
+      "pass": true,
+      "rule_id": "SQLCOST039",
+      "sampled_precision": 1.0,
+      "severity": "medium",
+      "tier": "verified-high",
+      "total": 74,
+      "tp": 74
+    },
+    {
+      "examined": 12,
+      "pass": true,
+      "rule_id": "SQLCOST040",
+      "sampled_precision": 1.0,
+      "severity": "medium",
+      "tier": "verified-high",
+      "total": 12,
+      "tp": 12
+    },
+    {
+      "examined": 7,
+      "pass": true,
+      "rule_id": "SQLCOST041",
+      "sampled_precision": 1.0,
+      "severity": "medium",
+      "tier": "verified-high",
+      "total": 7,
+      "tp": 7
+    },
+    {
+      "examined": 100,
+      "pass": true,
+      "rule_id": "SQLCOST042",
+      "sampled_precision": 1.0,
+      "severity": "medium",
+      "tier": "verified-high",
+      "total": 604,
+      "tp": 100
+    },
+    {
+      "examined": 0,
+      "pass": true,
+      "rule_id": "SQLCOST043",
+      "sampled_precision": null,
+      "severity": "medium",
+      "tier": "informational",
+      "total": 0,
+      "tp": 0
+    },
+    {
+      "examined": 6,
+      "pass": true,
+      "rule_id": "SQLCOST044",
+      "sampled_precision": 1.0,
+      "severity": "medium",
+      "tier": "verified-high",
+      "total": 6,
+      "tp": 6
+    },
+    {
+      "examined": null,
+      "pass": null,
+      "rule_id": "SQLCOST045",
+      "sampled_precision": null,
+      "severity": "info",
+      "tier": "informational",
+      "total": null,
+      "tp": null
+    },
+    {
+      "examined": null,
+      "pass": null,
+      "rule_id": "SQLCOST046",
+      "sampled_precision": null,
+      "severity": "low",
+      "tier": "informational",
+      "total": null,
+      "tp": null
+    }
+  ],
+  "quality_ledger": {
+    "evidence_snapshot": "tests/benchmarks/evidence/v2.6.json",
+    "false_positive_registry": {
+      "documented_exemptions": 30,
+      "entries": 93,
+      "false_positives": 30,
+      "open_bugs": 0,
+      "status": "clean"
+    },
+    "full_repositories": [
+      "jaffle-shop",
+      "spellbook",
+      "nba-monte-carlo",
+      "tuva",
+      "mattermost-warehouse",
+      "data-infra",
+      "ol-data-platform"
+    ],
+    "smoke_repositories": [
+      "spellbook",
+      "nba-monte-carlo",
+      "mattermost-warehouse",
+      "data-infra",
+      "ol-data-platform"
+    ]
+  },
+  "version": "2.6.0"
+}

@@ -4,8 +4,12 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-07-05
+
 ### Added
 
+- `costguard cost normalize --source pipeline` for local dlt/dbt/DuckDB/Dagster-style runtime observation exports, using the existing `CostObservationBundleV1` schema.
+- `costguard init --profile local-duckdb [--dbt-dir PATH]` for local dbt DuckDB projects, including model-scoped config, manifest wiring, and subdirectory-aware GitHub Action scaffolding.
 - Active base/head regression-only enforcement through `[gate].block_only_new`, PR CLI `--block-only-new[=<true|false>]`, default-on GitHub Action input, and `costguard init` scaffolding.
 - Project-wide priced PR net-cost enforcement through `[gate].fail_on_pr_cost_increase`, `--fail-on-pr-cost-increase`, and the matching Action input.
 - Version-dated Costguard vs SlowQL comparison and expanded regression/cost/evidence documentation.
@@ -15,6 +19,7 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ### Changed
 
+- SQLCOST007 now trusts parsed AST top-level `ORDER BY` detection, avoiding false positives from `ORDER BY` inside window functions.
 - Regression-only mode now applies consistently to top-level, global/scoped severity, and addressable finding-savings gates while preserving every diagnostic in JSON v4/receipt v2 evidence; required-owner and blast-radius controls still cover every changed model.
 - Markdown and GitHub output distinguish introduced/regressed blockers from unchanged notices and report priced net PR impact in the PR summary.
 - PR finding deltas now compare rename-aware base/head targets through the same current configuration, policy, suppression, waiver, baseline, confidence, and cost pipeline; approved and infrastructure findings are excluded.

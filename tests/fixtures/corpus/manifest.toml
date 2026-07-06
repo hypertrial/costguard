@@ -428,7 +428,7 @@ forbid_rules = []
 name = "recall_window_partitioned_ok"
 path = "recall_window_partitioned_ok"
 expect_rules = []
-forbid_rules = ["SQLCOST013"]
+forbid_rules = ["SQLCOST007", "SQLCOST013"]
 
 # --- Recall coverage: SQLCOST014 ---
 [[case]]
@@ -926,4 +926,3 @@ name = "recall_non_recursive_cte_ok"
 path = "recall_non_recursive_cte_ok"
 expect_rules = []
 forbid_rules = ["SQLCOST044"]
-

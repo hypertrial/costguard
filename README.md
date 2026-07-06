@@ -27,7 +27,7 @@ Generic SQL, Snowflake, BigQuery, and Trino scanning are production-ready; Datab
 curl -fsSL https://raw.githubusercontent.com/hypertrial/costguard/main/scripts/install.sh | sh
 ```
 
-Pin a version: `... | sh -s -- v2.5.0`. Or build from source: `cargo install --git https://github.com/hypertrial/costguard --tag v2.5.0 costguard-cli`.
+Pin a version: `... | sh -s -- v2.6.0`. Or build from source: `cargo install --git https://github.com/hypertrial/costguard --tag v2.6.0 costguard-cli`.
 
 See [Installation](docs/book/getting-started/installation.md) for pinned/airgapped manual install and Windows.
 
@@ -51,6 +51,8 @@ costguard init
 
 This writes `.github/workflows/costguard.yml` and a starter `costguard.toml` (best-effort warehouse detection from `dbt_project.yml` / `profiles.yml`). Commit the workflow, then open a PR.
 
+For local dbt DuckDB projects, including repos where dbt lives under `dbt/`, use `costguard init --profile local-duckdb --dbt-dir dbt`.
+
 Or add the Action manually after your existing dbt compile step:
 
 ```yaml
@@ -58,7 +60,7 @@ Or add the Action manually after your existing dbt compile step:
   with:
     fetch-depth: 0
 - run: dbt compile --target dev
-- uses: hypertrial/costguard/.github/actions/costguard@v2.5.0
+- uses: hypertrial/costguard/.github/actions/costguard@v2.6.0
   with:
     base: origin/main
     warehouse: snowflake
@@ -68,7 +70,7 @@ Or add the Action manually after your existing dbt compile step:
     receipt-path: costguard-receipt.json
 ```
 
-Pin the exact Action tag `@v2.5.0` or use the moving compatible major tag `@v2`. Release binaries are checksum-protected and include provenance attestations.
+Pin the exact Action tag `@v2.6.0` or use the moving compatible major tag `@v2`. Release binaries are checksum-protected and include provenance attestations.
 
 **2.1 requirements:** Use baseline v3 and policy v2 with `identity_scheme: "semantic-v1"`. Older baseline and policy schemas are rejected at scan time. See [Compatibility policy](docs/book/reference/compatibility.md).
 
@@ -216,6 +218,6 @@ Full schema: [Configuration](docs/book/reference/configuration.md).
 
 ## Status
 
-`v2.5.0` adds owner-aware routing, scoped PR gates, expiring local waivers controlled by signed policy, one-scan markdown/JSON receipts with trend comparison, and explicit warehouse-prior provenance. JSON schema v4, baseline v3, policy v2, rule IDs, and default exit behavior remain compatible. `v2.4.0` added lineage-aware downstream cost propagation, warehouse cost priors, committed [benchmark evidence](docs/book/reference/benchmarks.md), and measured precision tiers. Generic SQL, Snowflake, BigQuery, and Trino are supported; Databricks, Redshift, Postgres, and DuckDB remain preview. Cost estimates are advisory, warehouse connectivity is out of scope, and manifest-backed analysis requires the caller's dbt compile step. See the [support policy](SUPPORT.md), [compatibility policy](docs/book/reference/compatibility.md), and [security policy](SECURITY.md).
+`v2.6.0` adds local pipeline observation normalization, a `local-duckdb` init profile, regression-only PR gates, one-scan markdown/JSON receipts with trend comparison, and signed-policy/owner routing improvements. JSON schema v4, baseline v3, policy v2, rule IDs, and default exit behavior remain compatible. `v2.4.0` added lineage-aware downstream cost propagation, warehouse cost priors, committed [benchmark evidence](docs/book/reference/benchmarks.md), and measured precision tiers. Generic SQL, Snowflake, BigQuery, and Trino are supported; Databricks, Redshift, Postgres, and DuckDB remain preview. Cost estimates are advisory, warehouse connectivity is out of scope, and manifest-backed analysis requires the caller's dbt compile step. See the [support policy](SUPPORT.md), [compatibility policy](docs/book/reference/compatibility.md), and [security policy](SECURITY.md).
 
 Licensed under [MIT](LICENSE). Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).

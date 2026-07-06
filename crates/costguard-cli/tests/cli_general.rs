@@ -25,7 +25,7 @@ fn version_reports_workspace_version() {
     assert!(output.status.success());
     assert_eq!(
         String::from_utf8_lossy(&output.stdout).trim(),
-        "costguard 2.5.0"
+        "costguard 2.6.0"
     );
 }
 
@@ -39,7 +39,7 @@ fn version_propagates_to_every_subcommand() {
         assert!(output.status.success(), "{subcommand}");
         assert_eq!(
             String::from_utf8_lossy(&output.stdout).trim(),
-            format!("costguard-{subcommand} 2.5.0"),
+            format!("costguard-{subcommand} 2.6.0"),
             "{subcommand}"
         );
     }

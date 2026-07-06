@@ -4,6 +4,58 @@ use common::{costguard_command, fixture, git};
 use std::fs;
 
 #[test]
+fn cost_normalize_pipeline_source_writes_observations() {
+    let tempdir = tempfile::tempdir().expect("tempdir");
+    let root = tempdir.path();
+    fs::write(
+        root.join("pipeline.csv"),
+        "relation,window_start,window_end,run_count,duration_ms,rows_written,cost_usd\norders,2026-06-01T00:00:00Z,2026-06-02T00:00:00Z,2,1500,99,3.5\n",
+    )
+    .expect("pipeline csv");
+    fs::write(
+        root.join("mapping.json"),
+        r#"{"orders":"model.acme.orders"}"#,
+    )
+    .expect("mapping");
+
+    let output = costguard_command()
+        .current_dir(root)
+        .args([
+            "cost",
+            "normalize",
+            "pipeline.csv",
+            "observations.json",
+            "--source",
+            "pipeline",
+            "--organization",
+            "acme",
+            "--repository",
+            "acme/warehouse",
+            "--provenance",
+            "pipeline-run",
+            "--model-mapping",
+            "mapping.json",
+        ])
+        .output()
+        .expect("normalize");
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let bundle: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(root.join("observations.json")).unwrap())
+            .expect("observations json");
+    let observation = &bundle["observations"][0];
+    assert_eq!(observation["model_id"], "model.acme.orders");
+    assert_eq!(observation["executions"], 2);
+    assert_eq!(observation["compute_seconds"], 1.5);
+    assert_eq!(observation["cost_usd"], 3.5);
+}
+
+#[test]
 fn pr_cost_increase_gate_without_dollar_pricing_is_configuration_error() {
     let tempdir = tempfile::tempdir().expect("tempdir");
     let root = tempdir.path();

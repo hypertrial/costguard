@@ -24,9 +24,9 @@ class EnterpriseReleaseTest(unittest.TestCase):
         metadata = {
             "packages": [
                 {
-                    "id": "costguard-cli 2.5.0",
+                    "id": "costguard-cli 2.6.0",
                     "name": "costguard-cli",
-                    "version": "2.5.0",
+                    "version": "2.6.0",
                     "license": "MIT",
                 },
                 {
@@ -39,7 +39,7 @@ class EnterpriseReleaseTest(unittest.TestCase):
             "resolve": {
                 "nodes": [
                     {
-                        "id": "costguard-cli 2.5.0",
+                        "id": "costguard-cli 2.6.0",
                         "deps": [{"pkg": "serde 1.0.0"}],
                     },
                     {"id": "serde 1.0.0", "deps": []},
@@ -50,7 +50,7 @@ class EnterpriseReleaseTest(unittest.TestCase):
         second = build_sbom(metadata, b"lock")
         self.assertEqual(first, second)
         self.assertEqual(first["bomFormat"], "CycloneDX")
-        self.assertEqual(first["metadata"]["component"]["version"], "2.5.0")
+        self.assertEqual(first["metadata"]["component"]["version"], "2.6.0")
 
     def test_release_inventory_requires_every_target_and_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -64,13 +64,13 @@ class EnterpriseReleaseTest(unittest.TestCase):
                 )
                 (workdir / f"smoke-{target}.json").write_text(
                     json.dumps(
-                        {"target": target, "version": "2.5.0", "sha256": digest}
+                        {"target": target, "version": "2.6.0", "sha256": digest}
                     ),
                     encoding="utf-8",
                 )
             (workdir / "costguard.cdx.json").write_text("{}\n", encoding="utf-8")
             (workdir / "release-check.json").write_text("{}\n", encoding="utf-8")
-            sums = verify(workdir, "2.5.0")
+            sums = verify(workdir, "2.6.0")
             self.assertTrue(sums.exists())
 
 

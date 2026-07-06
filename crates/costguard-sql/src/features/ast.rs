@@ -1011,7 +1011,8 @@ pub fn merge_shape_features(
     } else {
         merge_field!(select_stars);
     }
-    merge_field!(order_by_clauses);
+    // ponytail: regex sees window ORDER BY; parsed SQL can prove top-level ORDER BY absence.
+    base.order_by_clauses = ast.order_by_clauses;
     merge_field!(group_by_clauses);
     merge_field!(distincts);
     merge_field!(window_functions);
