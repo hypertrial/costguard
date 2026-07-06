@@ -29,7 +29,7 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: "3.11"
-      - uses: taiki-e/install-action@16b05812d776ae1dfaabc8277e421fb6d2506419
+      - uses: taiki-e/install-action@4684b8405694ae9dd42c9f39ba901a70ae83f4a3
         with:
           tool: mdbook@0.4.40,cargo-deny@0.19.7
       - name: Install Python gate tools
