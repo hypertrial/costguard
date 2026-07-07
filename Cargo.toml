@@ -28,7 +28,7 @@ clap = { version = "4", default-features = false, features = ["derive", "std", "
 ignore = "0.4"
 ed25519-dalek = { version = "3", features = ["rand_core"] }
 globset = "0.4"
-rand_core = { version = "0.6", features = ["getrandom"] }
+getrandom = { version = "0.4", features = ["sys_rng"] }
 rayon = "1"
 regex = "1"
 schemars = { version = "0.8", features = ["chrono"] }

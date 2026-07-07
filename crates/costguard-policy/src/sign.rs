@@ -6,11 +6,13 @@ use base64::Engine;
 use chrono::{DateTime, Utc};
 use costguard_protocol::SignedDocumentV1;
 use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
-use rand_core::OsRng;
+use getrandom::fill;
 
 pub fn generate_key(key_id: &str, now: DateTime<Utc>) -> Result<PrivateKeyFileV1> {
     require_non_empty("key_id", key_id)?;
-    let signing = SigningKey::generate(&mut OsRng);
+    let mut secret = [0u8; 32];
+    fill(&mut secret).context("failed to generate ed25519 signing key")?;
+    let signing = SigningKey::from_bytes(&secret);
     let engine = base64::engine::general_purpose::STANDARD;
     Ok(PrivateKeyFileV1 {
         key_id: key_id.into(),

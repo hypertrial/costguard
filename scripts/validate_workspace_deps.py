@@ -19,7 +19,7 @@ ALLOWED = frozenset(
         "ed25519-dalek",
         "globset",
         "ignore",
-        "rand_core",
+        "getrandom",
         "rayon",
         "regex",
         "schemars",
