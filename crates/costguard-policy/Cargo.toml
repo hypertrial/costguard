@@ -14,7 +14,7 @@ costguard-diagnostics = { path = "../costguard-diagnostics" }
 costguard-protocol = { path = "../costguard-protocol" }
 ed25519-dalek.workspace = true
 globset.workspace = true
-rand_core.workspace = true
+getrandom.workspace = true
 regex.workspace = true
 schemars.workspace = true
 serde.workspace = true
