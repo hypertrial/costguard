@@ -6,6 +6,7 @@ warehouse = "generic"
 compile_dbt = true
 dbt_adapter = "dbt-duckdb"
 dbt_profile_type = "duckdb"
+dbt_no_introspect = false
 scan_paths = ["."]
 fail_on = "critical"
 
