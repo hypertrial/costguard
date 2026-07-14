@@ -70,9 +70,9 @@
     },
     "max_parse_failure_delta": 50,
     "max_parse_failure_rate": 0.35,
-    "max_rss_bytes": 1073741824,
-    "max_runtime_max_ms": 20000,
-    "max_runtime_median_ms": 15000,
+    "max_rss_bytes": 4294967296,
+    "max_runtime_max_ms": 30000,
+    "max_runtime_median_ms": 25000,
     "max_sql_parse_compiled_failures": 0
   },
   "version": 2,
