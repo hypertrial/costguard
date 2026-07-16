@@ -12,6 +12,7 @@ Source: `crates/costguard-cli/src/main.rs`
 | `cost` | Local cost prioritization summary (model-centric totals for ranking) |
 | `rules` | List registered rules |
 | `init` | Scaffold GitHub workflow and starter `costguard.toml` into a dbt project |
+| `doctor` | Run read-only project and PR-workflow readiness checks |
 | `policy` | Compile, sign, verify, resolve, or inspect signed policy |
 
 ## Shared flags
@@ -118,9 +119,19 @@ Scaffolds Costguard into the current directory (typically a dbt project root):
 - `.github/workflows/costguard.yml` — PR check using the published GitHub Action
 - `costguard.toml` — starter config with detected or overridden `warehouse` and `[gate] block_only_new = true`
 
-The generated workflow also sets `block-only-new: true` explicitly. Warehouse detection is best-effort: reads `dbt_project.yml` `profile`, then `profiles.yml` (project root or `~/.dbt/profiles.yml`) adapter `type`. Use `--warehouse` when detection fails. Existing files are skipped unless `--force`.
+The generated workflow also sets `block-only-new: true`, `pr-comment: true`, and least-privilege `pull-requests: write` explicitly. Warehouse detection is best-effort: reads `dbt_project.yml` `profile`, then `profiles.yml` (project root or `~/.dbt/profiles.yml`) adapter `type`. Use `--warehouse` when detection fails. Existing files are skipped unless `--force`.
 
 `--profile local-duckdb` writes active DuckDB/dbt defaults, keeps strict analysis commented as an opt-in hardening step, and rejects non-DuckDB warehouse overrides. Use `--dbt-dir dbt` from a repository root when the dbt project lives in a subdirectory.
+
+After scaffolding, `init` runs the same read-only report as `doctor`. Readiness warnings and blockers are printed for remediation, but a successful initialization still exits `0`.
+
+## `doctor`
+
+```bash
+costguard doctor [--dbt-dir PATH]
+```
+
+Checks git history, analyzable files, configured policy, dbt metadata freshness/integrity, parse coverage, warehouse selection, the GitHub workflow contract, and mapped-spend/USD cost coverage. It performs a normal local scan but never runs dbt, connects to a warehouse, or writes files. With `--dbt-dir`, project config and models are loaded below that directory while the workflow is checked at the repository root.
 
 ## `policy`
 
@@ -147,8 +158,8 @@ costguard rules [--format text|json|markdown|sarif]
 
 | Code | Meaning |
 | --- | --- |
-| `0` | Success: scan/pr passed gates; `explain` analysis complete; `rules` listed |
-| `1` | scan/pr: analysis incomplete, a blocking `[gate]` failed, findings met `--fail-on` (with optional `--min-confidence`), or a cost gate exceeded; `explain`: analysis incomplete only |
+| `0` | Success: scan/pr passed gates; `explain` analysis complete; `rules` listed; `doctor` found no blockers |
+| `1` | scan/pr: analysis incomplete, a blocking `[gate]` failed, findings met `--fail-on` (with optional `--min-confidence`), or a cost gate exceeded; `explain`: analysis incomplete; `doctor`: readiness blocker |
 | `2` | Configuration error (invalid config, missing manifest, unsupported baseline or policy schema) |
 | `3` | Runtime error (unexpected failure) |
 

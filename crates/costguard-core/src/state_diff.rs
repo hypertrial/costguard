@@ -93,21 +93,23 @@ fn is_regression(base: &Diagnostic, head: &Diagnostic) -> bool {
     if head.severity > base.severity {
         return true;
     }
-    let base_cost = cost_signal(base);
-    let head_cost = cost_signal(head);
+    let (base_cost, head_cost) = comparable_cost_signals(base, head);
     head_cost > base_cost + f64::EPSILON
 }
 
-fn cost_signal(diagnostic: &Diagnostic) -> f64 {
-    diagnostic
-        .cost_estimate
-        .as_ref()
-        .and_then(|estimate| {
-            estimate
-                .savings_p50_usd_per_month
-                .or(Some(estimate.relative_index))
-        })
-        .unwrap_or(0.0)
+fn comparable_cost_signals(base: &Diagnostic, head: &Diagnostic) -> (f64, f64) {
+    let base_estimate = base.cost_estimate.as_ref();
+    let head_estimate = head.cost_estimate.as_ref();
+    match (
+        base_estimate.and_then(|estimate| estimate.savings_p50_usd_per_month),
+        head_estimate.and_then(|estimate| estimate.savings_p50_usd_per_month),
+    ) {
+        (Some(base_usd), Some(head_usd)) => (base_usd, head_usd),
+        _ => (
+            base_estimate.map_or(0.0, |estimate| estimate.relative_index),
+            head_estimate.map_or(0.0, |estimate| estimate.relative_index),
+        ),
+    }
 }
 
 #[cfg(test)]
@@ -180,6 +182,29 @@ mod tests {
         assert_eq!(delta.unchanged, 1);
         assert_eq!(delta.introduced_ids.len(), 1);
         assert_eq!(delta.regressed_ids.len(), 1);
+    }
+
+    #[test]
+    fn regression_comparison_uses_volume_when_only_one_side_has_usd() {
+        let mut priced_base = diagnostic("mixed", Severity::Medium, Some(1_000.0));
+        priced_base.cost_estimate.as_mut().unwrap().relative_index = 1.0;
+        let mut unpriced_head = diagnostic("mixed", Severity::Medium, Some(2.0));
+        unpriced_head
+            .cost_estimate
+            .as_mut()
+            .unwrap()
+            .savings_p50_usd_per_month = None;
+        assert!(is_regression(&priced_base, &unpriced_head));
+
+        let mut unpriced_base = diagnostic("mixed", Severity::Medium, Some(1.0));
+        unpriced_base
+            .cost_estimate
+            .as_mut()
+            .unwrap()
+            .savings_p50_usd_per_month = None;
+        let mut priced_head = diagnostic("mixed", Severity::Medium, Some(1_000.0));
+        priced_head.cost_estimate.as_mut().unwrap().relative_index = 0.5;
+        assert!(!is_regression(&unpriced_base, &priced_head));
     }
 
     #[test]

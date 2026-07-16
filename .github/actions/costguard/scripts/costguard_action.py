@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import shutil
@@ -14,7 +15,8 @@ import tempfile
 import time
 import urllib.request
 from pathlib import Path
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
+from urllib.parse import quote
 
 DEFAULT_MANIFEST = "target/manifest.json"
 PRODUCER_REPOSITORY = "hypertrial/costguard"
@@ -23,6 +25,7 @@ DOWNLOAD_TIMEOUT_SECONDS = 30
 RELEASE_ARCHIVE_MAX_BYTES = 67_108_864
 CHECKSUM_MAX_BYTES = 4_096
 DOWNLOAD_CHUNK_BYTES = 64 * 1024
+PR_COMMENT_MARKER = "<!-- costguard-pr-comment -->"
 
 
 class DownloadTooLarge(Exception):
@@ -248,11 +251,105 @@ def append_run_flags(command: list[str]) -> None:
             command.append(flag)
 
 
+def github_warning(message: str) -> None:
+    safe = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    sys.stderr.write(f"::warning title=Costguard PR comment::{safe}\n")
+
+
+def github_api_request(
+    method: str, url: str, token: str, payload: dict[str, str] | None = None
+) -> object:
+    data = json.dumps(payload).encode("utf-8") if payload is not None else None
+    request = urllib.request.Request(
+        url,
+        data=data,
+        method=method,
+        headers={
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "costguard-action",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=DOWNLOAD_TIMEOUT_SECONDS) as response:
+        body = response.read()
+    return json.loads(body) if body else None
+
+
+def pull_request_number() -> int | None:
+    event_path = env("GITHUB_EVENT_PATH")
+    if not event_path:
+        return None
+    try:
+        event = json.loads(Path(event_path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    number = event.get("pull_request", {}).get("number")
+    return number if isinstance(number, int) and number > 0 else None
+
+
+def publish_pr_comment(markdown: str) -> None:
+    token = env("GITHUB_TOKEN_INPUT")
+    repository = env("GITHUB_REPOSITORY")
+    number = pull_request_number()
+    if not token:
+        github_warning("pr-comment is enabled but github-token is empty")
+        return
+    if not repository or "/" not in repository or number is None:
+        github_warning("pull request context is unavailable; skipped sticky comment")
+        return
+    owner, name = repository.split("/", 1)
+    api = env("GITHUB_API_URL", "https://api.github.com").rstrip("/")
+    repo_path = f"{quote(owner, safe='')}/{quote(name, safe='')}"
+    issue_url = f"{api}/repos/{repo_path}/issues/{number}/comments"
+    body = f"{PR_COMMENT_MARKER}\n{markdown.rstrip()}"
+    try:
+        existing_id: int | None = None
+        page = 1
+        while True:
+            comments = github_api_request(
+                "GET", f"{issue_url}?per_page=100&page={page}", token
+            )
+            if not isinstance(comments, list):
+                raise ValueError("comment list response was not an array")
+            for comment in comments:
+                user = comment.get("user", {}) if isinstance(comment, dict) else {}
+                login = user.get("login", "")
+                is_bot = user.get("type") == "Bot" or (
+                    isinstance(login, str) and login.endswith("[bot]")
+                )
+                if is_bot and PR_COMMENT_MARKER in str(comment.get("body", "")):
+                    identifier = comment.get("id")
+                    if isinstance(identifier, int):
+                        existing_id = identifier
+                        break
+            if existing_id is not None or len(comments) < 100:
+                break
+            page += 1
+        if existing_id is None:
+            github_api_request("POST", issue_url, token, {"body": body})
+        else:
+            github_api_request(
+                "PATCH",
+                f"{api}/repos/{repo_path}/issues/comments/{existing_id}",
+                token,
+                {"body": body},
+            )
+    except HTTPError as error:
+        github_warning(f"GitHub API returned HTTP {error.code}; scan result is unchanged")
+    except (OSError, URLError, ValueError, json.JSONDecodeError) as error:
+        github_warning(f"could not publish sticky comment ({type(error).__name__}); scan result is unchanged")
+
+
 def command_run() -> int:
     root = consumer_root()
     summary = env("GITHUB_STEP_SUMMARY")
+    pr_comment = env("PR_COMMENT_INPUT", "false").lower()
+    if pr_comment not in {"true", "false"}:
+        raise SystemExit("pr-comment must be true or false")
     summary_file: Path | None = None
-    if summary:
+    if summary or pr_comment == "true":
         runner_temp = Path(env("RUNNER_TEMP", tempfile.gettempdir()))
         runner_temp.mkdir(parents=True, exist_ok=True)
         handle, name = tempfile.mkstemp(prefix="costguard-summary-", suffix=".md", dir=runner_temp)
@@ -278,8 +375,13 @@ def command_run() -> int:
     sys.stdout.write(completed.stdout)
     sys.stderr.write(completed.stderr)
     if summary_file:
+        markdown = ""
         if summary_file.stat().st_size:
-            append_file(Path(summary), summary_file.read_text(encoding="utf-8").rstrip("\n"))
+            markdown = summary_file.read_text(encoding="utf-8").rstrip("\n")
+            if summary:
+                append_file(Path(summary), markdown)
+            if pr_comment == "true":
+                publish_pr_comment(markdown)
         summary_file.unlink(missing_ok=True)
     return completed.returncode
 

@@ -129,6 +129,8 @@ The Action does not install or compile dbt. See [Requirements](docs/book/getting
 
 The Action defaults to regression-only enforcement: unchanged findings remain visible as notices but do not fail the PR. Pair `fail-on: high` with `min-confidence: high` on macro-heavy dbt repos.
 
+Set `pr-comment: true` with `github-token: ${{ github.token }}` and `pull-requests: write` permission to maintain one sticky PR summary. `costguard init` enables this for newly generated workflows; existing Action consumers remain opted out.
+
 See [Quick start (PR check)](docs/book/getting-started/quick-start.md) for inputs and workflow guidance.
 
 ## Example output

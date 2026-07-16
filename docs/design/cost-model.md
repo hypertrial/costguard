@@ -70,7 +70,7 @@ They are close but not identical; gating uses the addressable finding sum.
 Backward-compatible JSON fields:
 
 - `p10_usd_per_month` / `p50_usd_per_month` / `p90_usd_per_month` — **savings** intervals (not total model cost)
-- `relative_index` — savings in **GB-months** (dimensionless ranking without pricing)
+- `relative_index` — savings in **GB-months** for volume-based ranking without pricing
 - New fields: `model_id`, `model_monthly_p50_usd`, `savings_p*_usd_per_month`
 
 ## Confidence grades

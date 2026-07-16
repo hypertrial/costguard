@@ -14,6 +14,7 @@ pub struct CostFigure {
     pub monthly_p50: Option<f64>,
     pub monthly_p90: Option<f64>,
     pub annual_p50: Option<f64>,
+    pub gb_months_p50: Option<f64>,
     pub basis: String,
 }
 
@@ -24,35 +25,62 @@ impl Default for CostFigure {
             monthly_p50: None,
             monthly_p90: None,
             annual_p50: None,
+            gb_months_p50: None,
             basis: "none".into(),
         }
     }
 }
 
 impl CostFigure {
-    pub fn from_estimate(
-        estimate: Estimate,
+    pub fn from_estimates(
+        usd: Option<Estimate>,
+        bytes: Option<Estimate>,
         config: &CostConfig,
         basis: &str,
-        has_pricing: bool,
     ) -> Self {
-        if !has_pricing {
-            return Self {
-                monthly_p50: Some(round_sig2(estimate.median())),
-                basis: basis.into(),
-                ..Default::default()
-            };
-        }
-        let (lo, hi) = estimate.interval(config.interval);
-        let p50 = round_sig2(estimate.median());
+        let (monthly_p10, monthly_p50, monthly_p90, annual_p50) =
+            usd.map_or((None, None, None, None), |estimate| {
+                let (lo, hi) = estimate.interval(config.interval);
+                let p50 = round_sig2(estimate.median());
+                (
+                    Some(round_sig2(lo)),
+                    Some(p50),
+                    Some(round_sig2(hi)),
+                    Some(annual_from_monthly(p50)),
+                )
+            });
         Self {
-            monthly_p10: Some(round_sig2(lo)),
-            monthly_p50: Some(p50),
-            monthly_p90: Some(round_sig2(hi)),
-            annual_p50: Some(annual_from_monthly(p50)),
+            monthly_p10,
+            monthly_p50,
+            monthly_p90,
+            annual_p50,
+            gb_months_p50: bytes.map(|estimate| round_sig2(estimate.median() / 1e9)),
             basis: basis.into(),
         }
     }
+
+    fn from_points(usd: Option<f64>, gb_months: Option<f64>, basis: &str) -> Self {
+        Self {
+            monthly_p50: usd.map(round_sig2),
+            annual_p50: usd.map(annual_from_monthly),
+            gb_months_p50: gb_months.map(round_sig2),
+            basis: basis.into(),
+            ..Default::default()
+        }
+    }
+}
+
+pub(crate) fn sum_estimate_medians(estimates: &[Estimate]) -> Option<Estimate> {
+    (!estimates.is_empty()).then(|| {
+        Estimate::from_point(
+            estimates
+                .iter()
+                .map(Estimate::median)
+                .sum::<f64>()
+                .max(0.001),
+            Some(0.01),
+        )
+    })
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize)]
@@ -60,6 +88,8 @@ pub struct CoverageMetrics {
     pub models_total: usize,
     pub models_with_mapped_spend: usize,
     pub mapped_spend_fraction: f64,
+    pub models_with_usd: usize,
+    pub usd_coverage_fraction: f64,
     pub rules_estimated: usize,
     pub rules_unestimated: usize,
     pub observation_age_days: Option<f64>,
@@ -92,7 +122,7 @@ pub struct ModelCostEntry {
     pub bytes: Estimate,
     pub runs_per_month: Estimate,
     pub scan_volume: Estimate,
-    pub monthly_cost: Estimate,
+    pub monthly_cost_usd: Option<Estimate>,
     pub gb_months: f64,
     pub grade: CostGrade,
     pub estimation_basis: String,
@@ -128,9 +158,9 @@ pub struct ProjectCostSummary {
     pub coverage: CoverageMetrics,
     pub pr_impact: Option<PrCostImpact>,
     pub realized_savings: Option<RealizedSavings>,
-    pub savings_p50_usd: f64,
-    pub savings_p10_usd: f64,
-    pub savings_p90_usd: f64,
+    pub savings_p50_usd: Option<f64>,
+    pub savings_p10_usd: Option<f64>,
+    pub savings_p90_usd: Option<f64>,
     pub savings_gb_months: f64,
     pub grade_a: usize,
     pub grade_b: usize,
@@ -152,9 +182,9 @@ impl Default for ProjectCostSummary {
             coverage: CoverageMetrics::default(),
             pr_impact: None,
             realized_savings: None,
-            savings_p50_usd: 0.0,
-            savings_p10_usd: 0.0,
-            savings_p90_usd: 0.0,
+            savings_p50_usd: None,
+            savings_p10_usd: None,
+            savings_p90_usd: None,
             savings_gb_months: 0.0,
             grade_a: 0,
             grade_b: 0,
@@ -192,13 +222,9 @@ pub fn build_model_cost_index(
     for model in model_list {
         let volume = ctx.resolve_for_model(model);
         let scan_volume = volume.bytes * volume.runs_per_month;
-        let monthly_cost = if let Some(observed) = volume.observed_monthly_cost {
-            observed
-        } else if let Some(price) = price {
-            scan_volume * price
-        } else {
-            scan_volume
-        };
+        let monthly_cost_usd = volume
+            .observed_monthly_cost_usd
+            .or_else(|| price.map(|price| scan_volume * price));
         let gb_months = scan_volume.median() / 1_000_000_000.0;
         let model_id = model_identity(model);
         if let Some(path) = &model.path {
@@ -212,7 +238,7 @@ pub fn build_model_cost_index(
                 bytes: volume.bytes,
                 runs_per_month: volume.runs_per_month,
                 scan_volume,
-                monthly_cost,
+                monthly_cost_usd,
                 gb_months,
                 grade: volume.grade,
                 estimation_basis: volume.estimation_basis,
@@ -226,13 +252,12 @@ pub fn build_model_cost_index(
 }
 
 pub fn summarize_project_costs(index: &ModelCostIndex, config: &CostConfig) -> ProjectCostSummary {
-    let has_pricing = price_per_byte(config).is_some();
     let mut grade_a = 0usize;
     let mut grade_b = 0usize;
     let mut grade_c = 0usize;
     let mut cost_estimates = Vec::new();
-    let mut gb_total = 0.0_f64;
     let mut mapped_spend = 0usize;
+    let mut models_with_usd = 0usize;
     let mut max_age: Option<f64> = None;
     let mut model_ids: Vec<&String> = index.models.keys().collect();
     model_ids.sort();
@@ -252,21 +277,18 @@ pub fn summarize_project_costs(index: &ModelCostIndex, config: &CostConfig) -> P
             mapped_spend += 1;
         }
         if let Some(age) = entry.observation_age_days {
-            max_age = Some(max_age.map_or(age, |current| current.min(age)));
+            max_age = Some(max_age.map_or(age, |current| current.max(age)));
         }
-        gb_total += entry.gb_months;
-        cost_estimates.push(entry.monthly_cost);
-        let score = if has_pricing {
-            entry.monthly_cost.median()
-        } else {
-            entry.gb_months
-        };
+        if let Some(cost) = entry.monthly_cost_usd {
+            cost_estimates.push(cost);
+            models_with_usd += 1;
+        }
         ranked.push((
-            score,
+            entry.gb_months,
             TopModelCost {
                 model_id: entry.model_id.clone(),
                 path: entry.path.clone(),
-                p50_usd_per_month: has_pricing.then(|| round_sig2(entry.monthly_cost.median())),
+                p50_usd_per_month: entry.monthly_cost_usd.map(|cost| round_sig2(cost.median())),
                 gb_months: round_sig2(entry.gb_months),
                 grade: entry.grade,
                 estimation_basis: entry.estimation_basis.clone(),
@@ -274,6 +296,12 @@ pub fn summarize_project_costs(index: &ModelCostIndex, config: &CostConfig) -> P
         ));
     }
 
+    let full_usd_coverage = !index.models.is_empty() && models_with_usd == index.models.len();
+    if full_usd_coverage {
+        for (score, model) in &mut ranked {
+            *score = model.p50_usd_per_month.unwrap_or(0.0);
+        }
+    }
     ranked.sort_unstable_by(|(left_score, left), (right_score, right)| {
         right_score
             .total_cmp(left_score)
@@ -281,8 +309,15 @@ pub fn summarize_project_costs(index: &ModelCostIndex, config: &CostConfig) -> P
     });
     let top_models = ranked.into_iter().take(5).map(|(_, model)| model).collect();
 
-    let total = sum_lognormals(&cost_estimates);
-    let (project_p10, project_p50, project_p90) = if has_pricing {
+    let total_usd = (!cost_estimates.is_empty()).then(|| sum_lognormals(&cost_estimates));
+    let total_bytes = sum_estimate_medians(
+        &index
+            .models
+            .values()
+            .map(|entry| entry.scan_volume)
+            .collect::<Vec<_>>(),
+    );
+    let (project_p10, project_p50, project_p90) = if let Some(total) = total_usd {
         let (lo, hi) = total.interval(config.interval);
         (
             Some(round_sig2(lo)),
@@ -299,28 +334,42 @@ pub fn summarize_project_costs(index: &ModelCostIndex, config: &CostConfig) -> P
     } else {
         mapped_spend as f64 / model_count as f64
     };
+    let usd_fraction = if model_count == 0 {
+        0.0
+    } else {
+        models_with_usd as f64 / model_count as f64
+    };
+    let total_basis = if models_with_usd > 0 && models_with_usd < model_count {
+        "mapped-project-total"
+    } else {
+        "project-total"
+    };
 
     ProjectCostSummary {
         project_p10_usd: project_p10,
         project_p50_usd: project_p50,
         project_p90_usd: project_p90,
-        project_gb_months: round_sig2(gb_total),
-        current_cost: CostFigure::from_estimate(total, config, "project-total", has_pricing),
-        post_fix_cost: CostFigure::from_estimate(total, config, "project-total", has_pricing),
+        project_gb_months: total_bytes
+            .map(|estimate| round_sig2(estimate.median() / 1e9))
+            .unwrap_or(0.0),
+        current_cost: CostFigure::from_estimates(total_usd, total_bytes, config, total_basis),
+        post_fix_cost: CostFigure::from_estimates(total_usd, total_bytes, config, total_basis),
         potential_savings: CostFigure::default(),
         coverage: CoverageMetrics {
             models_total: model_count,
             models_with_mapped_spend: mapped_spend,
             mapped_spend_fraction: round_sig2(mapped_fraction),
+            models_with_usd,
+            usd_coverage_fraction: usd_fraction,
             rules_estimated: 0,
             rules_unestimated: 0,
             observation_age_days: max_age.map(round_sig2),
         },
         pr_impact: None,
         realized_savings: None,
-        savings_p50_usd: 0.0,
-        savings_p10_usd: 0.0,
-        savings_p90_usd: 0.0,
+        savings_p50_usd: None,
+        savings_p10_usd: None,
+        savings_p90_usd: None,
         savings_gb_months: 0.0,
         grade_a,
         grade_b,
@@ -335,50 +384,83 @@ pub fn compute_realized_savings(
     after: &crate::observations::ObservationStats,
     config: &CostConfig,
 ) -> RealizedSavings {
-    let has_pricing = price_per_byte(config).is_some();
-    let mut before_total = Vec::new();
-    let mut after_total = Vec::new();
-    let mut efficiency_total = Vec::new();
-    let mut volume_total = Vec::new();
+    let mut before_usd = Vec::new();
+    let mut after_usd = Vec::new();
+    let mut efficiency_usd = Vec::new();
+    let mut volume_usd = Vec::new();
+    let mut before_bytes = Vec::new();
+    let mut after_bytes = Vec::new();
+    let mut efficiency_bytes = Vec::new();
+    let mut volume_bytes = Vec::new();
 
     for (model_id, after_cost) in &after.by_model {
         let Some(before_cost) = before.by_model.get(model_id) else {
             continue;
         };
-        let before_est = before_cost.monthly_cost_usd.unwrap_or_else(|| {
-            Estimate::from_point(before_cost.monthly_bytes.unwrap_or(0.0), Some(0.15))
-        });
-        let after_est = after_cost.monthly_cost_usd.unwrap_or_else(|| {
-            Estimate::from_point(after_cost.monthly_bytes.unwrap_or(0.0), Some(0.15))
-        });
-        before_total.push(before_est);
-        after_total.push(after_est);
-
         let before_exec = before_cost.monthly_executions.max(1.0);
         let after_exec = after_cost.monthly_executions.max(1.0);
-        let before_per_exec = before_est / Estimate::from_point(before_exec, Some(0.1));
-        let after_per_exec = after_est / Estimate::from_point(after_exec, Some(0.1));
         let exec_avg = Estimate::from_point((before_exec + after_exec) / 2.0, Some(0.1));
-        let efficiency_delta = (before_per_exec - after_per_exec) * exec_avg;
-        let volume_delta = (Estimate::from_point(after_exec, Some(0.1))
-            - Estimate::from_point(before_exec, Some(0.1)))
-            * after_per_exec;
-        efficiency_total.push(efficiency_delta);
-        volume_total.push(volume_delta);
+        let execution_delta = Estimate::from_point(after_exec, Some(0.1))
+            - Estimate::from_point(before_exec, Some(0.1));
+        if let (Some(before_est), Some(after_est)) =
+            (before_cost.monthly_cost_usd, after_cost.monthly_cost_usd)
+        {
+            before_usd.push(before_est);
+            after_usd.push(after_est);
+            let before_per_exec = before_est / Estimate::from_point(before_exec, Some(0.1));
+            let after_per_exec = after_est / Estimate::from_point(after_exec, Some(0.1));
+            efficiency_usd.push((before_per_exec - after_per_exec) * exec_avg);
+            volume_usd.push(execution_delta * after_per_exec);
+        }
+        if let (Some(before_value), Some(after_value)) =
+            (before_cost.monthly_bytes, after_cost.monthly_bytes)
+        {
+            let before_est = Estimate::from_point(before_value, Some(0.15));
+            let after_est = Estimate::from_point(after_value, Some(0.15));
+            before_bytes.push(before_est);
+            after_bytes.push(after_est);
+            let before_per_exec = before_est / Estimate::from_point(before_exec, Some(0.1));
+            let after_per_exec = after_est / Estimate::from_point(after_exec, Some(0.1));
+            efficiency_bytes.push((before_per_exec - after_per_exec) * exec_avg);
+            volume_bytes.push(execution_delta * after_per_exec);
+        }
     }
 
-    let before_sum = sum_lognormals(&before_total);
-    let after_sum = sum_lognormals(&after_total);
-    let realized = before_sum - after_sum;
-    let efficiency = sum_lognormals(&efficiency_total);
-    let volume = sum_lognormals(&volume_total);
+    let sums = |values: &[Estimate]| (!values.is_empty()).then(|| sum_lognormals(values));
+    let before_usd_sum = sums(&before_usd);
+    let after_usd_sum = sums(&after_usd);
+    let before_bytes_sum = sum_estimate_medians(&before_bytes);
+    let after_bytes_sum = sum_estimate_medians(&after_bytes);
 
     RealizedSavings {
-        before: CostFigure::from_estimate(before_sum, config, "observed-before", has_pricing),
-        after: CostFigure::from_estimate(after_sum, config, "observed-after", has_pricing),
-        realized: CostFigure::from_estimate(realized, config, "observed-delta", has_pricing),
-        efficiency: CostFigure::from_estimate(efficiency, config, "efficiency-delta", has_pricing),
-        volume: CostFigure::from_estimate(volume, config, "volume-delta", has_pricing),
+        before: CostFigure::from_estimates(
+            before_usd_sum,
+            before_bytes_sum,
+            config,
+            "observed-before",
+        ),
+        after: CostFigure::from_estimates(after_usd_sum, after_bytes_sum, config, "observed-after"),
+        realized: CostFigure::from_points(
+            before_usd_sum
+                .zip(after_usd_sum)
+                .map(|(before, after)| before.median() - after.median()),
+            before_bytes_sum
+                .zip(after_bytes_sum)
+                .map(|(before, after)| (before.median() - after.median()) / 1e9),
+            "observed-delta",
+        ),
+        efficiency: CostFigure::from_estimates(
+            sums(&efficiency_usd),
+            sums(&efficiency_bytes),
+            config,
+            "efficiency-delta",
+        ),
+        volume: CostFigure::from_estimates(
+            sums(&volume_usd),
+            sums(&volume_bytes),
+            config,
+            "volume-delta",
+        ),
     }
 }
 
@@ -388,9 +470,9 @@ pub fn compute_blast_radius(
     changed_paths: &[PathBuf],
     config: &CostConfig,
 ) -> CostFigure {
-    let has_pricing = price_per_byte(config).is_some();
     let mut seen_downstream = HashSet::new();
-    let mut costs = Vec::new();
+    let mut costs_usd = Vec::new();
+    let mut volumes = Vec::new();
 
     for path in changed_paths {
         let Some(model_id) = index.by_path.get(path) else {
@@ -404,51 +486,88 @@ pub fn compute_blast_radius(
                 continue;
             }
             if let Some(entry) = index.models.get(id) {
-                costs.push(entry.monthly_cost);
+                if let Some(cost) = entry.monthly_cost_usd {
+                    costs_usd.push(cost);
+                }
+                volumes.push(entry.scan_volume);
             }
         }
     }
 
-    if costs.is_empty() {
+    if volumes.is_empty() {
         return CostFigure {
             basis: "downstream-blast-radius".into(),
             ..Default::default()
         };
     }
 
-    let total = sum_lognormals(&costs);
-    CostFigure::from_estimate(total, config, "downstream-blast-radius", has_pricing)
+    CostFigure::from_estimates(
+        (!costs_usd.is_empty()).then(|| sum_lognormals(&costs_usd)),
+        sum_estimate_medians(&volumes),
+        config,
+        "downstream-blast-radius",
+    )
 }
 
 pub fn compute_pr_impact(
     head_summary: &ProjectCostSummary,
     base_summary: &ProjectCostSummary,
-    config: &CostConfig,
+    _config: &CostConfig,
     blast_radius: CostFigure,
 ) -> PrCostImpact {
-    let has_pricing = price_per_byte(config).is_some();
-
-    let head_current_p50 = head_summary.current_cost.monthly_p50.unwrap_or(0.0);
-    let base_current_p50 = base_summary.current_cost.monthly_p50.unwrap_or(0.0);
-    let head_savings_p50 = head_summary.potential_savings.monthly_p50.unwrap_or(0.0);
-    let base_savings_p50 = base_summary.potential_savings.monthly_p50.unwrap_or(0.0);
-
-    let current_delta = head_current_p50 - base_current_p50;
-    let savings_delta = head_savings_p50 - base_savings_p50;
-    let volume_delta = current_delta - savings_delta;
-
-    let introduced_est = Estimate::from_point(current_delta.max(0.0), Some(0.15));
-    let avoided_est = Estimate::from_point((-current_delta).max(0.0), Some(0.15));
-    let net_est = Estimate::from_point(current_delta, Some(0.15));
-    let efficiency_est = Estimate::from_point(savings_delta, Some(0.2));
-    let volume_est = Estimate::from_point(volume_delta, Some(0.2));
+    let usd_comparable = head_summary.coverage.models_total > 0
+        && head_summary.coverage.models_with_usd == head_summary.coverage.models_total
+        && base_summary.coverage.models_total > 0
+        && base_summary.coverage.models_with_usd == base_summary.coverage.models_total;
+    let usd_delta = if usd_comparable {
+        head_summary
+            .current_cost
+            .monthly_p50
+            .zip(base_summary.current_cost.monthly_p50)
+            .map(|(head, base)| head - base)
+    } else {
+        None
+    };
+    let gb_delta = head_summary
+        .current_cost
+        .gb_months_p50
+        .zip(base_summary.current_cost.gb_months_p50)
+        .map(|(head, base)| head - base);
+    let usd_savings_delta = usd_comparable.then(|| {
+        head_summary.potential_savings.monthly_p50.unwrap_or(0.0)
+            - base_summary.potential_savings.monthly_p50.unwrap_or(0.0)
+    });
+    let gb_savings_delta = head_summary
+        .current_cost
+        .gb_months_p50
+        .zip(base_summary.current_cost.gb_months_p50)
+        .map(|_| {
+            head_summary.potential_savings.gb_months_p50.unwrap_or(0.0)
+                - base_summary.potential_savings.gb_months_p50.unwrap_or(0.0)
+        });
 
     PrCostImpact {
-        introduced: CostFigure::from_estimate(introduced_est, config, "pr-introduced", has_pricing),
-        avoided: CostFigure::from_estimate(avoided_est, config, "pr-avoided", has_pricing),
-        net: CostFigure::from_estimate(net_est, config, "pr-net", has_pricing),
-        efficiency: CostFigure::from_estimate(efficiency_est, config, "pr-efficiency", has_pricing),
-        volume: CostFigure::from_estimate(volume_est, config, "pr-volume", has_pricing),
+        introduced: CostFigure::from_points(
+            usd_delta.map(|v| v.max(0.0)),
+            gb_delta.map(|v| v.max(0.0)),
+            "pr-introduced",
+        ),
+        avoided: CostFigure::from_points(
+            usd_delta.map(|v| (-v).max(0.0)),
+            gb_delta.map(|v| (-v).max(0.0)),
+            "pr-avoided",
+        ),
+        net: CostFigure::from_points(usd_delta, gb_delta, "pr-net"),
+        efficiency: CostFigure::from_points(usd_savings_delta, gb_savings_delta, "pr-efficiency"),
+        volume: CostFigure::from_points(
+            usd_delta
+                .zip(usd_savings_delta)
+                .map(|(current, savings)| current - savings),
+            gb_delta
+                .zip(gb_savings_delta)
+                .map(|(current, savings)| current - savings),
+            "pr-volume",
+        ),
         blast_radius,
     }
 }
@@ -553,5 +672,140 @@ mod tests {
         let mut sorted_ids = model_ids.clone();
         sorted_ids.sort();
         assert_eq!(model_ids, sorted_ids);
+    }
+
+    #[test]
+    fn unpriced_project_reports_volume_without_usd() {
+        let config = CostConfig {
+            enabled: true,
+            ..CostConfig::default()
+        };
+        let mut dbt = DbtProject::default();
+        dbt.models.insert(
+            "a".into(),
+            DbtModel {
+                name: "a".into(),
+                path: Some(PathBuf::from("models/a.sql")),
+                ..DbtModel::default()
+            },
+        );
+        let index = build_model_cost_index(&config, Some(&dbt), &CostInputs::default());
+        let summary = summarize_project_costs(&index, &config);
+        assert!(summary.project_p50_usd.is_none());
+        assert!(summary.current_cost.monthly_p50.is_none());
+        assert!(summary.current_cost.gb_months_p50.unwrap_or(0.0) > 0.0);
+        assert_eq!(summary.coverage.models_with_usd, 0);
+        assert_eq!(summary.coverage.usd_coverage_fraction, 0.0);
+    }
+
+    #[test]
+    fn coverage_reports_the_stalest_observation_age() {
+        let estimate = Estimate::from_point(1_000_000_000.0, Some(0.1));
+        let entry = |model_id: &str, age| ModelCostEntry {
+            model_id: model_id.into(),
+            path: None,
+            bytes: estimate,
+            runs_per_month: Estimate::from_point(1.0, Some(0.1)),
+            scan_volume: estimate,
+            monthly_cost_usd: None,
+            gb_months: 1.0,
+            grade: CostGrade::A,
+            estimation_basis: "observed-bytes".into(),
+            observation_window: None,
+            observation_age_days: Some(age),
+        };
+        let index = ModelCostIndex {
+            models: HashMap::from([
+                ("recent".into(), entry("recent", 2.0)),
+                ("stale".into(), entry("stale", 10.0)),
+            ]),
+            by_path: HashMap::new(),
+        };
+
+        let summary = summarize_project_costs(&index, &CostConfig::default());
+
+        assert_eq!(summary.coverage.observation_age_days, Some(10.0));
+    }
+
+    #[test]
+    fn partial_observed_usd_is_mapped_without_hiding_full_volume() {
+        let config = CostConfig {
+            enabled: true,
+            ..CostConfig::default()
+        };
+        let mut dbt = DbtProject::default();
+        for name in ["a", "b"] {
+            dbt.models.insert(
+                name.into(),
+                DbtModel {
+                    name: name.into(),
+                    path: Some(PathBuf::from(format!("models/{name}.sql"))),
+                    ..DbtModel::default()
+                },
+            );
+        }
+        let observations = crate::observations::parse_observations_text(
+            r#"{
+                "schema_version": 1,
+                "organization": "acme",
+                "repository": "acme/warehouse",
+                "currency": "USD",
+                "generated_at": "2026-06-15T00:00:00Z",
+                "provenance": "test",
+                "observations": [{
+                    "model_id": "a",
+                    "window_start": "2026-06-01T00:00:00Z",
+                    "window_end": "2026-07-01T00:00:00Z",
+                    "executions": 10,
+                    "cost_usd": 42.0
+                }]
+            }"#,
+        )
+        .unwrap();
+        let inputs = CostInputs {
+            observations: Some(observations),
+            ..CostInputs::default()
+        };
+        let index = build_model_cost_index(&config, Some(&dbt), &inputs);
+        let observed = &index.models["a"];
+        assert!(observed.monthly_cost_usd.is_some());
+        assert!(observed.estimation_basis.contains("size-prior"));
+        assert!(observed.scan_volume.median() > 1_000_000_000.0);
+        let summary = summarize_project_costs(&index, &config);
+        assert!(summary.project_p50_usd.unwrap_or(0.0) > 0.0);
+        assert!(summary.project_gb_months > 0.0);
+        assert_eq!(summary.coverage.models_with_usd, 1);
+        assert_eq!(summary.coverage.usd_coverage_fraction, 0.5);
+        assert!(summary
+            .top_models
+            .iter()
+            .any(|model| model.p50_usd_per_month.is_none()));
+    }
+
+    #[test]
+    fn partial_usd_coverage_uses_only_volume_for_pr_delta() {
+        let summary = |usd: f64, gb: f64| ProjectCostSummary {
+            current_cost: CostFigure {
+                monthly_p50: Some(usd),
+                gb_months_p50: Some(gb),
+                ..CostFigure::default()
+            },
+            coverage: CoverageMetrics {
+                models_total: 2,
+                models_with_usd: 1,
+                usd_coverage_fraction: 0.5,
+                ..CoverageMetrics::default()
+            },
+            ..ProjectCostSummary::default()
+        };
+        let impact = compute_pr_impact(
+            &summary(100.0, 12.0),
+            &summary(80.0, 10.0),
+            &CostConfig::default(),
+            CostFigure::default(),
+        );
+
+        assert!(impact.net.monthly_p50.is_none());
+        assert_eq!(impact.net.gb_months_p50, Some(2.0));
     }
 }

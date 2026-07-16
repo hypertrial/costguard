@@ -36,9 +36,13 @@ dev:
     let workflow = fs::read_to_string(root.join(".github/workflows/costguard.yml")).unwrap();
     assert!(workflow.contains("warehouse: snowflake"));
     assert!(workflow.contains("block-only-new: true"));
+    assert!(workflow.contains("pull-requests: write"));
+    assert!(workflow.contains("pr-comment: true"));
+    assert!(workflow.contains("github-token: ${{ github.token }}"));
     assert!(workflow.contains("fail-on-pr-cost-increase"));
     let config = fs::read_to_string(root.join("costguard.toml")).unwrap();
     assert!(config.contains("block_only_new = true"));
+    assert!(String::from_utf8_lossy(&output.stdout).contains("Costguard doctor"));
 }
 
 #[test]

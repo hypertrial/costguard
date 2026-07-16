@@ -14,6 +14,8 @@ Costguard follows semantic versioning for the `2.x` line. `v0.1.0` was the only 
 
 Minor releases may add optional JSON fields, configuration keys, commands, flags, rules, or diagnostics. Consumers must ignore unknown additive JSON fields. Removing or renaming stable fields, changing an existing rule to detect a materially different condition, or reusing a rule ID requires a major release.
 
+The v2.6 correctness repair keeps schema v4 and restores the documented units: `monthly_p*`, `annual_p50`, `project_p*_usd`, and `savings_p*_usd` are monetary only and are `null` when USD is unavailable. Full-project relative volume uses additive `CostFigure.gb_months_p50`; additive coverage fields report the USD-mapped model count and fraction. Unpriced byte values are never serialized as dollars.
+
 The moving `v2` Action tag may advance only to compatible stable `2.x` releases. Use exact `v2.6.0` when immutable behavior is required.
 
 Preview warehouse dialects may receive parser and rule refinements in minor releases. Production-supported dialects retain the stable contracts above.

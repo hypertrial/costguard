@@ -23,7 +23,7 @@ Only what **you configure** in CI output:
 
 - `github` / `markdown` annotations in the job log.
 - `json` or `sarif` artifacts you archive or upload.
-- GitHub Action step summary when `format: markdown` is selected.
+- GitHub Action step summary, and the same Markdown in an opt-in sticky PR comment when `pr-comment: true` is enabled. The comment is sent only to the configured GitHub API; the supplied token is carried only in the authorization header and is never logged.
 
 ## Release integrity
 

@@ -16,6 +16,7 @@ import tarfile
 import tempfile
 import threading
 import unittest
+import urllib.parse
 from pathlib import Path
 from unittest import mock
 from urllib.error import URLError
@@ -65,11 +66,164 @@ def file_server(root: Path):
         server.server_close()
 
 
+@contextlib.contextmanager
+def comment_server(comments: list[dict[str, object]] | None = None, reject: bool = False):
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def log_message(self, _format: str, *_args: object) -> None:
+            return
+
+        def respond(self, status: int, payload: object) -> None:
+            body = json.dumps(payload).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_GET(self) -> None:
+            self.server.auth_headers.append(self.headers.get("Authorization"))
+            if self.server.reject:
+                self.respond(403, {"message": "forbidden"})
+                return
+            query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            page = int(query.get("page", ["1"])[0])
+            start = (page - 1) * 100
+            self.respond(200, self.server.comments[start : start + 100])
+
+        def do_POST(self) -> None:
+            self.server.auth_headers.append(self.headers.get("Authorization"))
+            payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            comment = {
+                "id": 1001,
+                "body": payload["body"],
+                "user": {"login": "github-actions[bot]", "type": "Bot"},
+            }
+            self.server.comments.append(comment)
+            self.respond(201, comment)
+
+        def do_PATCH(self) -> None:
+            self.server.auth_headers.append(self.headers.get("Authorization"))
+            payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            identifier = int(self.path.rsplit("/", 1)[1])
+            comment = next(item for item in self.server.comments if item["id"] == identifier)
+            comment["body"] = payload["body"]
+            self.respond(200, comment)
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    server.comments = list(comments or [])
+    server.auth_headers = []
+    server.reject = reject
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield server, f"http://127.0.0.1:{server.server_port}"
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()
+
+
 def git(root: Path, *args: str) -> None:
     subprocess.run(["git", *args], cwd=root, check=True, capture_output=True, text=True)
 
 
 class ActionConsumerTest(unittest.TestCase):
+    def test_sticky_comment_creates_then_updates_without_duplicates(self) -> None:
+        driver = load_driver_module()
+        with tempfile.TemporaryDirectory() as tmp, comment_server() as (server, api):
+            event = Path(tmp) / "event.json"
+            event.write_text('{"pull_request":{"number":7}}', encoding="utf-8")
+            environment = {
+                "GITHUB_TOKEN_INPUT": "secret-token",
+                "GITHUB_REPOSITORY": "acme/warehouse",
+                "GITHUB_API_URL": api,
+                "GITHUB_EVENT_PATH": str(event),
+            }
+            with mock.patch.dict(os.environ, environment, clear=False):
+                driver.publish_pr_comment("# First")
+                driver.publish_pr_comment("# Updated")
+            self.assertEqual(len(server.comments), 1)
+            self.assertIn(driver.PR_COMMENT_MARKER, server.comments[0]["body"])
+            self.assertIn("# Updated", server.comments[0]["body"])
+            self.assertNotIn("# First", server.comments[0]["body"])
+            self.assertTrue(server.auth_headers)
+            self.assertTrue(all(value == "Bearer secret-token" for value in server.auth_headers))
+
+    def test_sticky_comment_finds_marker_on_later_page(self) -> None:
+        driver = load_driver_module()
+        comments = [
+            {"id": index, "body": "other", "user": {"login": "bot[bot]", "type": "Bot"}}
+            for index in range(1, 101)
+        ]
+        comments.append(
+            {
+                "id": 501,
+                "body": driver.PR_COMMENT_MARKER,
+                "user": {"login": "github-actions[bot]", "type": "Bot"},
+            }
+        )
+        with tempfile.TemporaryDirectory() as tmp, comment_server(comments) as (server, api):
+            event = Path(tmp) / "event.json"
+            event.write_text('{"pull_request":{"number":7}}', encoding="utf-8")
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "GITHUB_TOKEN_INPUT": "token",
+                    "GITHUB_REPOSITORY": "acme/warehouse",
+                    "GITHUB_API_URL": api,
+                    "GITHUB_EVENT_PATH": str(event),
+                },
+                clear=False,
+            ):
+                driver.publish_pr_comment("# Page two")
+            self.assertEqual(len(server.comments), 101)
+            self.assertIn("# Page two", server.comments[-1]["body"])
+
+    def test_comment_http_403_is_advisory(self) -> None:
+        driver = load_driver_module()
+        with tempfile.TemporaryDirectory() as tmp, comment_server(reject=True) as (_server, api):
+            event = Path(tmp) / "event.json"
+            event.write_text('{"pull_request":{"number":7}}', encoding="utf-8")
+            stderr = io.StringIO()
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "GITHUB_TOKEN_INPUT": "never-log-this",
+                    "GITHUB_REPOSITORY": "acme/warehouse",
+                    "GITHUB_API_URL": api,
+                    "GITHUB_EVENT_PATH": str(event),
+                },
+                clear=False,
+            ), contextlib.redirect_stderr(stderr):
+                driver.publish_pr_comment("# Summary")
+            self.assertIn("HTTP 403", stderr.getvalue())
+            self.assertNotIn("never-log-this", stderr.getvalue())
+
+    def test_comment_missing_token_is_advisory(self) -> None:
+        driver = load_driver_module()
+        stderr = io.StringIO()
+        with mock.patch.dict(os.environ, {"GITHUB_TOKEN_INPUT": ""}, clear=False), (
+            contextlib.redirect_stderr(stderr)
+        ):
+            driver.publish_pr_comment("# Summary")
+        self.assertIn("github-token is empty", stderr.getvalue())
+
+    def test_comment_missing_pull_request_context_is_advisory(self) -> None:
+        driver = load_driver_module()
+        stderr = io.StringIO()
+        with mock.patch.dict(
+            os.environ,
+            {
+                "GITHUB_TOKEN_INPUT": "never-log-this",
+                "GITHUB_REPOSITORY": "acme/warehouse",
+                "GITHUB_EVENT_PATH": "",
+            },
+            clear=False,
+        ), contextlib.redirect_stderr(stderr):
+            driver.publish_pr_comment("# Summary")
+        self.assertIn("context is unavailable", stderr.getvalue())
+        self.assertNotIn("never-log-this", stderr.getvalue())
+
     def test_floating_major_action_uses_exact_workspace_release(self) -> None:
         self.assertEqual(load_driver_module().action_release_version(), "v2.6.0")
 
@@ -434,6 +588,44 @@ class ActionConsumerTest(unittest.TestCase):
             self.assertIn("costguard-receipt.json", arguments)
             self.assertIn("--compare-receipt", arguments)
             self.assertIn("previous.json", arguments)
+
+    def test_failed_scan_still_publishes_comment_and_preserves_exit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, comment_server() as (server, api):
+            workspace = Path(tmp)
+            bin_dir = workspace / "bin"
+            bin_dir.mkdir()
+            fake = bin_dir / "costguard"
+            fake.write_text(
+                "#!/bin/sh\n"
+                "while [ \"$#\" -gt 0 ]; do\n"
+                "  if [ \"$1\" = '--summary-file' ]; then\n"
+                "    shift\n"
+                "    printf '# Costguard failed this PR\\n' > \"$1\"\n"
+                "  fi\n"
+                "  shift\n"
+                "done\n"
+                "exit 1\n",
+                encoding="utf-8",
+            )
+            fake.chmod(0o755)
+            event = workspace / "event.json"
+            event.write_text('{"pull_request":{"number":9}}', encoding="utf-8")
+            completed = run_driver(
+                ["run"],
+                env={
+                    "GITHUB_WORKSPACE": str(workspace),
+                    "RUNNER_TEMP": str(workspace / "runner"),
+                    "PR_COMMENT_INPUT": "true",
+                    "GITHUB_TOKEN_INPUT": "token",
+                    "GITHUB_REPOSITORY": "acme/warehouse",
+                    "GITHUB_API_URL": api,
+                    "GITHUB_EVENT_PATH": str(event),
+                    "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+                },
+            )
+            self.assertEqual(completed.returncode, 1, completed.stderr)
+            self.assertEqual(len(server.comments), 1)
+            self.assertIn("# Costguard failed this PR", server.comments[0]["body"])
 
     def test_requested_missing_manifest_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

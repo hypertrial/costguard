@@ -8,6 +8,9 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ### Added
 
+- `costguard doctor [--dbt-dir PATH]` for read-only git, project, manifest, parsing, workflow, policy, and cost-coverage readiness checks. Successful `costguard init` now prints the same report without turning advisory setup gaps into an initialization failure.
+- Opt-in sticky GitHub PR summaries through the composite Action's `pr-comment` and `github-token` inputs. Newly generated workflows enable the comment with least-privilege `pull-requests: write`; existing Action consumers remain opted out.
+- Additive JSON v4 fields `CostFigure.gb_months_p50`, `CoverageMetrics.models_with_usd`, and `CoverageMetrics.usd_coverage_fraction`.
 - `costguard cost normalize --source pipeline` for local dlt/dbt/DuckDB/Dagster-style runtime observation exports, using the existing `CostObservationBundleV1` schema.
 - `costguard init --profile local-duckdb [--dbt-dir PATH]` for local dbt DuckDB projects, including model-scoped config, manifest wiring, and subdirectory-aware GitHub Action scaffolding.
 - Active base/head regression-only enforcement through `[gate].block_only_new`, PR CLI `--block-only-new[=<true|false>]`, default-on GitHub Action input, and `costguard init` scaffolding.
@@ -19,12 +22,19 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ### Changed
 
+- Cost reports now show full-project GB-month volume alongside explicitly covered mapped USD. Partial-USD projects rank top models by volume; fully covered projects retain USD ranking.
+- CLI help now describes commands, user-facing flags, and common scan/PR/init/doctor examples.
 - SQLCOST007 now trusts parsed AST top-level `ORDER BY` detection, avoiding false positives from `ORDER BY` inside window functions.
 - Regression-only mode now applies consistently to top-level, global/scoped severity, and addressable finding-savings gates while preserving every diagnostic in JSON v4/receipt v2 evidence; required-owner and blast-radius controls still cover every changed model.
 - Markdown and GitHub output distinguish introduced/regressed blockers from unchanged notices and report priced net PR impact in the PR summary.
 - PR finding deltas now compare rename-aware base/head targets through the same current configuration, policy, suppression, waiver, baseline, confidence, and cost pipeline; approved and infrastructure findings are excluded.
 - Precision tiers now derive canonical IDs from `costguard rules --format json`, include `SQLCOST046`, and reject orphan infrastructure IDs.
 - Current benchmark evidence and generated precision tiers are byte-deterministic and no longer contain wall-clock dates.
+
+### Fixed
+
+- Unpriced byte estimates and byte observations no longer populate USD fields. Model totals, finding attribution, post-fix savings, PR impact, receipts, blast radius, and realized savings maintain independent USD and byte tracks.
+- USD-only observations no longer invent scan bytes by dividing dollars by executions; volume uses the existing query-history, catalog, configured-source, or size-prior fallback chain.
 
 ## [2.5.0] - 2026-06-19
 

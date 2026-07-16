@@ -166,24 +166,57 @@ pub(crate) fn append_pr_cost_impact_text(
     pr: &PrCostImpact,
 ) {
     output.push_str("PR Cost Impact:\n");
-    append_cost_figure_line(output, "  Net", &pr.net);
-    append_cost_figure_line(output, "  Introduced", &pr.introduced);
-    append_cost_figure_line(output, "  Avoided", &pr.avoided);
-    append_cost_figure_line(output, "  Efficiency", &pr.efficiency);
-    append_cost_figure_line(output, "  Volume", &pr.volume);
-    append_cost_figure_line(output, "  Blast radius (downstream)", &pr.blast_radius);
+    append_cost_figure_line(
+        output,
+        &covered_cost_label(summary, "  Net", &pr.net),
+        &pr.net,
+    );
+    append_cost_figure_line(
+        output,
+        &covered_cost_label(summary, "  Introduced", &pr.introduced),
+        &pr.introduced,
+    );
+    append_cost_figure_line(
+        output,
+        &covered_cost_label(summary, "  Avoided", &pr.avoided),
+        &pr.avoided,
+    );
+    append_cost_figure_line(
+        output,
+        &covered_cost_label(summary, "  Efficiency", &pr.efficiency),
+        &pr.efficiency,
+    );
+    append_cost_figure_line(
+        output,
+        &covered_cost_label(summary, "  Volume", &pr.volume),
+        &pr.volume,
+    );
+    append_cost_figure_line(
+        output,
+        &covered_cost_label(summary, "  Blast radius (downstream)", &pr.blast_radius),
+        &pr.blast_radius,
+    );
     output.push_str(&format!(
-        "  Coverage: {:.0}% mapped spend ({}/{} models)\n",
+        "  Coverage: {:.0}% USD ({}/{} models); {:.0}% mapped spend\n",
+        summary.coverage.usd_coverage_fraction * 100.0,
+        summary.coverage.models_with_usd,
+        summary.coverage.models_total,
         summary.coverage.mapped_spend_fraction * 100.0,
-        summary.coverage.models_with_mapped_spend,
-        summary.coverage.models_total
     ));
-    if summary.savings_p50_usd > 0.0 {
+    if let (Some(p10), Some(p50), Some(p90)) = (
+        summary.savings_p10_usd,
+        summary.savings_p50_usd,
+        summary.savings_p90_usd,
+    ) {
         output.push_str(&format!(
-            "  Addressable savings on flagged findings: ~${:.0}/mo (${:.0}–${:.0})\n",
-            summary.savings_p50_usd, summary.savings_p10_usd, summary.savings_p90_usd
+            "  Addressable savings on flagged findings{}: ~${:.0}/mo (${:.0}–${:.0})\n",
+            mapped_usd_suffix(summary),
+            p50,
+            p10,
+            p90
         ));
-    } else if summary.savings_gb_months > 0.0 {
+    }
+    if summary.savings_gb_months > 0.0 {
         output.push_str(&format!(
             "  Addressable savings on flagged findings: ~{:.0} GB-mo\n",
             summary.savings_gb_months
@@ -194,12 +227,17 @@ pub(crate) fn append_pr_cost_impact_text(
         summary.grade_a, summary.grade_b, summary.grade_c
     ));
     if !summary.top_models.is_empty() {
-        output.push_str("  Top models by cost:\n");
+        output.push_str(if has_full_usd_coverage(summary) {
+            "  Top models by USD cost:\n"
+        } else {
+            "  Top models by volume:\n"
+        });
         for model in summary.top_models.iter().take(5) {
             if let Some(p50) = model.p50_usd_per_month {
                 output.push_str(&format!(
-                    "    - {} — ~${p50:.0}/mo (grade {}, {})\n",
+                    "    - {} — ~${p50:.0}/mo; {:.0} GB-mo (grade {}, {})\n",
                     escape_text(&model.model_id),
+                    model.gb_months,
                     model.grade,
                     model.estimation_basis
                 ));
@@ -225,24 +263,57 @@ pub(crate) fn append_pr_cost_impact_markdown(
     pr: &PrCostImpact,
 ) {
     output.push_str("## PR Cost Impact\n\n");
-    append_cost_figure_markdown(output, "Net", &pr.net);
-    append_cost_figure_markdown(output, "Introduced", &pr.introduced);
-    append_cost_figure_markdown(output, "Avoided", &pr.avoided);
-    append_cost_figure_markdown(output, "Efficiency", &pr.efficiency);
-    append_cost_figure_markdown(output, "Volume", &pr.volume);
-    append_cost_figure_markdown(output, "Blast radius (downstream)", &pr.blast_radius);
+    append_cost_figure_markdown(
+        output,
+        &covered_cost_label(summary, "Net", &pr.net),
+        &pr.net,
+    );
+    append_cost_figure_markdown(
+        output,
+        &covered_cost_label(summary, "Introduced", &pr.introduced),
+        &pr.introduced,
+    );
+    append_cost_figure_markdown(
+        output,
+        &covered_cost_label(summary, "Avoided", &pr.avoided),
+        &pr.avoided,
+    );
+    append_cost_figure_markdown(
+        output,
+        &covered_cost_label(summary, "Efficiency", &pr.efficiency),
+        &pr.efficiency,
+    );
+    append_cost_figure_markdown(
+        output,
+        &covered_cost_label(summary, "Volume", &pr.volume),
+        &pr.volume,
+    );
+    append_cost_figure_markdown(
+        output,
+        &covered_cost_label(summary, "Blast radius (downstream)", &pr.blast_radius),
+        &pr.blast_radius,
+    );
     output.push_str(&format!(
-        "- **Coverage:** {:.0}% mapped spend ({}/{} models)\n",
+        "- **Coverage:** {:.0}% USD ({}/{} models); {:.0}% mapped spend\n",
+        summary.coverage.usd_coverage_fraction * 100.0,
+        summary.coverage.models_with_usd,
+        summary.coverage.models_total,
         summary.coverage.mapped_spend_fraction * 100.0,
-        summary.coverage.models_with_mapped_spend,
-        summary.coverage.models_total
     ));
-    if summary.savings_p50_usd > 0.0 {
+    if let (Some(p10), Some(p50), Some(p90)) = (
+        summary.savings_p10_usd,
+        summary.savings_p50_usd,
+        summary.savings_p90_usd,
+    ) {
         output.push_str(&format!(
-            "- **Addressable savings:** ~${:.0}/mo (${:.0}–${:.0})\n",
-            summary.savings_p50_usd, summary.savings_p10_usd, summary.savings_p90_usd
+            "- **Addressable savings{}:** ~${:.0}/mo (${:.0}–${:.0})\n",
+            mapped_usd_suffix(summary),
+            p50,
+            p10,
+            p90
         ));
-    } else if summary.savings_gb_months > 0.0 {
+    }
+    if summary.savings_gb_months > 0.0 {
         output.push_str(&format!(
             "- **Addressable savings:** ~{:.0} GB-mo\n",
             summary.savings_gb_months
@@ -253,12 +324,16 @@ pub(crate) fn append_pr_cost_impact_markdown(
         summary.grade_a, summary.grade_b, summary.grade_c
     ));
     if !summary.top_models.is_empty() {
-        output.push_str("### Top models by cost\n\n");
+        output.push_str(if has_full_usd_coverage(summary) {
+            "### Top models by USD cost\n\n"
+        } else {
+            "### Top models by volume\n\n"
+        });
         for model in summary.top_models.iter().take(5) {
             if let Some(p50) = model.p50_usd_per_month {
                 output.push_str(&format!(
-                    "- `{}` — ~${p50:.0}/mo (grade {})\n",
-                    model.model_id, model.grade
+                    "- `{}` — ~${p50:.0}/mo; {:.0} GB-mo (grade {})\n",
+                    model.model_id, model.gb_months, model.grade
                 ));
             } else {
                 output.push_str(&format!(
@@ -279,11 +354,23 @@ pub(crate) fn append_cost_summary(output: &mut String, summary: Option<&ProjectC
         return;
     };
     output.push_str("\nCost summary:\n");
-    append_cost_figure_line(output, "  Current cost", &summary.current_cost);
-    append_cost_figure_line(output, "  Post-fix cost", &summary.post_fix_cost);
     append_cost_figure_line(
         output,
-        "  Potential savings (current - post-fix)",
+        &covered_cost_label(summary, "  Current cost", &summary.current_cost),
+        &summary.current_cost,
+    );
+    append_cost_figure_line(
+        output,
+        &covered_cost_label(summary, "  Post-fix cost", &summary.post_fix_cost),
+        &summary.post_fix_cost,
+    );
+    append_cost_figure_line(
+        output,
+        &covered_cost_label(
+            summary,
+            "  Potential savings (current - post-fix)",
+            &summary.potential_savings,
+        ),
         &summary.potential_savings,
     );
     if let Some(pr) = &summary.pr_impact {
@@ -293,24 +380,36 @@ pub(crate) fn append_cost_summary(output: &mut String, summary: Option<&ProjectC
         append_cost_figure_line(output, "    blast radius (downstream)", &pr.blast_radius);
     }
     if let Some(realized) = &summary.realized_savings {
-        append_cost_figure_line(output, "  Realized savings", &realized.realized);
+        let label = if realized.realized.monthly_p50.is_some() {
+            "  Realized savings (mapped USD)"
+        } else {
+            "  Realized savings"
+        };
+        append_cost_figure_line(output, label, &realized.realized);
     }
     output.push_str(&format!(
-        "  Coverage: {:.0}% mapped spend ({}/{} models)",
+        "  Coverage: {:.0}% USD ({}/{} models); {:.0}% mapped spend",
+        summary.coverage.usd_coverage_fraction * 100.0,
+        summary.coverage.models_with_usd,
+        summary.coverage.models_total,
         summary.coverage.mapped_spend_fraction * 100.0,
-        summary.coverage.models_with_mapped_spend,
-        summary.coverage.models_total
     ));
     if let Some(age) = summary.coverage.observation_age_days {
         output.push_str(&format!(", observation age {:.0}d", age));
     }
     output.push('\n');
-    if summary.savings_p50_usd > 0.0 {
+    if let (Some(p10), Some(p50), Some(p90)) = (
+        summary.savings_p10_usd,
+        summary.savings_p50_usd,
+        summary.savings_p90_usd,
+    ) {
         output.push_str(&format!(
-            "  Addressable savings on flagged findings (deduplicated): ~${:.0}/mo (${:.0}–${:.0})\n",
-            summary.savings_p50_usd, summary.savings_p10_usd, summary.savings_p90_usd
+            "  Addressable savings on flagged findings (deduplicated){}: ~${:.0}/mo (${:.0}–${:.0})\n",
+            mapped_usd_suffix(summary),
+            p50, p10, p90
         ));
-    } else if summary.savings_gb_months > 0.0 {
+    }
+    if summary.savings_gb_months > 0.0 {
         output.push_str(&format!(
             "  Addressable savings on flagged findings (deduplicated): ~{:.0} GB-mo\n",
             summary.savings_gb_months
@@ -321,12 +420,17 @@ pub(crate) fn append_cost_summary(output: &mut String, summary: Option<&ProjectC
         summary.grade_a, summary.grade_b, summary.grade_c
     ));
     if !summary.top_models.is_empty() {
-        output.push_str("  Top models by cost:\n");
+        output.push_str(if has_full_usd_coverage(summary) {
+            "  Top models by USD cost:\n"
+        } else {
+            "  Top models by volume:\n"
+        });
         for model in &summary.top_models {
             if let Some(p50) = model.p50_usd_per_month {
                 output.push_str(&format!(
-                    "    - {} — ~${p50:.0}/mo (grade {}, {})\n",
+                    "    - {} — ~${p50:.0}/mo; {:.0} GB-mo (grade {}, {})\n",
                     escape_markdown(&model.model_id),
+                    model.gb_months,
                     model.grade,
                     model.estimation_basis
                 ));
@@ -346,6 +450,10 @@ pub(crate) fn append_cost_summary(output: &mut String, summary: Option<&ProjectC
 }
 
 fn append_cost_figure_line(output: &mut String, label: &str, figure: &CostFigure) {
+    let volume = figure
+        .gb_months_p50
+        .map(|value| format!("; ~{value:.0} GB-mo"))
+        .unwrap_or_default();
     if let (Some(p10), Some(p50), Some(p90)) =
         (figure.monthly_p10, figure.monthly_p50, figure.monthly_p90)
     {
@@ -354,27 +462,62 @@ fn append_cost_figure_line(output: &mut String, label: &str, figure: &CostFigure
             .map(|value| format!(" / ~${value:.0}/yr"))
             .unwrap_or_default();
         output.push_str(&format!(
-            "{label}: {}{} ({})\n",
+            "{label}: {}{}{volume} ({})\n",
             format_usd_interval(p10, p50, p90),
             annual,
             figure.basis
         ));
     } else if let Some(p50) = figure.monthly_p50 {
-        output.push_str(&format!("{label}: ~${p50:.0}/mo ({})\n", figure.basis));
+        output.push_str(&format!(
+            "{label}: ~${p50:.0}/mo{volume} ({})\n",
+            figure.basis
+        ));
+    } else if let Some(gb) = figure.gb_months_p50 {
+        output.push_str(&format!("{label}: ~{gb:.0} GB-mo ({})\n", figure.basis));
     }
 }
 
 fn append_cost_figure_markdown(output: &mut String, label: &str, figure: &CostFigure) {
+    let volume = figure
+        .gb_months_p50
+        .map(|value| format!(", ~{value:.0} GB-mo"))
+        .unwrap_or_default();
     if let Some(p50) = figure.monthly_p50 {
         let annual = figure
             .annual_p50
             .map(|value| format!(", ~${value:.0}/yr"))
             .unwrap_or_default();
         output.push_str(&format!(
-            "- **{label}:** ~${p50:.0}/mo{annual} ({})\n",
+            "- **{label}:** ~${p50:.0}/mo{annual}{volume} ({})\n",
+            figure.basis
+        ));
+    } else if let Some(gb) = figure.gb_months_p50 {
+        output.push_str(&format!(
+            "- **{label}:** ~{gb:.0} GB-mo ({})\n",
             figure.basis
         ));
     }
+}
+
+fn mapped_usd_suffix(summary: &ProjectCostSummary) -> &'static str {
+    if summary.coverage.models_with_usd > 0 && !has_full_usd_coverage(summary) {
+        " (mapped USD)"
+    } else {
+        ""
+    }
+}
+
+fn covered_cost_label(summary: &ProjectCostSummary, label: &str, figure: &CostFigure) -> String {
+    if figure.monthly_p50.is_some() {
+        format!("{label}{}", mapped_usd_suffix(summary))
+    } else {
+        label.into()
+    }
+}
+
+fn has_full_usd_coverage(summary: &ProjectCostSummary) -> bool {
+    summary.coverage.models_total > 0
+        && summary.coverage.models_with_usd == summary.coverage.models_total
 }
 
 pub(crate) fn append_cost_summary_markdown(
@@ -385,11 +528,23 @@ pub(crate) fn append_cost_summary_markdown(
         return;
     };
     output.push_str("\n## Cost summary\n\n");
-    append_cost_figure_markdown(output, "Current cost", &summary.current_cost);
-    append_cost_figure_markdown(output, "Post-fix cost", &summary.post_fix_cost);
     append_cost_figure_markdown(
         output,
-        "Potential savings (current - post-fix)",
+        &covered_cost_label(summary, "Current cost", &summary.current_cost),
+        &summary.current_cost,
+    );
+    append_cost_figure_markdown(
+        output,
+        &covered_cost_label(summary, "Post-fix cost", &summary.post_fix_cost),
+        &summary.post_fix_cost,
+    );
+    append_cost_figure_markdown(
+        output,
+        &covered_cost_label(
+            summary,
+            "Potential savings (current - post-fix)",
+            &summary.potential_savings,
+        ),
         &summary.potential_savings,
     );
     if let Some(pr) = &summary.pr_impact {
@@ -397,20 +552,28 @@ pub(crate) fn append_cost_summary_markdown(
         append_cost_figure_markdown(output, "Blast radius (downstream)", &pr.blast_radius);
     }
     if let Some(realized) = &summary.realized_savings {
-        append_cost_figure_markdown(output, "Realized savings", &realized.realized);
+        let label = if realized.realized.monthly_p50.is_some() {
+            "Realized savings (mapped USD)"
+        } else {
+            "Realized savings"
+        };
+        append_cost_figure_markdown(output, label, &realized.realized);
     }
     output.push_str(&format!(
-        "Coverage: {:.0}% mapped spend ({}/{} models).\n\n",
+        "Coverage: {:.0}% USD ({}/{} models); {:.0}% mapped spend.\n\n",
+        summary.coverage.usd_coverage_fraction * 100.0,
+        summary.coverage.models_with_usd,
+        summary.coverage.models_total,
         summary.coverage.mapped_spend_fraction * 100.0,
-        summary.coverage.models_with_mapped_spend,
-        summary.coverage.models_total
     ));
-    if summary.savings_p50_usd > 0.0 {
+    if let Some(p50) = summary.savings_p50_usd {
         output.push_str(&format!(
-            "Addressable savings on flagged findings (deduplicated): ~${:.0}/mo.\n\n",
-            summary.savings_p50_usd
+            "Addressable savings on flagged findings (deduplicated){}: ~${:.0}/mo.\n\n",
+            mapped_usd_suffix(summary),
+            p50
         ));
-    } else if summary.savings_gb_months > 0.0 {
+    }
+    if summary.savings_gb_months > 0.0 {
         output.push_str(&format!(
             "Addressable savings on flagged findings (deduplicated): ~{:.0} GB-mo.\n\n",
             summary.savings_gb_months
@@ -421,12 +584,16 @@ pub(crate) fn append_cost_summary_markdown(
         summary.grade_a, summary.grade_b, summary.grade_c
     ));
     if !summary.top_models.is_empty() {
-        output.push_str("### Top models by cost\n\n");
+        output.push_str(if has_full_usd_coverage(summary) {
+            "### Top models by USD cost\n\n"
+        } else {
+            "### Top models by volume\n\n"
+        });
         for model in &summary.top_models {
             if let Some(p50) = model.p50_usd_per_month {
                 output.push_str(&format!(
-                    "- `{}` — ~${p50:.0}/mo (grade {})\n",
-                    model.model_id, model.grade
+                    "- `{}` — ~${p50:.0}/mo; {:.0} GB-mo (grade {})\n",
+                    model.model_id, model.gb_months, model.grade
                 ));
             } else {
                 output.push_str(&format!(
@@ -783,6 +950,81 @@ mod tests {
         assert_eq!(value["metrics"]["sql_parse_failures"], 1);
         assert_eq!(value["metrics"]["diagnostics_by_rule"]["SQLCOST005"], 1);
         assert_eq!(value["diagnostics"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn unpriced_cost_summary_renders_volume_without_dollars() {
+        let mut result = sample_result(false);
+        result.diagnostics.clear();
+        result.pr_summary = None;
+        result.cost_summary = Some(ProjectCostSummary {
+            project_gb_months: 125.0,
+            current_cost: CostFigure {
+                gb_months_p50: Some(125.0),
+                basis: "project-total".into(),
+                ..CostFigure::default()
+            },
+            coverage: costguard_cost::CoverageMetrics {
+                models_total: 2,
+                ..Default::default()
+            },
+            model_count: 2,
+            ..ProjectCostSummary::default()
+        });
+        let markdown = render_cost_report(&result, OutputFormat::Markdown).unwrap();
+        assert!(markdown.contains("125 GB-mo"), "{markdown}");
+        assert!(!markdown.contains('$'), "{markdown}");
+
+        for format in [OutputFormat::Text, OutputFormat::Markdown] {
+            let rendered = render(&result, format).unwrap();
+            assert!(rendered.contains("125 GB-mo"), "{rendered}");
+            assert!(!rendered.contains('$'), "{rendered}");
+        }
+
+        let json = render(&result, OutputFormat::Json).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert!(value["cost"]["current_cost"]["monthly_p50"].is_null());
+        assert_eq!(value["cost"]["current_cost"]["gb_months_p50"], 125.0);
+        assert!(value["cost"]["savings_p50_usd"].is_null());
+    }
+
+    #[test]
+    fn partial_coverage_labels_only_figures_that_contain_usd() {
+        let mut result = sample_result(false);
+        result.pr_summary = None;
+        result.cost_summary = Some(ProjectCostSummary {
+            current_cost: CostFigure {
+                monthly_p50: Some(100.0),
+                gb_months_p50: Some(1_000.0),
+                basis: "mapped-project-total".into(),
+                ..CostFigure::default()
+            },
+            potential_savings: CostFigure {
+                gb_months_p50: Some(25.0),
+                basis: "potential-savings".into(),
+                ..CostFigure::default()
+            },
+            coverage: costguard_cost::CoverageMetrics {
+                models_total: 1_000,
+                models_with_usd: 999,
+                usd_coverage_fraction: 0.999,
+                ..Default::default()
+            },
+            ..ProjectCostSummary::default()
+        });
+
+        let markdown = render_cost_report(&result, OutputFormat::Markdown).unwrap();
+
+        assert!(
+            markdown.contains("**Current cost (mapped USD):**"),
+            "{markdown}"
+        );
+        assert!(
+            markdown.contains("**Potential savings (current - post-fix):** ~25 GB-mo"),
+            "{markdown}"
+        );
+        assert!(!markdown.contains("Potential savings (current - post-fix) (mapped USD)"));
+        assert!(markdown.contains("Top models by volume") || !markdown.contains("Top models"));
     }
 
     #[test]

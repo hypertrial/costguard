@@ -25,7 +25,7 @@ pub struct ResolvedVolume {
     pub estimation_basis: String,
     pub observation_window: Option<(String, String)>,
     pub observation_age_days: Option<f64>,
-    pub observed_monthly_cost: Option<Estimate>,
+    pub observed_monthly_cost_usd: Option<Estimate>,
 }
 
 pub struct VolumeContext<'a> {
@@ -46,40 +46,68 @@ impl VolumeContext<'_> {
         model: &DbtModel,
         rule_id: Option<&str>,
     ) -> ResolvedVolume {
-        let apply_incremental = rule_id.is_none_or(|rule| !skips_incremental_discount(rule));
         let runs = self.runs_for_model(model);
 
         if let Some(stats) = self.observations {
             if let Some(observed) = lookup_observed_cost(stats, &lookup_keys(model)) {
-                let monthly_cost = observed.monthly_cost_usd.unwrap_or_else(|| {
-                    Estimate::from_point(observed.monthly_bytes.unwrap_or(0.0), Some(0.1))
-                });
-                let runs_per_month =
-                    Estimate::from_point(observed.monthly_executions.max(1.0), Some(0.1));
-                let bytes = if let Some(monthly_bytes) = observed.monthly_bytes {
-                    if observed.monthly_executions > 0.0 {
-                        Estimate::from_point(monthly_bytes / observed.monthly_executions, Some(0.1))
+                let fallback = self.resolve_without_observations(model, rule_id, runs);
+                let (bytes, runs_per_month, volume_basis) =
+                    if let Some(monthly_bytes) = observed.monthly_bytes {
+                        let runs_per_month =
+                            Estimate::from_point(observed.monthly_executions.max(1.0), Some(0.1));
+                        if observed.monthly_executions > 0.0 {
+                            (
+                                Estimate::from_point(
+                                    monthly_bytes / observed.monthly_executions,
+                                    Some(0.1),
+                                ),
+                                runs_per_month,
+                                "observed-bytes".to_string(),
+                            )
+                        } else {
+                            (
+                                Estimate::from_point(monthly_bytes, Some(0.1)),
+                                runs_per_month,
+                                "observed-bytes".to_string(),
+                            )
+                        }
                     } else {
-                        Estimate::from_point(monthly_bytes, Some(0.1))
-                    }
-                } else {
-                    monthly_cost / runs_per_month
-                };
+                        (
+                            fallback.bytes,
+                            fallback.runs_per_month,
+                            fallback.estimation_basis,
+                        )
+                    };
                 return ResolvedVolume {
                     bytes,
                     runs_per_month,
                     grade: CostGrade::A,
                     measured: true,
-                    estimation_basis: observed.basis.clone(),
+                    estimation_basis: if volume_basis == observed.basis {
+                        volume_basis
+                    } else {
+                        format!("{} + {volume_basis}", observed.basis)
+                    },
                     observation_window: Some((
                         observed.window_start.clone(),
                         observed.window_end.clone(),
                     )),
                     observation_age_days: Some(observed.age_days),
-                    observed_monthly_cost: Some(monthly_cost),
+                    observed_monthly_cost_usd: observed.monthly_cost_usd,
                 };
             }
         }
+
+        self.resolve_without_observations(model, rule_id, runs)
+    }
+
+    fn resolve_without_observations(
+        &self,
+        model: &DbtModel,
+        rule_id: Option<&str>,
+        runs: Estimate,
+    ) -> ResolvedVolume {
+        let apply_incremental = rule_id.is_none_or(|rule| !skips_incremental_discount(rule));
 
         if let Some(history) = self.query_history {
             for key in lookup_keys(model) {
@@ -217,7 +245,7 @@ fn resolved_volume(
         estimation_basis: basis.to_string(),
         observation_window: None,
         observation_age_days: None,
-        observed_monthly_cost: None,
+        observed_monthly_cost_usd: None,
     }
 }
 
@@ -400,6 +428,54 @@ mod tests {
         let vol = ctx.resolve_for_model(&model);
         assert_eq!(vol.grade, CostGrade::C);
         assert!(vol.bytes.median() > 0.0);
+    }
+
+    #[test]
+    fn usd_only_observation_uses_query_history_for_volume() {
+        let config = CostConfig {
+            enabled: true,
+            ..CostConfig::default()
+        };
+        let observations = crate::observations::parse_observations_text(
+            r#"{
+                "schema_version": 1,
+                "organization": "acme",
+                "repository": "acme/warehouse",
+                "currency": "USD",
+                "generated_at": "2026-06-15T00:00:00Z",
+                "provenance": "test",
+                "observations": [{
+                    "model_id": "fct_orders",
+                    "window_start": "2026-06-01T00:00:00Z",
+                    "window_end": "2026-07-01T00:00:00Z",
+                    "executions": 10,
+                    "cost_usd": 42.0
+                }]
+            }"#,
+        )
+        .unwrap();
+        let history = crate::query_history::parse_query_history_text(
+            "model_or_table,bytes_per_run,runs_per_month\nfct_orders,1000000000,20\n",
+        )
+        .unwrap();
+        let ctx = VolumeContext {
+            config: &config,
+            observations: Some(&observations),
+            catalog: None,
+            query_history: Some(&history),
+            dbt: None,
+        };
+        let model = DbtModel {
+            name: "fct_orders".into(),
+            ..DbtModel::default()
+        };
+
+        let volume = ctx.resolve_for_model(&model);
+
+        assert!(volume.observed_monthly_cost_usd.is_some());
+        assert_eq!(volume.estimation_basis, "observed-usd + query-history");
+        assert!((volume.bytes.median() - 1_000_000_000.0).abs() < 1.0);
+        assert!((volume.runs_per_month.median() - 20.0).abs() < 0.1);
     }
 
     #[test]

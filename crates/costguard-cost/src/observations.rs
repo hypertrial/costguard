@@ -43,7 +43,7 @@ pub fn parse_observations_text(text: &str) -> Result<ObservationStats> {
 
 pub fn aggregate_bundle(bundle: &CostObservationBundleV1, config: &CostConfig) -> ObservationStats {
     let price = price_per_byte(config);
-    let usd_per_credit = config.pricing.usd_per_credit.unwrap_or(3.0);
+    let usd_per_credit = config.pricing.usd_per_credit;
     let mut by_model: HashMap<String, Vec<&ModelCostObservationV1>> = HashMap::new();
     for obs in &bundle.observations {
         by_model.entry(obs.model_id.clone()).or_default().push(obs);
@@ -67,7 +67,7 @@ pub fn aggregate_bundle(bundle: &CostObservationBundleV1, config: &CostConfig) -
 fn aggregate_model_observations(
     observations: &[&ModelCostObservationV1],
     price: Option<Estimate>,
-    usd_per_credit: f64,
+    usd_per_credit: Option<f64>,
     now: DateTime<Utc>,
 ) -> Option<ObservedModelCost> {
     if observations.is_empty() {
@@ -116,10 +116,8 @@ fn aggregate_model_observations(
         )
     } else if has_credits {
         (
-            Some(Estimate::from_point(
-                (total_credits / months) * usd_per_credit,
-                Some(0.15),
-            )),
+            usd_per_credit
+                .map(|price| Estimate::from_point((total_credits / months) * price, Some(0.15))),
             "observed-credits".to_string(),
         )
     } else if has_bytes {
@@ -130,10 +128,7 @@ fn aggregate_model_observations(
                 "observed-bytes".to_string(),
             )
         } else {
-            (
-                Some(Estimate::from_point(total_bytes / months, Some(0.15))),
-                "observed-bytes".to_string(),
-            )
+            (None, "observed-bytes".to_string())
         }
     } else {
         return None;
@@ -226,5 +221,77 @@ mod tests {
         }"#;
         let stats = parse_observations_text(text).unwrap();
         assert_eq!(stats.by_model["m"].basis, "observed-usd");
+    }
+
+    #[test]
+    fn unpriced_bytes_do_not_become_usd() {
+        let text = r#"{
+            "schema_version": 1,
+            "organization": "acme",
+            "repository": "acme/warehouse",
+            "currency": "USD",
+            "generated_at": "2026-06-15T00:00:00Z",
+            "provenance": "test",
+            "observations": [{
+                "model_id": "m",
+                "window_start": "2026-06-01T00:00:00Z",
+                "window_end": "2026-07-01T00:00:00Z",
+                "executions": 10,
+                "bytes_processed": 1000000000
+            }]
+        }"#;
+        let stats = parse_observations_text(text).unwrap();
+        let observation = &stats.by_model["m"];
+        assert!(observation.monthly_cost_usd.is_none());
+        assert_eq!(observation.monthly_bytes, Some(1_000_000_000.0));
+    }
+
+    #[test]
+    fn credits_require_an_explicit_usd_price() {
+        let text = r#"{
+            "schema_version": 1,
+            "organization": "acme",
+            "repository": "acme/warehouse",
+            "currency": "USD",
+            "generated_at": "2026-06-15T00:00:00Z",
+            "provenance": "test",
+            "observations": [{
+                "model_id": "m",
+                "window_start": "2026-06-01T00:00:00Z",
+                "window_end": "2026-07-01T00:00:00Z",
+                "executions": 10,
+                "credits": 12.0
+            }]
+        }"#;
+        let stats = parse_observations_text(text).unwrap();
+        assert!(stats.by_model["m"].monthly_cost_usd.is_none());
+    }
+
+    #[test]
+    fn configured_credit_price_produces_usd() {
+        let bundle: CostObservationBundleV1 = serde_json::from_str(
+            r#"{
+                "schema_version": 1,
+                "organization": "acme",
+                "repository": "acme/warehouse",
+                "currency": "USD",
+                "generated_at": "2026-06-15T00:00:00Z",
+                "provenance": "test",
+                "observations": [{
+                    "model_id": "m",
+                    "window_start": "2026-06-01T00:00:00Z",
+                    "window_end": "2026-07-01T00:00:00Z",
+                    "executions": 10,
+                    "credits": 12.0
+                }]
+            }"#,
+        )
+        .unwrap();
+        let mut config = CostConfig::default();
+        config.pricing.usd_per_credit = Some(2.5);
+
+        let stats = aggregate_bundle(&bundle, &config);
+
+        assert!((stats.by_model["m"].monthly_cost_usd.unwrap().median() - 30.0).abs() < 0.1);
     }
 }

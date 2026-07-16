@@ -30,7 +30,7 @@ Structured scan result:
 | `identity_scheme` | When semantic identity is active | `"semantic-v1"` — finding IDs are stable across formatting and line movement |
 | `analysis` | Always | Completeness report: `policy`, `passed`, and optional `violations` with `code`, `message`, `observed`, and `allowed` |
 | `metrics` | Always | Scan counters including parse metrics (see [Parse metrics](parse-metrics.md)) |
-| `cost` | `[cost]` enabled | Project cost summary: current/post-fix/potential savings, addressable finding savings (deduplicated), top models, grade mix, disclaimer (see [Cost estimates](cost-estimates.md)) |
+| `cost` | `[cost]` enabled | Project cost summary: mapped USD and full-project GB-month current/post-fix/potential savings, addressable finding savings, coverage, top models, grade mix, and disclaimer (see [Cost estimates](cost-estimates.md)) |
 | `diagnostics` | Always | Gated findings on changed files in PR mode; full scan findings otherwise. Entries include governance fields (`finding_id`, `evidence_key`, optional `owners` and `exception`), advisory `rule_precision_tier`, and optional cost data including `prior_basis`, downstream count, and savings |
 | `files` | Always | Per-model parse metadata (`parse_input`, `parsed_raw`, `parsed_compiled`, `feature_extraction_used_ast`) |
 | `pr_summary` | PR mode, or receipt comparison | Receipt version `2` adds base-vs-head `finding_delta`, macro/source `indirectly_affected`, `manifest_integrity`, and compatibility field `enforcement_preview`; plus changed model details/owners, gate results, downstream models/exposures, recommended `dbt build --select`, and optional trend deltas |
@@ -76,7 +76,7 @@ In regression-only mode, unchanged diagnostics are emitted as `notice`; introduc
 
 PR-summary-oriented report with grouped findings, context footer, suppression guidance, and (when `[cost]` is enabled in PR mode) a **PR Cost Impact** section before diagnostics: net/introduced/avoided cost delta, efficiency/volume split, blast radius, coverage, addressable savings, grade mix, and top models. Per-finding lines include severity, confidence, precision tier, delta classification, enforcement status, and savings when priced. Pass/fail headings count only findings that can actually block under regression-only mode.
 
-`--summary-file` writes this report without changing stdout. `--receipt-file` writes the same run as JSON v4. `--compare-receipt` reads a prior JSON v4 receipt and adds diagnostic, high-finding, USD, and GB-month trend deltas under `pr_summary.trend`.
+`--summary-file` writes this report without changing stdout. `--receipt-file` writes the same run as JSON v4. `--compare-receipt` reads a prior JSON v4 receipt and adds diagnostic, high-finding, USD, and GB-month trend deltas under `pr_summary.trend`; USD trend is present only when both receipts have complete USD project coverage.
 
 ## SARIF (`sarif`)
 
@@ -109,6 +109,8 @@ Suppress only intentional exceptions with `-- costguard: disable-next-line=RULE`
 | `1` | Analysis completeness failed, a blocking scoped gate failed, diagnostics met severity/confidence thresholds, or an enabled cost threshold was exceeded; `explain` with `analysis.passed = false` |
 | `2` | Configuration error (invalid config, missing manifest path, unsupported baseline or policy schema) |
 | `3` | Runtime error |
+
+For `doctor`, code `0` means no readiness blockers, `1` means one or more blockers, `2` means invalid configuration, and `3` means the readiness scan could not run. `init` remains code `0` after successfully creating or preserving files even when its automatic doctor report contains blockers or warnings.
 
 ## Related
 

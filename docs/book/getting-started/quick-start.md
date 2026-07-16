@@ -24,20 +24,30 @@ costguard pr --base origin/main --warehouse snowflake --fail-on high --min-confi
 Use the published composite action after your existing dbt compile step:
 
 ```yaml
-- uses: actions/checkout@v6
-  with:
-    fetch-depth: 0
-- run: dbt compile --target dev
-- uses: hypertrial/costguard/.github/actions/costguard@v2.6.0
-  with:
-    base: origin/main
-    warehouse: snowflake
-    manifest: target/manifest.json
-    fail-on: high
-    min-confidence: high
-    block-only-new: true
-    format: github
-    receipt-path: costguard-receipt.json
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  costguard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - run: dbt compile --target dev
+      - uses: hypertrial/costguard/.github/actions/costguard@v2.6.0
+        with:
+          base: origin/main
+          warehouse: snowflake
+          manifest: target/manifest.json
+          fail-on: high
+          min-confidence: high
+          block-only-new: true
+          format: github
+          receipt-path: costguard-receipt.json
+          pr-comment: true
+          github-token: ${{ github.token }}
 ```
 
 For Costguard contributor workflows that need to run the checked-out source instead of a release binary, add:
@@ -47,6 +57,8 @@ For Costguard contributor workflows that need to run the checked-out source inst
 ```
 
 Core inputs: `base`, `warehouse`, `manifest`, `fail-on`, and `baseline`. The Action defaults `block-only-new` to `true` and always forwards the explicit value; set it to `false` during an upgrade if all-findings enforcement is still required. It also supports `min-confidence`, `format`, `analysis-policy`, `fail-on-cost-delta`, `fail-on-pr-cost-increase`, signed-policy inputs, `receipt-path`, and `compare-receipt`. It always writes markdown to the GitHub step summary while preserving the selected stdout format.
+
+Sticky PR comments are opt-in for existing Action consumers: set `pr-comment: true`, pass `github-token: ${{ github.token }}`, and grant `pull-requests: write`. The Action creates or updates one marker-based comment using the same Markdown as the step summary. Fork and Dependabot PRs commonly receive a read-only token; comment publication then warns and skips without changing Costguard's scan result. Newly generated `costguard init` workflows include this setup.
 
 Costguard 2.1 requires baseline v3 and policy v2 with `identity_scheme: "semantic-v1"`. See [Compatibility policy](../reference/compatibility.md).
 

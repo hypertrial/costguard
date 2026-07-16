@@ -1,5 +1,15 @@
 # Troubleshooting
 
+Start with the read-only readiness report:
+
+```bash
+costguard doctor
+# monorepo:
+costguard doctor --dbt-dir analytics
+```
+
+Warnings preserve local scanning; failed checks identify setup or configured-policy blockers. The command does not run dbt or require warehouse credentials.
+
 Common Costguard failures and how to fix them. See also [Requirements](requirements.md), [CLI reference](../reference/cli.md), and [Parse metrics](../reference/parse-metrics.md).
 
 ## Stale or missing manifest

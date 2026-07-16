@@ -13,6 +13,7 @@ mod config;
 mod context;
 mod dbt_graph;
 mod dbt_load;
+mod doctor;
 mod gates;
 mod git;
 mod governance;
@@ -49,6 +50,7 @@ pub use costguard_sql::Platform;
 pub use costguard_sql::{
     CteFeature, ExpressionFeature, JoinFeature, ParseInput, SqlFeatures, WindowFeature,
 };
+pub use doctor::{doctor, DoctorCheck, DoctorReport, DoctorStatus};
 pub use init::{detect_warehouse, init_project, InitOptions, InitOutcome};
 pub use scan::{explain, rules, scan};
 pub use state_diff::{classify_findings, FindingDelta};
@@ -220,7 +222,7 @@ impl ScanResult {
             } else {
                 self.cost_summary
                     .as_ref()
-                    .map(|summary| summary.savings_p50_usd)
+                    .and_then(|summary| summary.savings_p50_usd)
                     .unwrap_or_else(|| costguard_cost::total_p50_usd_per_month(&self.diagnostics))
             };
             if savings >= delta {
@@ -502,7 +504,7 @@ mod tests {
     fn should_fail_on_finding_savings_not_pr_impact_net() {
         let mut result = result_with(Vec::new());
         result.cost_summary = Some(costguard_cost::ProjectCostSummary {
-            savings_p50_usd: 0.0,
+            savings_p50_usd: None,
             savings_gb_months: 0.0,
             pr_impact: Some(costguard_cost::PrCostImpact {
                 net: costguard_cost::CostFigure {

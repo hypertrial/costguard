@@ -32,16 +32,16 @@ When `[cost]` is enabled, scan output includes a `cost` block (JSON) or **Cost s
 
 | Field | Description |
 | --- | --- |
-| `project_p50_usd` | **Current cost** p50 — deduplicated sum of per-model monthly costs (priced mode) |
-| `current_cost` | **Current cost** — project monthly/annual cost with uncertainty (`CostFigure`) |
+| `project_p50_usd` | **Current mapped USD cost** p50 — deduplicated sum of models with pricing or direct monetary observations; `null` when no USD is available |
+| `current_cost` | **Current cost** — mapped monthly/annual USD with uncertainty plus full-project `gb_months_p50` (`CostFigure`) |
 | `post_fix_cost` | **Post-fix cost** — counterfactual cost if all current findings were fixed |
 | `potential_savings` | **Potential savings** — `current_cost − post_fix_cost` (top-down, per model) |
-| `coverage` | **Coverage** — mapped-spend fraction, observation age, rules estimated/unestimated |
+| `coverage` | **Coverage** — mapped-spend fraction, separate USD model count/fraction, observation age, rules estimated/unestimated |
 | `pr_impact` | **PR impact** — base vs head delta in PR mode (`introduced`, `avoided`, `net`, `efficiency`, `volume`, `blast_radius`); `net.monthly_p50` gates `fail_on_pr_cost_increase` |
 | `realized_savings` | **Realized savings** — before/after observation bundles (`observations_before` + `observations_after`) |
 | `project_gb_months` | Sum of model scan volumes in GB-months |
 | `savings_p50_usd` | **Addressable finding savings (deduplicated)** — bottom-up sum of per-finding savings; gates `fail_on_monthly_delta` |
-| `top_models` | Top 5 models by monthly cost |
+| `top_models` | Top 5 models by USD cost at 100% USD coverage, otherwise by full-project GB-month volume |
 | `grade_a` / `grade_b` / `grade_c` | Count of models by input grade |
 
 ### Two savings numbers
@@ -60,6 +60,8 @@ They are close but not identical by construction. `--fail-on-cost-delta` uses th
 1. **Relative index only** — enable `[cost]` without `[cost.pricing]`. Findings ranked by GB-month savings; gate with `fail_on_monthly_delta_gb`.
 2. **Scan-priced dollars** — BigQuery on-demand, Athena, Trino-on-S3: set `[cost.pricing] model = "scan"` and `usd_per_tb`.
 3. **Compute-priced dollars** — Snowflake credits, Databricks DBUs: set `model = "compute"`, `usd_per_credit`, and `tb_per_credit_hour` range.
+
+Byte volume and USD are independent tracks. Unpriced bytes never appear in a USD field. Direct monetary observations can provide mapped USD without global scan pricing; if only part of the project has monetary coverage, reports label those totals as mapped USD and still show full-project GB-month volume. `CostFigure.monthly_p*` and `annual_p50` are always USD, while `gb_months_p50` is always monthly scan volume in GB.
 
 ## Benchmark repo cost configs
 
@@ -131,7 +133,7 @@ Text and markdown scans append:
 - Top findings by estimated monthly savings
 - Cost summary with current/post-fix/potential savings, addressable finding savings, grade mix, top models, and an advisory disclaimer footer
 
-JSON schema version is **4** with an optional top-level `cost` object. Per-finding estimates include additive `prior_basis`: `config-override`, `rule-prior:generic`, or `warehouse-prior:<warehouse>`; explicit `[cost.rules.RULE_ID]` multipliers always win.
+JSON schema version is **4** with an optional top-level `cost` object. Additive fields `CostFigure.gb_months_p50`, `coverage.models_with_usd`, and `coverage.usd_coverage_fraction` distinguish full volume from mapped USD. Monetary fields are `null` when unavailable; `relative_index` remains the per-finding GB-month measure. Per-finding estimates include additive `prior_basis`: `config-override`, `rule-prior:generic`, or `warehouse-prior:<warehouse>`; explicit `[cost.rules.RULE_ID]` multipliers always win.
 
 ## GitHub Action
 

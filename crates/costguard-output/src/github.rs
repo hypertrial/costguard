@@ -72,13 +72,17 @@ pub(crate) fn render_github(result: &ScanResult) -> String {
             ));
         }
         if let Some(cost) = result.cost_summary.as_ref() {
-            if cost.project_p50_usd.is_some() {
-                if let Some(net) = cost
-                    .pr_impact
-                    .as_ref()
-                    .and_then(|impact| impact.net.monthly_p50)
-                {
-                    summary_message.push_str(&format!("; net PR impact: ${net:.0}/mo"));
+            if let Some(impact) = cost.pr_impact.as_ref() {
+                if let Some(net) = impact.net.monthly_p50 {
+                    let mapped = if cost.coverage.models_with_usd < cost.coverage.models_total {
+                        "mapped "
+                    } else {
+                        ""
+                    };
+                    summary_message.push_str(&format!("; {mapped}net PR impact: ${net:.0}/mo"));
+                }
+                if let Some(net) = impact.net.gb_months_p50 {
+                    summary_message.push_str(&format!("; net volume impact: {net:.0} GB-mo"));
                 }
             }
         }

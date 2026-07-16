@@ -2,7 +2,9 @@ use crate::config::CostConfig;
 use crate::estimate::{
     combined_multiplier, round_sig2, savings_fraction, sum_lognormals, Estimate,
 };
-use crate::model_cost::{lookup_model_entry, CostFigure, ModelCostIndex, ProjectCostSummary};
+use crate::model_cost::{
+    lookup_model_entry, sum_estimate_medians, CostFigure, ModelCostIndex, ProjectCostSummary,
+};
 use crate::multipliers::{is_cost_bearing_rule, rule_multiplier_with_basis, unestimated_reason};
 use crate::pricing::{price_per_byte, pricing_label};
 use crate::volume::{model_for_path, model_identity, VolumeContext};
@@ -27,12 +29,14 @@ struct PendingAttribution {
     rule_multiplier: Estimate,
     prior_basis: String,
     savings_fraction: Estimate,
-    raw_savings: Estimate,
+    raw_savings_usd: Option<Estimate>,
+    raw_savings_bytes: Estimate,
     gb_months_savings: f64,
     structure_factor: f64,
     fan_out_factor: f64,
     grade: costguard_diagnostics::CostGrade,
-    model_monthly_cost: Estimate,
+    model_monthly_cost_usd: Option<Estimate>,
+    scan_volume: Estimate,
     volume_basis: String,
 }
 
@@ -93,7 +97,6 @@ pub fn attribute_findings(
     }
 
     let price = price_per_byte(ctx.config);
-    let has_pricing = price.is_some();
     let volume_ctx = VolumeContext {
         config: ctx.config,
         observations: None,
@@ -152,10 +155,10 @@ pub fn attribute_findings(
                 .to_string()
         });
 
-        let (model_monthly_cost, scan_volume, grade, volume_basis) =
+        let (model_monthly_cost_usd, scan_volume, grade, volume_basis) =
             if let Some(entry) = lookup_model_entry(ctx.model_index, &diagnostic.path, dbt_model) {
                 (
-                    entry.monthly_cost,
+                    entry.monthly_cost_usd,
                     entry.scan_volume,
                     entry.grade,
                     format!(
@@ -175,13 +178,9 @@ pub fn attribute_findings(
                     Some(&diagnostic.rule_id),
                 );
                 let scan = volume.bytes * volume.runs_per_month;
-                let monthly = volume.observed_monthly_cost.unwrap_or_else(|| {
-                    if let Some(price) = price {
-                        scan * price
-                    } else {
-                        scan
-                    }
-                });
+                let monthly = volume
+                    .observed_monthly_cost_usd
+                    .or_else(|| price.map(|price| scan * price));
                 (
                     monthly,
                     scan,
@@ -207,11 +206,8 @@ pub fn attribute_findings(
         let attribution_weight = Estimate::from_point(structure_factor * fan_out, Some(0.2));
         let scan_savings = scan_volume * fraction * attribution_weight;
         let gb_months_savings = scan_savings.median() / 1_000_000_000.0;
-        let raw_savings = if has_pricing {
-            model_monthly_cost * fraction * attribution_weight
-        } else {
-            scan_savings
-        };
+        let raw_savings_usd =
+            model_monthly_cost_usd.map(|cost| cost * fraction * attribution_weight);
 
         pending.push(PendingAttribution {
             diagnostic_index: index,
@@ -219,44 +215,75 @@ pub fn attribute_findings(
             rule_multiplier: multiplier,
             prior_basis,
             savings_fraction: fraction,
-            raw_savings,
+            raw_savings_usd,
+            raw_savings_bytes: scan_savings,
             gb_months_savings,
             structure_factor,
             fan_out_factor: fan_out,
             grade,
-            model_monthly_cost,
+            model_monthly_cost_usd,
+            scan_volume,
             volume_basis,
         });
     }
 
     let per_model = apply_per_model_caps(&mut pending);
-    let (savings_p10, savings_p50, savings_p90) = apply_attributions(diagnostics, &pending, ctx);
+    let savings_usd = apply_attributions(diagnostics, &pending, ctx);
 
     // ponytail: project_current matches summarize_project_costs (all indexed models);
     // per_model caps cover only models with findings — savings outside the index are minor.
-    let project_current = sum_lognormals(
-        &ctx.model_index
-            .models
-            .values()
-            .map(|entry| entry.monthly_cost)
-            .collect::<Vec<_>>(),
-    );
-    let (potential_total, post_fix_total) = if per_model.is_empty() {
-        (Estimate::from_point(0.001, Some(0.5)), project_current)
-    } else {
-        let model_savings: Vec<Estimate> = per_model
-            .iter()
-            .map(|(c, p)| Estimate::from_point((c.median() - p.median()).max(0.001), Some(0.15)))
-            .collect();
-        let potential_total = sum_lognormals(&model_savings);
-        let post_fix_median = (project_current.median() - potential_total.median()).max(0.001);
-        let post_fix_total = Estimate::from_point(post_fix_median, Some(0.15));
-        (potential_total, post_fix_total)
-    };
+    let project_usd_values: Vec<Estimate> = ctx
+        .model_index
+        .models
+        .values()
+        .filter_map(|entry| entry.monthly_cost_usd)
+        .collect();
+    let project_byte_values: Vec<Estimate> = ctx
+        .model_index
+        .models
+        .values()
+        .map(|entry| entry.scan_volume)
+        .collect();
+    let project_current_usd =
+        (!project_usd_values.is_empty()).then(|| sum_lognormals(&project_usd_values));
+    let project_current_bytes = sum_estimate_medians(&project_byte_values);
+    let usd_savings: Vec<Estimate> = per_model
+        .iter()
+        .filter_map(|totals| totals.current_usd.zip(totals.post_fix_usd))
+        .map(|(current, post_fix)| {
+            Estimate::from_point(
+                (current.median() - post_fix.median()).max(0.001),
+                Some(0.15),
+            )
+        })
+        .collect();
+    let byte_savings: Vec<Estimate> = per_model
+        .iter()
+        .map(|totals| {
+            Estimate::from_point(
+                (totals.current_bytes.median() - totals.post_fix_bytes.median()).max(0.001),
+                Some(0.15),
+            )
+        })
+        .collect();
+    let potential_usd = (!usd_savings.is_empty()).then(|| sum_lognormals(&usd_savings));
+    let potential_bytes = sum_estimate_medians(&byte_savings);
+    let post_fix_usd = project_current_usd
+        .zip(potential_usd)
+        .map(|(current, savings)| {
+            Estimate::from_point((current.median() - savings.median()).max(0.001), Some(0.15))
+        })
+        .or(project_current_usd);
+    let post_fix_bytes = project_current_bytes
+        .zip(potential_bytes)
+        .map(|(current, savings)| {
+            Estimate::from_point((current.median() - savings.median()).max(0.001), Some(0.01))
+        })
+        .or(project_current_bytes);
 
-    summary.savings_p10_usd = savings_p10;
-    summary.savings_p50_usd = savings_p50;
-    summary.savings_p90_usd = savings_p90;
+    summary.savings_p10_usd = savings_usd.map(|values| values.0);
+    summary.savings_p50_usd = savings_usd.map(|values| values.1);
+    summary.savings_p90_usd = savings_usd.map(|values| values.2);
     summary.savings_gb_months = round_sig2(
         diagnostics
             .iter()
@@ -264,23 +291,30 @@ pub fn attribute_findings(
             .map(|c| c.relative_index)
             .sum(),
     );
-    summary.post_fix_cost = CostFigure::from_estimate(
-        post_fix_total,
+    summary.post_fix_cost = CostFigure::from_estimates(
+        post_fix_usd,
+        post_fix_bytes,
         ctx.config,
         "post-fix-counterfactual",
-        has_pricing,
     );
-    summary.potential_savings = CostFigure::from_estimate(
-        potential_total,
+    summary.potential_savings = CostFigure::from_estimates(
+        potential_usd,
+        potential_bytes,
         ctx.config,
         "potential-savings",
-        has_pricing,
     );
     summary.coverage.rules_estimated = rules_estimated;
     summary.coverage.rules_unestimated = rules_unestimated;
 }
 
-fn apply_per_model_caps(pending: &mut [PendingAttribution]) -> Vec<(Estimate, Estimate)> {
+struct PerModelTotals {
+    current_usd: Option<Estimate>,
+    post_fix_usd: Option<Estimate>,
+    current_bytes: Estimate,
+    post_fix_bytes: Estimate,
+}
+
+fn apply_per_model_caps(pending: &mut [PendingAttribution]) -> Vec<PerModelTotals> {
     let mut by_model: HashMap<String, Vec<usize>> = HashMap::new();
     for (idx, item) in pending.iter().enumerate() {
         by_model.entry(item.model_id.clone()).or_default().push(idx);
@@ -291,7 +325,8 @@ fn apply_per_model_caps(pending: &mut [PendingAttribution]) -> Vec<(Estimate, Es
         if indices.is_empty() {
             continue;
         }
-        let current = pending[indices[0]].model_monthly_cost;
+        let current_usd = pending[indices[0]].model_monthly_cost_usd;
+        let current_bytes = pending[indices[0]].scan_volume;
         let multipliers: Vec<Estimate> = indices
             .iter()
             .map(|idx| pending[*idx].rule_multiplier)
@@ -299,10 +334,22 @@ fn apply_per_model_caps(pending: &mut [PendingAttribution]) -> Vec<(Estimate, Es
         let combined = combined_multiplier(&multipliers);
         let max_combined = combined.median().max(1.001);
         let capped_combined = max_combined.min(20.0);
-        let post_fix = current / Estimate::from_point(capped_combined, Some(0.15));
-        let savings_median = (current.median() - post_fix.median()).max(0.001);
-        let total_savings = Estimate::from_point(savings_median, Some(0.2));
-        per_model.push((current, post_fix));
+        let divisor = Estimate::from_point(capped_combined, Some(0.15));
+        let post_fix_usd = current_usd.map(|current| current / divisor);
+        let post_fix_bytes = current_bytes / divisor;
+        let total_savings_usd = current_usd.zip(post_fix_usd).map(|(current, post_fix)| {
+            Estimate::from_point((current.median() - post_fix.median()).max(0.001), Some(0.2))
+        });
+        let total_savings_bytes = Estimate::from_point(
+            (current_bytes.median() - post_fix_bytes.median()).max(0.001),
+            Some(0.2),
+        );
+        per_model.push(PerModelTotals {
+            current_usd,
+            post_fix_usd,
+            current_bytes,
+            post_fix_bytes,
+        });
 
         let weights: Vec<f64> = indices
             .iter()
@@ -315,10 +362,11 @@ fn apply_per_model_caps(pending: &mut [PendingAttribution]) -> Vec<(Estimate, Es
 
         for (idx, weight) in indices.iter().zip(weights) {
             let share = weight / weight_sum;
-            let gb_before = pending[*idx].gb_months_savings;
-            let fraction_median = pending[*idx].savings_fraction.median().max(0.001);
-            pending[*idx].raw_savings = total_savings * Estimate::from_point(share, Some(0.2));
-            pending[*idx].gb_months_savings = gb_before * (share / fraction_median);
+            let share_estimate = Estimate::from_point(share, Some(0.2));
+            pending[*idx].raw_savings_usd =
+                total_savings_usd.map(|savings| savings * share_estimate);
+            pending[*idx].raw_savings_bytes = total_savings_bytes * share_estimate;
+            pending[*idx].gb_months_savings = pending[*idx].raw_savings_bytes.median() / 1e9;
         }
     }
     per_model
@@ -340,33 +388,30 @@ fn downstream_monthly_cost(
     let costs: Vec<Estimate> = ids
         .iter()
         .filter_map(|id| ctx.model_index.models.get(id))
-        .map(|entry| entry.monthly_cost)
+        .filter_map(|entry| entry.monthly_cost_usd)
         .collect();
     if costs.is_empty() {
         return (count, None);
     }
     let total = sum_lognormals(&costs);
-    let has_pricing = price_per_byte(ctx.config).is_some();
-    let p50 = has_pricing.then(|| round_sig2(total.median()));
-    (count, p50)
+    (count, Some(round_sig2(total.median())))
 }
 
 fn apply_attributions(
     diagnostics: &mut [Diagnostic],
     pending: &[PendingAttribution],
     ctx: &CostAttributionContext<'_>,
-) -> (f64, f64, f64) {
+) -> Option<(f64, f64, f64)> {
     let config = ctx.config;
     let pricing = pricing_label(&config.pricing);
-    let has_pricing = price_per_byte(config).is_some();
     let mut savings_estimates = Vec::new();
 
     for item in pending {
-        let savings = item.raw_savings;
+        let savings = item.raw_savings_usd;
         let combined = combined_multiplier(&[item.rule_multiplier]);
-        let post_fix = item.model_monthly_cost / combined;
+        let post_fix = item.model_monthly_cost_usd.map(|cost| cost / combined);
 
-        let (usd_p10, usd_p50, usd_p90) = if has_pricing {
+        let (usd_p10, usd_p50, usd_p90) = if let Some(savings) = savings {
             let (lo, hi) = savings.interval(config.interval);
             (
                 Some(round_sig2(lo)),
@@ -378,16 +423,10 @@ fn apply_attributions(
         };
 
         let relative_index = round_sig2(item.gb_months_savings);
-        let model_monthly_p50 = if has_pricing {
-            Some(round_sig2(item.model_monthly_cost.median()))
-        } else {
-            None
-        };
-        let post_fix_p50 = if has_pricing {
-            Some(round_sig2(post_fix.median()))
-        } else {
-            None
-        };
+        let model_monthly_p50 = item
+            .model_monthly_cost_usd
+            .map(|cost| round_sig2(cost.median()));
+        let post_fix_p50 = post_fix.map(|cost| round_sig2(cost.median()));
 
         let cap_note = if item.structure_factor != 1.0 || item.fan_out_factor != 1.0 {
             format!(
@@ -397,18 +436,24 @@ fn apply_attributions(
         } else {
             String::new()
         };
+        let cost_basis =
+            if item.model_monthly_cost_usd.is_some() && price_per_byte(config).is_none() {
+                "observed USD"
+            } else {
+                &pricing
+            };
 
         let basis = format!(
             "Est. savings from {} on {} (model {} × {} rule fraction {}{})",
             item.volume_basis,
             item.model_id,
-            if has_pricing {
-                format!("${:.0}/mo", item.model_monthly_cost.median())
+            if let Some(cost) = item.model_monthly_cost_usd {
+                format!("${:.0}/mo", cost.median())
             } else {
-                format!("{:.0} GB-mo", item.model_monthly_cost.median() / 1e9)
+                format!("{:.0} GB-mo", item.scan_volume.median() / 1e9)
             },
             diagnostics[item.diagnostic_index].rule_id,
-            pricing,
+            cost_basis,
             cap_note
         );
 
@@ -431,15 +476,17 @@ fn apply_attributions(
             downstream_model_count: (downstream_count > 0).then_some(downstream_count),
             downstream_monthly_p50_usd: downstream_p50,
         });
-        savings_estimates.push(savings);
+        if let Some(savings) = savings {
+            savings_estimates.push(savings);
+        }
     }
 
     if savings_estimates.is_empty() {
-        return (0.0, 0.0, 0.0);
+        return None;
     }
     let total = sum_lognormals(&savings_estimates);
     let (lo, hi) = total.interval(config.interval);
-    (round_sig2(lo), round_sig2(total.median()), round_sig2(hi))
+    Some((round_sig2(lo), round_sig2(total.median()), round_sig2(hi)))
 }
 
 fn structure_factor_for_rule(rule_id: &str, features: Option<&ModelFeatureSummary>) -> f64 {
@@ -613,6 +660,42 @@ mod tests {
             cost_estimate: None,
             rule_precision_tier: None,
         }
+    }
+
+    #[test]
+    fn unpriced_findings_do_not_populate_usd_fields() {
+        let config = CostConfig {
+            enabled: true,
+            ..CostConfig::default()
+        };
+        let mut dbt = DbtProject::default();
+        dbt.models.insert(
+            "m".into(),
+            DbtModel {
+                name: "m".into(),
+                path: Some(PathBuf::from("models/m.sql")),
+                ..DbtModel::default()
+            },
+        );
+        let index = build_model_cost_index(&config, Some(&dbt), &CostInputs::default());
+        let mut diagnostics = vec![sample_diagnostic("SQLCOST014", 1)];
+        let mut summary = summarize_project_costs(&index, &config);
+        let ctx = CostAttributionContext {
+            config: &config,
+            model_index: &index,
+            dbt: Some(&dbt),
+            features_by_path: &HashMap::new(),
+            downstream_counts: &HashMap::new(),
+            downstream_ids: &HashMap::new(),
+            exposure_counts: &HashMap::new(),
+        };
+
+        attribute_findings(&mut diagnostics, &ctx, &mut summary);
+
+        let estimate = diagnostics[0].cost_estimate.as_ref().unwrap();
+        assert_eq!(estimate.currency, "USD");
+        assert!(estimate.savings_p50_usd_per_month.is_none());
+        assert!(estimate.relative_index > 0.0);
     }
 
     #[test]

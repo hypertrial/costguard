@@ -225,6 +225,8 @@ pub(crate) fn render_markdown(result: &ScanResult) -> String {
         output.push_str(
             "Suppress only intentional exceptions with `-- costguard: disable-next-line=RULE`.\n",
         );
+    } else {
+        append_cost_summary_markdown(&mut output, result.cost_summary.as_ref());
     }
 
     output
@@ -238,15 +240,22 @@ pub(crate) fn append_top_cost_findings_markdown(output: &mut String, diagnostics
     if ranked.is_empty() {
         return;
     }
+    let rank_by_usd = ranked
+        .iter()
+        .all(|(_, cost)| cost.savings_p50_usd_per_month.is_some());
     ranked.sort_by(|(_left, left_cost), (_right, right_cost)| {
-        right_cost
-            .savings_p50_usd_per_month
-            .unwrap_or(right_cost.relative_index)
-            .partial_cmp(
-                &left_cost
-                    .savings_p50_usd_per_month
-                    .unwrap_or(left_cost.relative_index),
-            )
+        let left = if rank_by_usd {
+            left_cost.savings_p50_usd_per_month.unwrap_or_default()
+        } else {
+            left_cost.relative_index
+        };
+        let right = if rank_by_usd {
+            right_cost.savings_p50_usd_per_month.unwrap_or_default()
+        } else {
+            right_cost.relative_index
+        };
+        right
+            .partial_cmp(&left)
             .unwrap_or(std::cmp::Ordering::Equal)
     });
     output.push_str("\n## Top findings by estimated monthly savings\n\n");

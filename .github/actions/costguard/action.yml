@@ -94,6 +94,14 @@ inputs:
     description: Optional prior JSON v4 receipt used to calculate trend deltas
     required: false
     default: ""
+  pr-comment:
+    description: Create or update a sticky pull request summary comment
+    required: false
+    default: "false"
+  github-token:
+    description: GitHub token used only to publish the optional pull request comment
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -137,6 +145,8 @@ runs:
         POLICY_REPOSITORY_INPUT: ${{ inputs.policy-repository }}
         RECEIPT_PATH_INPUT: ${{ inputs.receipt-path }}
         COMPARE_RECEIPT_INPUT: ${{ inputs.compare-receipt }}
+        PR_COMMENT_INPUT: ${{ inputs.pr-comment }}
+        GITHUB_TOKEN_INPUT: ${{ inputs.github-token }}
       run: |
         PYTHON="$(command -v python3 || command -v python)"
         "${PYTHON}" "${GITHUB_ACTION_PATH}/scripts/costguard_action.py" run

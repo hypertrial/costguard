@@ -240,6 +240,10 @@ name: Costguard
 on:
   pull_request:
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   costguard:
     runs-on: ubuntu-latest
@@ -258,6 +262,8 @@ jobs:
           fail-on: high
           min-confidence: high
           block-only-new: true
+          pr-comment: true
+          github-token: ${{{{ github.token }}}}
           # fail-on-pr-cost-increase: "500" # requires priced [cost] configuration
 "#
     )
@@ -404,6 +410,9 @@ dev:
         let workflow =
             fs::read_to_string(temp.path().join(".github/workflows/costguard.yml")).unwrap();
         assert!(workflow.contains("warehouse: trino"));
+        assert!(workflow.contains("pull-requests: write"));
+        assert!(workflow.contains("pr-comment: true"));
+        assert!(workflow.contains("github-token: ${{ github.token }}"));
         assert!(workflow.contains(&format!("@v{}", env!("CARGO_PKG_VERSION"))));
         assert!(!workflow.contains("@vv"));
         assert!(!workflow.contains("manifest: target/manifest.json"));

@@ -76,6 +76,7 @@ pub(crate) fn render_text(result: &ScanResult) -> String {
             "No diagnostics. Scanned {} SQL, {} YAML, {} Python, {} manifest files.\n",
             result.counts.sql, result.counts.yaml, result.counts.python, result.counts.manifest
         ));
+        append_cost_summary(&mut output, result.cost_summary.as_ref());
         return output;
     }
 
@@ -126,15 +127,22 @@ pub(crate) fn append_top_cost_findings(output: &mut String, diagnostics: &[Diagn
     if ranked.is_empty() {
         return;
     }
+    let rank_by_usd = ranked
+        .iter()
+        .all(|(_, cost)| cost.savings_p50_usd_per_month.is_some());
     ranked.sort_by(|(_left, left_cost), (_right, right_cost)| {
-        right_cost
-            .savings_p50_usd_per_month
-            .unwrap_or(right_cost.relative_index)
-            .partial_cmp(
-                &left_cost
-                    .savings_p50_usd_per_month
-                    .unwrap_or(left_cost.relative_index),
-            )
+        let left = if rank_by_usd {
+            left_cost.savings_p50_usd_per_month.unwrap_or_default()
+        } else {
+            left_cost.relative_index
+        };
+        let right = if rank_by_usd {
+            right_cost.savings_p50_usd_per_month.unwrap_or_default()
+        } else {
+            right_cost.relative_index
+        };
+        right
+            .partial_cmp(&left)
             .unwrap_or(std::cmp::Ordering::Equal)
     });
     output.push_str("\nTop findings by estimated monthly savings:\n");

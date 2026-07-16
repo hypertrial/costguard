@@ -1,14 +1,15 @@
 //! Costguard CLI binary.
 //!
-//! Entry point for `scan`, `explain`, `pr`, `cost`, `rules`, and
-//! `policy` subcommands. Delegates scan orchestration to
+//! Entry point for `scan`, `explain`, `pr`, `cost`, `rules`, `policy`,
+//! `init`, and `doctor` subcommands. Delegates scan orchestration to
 //! [`costguard_core`].
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use costguard_core::{
-    apply_file_config, explain, init_project, load_config, rules, scan, validate_scan_config,
-    InitOptions, OutputFormat, PrSummary, ReceiptTrend, ScanConfig, ScanRuntimeOverrides,
+    apply_file_config, doctor, explain, init_project, load_config, rules, scan,
+    validate_scan_config, DoctorReport, DoctorStatus, InitOptions, OutputFormat, PrSummary,
+    ReceiptTrend, ScanConfig, ScanRuntimeOverrides,
 };
 use costguard_cost::{normalize_cost_export, CostExportFormat, NormalizeCostOptions};
 use costguard_output::{render, render_rules};
@@ -33,13 +34,22 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Scan a project and report cost-risk findings.
     Scan(ScanArgs),
+    /// Explain findings for one file.
     Explain(ExplainArgs),
+    /// Scan files changed against a git base revision.
     Pr(PrArgs),
+    /// Report or normalize model cost data.
     Cost(CostArgs),
+    /// List the built-in rule catalog.
     Rules(RulesArgs),
+    /// Create, sign, verify, and inspect managed policy bundles.
     Policy(PolicyCommandArgs),
+    /// Generate a starter configuration and GitHub workflow.
     Init(InitArgs),
+    /// Check whether a project is ready for local and PR scans.
+    Doctor(DoctorArgs),
 }
 
 #[derive(Debug, Parser)]
@@ -50,67 +60,105 @@ struct PolicyCommandArgs {
 
 #[derive(Debug, Subcommand)]
 enum PolicyCommand {
+    /// Generate a private signing key and matching trust store.
     Keygen {
+        /// Stable identifier embedded in signatures.
         key_id: String,
+        /// Destination for the private key JSON.
         #[arg(long)]
         private_key: PathBuf,
+        /// Destination for the public trust store JSON.
         #[arg(long)]
         trust_store: PathBuf,
+        /// RFC3339 public-key expiry; defaults to one year.
         #[arg(long)]
         valid_until: Option<String>,
+        /// Replace existing regular output files.
         #[arg(long)]
         force: bool,
     },
+    /// Compile policy TOML into canonical policy JSON.
     Compile {
+        /// Policy TOML source.
         input: PathBuf,
+        /// Canonical policy JSON destination.
         output: PathBuf,
     },
+    /// Sign compiled policy JSON.
     Sign {
+        /// Compiled policy JSON.
         policy: PathBuf,
+        /// Private signing key JSON.
         key: PathBuf,
+        /// Signed policy bundle destination.
         output: PathBuf,
     },
+    /// Verify a signed policy bundle against a trust store.
     Verify {
+        /// Signed policy bundle.
         bundle: PathBuf,
+        /// Public trust store.
         trust_store: PathBuf,
     },
+    /// Resolve the effective policy for an organization and repository.
     Resolve {
+        /// Signed policy bundle.
         bundle: PathBuf,
+        /// Public trust store.
         trust_store: PathBuf,
+        /// Organization slug used for scope resolution.
         #[arg(long)]
         organization: String,
+        /// Repository slug in owner/name form.
         #[arg(long)]
         repository: String,
+        /// Optional team scope.
         #[arg(long)]
         team: Option<String>,
+        /// Optional repository path scope.
         #[arg(long)]
         path: Option<String>,
     },
+    /// Print verified policy metadata and counts.
     Inspect {
+        /// Signed policy bundle.
         bundle: PathBuf,
+        /// Public trust store.
         trust_store: PathBuf,
     },
 }
 
 #[derive(Debug, Parser)]
+#[command(
+    after_help = "Examples:\n  costguard scan\n  costguard scan models --cost --format markdown"
+)]
 struct ScanArgs {
+    /// Files or directories to scan; defaults to the configured project.
     paths: Vec<PathBuf>,
     #[command(flatten)]
     common: CommonScanArgs,
+    /// Minimum severity that returns exit code 1.
     #[arg(long)]
     fail_on: Option<String>,
+    /// Minimum confidence eligible for the failure gate.
     #[arg(long)]
     min_confidence: Option<String>,
+    /// Hide diagnostics below --min-confidence from output.
     #[arg(long)]
     min_confidence_filter: bool,
+    /// Existing finding baseline to apply.
     #[arg(long)]
     baseline: Option<PathBuf>,
+    /// Write the current findings as a baseline.
     #[arg(long)]
     write_baseline: Option<PathBuf>,
+    /// Enable project cost estimation.
     #[arg(long)]
     cost: bool,
+    /// Fail when addressable mapped USD reaches this monthly threshold.
     #[arg(long)]
     fail_on_cost_delta: Option<f64>,
+    /// Require this mapped-spend coverage fraction.
     #[arg(long, value_name = "0.0..1.0")]
     min_cost_coverage: Option<f64>,
     #[command(flatten)]
@@ -125,20 +173,30 @@ struct CostArgs {
 
 #[derive(Debug, Subcommand)]
 enum CostCommand {
+    /// Render the project-level cost report.
     Report(CostReportArgs),
+    /// Convert a supported warehouse or pipeline export to Costguard observations.
     Normalize {
+        /// Source export to read.
         input: PathBuf,
+        /// Normalized JSON bundle to write.
         output: PathBuf,
+        /// Input export format.
         #[arg(long, value_enum)]
         source: CostSourceArg,
+        /// Organization recorded in the normalized bundle.
         #[arg(long)]
         organization: String,
+        /// Repository recorded in the normalized bundle.
         #[arg(long)]
         repository: String,
+        /// Human-readable source provenance.
         #[arg(long)]
         provenance: String,
+        /// Currency code; currently USD.
         #[arg(long, default_value = "USD")]
         currency: String,
+        /// Optional JSON map from source identifiers to dbt model IDs.
         #[arg(long)]
         model_mapping: Option<PathBuf>,
     },
@@ -146,6 +204,7 @@ enum CostCommand {
 
 #[derive(Debug, Parser)]
 struct CostReportArgs {
+    /// Files or directories to include; defaults to the configured project.
     paths: Vec<PathBuf>,
     #[command(flatten)]
     common: CommonScanArgs,
@@ -178,31 +237,42 @@ impl From<CostSourceArg> for CostExportFormat {
 
 #[derive(Debug, Parser)]
 struct ExplainArgs {
+    /// SQL or dbt file to analyze.
     path: PathBuf,
     #[command(flatten)]
     common: CommonScanArgs,
+    /// Attach advisory cost estimates.
     #[arg(long)]
     cost: bool,
 }
 
 #[derive(Debug, Parser)]
+#[command(after_help = "Example:\n  costguard pr --base origin/main --block-only-new=true")]
 struct PrArgs {
+    /// Git revision used as the comparison base.
     #[arg(long, default_value = "main")]
     base: String,
     #[command(flatten)]
     common: CommonScanArgs,
+    /// Minimum severity that returns exit code 1.
     #[arg(long)]
     fail_on: Option<String>,
+    /// Minimum confidence eligible for the failure gate.
     #[arg(long)]
     min_confidence: Option<String>,
+    /// Hide diagnostics below --min-confidence from output.
     #[arg(long)]
     min_confidence_filter: bool,
+    /// Existing finding baseline to apply.
     #[arg(long)]
     baseline: Option<PathBuf>,
+    /// Enable project cost estimation.
     #[arg(long)]
     cost: bool,
+    /// Fail when addressable mapped USD reaches this monthly threshold.
     #[arg(long)]
     fail_on_cost_delta: Option<f64>,
+    /// Enforce only introduced or regressed findings.
     #[arg(
         long,
         num_args = 0..=1,
@@ -210,8 +280,10 @@ struct PrArgs {
         require_equals = true
     )]
     block_only_new: Option<bool>,
+    /// Fail when mapped project cost rises by this USD/month amount.
     #[arg(long, value_name = "USD_PER_MONTH")]
     fail_on_pr_cost_increase: Option<f64>,
+    /// Require this mapped-spend coverage fraction.
     #[arg(long, value_name = "0.0..1.0")]
     min_cost_coverage: Option<f64>,
     #[command(flatten)]
@@ -220,40 +292,54 @@ struct PrArgs {
 
 #[derive(Debug, Parser, Default)]
 struct ReceiptArgs {
+    /// Write the Markdown summary to this file.
     #[arg(long)]
     summary_file: Option<PathBuf>,
+    /// Write the JSON v4 receipt to this file.
     #[arg(long)]
     receipt_file: Option<PathBuf>,
+    /// Compare against a previous JSON v4 receipt.
     #[arg(long)]
     compare_receipt: Option<PathBuf>,
 }
 
 #[derive(Debug, Parser, Default)]
 struct PolicyArgs {
+    /// Signed policy bundle.
     #[arg(long = "policy")]
     bundle: Option<PathBuf>,
+    /// Public trust store for policy verification.
     #[arg(long = "trust-store")]
     trust_store: Option<PathBuf>,
+    /// Organization used for policy scope resolution.
     #[arg(long = "policy-organization")]
     organization: Option<String>,
+    /// Optional team used for policy scope resolution.
     #[arg(long = "policy-team")]
     team: Option<String>,
+    /// Repository used for policy scope resolution.
     #[arg(long = "policy-repository")]
     repository: Option<String>,
 }
 
 #[derive(Debug, Parser, Default)]
 struct CommonScanArgs {
+    /// Warehouse platform used for dialect and rule context.
     #[arg(long)]
     warehouse: Option<String>,
+    /// SQL dialect override.
     #[arg(long)]
     dialect: Option<String>,
+    /// Output format.
     #[arg(long, value_enum)]
     format: Option<FormatArg>,
+    /// dbt manifest path relative to the project root.
     #[arg(long)]
     manifest: Option<PathBuf>,
+    /// Base-branch manifest used by PR analysis.
     #[arg(long)]
     base_manifest: Option<PathBuf>,
+    /// Analysis completeness policy: standard or strict.
     #[arg(long)]
     analysis_policy: Option<String>,
     #[command(flatten)]
@@ -278,24 +364,40 @@ impl CommonScanArgs {
 
 #[derive(Debug, Parser)]
 struct RulesArgs {
+    /// Rule catalog output format.
     #[arg(long, value_enum)]
     format: Option<FormatArg>,
 }
 
 #[derive(Debug, Parser)]
+#[command(after_help = "Examples:\n  costguard init\n  costguard init --dbt-dir analytics")]
 struct InitArgs {
+    /// Warehouse platform to write, overriding auto-detection.
     #[arg(long)]
     warehouse: Option<String>,
+    /// Initialization profile; currently local-duckdb.
     #[arg(long)]
     profile: Option<String>,
+    /// dbt project directory relative to the repository root.
     #[arg(long)]
     dbt_dir: Option<PathBuf>,
+    /// Replace generated files that already exist.
     #[arg(long)]
     force: bool,
+    /// Do not generate a GitHub workflow.
     #[arg(long)]
     no_workflow: bool,
+    /// Do not generate costguard.toml.
     #[arg(long)]
     no_config: bool,
+}
+
+#[derive(Debug, Parser)]
+#[command(after_help = "Example:\n  costguard doctor --dbt-dir analytics")]
+struct DoctorArgs {
+    /// dbt project directory relative to the repository root.
+    #[arg(long)]
+    dbt_dir: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -366,11 +468,13 @@ fn run() -> Result<u8> {
         }
         Command::Policy(args) => run_policy_command(args.command),
         Command::Init(args) => run_init_command(args),
+        Command::Doctor(args) => run_doctor_command(args),
     }
 }
 
 fn run_init_command(args: InitArgs) -> Result<u8> {
     let root = std::env::current_dir().context("failed to resolve current directory")?;
+    let dbt_dir = args.dbt_dir.clone();
     let outcome = init_project(
         &root,
         &InitOptions {
@@ -396,7 +500,53 @@ fn run_init_command(args: InitArgs) -> Result<u8> {
             );
         }
     }
+    match doctor_config(&root, dbt_dir.as_deref()).and_then(|config| doctor(&config, &root)) {
+        Ok(report) => print_doctor_report(&report),
+        Err(error) => eprintln!("warning: readiness check could not complete: {error:#}"),
+    }
     Ok(0)
+}
+
+fn run_doctor_command(args: DoctorArgs) -> Result<u8> {
+    let root = std::env::current_dir().context("failed to resolve current directory")?;
+    let config = match doctor_config(&root, args.dbt_dir.as_deref()).context("configuration error")
+    {
+        Ok(config) => config,
+        Err(error) => return configuration_error(error),
+    };
+    let report = doctor(&config, &root)?;
+    print_doctor_report(&report);
+    Ok(if report.has_blockers() { 1 } else { 0 })
+}
+
+fn doctor_config(repository_root: &Path, dbt_dir: Option<&Path>) -> Result<ScanConfig> {
+    let project_root = dbt_dir
+        .map(|path| repository_root.join(path))
+        .unwrap_or_else(|| repository_root.to_path_buf());
+    let config = ScanConfig {
+        root: project_root.clone(),
+        ..ScanConfig::default()
+    };
+    let config = apply_file_config(config, load_config(&project_root)?)?;
+    validate_scan_config(&config)?;
+    Ok(config)
+}
+
+fn print_doctor_report(report: &DoctorReport) {
+    println!("Costguard doctor");
+    for check in &report.checks {
+        let status = match check.status {
+            DoctorStatus::Pass => "pass",
+            DoctorStatus::Warn => "warn",
+            DoctorStatus::Fail => "fail",
+        };
+        println!("[{status}] {}: {}", check.name, check.message);
+    }
+    if report.has_blockers() {
+        println!("Not ready: resolve the failed checks above.");
+    } else {
+        println!("Ready: no blocking setup issues found.");
+    }
 }
 
 fn run_cost_command(command: CostCommand) -> Result<u8> {
@@ -886,13 +1036,34 @@ fn compare_receipt(path: &Path, current: &costguard_core::ScanResult) -> Result<
         .iter()
         .filter(|diagnostic| diagnostic.severity >= costguard_diagnostics::Severity::High)
         .count();
-    let previous_usd = previous
-        .pointer("/cost/savings_p50_usd")
+    let previous_project_usd = previous
+        .pointer("/cost/project_p50_usd")
         .and_then(|value| value.as_f64());
-    let current_usd = current
-        .cost_summary
-        .as_ref()
-        .map(|cost| cost.savings_p50_usd);
+    let previous_usd_coverage = previous
+        .pointer("/cost/coverage/usd_coverage_fraction")
+        .and_then(|value| value.as_f64());
+    let previous_usd_comparable = previous_usd_coverage
+        .map(|coverage| coverage == 1.0)
+        .unwrap_or(previous_project_usd.is_some());
+    let previous_usd = if previous_usd_comparable {
+        previous
+            .pointer("/cost/savings_p50_usd")
+            .and_then(|value| value.as_f64())
+    } else {
+        None
+    };
+    let current_usd_comparable = current.cost_summary.as_ref().is_some_and(|cost| {
+        cost.coverage.models_total > 0
+            && cost.coverage.models_with_usd == cost.coverage.models_total
+    });
+    let current_usd = if current_usd_comparable {
+        current
+            .cost_summary
+            .as_ref()
+            .and_then(|cost| cost.savings_p50_usd)
+    } else {
+        None
+    };
     let previous_gb = previous
         .pointer("/cost/savings_gb_months")
         .and_then(|value| value.as_f64());
@@ -903,14 +1074,13 @@ fn compare_receipt(path: &Path, current: &costguard_core::ScanResult) -> Result<
     Ok(ReceiptTrend {
         diagnostics_delta: current.diagnostics.len() as i64 - previous_diagnostics.len() as i64,
         high_findings_delta: current_high as i64 - previous_high as i64,
-        monthly_savings_delta_usd: delta(previous_usd, current_usd),
-        monthly_savings_delta_gb: delta(previous_gb, current_gb),
+        monthly_savings_delta_usd: previous_usd
+            .zip(current_usd)
+            .map(|(previous, current)| current - previous),
+        monthly_savings_delta_gb: previous_gb
+            .zip(current_gb)
+            .map(|(previous, current)| current - previous),
     })
-}
-
-fn delta(previous: Option<f64>, current: Option<f64>) -> Option<f64> {
-    (previous.is_some() || current.is_some())
-        .then(|| current.unwrap_or(0.0) - previous.unwrap_or(0.0))
 }
 
 fn fail_on_monthly_delta(config: &ScanConfig) -> Option<f64> {

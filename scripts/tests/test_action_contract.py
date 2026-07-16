@@ -134,8 +134,14 @@ class ActionContractTest(unittest.TestCase):
             "policy-repository:",
             "receipt-path:",
             "compare-receipt:",
+            "pr-comment:",
+            "github-token:",
         ]:
             self.assertIn(policy_input, action)
+        comment_block = action.split("pr-comment:", 1)[1].split("github-token:", 1)[0]
+        self.assertIn('default: "false"', comment_block)
+        self.assertIn("PR_COMMENT_INPUT", action)
+        self.assertIn("GITHUB_TOKEN_INPUT", action)
 
 
 def run_blocks(text: str) -> list[str]:
