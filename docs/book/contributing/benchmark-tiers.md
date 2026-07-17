@@ -48,7 +48,7 @@ python3 scripts/benchmark_external_repo.py --repo ol-data-platform --smoke
 python3 scripts/benchmark_external_repo.py --repo data-infra  # manual observational
 ```
 
-The independently dispatched `benchmark.yml` workflow is part of release qualification. Scheduled runs remain useful trend evidence but cannot qualify a release.
+The independently dispatched `benchmark.yml` workflow is part of release qualification. It first runs the default full `ci_local.sh` gate, then the required external support matrix and precision checks. Scheduled runs remain useful trend evidence but cannot qualify a release.
 
 ### Defaults by context
 

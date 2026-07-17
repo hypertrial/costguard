@@ -33,8 +33,8 @@ See [`benchmark-calibration.md`](benchmark-calibration.md) for the triage loop a
 
 GitHub Actions:
 
-- **Push to `main`:** Spellbook **smoke** benchmark (`tokens` + root macros) in [`ci.yml`](../../.github/workflows/ci.yml) (`spellbook-smoke` job).
-- **Manual:** run the **benchmark** workflow (`workflow_dispatch`) in [`benchmark.yml`](../../.github/workflows/benchmark.yml) with target `spellbook` for the full five-subproject gate.
+- **Push to `main`:** the five-minute [`ci.yml`](../../.github/workflows/ci.yml) gate runs repository tests and synthetic scale, not network-dependent external repositories.
+- **Manual/release:** run the **benchmark** workflow (`workflow_dispatch`) in [`benchmark.yml`](../../.github/workflows/benchmark.yml); its required support matrix includes full Spellbook across all five subprojects.
 
 Why Spellbook:
 

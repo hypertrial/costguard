@@ -9,6 +9,11 @@ pip install ruff   # required by CI; ci_local.sh warns if missing
 ./scripts/ci_local.sh
 ```
 
+The default command is the full pre-push and release qualification gate. GitHub's
+sub-five-minute `pr-gate` uses `./scripts/ci_local.sh --fast`, which keeps
+formatting, lint, tests, the release build, and release-asset smoke; do not
+substitute it for the full command before submitting a change.
+
 Rule behavior changes must include positive and negative corpus fixtures. False-positive fixes should be registered in `tests/benchmarks/fp_registry.toml`. Changes to stable `2.x` interfaces must follow the [compatibility policy](docs/book/reference/compatibility.md).
 
 External benchmark and release procedures are documented in the [benchmark guide](docs/book/contributing/benchmark-tiers.md) and [release checklist](docs/book/contributing/releasing.md).

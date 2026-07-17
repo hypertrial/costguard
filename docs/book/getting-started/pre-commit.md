@@ -37,7 +37,7 @@ Install a checksum-verified release binary on your `PATH` as shown in the [quick
 
 This repository includes [`.pre-commit-config.yaml`](../../../.pre-commit-config.yaml) pointing at the local hook script for development.
 
-Run the PR-equivalent local gate with:
+Run the full local qualification gate with:
 
 ```bash
 ./scripts/ci_local.sh

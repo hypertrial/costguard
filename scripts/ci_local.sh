@@ -8,8 +8,10 @@ SPELLBOOK_SMOKE=0
 NBA_MONTE_CARLO_SMOKE=0
 PRECISION_GATE=0
 CENSUS_GATE=0
+FAST_GATE=0
 for arg in "$@"; do
   case "$arg" in
+    --fast) FAST_GATE=1 ;;
     --spellbook-smoke) SPELLBOOK_SMOKE=1 ;;
     --nba-monte-carlo-smoke) NBA_MONTE_CARLO_SMOKE=1 ;;
     --precision) PRECISION_GATE=1 ;;
@@ -50,29 +52,35 @@ eval_python() {
 }
 
 require_tool ruff
-require_tool mdbook
-require_tool cargo-deny
+if [ "$FAST_GATE" -eq 0 ]; then
+  require_tool mdbook
+  require_tool cargo-deny
+fi
 run python3 scripts/lock_python_deps.py --check
 EVAL_PY="$(eval_python)"
 run python3 scripts/validate_workspace_deps.py
 run ruff check scripts .github/actions/costguard/scripts
 run cargo fmt --check
 run cargo clippy --locked --all-targets --all-features -- -D warnings
-RUSTDOCFLAGS="-D warnings" run cargo doc --workspace --no-deps --locked
+if [ "$FAST_GATE" -eq 0 ]; then
+  RUSTDOCFLAGS="-D warnings" run cargo doc --workspace --no-deps --locked
+fi
 run cargo build --release --locked -p costguard-cli
 run python3 scripts/verify_release_assets.py
 run "$EVAL_PY" -m unittest discover -s scripts/tests -p 'test_*.py'
-run python3 scripts/validate_fp_registry.py
-run python3 scripts/recall_report.py
-run "$EVAL_PY" scripts/eval_metrics.py --split corpus
-run "$EVAL_PY" scripts/eval_irr.py
-COSTGUARD_BUILD_PROFILE=release run python3 scripts/benchmark_external_repo.py --all-vendored
-run python3 scripts/generate_rule_docs.py --check
-run python3 scripts/generate_precision_tiers.py --check
-run python3 scripts/build_benchmark_evidence.py --check
-run python3 scripts/check_docs.py
-run mdbook build
-run cargo deny check
+if [ "$FAST_GATE" -eq 0 ]; then
+  run python3 scripts/validate_fp_registry.py
+  run python3 scripts/recall_report.py
+  run "$EVAL_PY" scripts/eval_metrics.py --split corpus
+  run "$EVAL_PY" scripts/eval_irr.py
+  COSTGUARD_BUILD_PROFILE=release run python3 scripts/benchmark_external_repo.py --all-vendored
+  run python3 scripts/generate_rule_docs.py --check
+  run python3 scripts/generate_precision_tiers.py --check
+  run python3 scripts/build_benchmark_evidence.py --check
+  run python3 scripts/check_docs.py
+  run mdbook build
+  run cargo deny check
+fi
 run cargo test --workspace --all-targets --locked
 if [ "$SPELLBOOK_SMOKE" -eq 1 ]; then
   COSTGUARD_BUILD_PROFILE=release run python3 scripts/benchmark_external_repo.py --repo spellbook --smoke

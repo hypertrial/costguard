@@ -43,7 +43,7 @@ Plain accuracy is intentionally omitted (misleading when negatives dominate).
 | `corpus` | Authored gold from corpus manifest | Hard: precision/recall/MCC = 1.0 |
 | `real` | Provisional bucket templates from fp_registry | Soft: precision floors until human review |
 
-The corpus split is deterministic and runs in every local CI gate. The real split requires a cached Spellbook checkout and runs behind `./scripts/ci_local.sh --precision`.
+The corpus split is deterministic and runs in every full local CI gate; the per-change `--fast` mode defers it to manual release qualification. The real split requires a cached Spellbook checkout and runs behind `./scripts/ci_local.sh --precision`.
 
 ## Commands
 

@@ -79,7 +79,7 @@ python3 scripts/release_check.py --version 2.0.0
 
 ## `verify_ci_history.py`
 
-Release qualification helper used by `release.yml`. `--workflow`, `--event`, and repeatable `--required-job` select the evidence contract. The helper paginates workflow runs and jobs, chooses the latest exact-SHA match, and requires every named job to have completed successfully. Release qualification checks `ci.yml` on `push` (`pr-gate`, `scale`, `spellbook-smoke`, `nba-monte-carlo-smoke`) and `benchmark.yml` on `workflow_dispatch` (`full-evidence-gate`). Scheduled benchmarks do not qualify.
+Release qualification helper used by `release.yml`. `--workflow`, `--event`, and repeatable `--required-job` select the evidence contract. The helper paginates workflow runs and jobs, chooses the latest exact-SHA match, and requires every named job to have completed successfully. Release qualification checks `ci.yml` on `push` (`pr-gate`, which includes synthetic scale) and `benchmark.yml` on `workflow_dispatch` (`full-evidence-gate`, which includes the full local gate and support matrix). Scheduled benchmarks do not qualify.
 
 ## `verify_release_assets.py`
 
@@ -119,16 +119,17 @@ python3 scripts/smoke_release_asset.py \
 
 ## `ci_local.sh`
 
-PR-equivalent local gate mirrored by the required `pr-gate` job in [`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml). It does not create release evidence; use `release_check.py` for authoritative release qualification.
+Full local pre-push and release qualification gate. The required `pr-gate` job in [`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml) uses the additive `--fast` subset and then runs `scale_check.py`; the independently dispatched benchmark workflow runs the default full gate before the external support matrix. The script does not itself create release evidence; use `release_check.py` for authoritative release qualification.
 
 ```bash
 ./scripts/ci_local.sh
+./scripts/ci_local.sh --fast
 ./scripts/ci_local.sh --spellbook-smoke
 ./scripts/ci_local.sh --nba-monte-carlo-smoke
 ./scripts/ci_local.sh --precision
 ```
 
-The gate runs offline Python lock verification, workspace dependency validation, `ruff check` on Python scripts, Rust fmt/clippy/rustdoc/build/test, Python unit tests (via a lock/Python-fingerprinted `.venv-eval` so eval metrics tests can import numpy/scikit-learn), fp-registry and recall coverage checks, corpus classification metrics (`eval_metrics.py --split corpus`), LLM judge IRR validation (`eval_irr.py`), vendored benchmarks, rule-doc sync, internal link validation, mdBook build, and `cargo deny` when installed.
+Fast mode runs offline Python lock verification, workspace dependency validation, `ruff check`, Rust fmt/clippy/release build/test, release-asset smoke, and Python unit tests through the lock/Python-fingerprinted `.venv-eval`. The default full mode additionally runs Rustdoc, fp-registry and recall checks, corpus classification metrics, LLM judge IRR validation, vendored benchmarks, generated rule/evidence checks, internal link validation, mdBook, and `cargo deny`.
 
 Unit tests:
 

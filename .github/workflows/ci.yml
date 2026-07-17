@@ -29,20 +29,12 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: "3.11"
-      - uses: taiki-e/install-action@43aecc8d72668fbcfe75c31400bc4f890f1c5853
-        with:
-          tool: mdbook@0.4.40,cargo-deny@0.19.7
       - name: Install Python gate tools
         run: python -m pip install ruff==0.11.13
       - name: Run required PR gate
-        run: ./scripts/ci_local.sh
-      - name: Upload release binary
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: ci-release-binary
-          path: target/release/costguard
-          if-no-files-found: error
-          retention-days: 1
+        run: ./scripts/ci_local.sh --fast
+      - name: Run scale gate
+        run: python scripts/scale_check.py
       - name: Upload qualification reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -50,78 +42,3 @@ jobs:
           name: pr-gate-reports
           path: tests/benchmarks/reports
           if-no-files-found: warn
-
-  scale:
-    needs: pr-gate
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
-        with:
-          python-version: "3.11"
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: ci-release-binary
-          path: target/release
-      - run: chmod +x target/release/costguard
-      - run: python scripts/scale_check.py
-      - name: Upload scale report
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: scale-report
-          path: tests/benchmarks/reports/scale.json
-          if-no-files-found: error
-
-  spellbook-smoke:
-    if: github.event_name != 'pull_request'
-    needs: pr-gate
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
-        with:
-          python-version: "3.11"
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: ci-release-binary
-          path: target/release
-      - run: chmod +x target/release/costguard
-      - env:
-          COSTGUARD_BUILD_PROFILE: release
-        run: python scripts/benchmark_external_repo.py --repo spellbook --smoke
-      - name: Upload Spellbook smoke report
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: spellbook-smoke-report
-          path: tests/benchmarks/reports/external__spellbook_smoke.json
-          if-no-files-found: error
-
-  nba-monte-carlo-smoke:
-    if: github.event_name != 'pull_request'
-    needs: pr-gate
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
-        with:
-          python-version: "3.11"
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: ci-release-binary
-          path: target/release
-      - run: chmod +x target/release/costguard
-      - env:
-          COSTGUARD_BUILD_PROFILE: release
-        run: python scripts/benchmark_external_repo.py --repo nba-monte-carlo --smoke
-      - name: Upload NBA Monte Carlo smoke report
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: nba-monte-carlo-smoke-report
-          path: tests/benchmarks/reports/external__nba-monte-carlo_smoke.json
-          if-no-files-found: error

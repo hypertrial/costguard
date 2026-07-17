@@ -38,10 +38,7 @@ jobs:
             --sha "${SHA}" \
             --workflow ci.yml \
             --event push \
-            --required-job pr-gate \
-            --required-job scale \
-            --required-job spellbook-smoke \
-            --required-job nba-monte-carlo-smoke
+            --required-job pr-gate
           python scripts/verify_ci_history.py \
             --repository "${GITHUB_REPOSITORY}" \
             --sha "${SHA}" \

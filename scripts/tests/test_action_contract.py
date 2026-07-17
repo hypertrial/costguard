@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -24,18 +25,25 @@ class ActionContractTest(unittest.TestCase):
         self.assertRegex(ci, r"(?m)^  push:")
         self.assertIn("branches: [main]", ci)
         self.assertIn("timeout-minutes: 5", ci)
-        scale = ci.split("  scale:", 1)[1].split("  spellbook-smoke:", 1)[0]
-        self.assertNotIn("github.event_name == 'push'", scale)
-        spellbook = ci.split("  spellbook-smoke:", 1)[1].split("  nba-monte-carlo-smoke:", 1)[0]
-        nba = ci.split("  nba-monte-carlo-smoke:", 1)[1]
-        self.assertIn("github.event_name != 'pull_request'", spellbook)
-        self.assertIn("github.event_name != 'pull_request'", nba)
+        self.assertRegex(ci, r"(?m)^  pr-gate:")
+        for removed_job in ["scale", "spellbook-smoke", "nba-monte-carlo-smoke"]:
+            self.assertNotRegex(ci, rf"(?m)^  {removed_job}:")
+        self.assertIn("./scripts/ci_local.sh --fast", ci)
+        self.assertIn("python scripts/scale_check.py", ci)
 
         benchmark = (ROOT / ".github/workflows/benchmark.yml").read_text(
             encoding="utf-8"
         )
         self.assertRegex(benchmark, r"(?m)^  schedule:")
         self.assertIn("workflow_dispatch:", benchmark)
+        self.assertIn("./scripts/ci_local.sh", benchmark)
+        self.assertNotIn("./scripts/ci_local.sh --fast", benchmark)
+        self.assertIn("support_matrix.py --run-benchmarks --verify", benchmark)
+
+        dogfood = (ROOT / ".github/workflows/costguard-pr.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("timeout-minutes: 5", dogfood)
 
         release = (ROOT / ".github/workflows/release.yml").read_text(
             encoding="utf-8"
@@ -54,6 +62,9 @@ class ActionContractTest(unittest.TestCase):
         self.assertIn("--workflow ci.yml", release)
         self.assertIn("--workflow benchmark.yml", release)
         self.assertIn("--event workflow_dispatch", release)
+        self.assertIn("--required-job pr-gate", release)
+        for removed_job in ["scale", "spellbook-smoke", "nba-monte-carlo-smoke"]:
+            self.assertNotIn(f"--required-job {removed_job}", release)
         self.assertIn("--required-job full-evidence-gate", release)
         self.assertIn("release_consumer_smoke.py", release)
         self.assertIn("timeout-minutes: 5", release)
@@ -62,26 +73,87 @@ class ActionContractTest(unittest.TestCase):
 
     def test_ci_reuses_cached_tools_and_single_release_build(self) -> None:
         ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        benchmark = (ROOT / ".github/workflows/benchmark.yml").read_text(
+            encoding="utf-8"
+        )
         ci_local = (ROOT / "scripts/ci_local.sh").read_text(encoding="utf-8")
-        pr_gate = ci.split("  pr-gate:", 1)[1].split("  scale:", 1)[0]
-        scale = ci.split("  scale:", 1)[1].split("  spellbook-smoke:", 1)[0]
-        spellbook = ci.split("  spellbook-smoke:", 1)[1].split("  nba-monte-carlo-smoke:", 1)[0]
-        nba = ci.split("  nba-monte-carlo-smoke:", 1)[1]
+        pr_gate = ci.split("  pr-gate:", 1)[1]
 
         self.assertIn("Swatinem/rust-cache@", pr_gate)
-        self.assertIn("taiki-e/install-action@", pr_gate)
-        self.assertIn("tool: mdbook@0.4.40,cargo-deny@0.19.7", pr_gate)
+        self.assertNotIn("taiki-e/install-action@", pr_gate)
         self.assertIn('CARGO_INCREMENTAL: "0"', pr_gate)
-        self.assertIn("name: ci-release-binary", pr_gate)
+        self.assertNotIn("ci-release-binary", ci)
+        self.assertNotIn("actions/download-artifact@", ci)
         self.assertEqual(ci.count("cargo build --release --locked -p costguard-cli"), 0)
         self.assertEqual(
             ci_local.count("cargo build --release --locked -p costguard-cli"), 1
         )
         self.assertNotIn("cargo build --locked -p costguard-cli", ci_local)
-        for job in [scale, spellbook, nba]:
-            self.assertIn("actions/download-artifact@", job)
-            self.assertIn("name: ci-release-binary", job)
-            self.assertIn("chmod +x target/release/costguard", job)
+        self.assertIn("Swatinem/rust-cache@", benchmark)
+        self.assertIn("taiki-e/install-action@", benchmark)
+        self.assertIn("tool: mdbook@0.4.40,cargo-deny@0.19.7", benchmark)
+        self.assertNotIn("cargo build --release --locked -p costguard-cli", benchmark)
+
+    def test_ci_local_fast_mode_preserves_the_full_gate(self) -> None:
+        script = (ROOT / "scripts/ci_local.sh").read_text(encoding="utf-8")
+        self.assertIn("--fast) FAST_GATE=1", script)
+
+        commands: dict[str, bool] = {}
+        full_only = False
+        for raw_line in script.splitlines():
+            line = raw_line.strip()
+            if line == 'if [ "$FAST_GATE" -eq 0 ]; then':
+                full_only = True
+                continue
+            if full_only and line == "fi":
+                full_only = False
+                continue
+            if line.startswith("run ") or " run " in line:
+                commands[line] = full_only
+
+        essential = [
+            "run python3 scripts/lock_python_deps.py --check",
+            "run python3 scripts/validate_workspace_deps.py",
+            "run ruff check scripts .github/actions/costguard/scripts",
+            "run cargo fmt --check",
+            "run cargo clippy --locked --all-targets --all-features -- -D warnings",
+            "run cargo build --release --locked -p costguard-cli",
+            "run python3 scripts/verify_release_assets.py",
+            "run \"$EVAL_PY\" -m unittest discover -s scripts/tests -p 'test_*.py'",
+            "run cargo test --workspace --all-targets --locked",
+        ]
+        for command in essential:
+            self.assertIn(command, commands)
+            self.assertFalse(commands[command], command)
+
+        deferred = [
+            'RUSTDOCFLAGS="-D warnings" run cargo doc --workspace --no-deps --locked',
+            "run python3 scripts/validate_fp_registry.py",
+            "run python3 scripts/recall_report.py",
+            'run "$EVAL_PY" scripts/eval_metrics.py --split corpus',
+            'run "$EVAL_PY" scripts/eval_irr.py',
+            "COSTGUARD_BUILD_PROFILE=release run python3 scripts/benchmark_external_repo.py --all-vendored",
+            "run python3 scripts/generate_rule_docs.py --check",
+            "run python3 scripts/generate_precision_tiers.py --check",
+            "run python3 scripts/build_benchmark_evidence.py --check",
+            "run python3 scripts/check_docs.py",
+            "run mdbook build",
+            "run cargo deny check",
+        ]
+        for command in deferred:
+            self.assertIn(command, commands)
+            self.assertTrue(commands[command], command)
+
+    def test_ci_local_rejects_unknown_modes(self) -> None:
+        completed = subprocess.run(
+            [str(ROOT / "scripts/ci_local.sh"), "--unknown"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("unknown argument: --unknown", completed.stderr)
 
     def test_action_run_blocks_do_not_interpolate_inputs_directly(self) -> None:
         action = (ROOT / ".github/actions/costguard/action.yml").read_text(encoding="utf-8")

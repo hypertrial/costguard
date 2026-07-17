@@ -175,7 +175,7 @@ cargo test -p costguard-core --test corpus
 
 Layer definitions: [Benchmark tiers](docs/book/contributing/benchmark-tiers.md).
 
-Run the PR-equivalent local gate with `./scripts/ci_local.sh`. Authoritative release qualification uses `python3 scripts/release_check.py --version <version>` and additionally requires a successful exact-SHA push CI run, a signed tag, and external evidence.
+Run the full local qualification gate with `./scripts/ci_local.sh`; GitHub uses its faster `--fast` subset plus the scale gate for per-change feedback. Authoritative release qualification uses `python3 scripts/release_check.py --version <version>` and additionally requires a successful exact-SHA push CI run, a signed tag, and independently dispatched full benchmark evidence.
 
 ## Configuration sketch
 

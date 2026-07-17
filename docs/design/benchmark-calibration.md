@@ -61,8 +61,8 @@ python3 scripts/benchmark_external_repo.py --repo spellbook --update-baseline
 
 GitHub Actions:
 
-- **Push to `main`:** [`ci.yml`](../../.github/workflows/ci.yml) runs Spellbook and NBA Monte Carlo smoke jobs after the PR gate. Vendored baselines run in the PR gate.
-- **Manual:** run the **benchmark** workflow (`workflow_dispatch`) for the full support matrix. Full Spellbook (five subprojects) and Tuva are not push smoke jobs. The `precision` target runs full Spellbook plus `precision_triage.py` gates.
+- **Push to `main`:** [`ci.yml`](../../.github/workflows/ci.yml) runs the fast correctness gate and synthetic scale in one five-minute job. Network-dependent external repositories and vendored evidence are excluded.
+- **Manual/release:** run the **benchmark** workflow (`workflow_dispatch`) for the full local qualification and support matrix, including full Spellbook, NBA Monte Carlo, Tuva, vendored evidence, and Spellbook precision.
 
 Benchmark scripts build the CLI in **release** mode by default (`COSTGUARD_BUILD_PROFILE=release`). dbt manifests are cached under `{cache}/manifests/{repo}/{commit}/{packages_fp}/` and skipped on warm runs unless `--force-compile` is passed.
 

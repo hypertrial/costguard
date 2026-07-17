@@ -11,7 +11,7 @@ from typing import Any
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
-REQUIRED_JOBS = ("pr-gate", "scale", "spellbook-smoke", "nba-monte-carlo-smoke")
+REQUIRED_JOBS = ("pr-gate",)
 
 
 def qualifying_runs(

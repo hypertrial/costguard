@@ -34,6 +34,7 @@ All notable changes to Costguard are documented here. The project follows [Seman
 - Configuration precedence is resolved once for every command; `doctor` reuses scan facts and validates one complete GitHub job structurally rather than matching workflow text.
 - The synthetic scale report is version 4 and includes a deterministic 10,000-model PR replay with committed-delta, base-context, runtime, and RSS gates.
 - Release qualification now requires both exact-SHA push CI and an independently dispatched exact-SHA benchmark workflow before the signed tag can publish.
+- Per-change CI now runs formatting, lint, tests, a release-asset smoke, and synthetic scale in one five-minute `pr-gate`; documentation, dependency policy, generated evidence, and full external repositories remain enforced by the full local gate and independently dispatched release benchmark.
 - SQL AST/regex merging now has an exhaustive 22-field policy snapshot, and schema-v4 receipt comparison uses a tolerant typed output DTO.
 
 ### Fixed

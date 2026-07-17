@@ -19,7 +19,7 @@ class VerifyCiHistoryTest(unittest.TestCase):
             run_id: {
                 "jobs": [
                     {"name": name, "status": "completed", "conclusion": "success"}
-                    for name in ["pr-gate", "scale", "spellbook-smoke", "nba-monte-carlo-smoke"]
+                    for name in ["pr-gate"]
                 ]
             }
             for run_id in [1, 2]
@@ -100,7 +100,7 @@ class VerifyCiHistoryTest(unittest.TestCase):
             {
                 "jobs": [
                     *self.jobs[1]["jobs"][:-1],
-                    {"name": "spellbook-smoke", "status": "completed", "conclusion": "skipped"},
+                    {"name": "pr-gate", "status": "completed", "conclusion": "skipped"},
                 ]
             },
         ]:
