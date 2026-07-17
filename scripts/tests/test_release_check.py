@@ -44,6 +44,24 @@ class ReleaseCheckTest(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertIn("trust-push-ci", completed.stdout)
 
+    def test_trust_github_qualification_skips_heavy_gate(self) -> None:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "scripts/release_check.py"),
+                "--version",
+                "2.6.0",
+                "--trust-github-qualification",
+                "--development",
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("trust-github-qualification", completed.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

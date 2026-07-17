@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 pub const DEFAULT_MAX_MANIFEST_BYTES: u64 = 512 * 1024 * 1024;
+pub const DEFAULT_MAX_TOTAL_BASE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 
 /// Strictness policy controlling parse-failure and metadata error tolerance.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -165,6 +166,25 @@ impl Default for ScanConfig {
             owners: OwnersConfig::default(),
             gate: None,
             waivers: Vec::new(),
+        }
+    }
+}
+
+/// A scan configuration plus execution-only safety limits.
+///
+/// The wrapper keeps [`ScanConfig`] source-compatible while allowing project
+/// configuration to carry limits that do not affect scan semantics.
+#[derive(Debug, Clone)]
+pub struct ResolvedScanRequest {
+    pub config: ScanConfig,
+    pub max_total_base_bytes: u64,
+}
+
+impl From<ScanConfig> for ResolvedScanRequest {
+    fn from(config: ScanConfig) -> Self {
+        Self {
+            config,
+            max_total_base_bytes: DEFAULT_MAX_TOTAL_BASE_BYTES,
         }
     }
 }
@@ -343,13 +363,43 @@ pub struct SignedPolicySection {
 }
 
 pub fn load_config(root: &Path) -> Result<FileConfig> {
+    Ok(load_config_document(root)?.0)
+}
+
+/// Load and apply project configuration, including execution-only limits.
+pub fn load_resolved_config(root: &Path, config: ScanConfig) -> Result<ResolvedScanRequest> {
+    let (file_config, max_total_base_bytes) = load_config_document(root)?;
+    Ok(ResolvedScanRequest {
+        config: apply_file_config(config, file_config)?,
+        max_total_base_bytes,
+    })
+}
+
+fn load_config_document(root: &Path) -> Result<(FileConfig, u64)> {
     let path = root.join("costguard.toml");
     if !path.exists() {
-        return Ok(FileConfig::default());
+        return Ok((FileConfig::default(), DEFAULT_MAX_TOTAL_BASE_BYTES));
     }
     let text = std::fs::read_to_string(&path)
         .with_context(|| format!("failed to read {}", path.display()))?;
-    toml::from_str(&text).with_context(|| format!("invalid config {}", path.display()))
+    let mut document: toml::Value =
+        toml::from_str(&text).with_context(|| format!("invalid config {}", path.display()))?;
+    let configured_limit = document
+        .get_mut("scan")
+        .and_then(toml::Value::as_table_mut)
+        .and_then(|scan| scan.remove("max_total_base_bytes"));
+    let max_total_base_bytes = match configured_limit {
+        None | Some(toml::Value::Integer(0)) => DEFAULT_MAX_TOTAL_BASE_BYTES,
+        Some(toml::Value::Integer(value)) if value > 0 => value as u64,
+        Some(_) => anyhow::bail!(
+            "invalid config {}: scan.max_total_base_bytes must be a non-negative integer",
+            path.display()
+        ),
+    };
+    let file_config = document
+        .try_into()
+        .with_context(|| format!("invalid config {}", path.display()))?;
+    Ok((file_config, max_total_base_bytes))
 }
 
 pub fn apply_file_config(mut config: ScanConfig, file_config: FileConfig) -> Result<ScanConfig> {
@@ -814,6 +864,52 @@ max_file_bytes = 1024
         )
         .expect("apply config");
         assert_eq!(config.max_file_bytes, Some(1024));
+    }
+
+    #[test]
+    fn resolved_config_loads_aggregate_base_limit_without_changing_scan_config() {
+        let root = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            root.path().join("costguard.toml"),
+            "[scan]\nmax_total_base_bytes = 1234\n",
+        )
+        .expect("write config");
+        let request = load_resolved_config(
+            root.path(),
+            ScanConfig {
+                root: root.path().to_path_buf(),
+                ..ScanConfig::default()
+            },
+        )
+        .expect("load resolved config");
+        assert_eq!(request.max_total_base_bytes, 1234);
+
+        std::fs::write(
+            root.path().join("costguard.toml"),
+            "[scan]\nmax_total_base_bytes = 0\n",
+        )
+        .expect("write config");
+        assert_eq!(
+            load_resolved_config(root.path(), ScanConfig::default())
+                .expect("load default limit")
+                .max_total_base_bytes,
+            DEFAULT_MAX_TOTAL_BASE_BYTES
+        );
+    }
+
+    #[test]
+    fn resolved_config_still_rejects_unknown_scan_keys() {
+        let root = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            root.path().join("costguard.toml"),
+            "[scan]\nmax_total_base_bytes = 1234\nunknown = true\n",
+        )
+        .expect("write config");
+        let error = format!(
+            "{:#}",
+            load_resolved_config(root.path(), ScanConfig::default()).expect_err("unknown key")
+        );
+        assert!(error.contains("unknown field"), "{error}");
     }
 
     #[test]

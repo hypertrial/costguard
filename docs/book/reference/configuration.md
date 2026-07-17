@@ -15,6 +15,7 @@ warehouse = "snowflake"
 [scan]
 paths = ["models"]
 ignore = ["target", "dbt_packages"]
+max_total_base_bytes = 2147483648
 
 [output]
 format = "text"
@@ -59,6 +60,7 @@ severity = "high"
 | `paths` | string array | Subdirectories/files to scan (empty = entire root) |
 | `ignore` | string array | Paths to skip (relative to root) |
 | `max_file_bytes` | integer | Maximum file size to load during discovery (default 5242880; `0` uses the built-in default) |
+| `max_total_base_bytes` | integer | Aggregate cap for all base-replay SQL/YAML/Python and manifest bytes (default `2147483648`, 2 GiB; `0` restores the default) |
 
 ## `[output]`
 
@@ -78,7 +80,9 @@ severity = "high"
 | `base_manifest_path` | string | Optional production/state manifest for PR base-vs-head comparison (falls back to the git base ref when unset) |
 | `max_manifest_bytes` | integer | Maximum bytes loaded from any head or base manifest (default `536870912`, 512 MiB; omitted or `0` uses the default) |
 
-Manifest limits are enforced with a metadata preflight and a bounded read. Oversized head or base manifests fail the run without emitting a partial PR delta.
+Manifest limits are enforced with a metadata preflight and a bounded read. Before base replay, Costguard resolves only requested paths in bounded literal-path chunks, asks Git for the type and exact size of every requested object, includes the base manifest in the same aggregate budget, and starts content streaming only if the complete request fits. An explicitly configured local base manifest is charged before any Git content is read. Oversized head or base inputs fail without emitting a partial PR delta.
+
+Effective scan configuration is resolved once in this order: built-in defaults, `costguard.toml`, command-specific path/PR settings, explicit CLI or Action overrides, warehouse/cost normalization, then validation. The execution-only aggregate cap is available through `ResolvedScanRequest`; legacy Rust APIs retain their existing fields and use the 2 GiB default.
 
 ## `[owners]`
 

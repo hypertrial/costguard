@@ -69,7 +69,7 @@ Shared helper for locating/building the CLI. Benchmark and doc scripts default t
 
 ## `release_check.py`
 
-Authoritative pre-release qualification gate. It requires the verified signed version tag at `HEAD`, validates the requested workspace version, runs local CI and consumer Action tests, executes pinned external benchmarks, enforces the 10,000-model performance budget, checks external documentation links, and writes `dist/release/release-check.json` bound to the commit.
+Authoritative pre-release qualification gate. It requires the verified signed version tag at `HEAD`, validates the requested workspace version, runs local CI and consumer Action tests, executes pinned external benchmarks, enforces the 10,000-model performance budget, checks external documentation links, and writes `dist/release/release-check.json` bound to the commit. In the release workflow, `--trust-github-qualification` records the already verified `github-ci+benchmark` evidence; `--trust-push-ci` remains a compatibility alias.
 
 ```bash
 python3 scripts/release_check.py --version 2.0.0
@@ -79,7 +79,7 @@ python3 scripts/release_check.py --version 2.0.0
 
 ## `verify_ci_history.py`
 
-Release qualification helper used by `release.yml`. For the exact release SHA it requires the latest three completed `ci.yml` runs to be one push and two workflow dispatches, all successful, with successful `pr-gate`, `scale`, `spellbook-smoke`, and `nba-monte-carlo-smoke` jobs.
+Release qualification helper used by `release.yml`. `--workflow`, `--event`, and repeatable `--required-job` select the evidence contract. The helper paginates workflow runs and jobs, chooses the latest exact-SHA match, and requires every named job to have completed successfully. Release qualification checks `ci.yml` on `push` (`pr-gate`, `scale`, `spellbook-smoke`, `nba-monte-carlo-smoke`) and `benchmark.yml` on `workflow_dispatch` (`full-evidence-gate`). Scheduled benchmarks do not qualify.
 
 ## `verify_release_assets.py`
 
@@ -142,7 +142,9 @@ Validates repository-local Markdown links during every local CI run. Release qua
 
 ## `scale_check.py`
 
-Generates independent 2,000-model and 10,000-model clean projects in release mode. Each target runs one warmup plus three measured scans. The gate requires the 10,000-model median ≤10 seconds, maximum ≤15 seconds, peak RSS ≤1 GiB, per-model runtime growth ≤1.5×, zero parse failures, and zero diagnostics. The version 3 report records environment metadata, both sample sets, growth, thresholds, status, and violations, and is written even when the gate fails.
+Generates independent 2,000-model and 10,000-model clean projects in release mode. Each clean target runs one warmup plus three measured scans. The gate retains the 10,000-model median ≤10 seconds, maximum ≤15 seconds, peak RSS ≤1 GiB, per-model runtime growth ≤1.5×, zero parse failures, and zero diagnostics.
+
+Report version 4 also creates a deterministic 10,000-model Git repository, commits a base project with one known finding, commits a clean model/manifest change that resolves it, then runs one warm-up and two measured `costguard pr --base HEAD~1` replays. It requires the changed file, resolved base finding, processed base context, median ≤30 seconds, maximum ≤45 seconds, and peak RSS ≤1 GiB. The report records all samples and is written even when the gate fails.
 
 ## `benchmark_external_repo.py`
 

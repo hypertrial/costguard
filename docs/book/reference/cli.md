@@ -1,6 +1,6 @@
 # CLI reference
 
-Source: `crates/costguard-cli/src/main.rs`
+Source: thin entry point in `crates/costguard-cli/src/main.rs`, Clap root in `args.rs`, and command dispatch/handlers in `commands.rs`.
 
 ## Subcommands
 
@@ -131,7 +131,7 @@ After scaffolding, `init` runs the same read-only report as `doctor`. Readiness 
 costguard doctor [--dbt-dir PATH]
 ```
 
-Checks git history, analyzable files, configured policy, dbt metadata freshness/integrity, parse coverage, warehouse selection, the GitHub workflow contract, and mapped-spend/USD cost coverage. It performs a normal local scan but never runs dbt, connects to a warehouse, or writes files. With `--dbt-dir`, project config and models are loaded below that directory while the workflow is checked at the repository root.
+Checks git history, analyzable files, configured policy, dbt metadata freshness/integrity, parse coverage, warehouse selection, the GitHub workflow contract, and mapped-spend/USD cost coverage. It performs a normal local scan but never runs dbt, connects to a warehouse, or writes files. Workflow validation parses YAML and requires one complete Costguard job with full-history checkout, Action inputs, and effective job/top-level permissions; comments and unrelated jobs do not count. With `--dbt-dir`, project config and models are loaded below that directory while the workflow is checked at the repository root.
 
 ## `policy`
 

@@ -17,6 +17,7 @@ All notable changes to Costguard are documented here. The project follows [Seman
 - Project-wide priced PR net-cost enforcement through `[gate].fail_on_pr_cost_increase`, `--fail-on-pr-cost-increase`, and the matching Action input.
 - Version-dated Costguard vs SlowQL comparison and expanded regression/cost/evidence documentation.
 - Bounded manifest loading via `[dbt].max_manifest_bytes` (512 MiB default), immutable git-base blob preflights, and fixed GitHub Action limits of 64 MiB for release archives and 4 KiB for checksum sidecars.
+- Aggregate base replay protection via config-only `[scan].max_total_base_bytes` (2 GiB default), with complete type/size preflight before exact-length blob streaming.
 - Secure `costguard policy keygen --force` replacement with regular-file validation, same-directory atomic persistence, and Unix private-key mode `0600`.
 - Universal pip-compatible hashed evaluation and judge locks with offline source-hash verification and Python-version/lock-digest environment fingerprints.
 
@@ -30,11 +31,16 @@ All notable changes to Costguard are documented here. The project follows [Seman
 - PR finding deltas now compare rename-aware base/head targets through the same current configuration, policy, suppression, waiver, baseline, confidence, and cost pipeline; approved and infrastructure findings are excluded.
 - Precision tiers now derive canonical IDs from `costguard rules --format json`, include `SQLCOST046`, and reject orphan infrastructure IDs.
 - Current benchmark evidence and generated precision tiers are byte-deterministic and no longer contain wall-clock dates.
+- Configuration precedence is resolved once for every command; `doctor` reuses scan facts and validates one complete GitHub job structurally rather than matching workflow text.
+- The synthetic scale report is version 4 and includes a deterministic 10,000-model PR replay with committed-delta, base-context, runtime, and RSS gates.
+- Release qualification now requires both exact-SHA push CI and an independently dispatched exact-SHA benchmark workflow before the signed tag can publish.
+- SQL AST/regex merging now has an exhaustive 22-field policy snapshot, and schema-v4 receipt comparison uses a tolerant typed output DTO.
 
 ### Fixed
 
 - Unpriced byte estimates and byte observations no longer populate USD fields. Model totals, finding attribution, post-fix savings, PR impact, receipts, blast radius, and realized savings maintain independent USD and byte tracks.
 - USD-only observations no longer invent scan bytes by dividing dollars by executions; volume uses the existing query-history, catalog, configured-source, or size-prior fallback chain.
+- Internal USD/month, bytes/month, and unitless estimates use distinct domain types across aggregation, PR impact, receipts, and realized savings.
 
 ## [2.5.0] - 2026-06-19
 

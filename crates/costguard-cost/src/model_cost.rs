@@ -1,6 +1,9 @@
 use crate::config::CostConfig;
-use crate::estimate::{annual_from_monthly, round_sig2, sum_lognormals, Estimate};
+use crate::estimate::{annual_from_monthly, round_sig2, Estimate};
 use crate::pricing::price_per_byte;
+use crate::units::{
+    price_bytes, sum_bytes, sum_usd, BytesPerMonthEstimate, UnitlessEstimate, UsdPerMonthEstimate,
+};
 use crate::volume::{lookup_keys, model_identity, VolumeContext};
 use crate::CostInputs;
 use costguard_dbt::{DbtModel, DbtProject};
@@ -38,6 +41,20 @@ impl CostFigure {
         config: &CostConfig,
         basis: &str,
     ) -> Self {
+        Self::from_typed(
+            usd.map(UsdPerMonthEstimate::from_raw),
+            bytes.map(BytesPerMonthEstimate::from_raw),
+            config,
+            basis,
+        )
+    }
+
+    pub(crate) fn from_typed(
+        usd: Option<UsdPerMonthEstimate>,
+        bytes: Option<BytesPerMonthEstimate>,
+        config: &CostConfig,
+        basis: &str,
+    ) -> Self {
         let (monthly_p10, monthly_p50, monthly_p90, annual_p50) =
             usd.map_or((None, None, None, None), |estimate| {
                 let (lo, hi) = estimate.interval(config.interval);
@@ -68,19 +85,6 @@ impl CostFigure {
             ..Default::default()
         }
     }
-}
-
-pub(crate) fn sum_estimate_medians(estimates: &[Estimate]) -> Option<Estimate> {
-    (!estimates.is_empty()).then(|| {
-        Estimate::from_point(
-            estimates
-                .iter()
-                .map(Estimate::median)
-                .sum::<f64>()
-                .max(0.001),
-            Some(0.01),
-        )
-    })
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize)]
@@ -221,10 +225,12 @@ pub fn build_model_cost_index(
 
     for model in model_list {
         let volume = ctx.resolve_for_model(model);
-        let scan_volume = volume.bytes * volume.runs_per_month;
+        let scan_volume =
+            BytesPerMonthEstimate::from_bytes_and_runs(volume.bytes, volume.runs_per_month);
         let monthly_cost_usd = volume
             .observed_monthly_cost_usd
-            .or_else(|| price.map(|price| scan_volume * price));
+            .map(UsdPerMonthEstimate::from_raw)
+            .or_else(|| price.map(|price| price_bytes(scan_volume, price)));
         let gb_months = scan_volume.median() / 1_000_000_000.0;
         let model_id = model_identity(model);
         if let Some(path) = &model.path {
@@ -237,8 +243,8 @@ pub fn build_model_cost_index(
                 path: model.path.clone(),
                 bytes: volume.bytes,
                 runs_per_month: volume.runs_per_month,
-                scan_volume,
-                monthly_cost_usd,
+                scan_volume: scan_volume.raw(),
+                monthly_cost_usd: monthly_cost_usd.map(UsdPerMonthEstimate::raw),
                 gb_months,
                 grade: volume.grade,
                 estimation_basis: volume.estimation_basis,
@@ -255,7 +261,7 @@ pub fn summarize_project_costs(index: &ModelCostIndex, config: &CostConfig) -> P
     let mut grade_a = 0usize;
     let mut grade_b = 0usize;
     let mut grade_c = 0usize;
-    let mut cost_estimates = Vec::new();
+    let mut cost_estimates: Vec<UsdPerMonthEstimate> = Vec::new();
     let mut mapped_spend = 0usize;
     let mut models_with_usd = 0usize;
     let mut max_age: Option<f64> = None;
@@ -280,7 +286,7 @@ pub fn summarize_project_costs(index: &ModelCostIndex, config: &CostConfig) -> P
             max_age = Some(max_age.map_or(age, |current| current.max(age)));
         }
         if let Some(cost) = entry.monthly_cost_usd {
-            cost_estimates.push(cost);
+            cost_estimates.push(UsdPerMonthEstimate::from_raw(cost));
             models_with_usd += 1;
         }
         ranked.push((
@@ -309,12 +315,12 @@ pub fn summarize_project_costs(index: &ModelCostIndex, config: &CostConfig) -> P
     });
     let top_models = ranked.into_iter().take(5).map(|(_, model)| model).collect();
 
-    let total_usd = (!cost_estimates.is_empty()).then(|| sum_lognormals(&cost_estimates));
-    let total_bytes = sum_estimate_medians(
+    let total_usd = sum_usd(&cost_estimates);
+    let total_bytes = sum_bytes(
         &index
             .models
             .values()
-            .map(|entry| entry.scan_volume)
+            .map(|entry| BytesPerMonthEstimate::from_raw(entry.scan_volume))
             .collect::<Vec<_>>(),
     );
     let (project_p10, project_p50, project_p90) = if let Some(total) = total_usd {
@@ -352,8 +358,8 @@ pub fn summarize_project_costs(index: &ModelCostIndex, config: &CostConfig) -> P
         project_gb_months: total_bytes
             .map(|estimate| round_sig2(estimate.median() / 1e9))
             .unwrap_or(0.0),
-        current_cost: CostFigure::from_estimates(total_usd, total_bytes, config, total_basis),
-        post_fix_cost: CostFigure::from_estimates(total_usd, total_bytes, config, total_basis),
+        current_cost: CostFigure::from_typed(total_usd, total_bytes, config, total_basis),
+        post_fix_cost: CostFigure::from_typed(total_usd, total_bytes, config, total_basis),
         potential_savings: CostFigure::default(),
         coverage: CoverageMetrics {
             models_total: model_count,
@@ -384,14 +390,14 @@ pub fn compute_realized_savings(
     after: &crate::observations::ObservationStats,
     config: &CostConfig,
 ) -> RealizedSavings {
-    let mut before_usd = Vec::new();
-    let mut after_usd = Vec::new();
-    let mut efficiency_usd = Vec::new();
-    let mut volume_usd = Vec::new();
-    let mut before_bytes = Vec::new();
-    let mut after_bytes = Vec::new();
-    let mut efficiency_bytes = Vec::new();
-    let mut volume_bytes = Vec::new();
+    let mut before_usd: Vec<UsdPerMonthEstimate> = Vec::new();
+    let mut after_usd: Vec<UsdPerMonthEstimate> = Vec::new();
+    let mut efficiency_usd: Vec<UsdPerMonthEstimate> = Vec::new();
+    let mut volume_usd: Vec<UsdPerMonthEstimate> = Vec::new();
+    let mut before_bytes: Vec<BytesPerMonthEstimate> = Vec::new();
+    let mut after_bytes: Vec<BytesPerMonthEstimate> = Vec::new();
+    let mut efficiency_bytes: Vec<BytesPerMonthEstimate> = Vec::new();
+    let mut volume_bytes: Vec<BytesPerMonthEstimate> = Vec::new();
 
     for (model_id, after_cost) in &after.by_model {
         let Some(before_cost) = before.by_model.get(model_id) else {
@@ -399,47 +405,65 @@ pub fn compute_realized_savings(
         };
         let before_exec = before_cost.monthly_executions.max(1.0);
         let after_exec = after_cost.monthly_executions.max(1.0);
-        let exec_avg = Estimate::from_point((before_exec + after_exec) / 2.0, Some(0.1));
-        let execution_delta = Estimate::from_point(after_exec, Some(0.1))
-            - Estimate::from_point(before_exec, Some(0.1));
+        let before_executions = UnitlessEstimate::from_point(before_exec, 0.1);
+        let after_executions = UnitlessEstimate::from_point(after_exec, 0.1);
+        let exec_avg = UnitlessEstimate::from_point((before_exec + after_exec) / 2.0, 0.1);
+        let execution_delta = UnitlessEstimate::from_raw(
+            Estimate::from_point(after_exec, Some(0.1))
+                - Estimate::from_point(before_exec, Some(0.1)),
+        );
         if let (Some(before_est), Some(after_est)) =
             (before_cost.monthly_cost_usd, after_cost.monthly_cost_usd)
         {
+            let before_est = UsdPerMonthEstimate::from_raw(before_est);
+            let after_est = UsdPerMonthEstimate::from_raw(after_est);
             before_usd.push(before_est);
             after_usd.push(after_est);
-            let before_per_exec = before_est / Estimate::from_point(before_exec, Some(0.1));
-            let after_per_exec = after_est / Estimate::from_point(after_exec, Some(0.1));
-            efficiency_usd.push((before_per_exec - after_per_exec) * exec_avg);
-            volume_usd.push(execution_delta * after_per_exec);
+            efficiency_usd.push(UsdPerMonthEstimate::efficiency_change(
+                before_est,
+                after_est,
+                before_executions,
+                after_executions,
+                exec_avg,
+            ));
+            volume_usd.push(UsdPerMonthEstimate::volume_change(
+                after_est,
+                after_executions,
+                execution_delta,
+            ));
         }
         if let (Some(before_value), Some(after_value)) =
             (before_cost.monthly_bytes, after_cost.monthly_bytes)
         {
-            let before_est = Estimate::from_point(before_value, Some(0.15));
-            let after_est = Estimate::from_point(after_value, Some(0.15));
+            let before_est =
+                BytesPerMonthEstimate::from_raw(Estimate::from_point(before_value, Some(0.15)));
+            let after_est =
+                BytesPerMonthEstimate::from_raw(Estimate::from_point(after_value, Some(0.15)));
             before_bytes.push(before_est);
             after_bytes.push(after_est);
-            let before_per_exec = before_est / Estimate::from_point(before_exec, Some(0.1));
-            let after_per_exec = after_est / Estimate::from_point(after_exec, Some(0.1));
-            efficiency_bytes.push((before_per_exec - after_per_exec) * exec_avg);
-            volume_bytes.push(execution_delta * after_per_exec);
+            efficiency_bytes.push(BytesPerMonthEstimate::efficiency_change(
+                before_est,
+                after_est,
+                before_executions,
+                after_executions,
+                exec_avg,
+            ));
+            volume_bytes.push(BytesPerMonthEstimate::volume_change(
+                after_est,
+                after_executions,
+                execution_delta,
+            ));
         }
     }
 
-    let sums = |values: &[Estimate]| (!values.is_empty()).then(|| sum_lognormals(values));
-    let before_usd_sum = sums(&before_usd);
-    let after_usd_sum = sums(&after_usd);
-    let before_bytes_sum = sum_estimate_medians(&before_bytes);
-    let after_bytes_sum = sum_estimate_medians(&after_bytes);
+    let before_usd_sum = sum_usd(&before_usd);
+    let after_usd_sum = sum_usd(&after_usd);
+    let before_bytes_sum = sum_bytes(&before_bytes);
+    let after_bytes_sum = sum_bytes(&after_bytes);
 
     RealizedSavings {
-        before: CostFigure::from_estimates(
-            before_usd_sum,
-            before_bytes_sum,
-            config,
-            "observed-before",
-        ),
-        after: CostFigure::from_estimates(after_usd_sum, after_bytes_sum, config, "observed-after"),
+        before: CostFigure::from_typed(before_usd_sum, before_bytes_sum, config, "observed-before"),
+        after: CostFigure::from_typed(after_usd_sum, after_bytes_sum, config, "observed-after"),
         realized: CostFigure::from_points(
             before_usd_sum
                 .zip(after_usd_sum)
@@ -449,15 +473,15 @@ pub fn compute_realized_savings(
                 .map(|(before, after)| (before.median() - after.median()) / 1e9),
             "observed-delta",
         ),
-        efficiency: CostFigure::from_estimates(
-            sums(&efficiency_usd),
-            sums(&efficiency_bytes),
+        efficiency: CostFigure::from_typed(
+            sum_usd(&efficiency_usd),
+            sum_bytes(&efficiency_bytes),
             config,
             "efficiency-delta",
         ),
-        volume: CostFigure::from_estimates(
-            sums(&volume_usd),
-            sums(&volume_bytes),
+        volume: CostFigure::from_typed(
+            sum_usd(&volume_usd),
+            sum_bytes(&volume_bytes),
             config,
             "volume-delta",
         ),
@@ -471,8 +495,8 @@ pub fn compute_blast_radius(
     config: &CostConfig,
 ) -> CostFigure {
     let mut seen_downstream = HashSet::new();
-    let mut costs_usd = Vec::new();
-    let mut volumes = Vec::new();
+    let mut costs_usd: Vec<UsdPerMonthEstimate> = Vec::new();
+    let mut volumes: Vec<BytesPerMonthEstimate> = Vec::new();
 
     for path in changed_paths {
         let Some(model_id) = index.by_path.get(path) else {
@@ -487,9 +511,9 @@ pub fn compute_blast_radius(
             }
             if let Some(entry) = index.models.get(id) {
                 if let Some(cost) = entry.monthly_cost_usd {
-                    costs_usd.push(cost);
+                    costs_usd.push(UsdPerMonthEstimate::from_raw(cost));
                 }
-                volumes.push(entry.scan_volume);
+                volumes.push(BytesPerMonthEstimate::from_raw(entry.scan_volume));
             }
         }
     }
@@ -501,9 +525,9 @@ pub fn compute_blast_radius(
         };
     }
 
-    CostFigure::from_estimates(
-        (!costs_usd.is_empty()).then(|| sum_lognormals(&costs_usd)),
-        sum_estimate_medians(&volumes),
+    CostFigure::from_typed(
+        sum_usd(&costs_usd),
+        sum_bytes(&volumes),
         config,
         "downstream-blast-radius",
     )

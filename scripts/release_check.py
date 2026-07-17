@@ -92,9 +92,14 @@ def main() -> int:
     parser.add_argument("--skip-external-links", action="store_true")
     parser.add_argument("--development", action="store_true")
     parser.add_argument(
+        "--trust-github-qualification",
+        action="store_true",
+        help="GitHub release path: require signed tag and trust exact-SHA CI plus benchmark evidence",
+    )
+    parser.add_argument(
         "--trust-push-ci",
         action="store_true",
-        help="GitHub release path: require signed tag and defer heavy gates to push CI",
+        help="Compatibility alias for --trust-github-qualification",
     )
     parser.add_argument("--receipt", type=Path, default=Path("dist/release/release-check.json"))
     args = parser.parse_args()
@@ -103,11 +108,14 @@ def main() -> int:
         raise SystemExit(f"requested version {version} != workspace version {workspace_version()}")
     tag = f"v{version}"
     commit = git_output("rev-parse", "HEAD")
-    if args.trust_push_ci:
+    if args.trust_github_qualification or args.trust_push_ci:
         if args.skip_external or args.skip_external_links:
             raise SystemExit("release evidence cannot be created with skip flags")
         if args.development:
-            print("trust-push-ci release defers qualification to push CI")
+            print(
+                "trust-github-qualification release trusts exact-SHA CI and benchmark evidence "
+                "(trust-push-ci compatibility alias)"
+            )
         else:
             tag, commit = require_release_tag(version)
             write_receipt(
@@ -115,10 +123,13 @@ def main() -> int:
                 version=version,
                 tag=tag,
                 commit=commit,
-                gate="push-ci",
+                gate="github-ci+benchmark",
             )
             print(f"wrote qualification receipt {args.receipt}")
-        print(f"release qualification passed for {version} (trust-push-ci)")
+        print(
+            f"release qualification passed for {version} "
+            "(trust-github-qualification; trust-push-ci compatibility alias)"
+        )
         return 0
     if args.development:
         print("development qualification does not produce release evidence")

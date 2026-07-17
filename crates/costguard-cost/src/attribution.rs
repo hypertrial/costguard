@@ -1,12 +1,11 @@
 use crate::config::CostConfig;
-use crate::estimate::{
-    combined_multiplier, round_sig2, savings_fraction, sum_lognormals, Estimate,
-};
-use crate::model_cost::{
-    lookup_model_entry, sum_estimate_medians, CostFigure, ModelCostIndex, ProjectCostSummary,
-};
+use crate::estimate::{combined_multiplier, round_sig2, savings_fraction, Estimate};
+use crate::model_cost::{lookup_model_entry, CostFigure, ModelCostIndex, ProjectCostSummary};
 use crate::multipliers::{is_cost_bearing_rule, rule_multiplier_with_basis, unestimated_reason};
 use crate::pricing::{price_per_byte, pricing_label};
+use crate::units::{
+    price_bytes, sum_bytes, sum_usd, BytesPerMonthEstimate, UnitlessEstimate, UsdPerMonthEstimate,
+};
 use crate::volume::{model_for_path, model_identity, VolumeContext};
 use costguard_dbt::DbtProject;
 use costguard_diagnostics::{CostEstimate, Diagnostic};
@@ -26,17 +25,17 @@ pub struct ModelFeatureSummary {
 struct PendingAttribution {
     diagnostic_index: usize,
     model_id: String,
-    rule_multiplier: Estimate,
+    rule_multiplier: UnitlessEstimate,
     prior_basis: String,
-    savings_fraction: Estimate,
-    raw_savings_usd: Option<Estimate>,
-    raw_savings_bytes: Estimate,
+    savings_fraction: UnitlessEstimate,
+    raw_savings_usd: Option<UsdPerMonthEstimate>,
+    raw_savings_bytes: BytesPerMonthEstimate,
     gb_months_savings: f64,
     structure_factor: f64,
     fan_out_factor: f64,
     grade: costguard_diagnostics::CostGrade,
-    model_monthly_cost_usd: Option<Estimate>,
-    scan_volume: Estimate,
+    model_monthly_cost_usd: Option<UsdPerMonthEstimate>,
+    scan_volume: BytesPerMonthEstimate,
     volume_basis: String,
 }
 
@@ -158,8 +157,8 @@ pub fn attribute_findings(
         let (model_monthly_cost_usd, scan_volume, grade, volume_basis) =
             if let Some(entry) = lookup_model_entry(ctx.model_index, &diagnostic.path, dbt_model) {
                 (
-                    entry.monthly_cost_usd,
-                    entry.scan_volume,
+                    entry.monthly_cost_usd.map(UsdPerMonthEstimate::from_raw),
+                    BytesPerMonthEstimate::from_raw(entry.scan_volume),
                     entry.grade,
                     format!(
                         "{} × {:.0} runs/mo ({})",
@@ -177,10 +176,12 @@ pub fn attribute_findings(
                     }),
                     Some(&diagnostic.rule_id),
                 );
-                let scan = volume.bytes * volume.runs_per_month;
+                let scan =
+                    BytesPerMonthEstimate::from_bytes_and_runs(volume.bytes, volume.runs_per_month);
                 let monthly = volume
                     .observed_monthly_cost_usd
-                    .or_else(|| price.map(|price| scan * price));
+                    .map(UsdPerMonthEstimate::from_raw)
+                    .or_else(|| price.map(|price| price_bytes(scan, price)));
                 (
                     monthly,
                     scan,
@@ -202,12 +203,15 @@ pub fn attribute_findings(
             ctx.downstream_counts.get(&model_id).copied().unwrap_or(0),
             ctx.exposure_counts.get(&model_id).copied().unwrap_or(0),
         );
-        let fraction = savings_fraction(multiplier);
-        let attribution_weight = Estimate::from_point(structure_factor * fan_out, Some(0.2));
-        let scan_savings = scan_volume * fraction * attribution_weight;
+        let multiplier = UnitlessEstimate::from_raw(multiplier);
+        let fraction = UnitlessEstimate::from_raw(savings_fraction(multiplier.raw()));
+        let attribution_weight = UnitlessEstimate::from_point(structure_factor * fan_out, 0.2);
+        let scan_savings = scan_volume
+            .scaled_by(fraction)
+            .scaled_by(attribution_weight);
         let gb_months_savings = scan_savings.median() / 1_000_000_000.0;
-        let raw_savings_usd =
-            model_monthly_cost_usd.map(|cost| cost * fraction * attribution_weight);
+        let raw_savings_usd = model_monthly_cost_usd
+            .map(|cost| cost.scaled_by(fraction).scaled_by(attribution_weight));
 
         pending.push(PendingAttribution {
             diagnostic_index: index,
@@ -232,53 +236,42 @@ pub fn attribute_findings(
 
     // ponytail: project_current matches summarize_project_costs (all indexed models);
     // per_model caps cover only models with findings — savings outside the index are minor.
-    let project_usd_values: Vec<Estimate> = ctx
+    let project_usd_values: Vec<UsdPerMonthEstimate> = ctx
         .model_index
         .models
         .values()
-        .filter_map(|entry| entry.monthly_cost_usd)
+        .filter_map(|entry| entry.monthly_cost_usd.map(UsdPerMonthEstimate::from_raw))
         .collect();
-    let project_byte_values: Vec<Estimate> = ctx
+    let project_byte_values: Vec<BytesPerMonthEstimate> = ctx
         .model_index
         .models
         .values()
-        .map(|entry| entry.scan_volume)
+        .map(|entry| BytesPerMonthEstimate::from_raw(entry.scan_volume))
         .collect();
-    let project_current_usd =
-        (!project_usd_values.is_empty()).then(|| sum_lognormals(&project_usd_values));
-    let project_current_bytes = sum_estimate_medians(&project_byte_values);
-    let usd_savings: Vec<Estimate> = per_model
+    let project_current_usd = sum_usd(&project_usd_values);
+    let project_current_bytes = sum_bytes(&project_byte_values);
+    let usd_savings: Vec<UsdPerMonthEstimate> = per_model
         .iter()
         .filter_map(|totals| totals.current_usd.zip(totals.post_fix_usd))
-        .map(|(current, post_fix)| {
-            Estimate::from_point(
-                (current.median() - post_fix.median()).max(0.001),
-                Some(0.15),
-            )
-        })
+        .map(|(current, post_fix)| current.positive_difference(post_fix, 0.15))
         .collect();
-    let byte_savings: Vec<Estimate> = per_model
+    let byte_savings: Vec<BytesPerMonthEstimate> = per_model
         .iter()
         .map(|totals| {
-            Estimate::from_point(
-                (totals.current_bytes.median() - totals.post_fix_bytes.median()).max(0.001),
-                Some(0.15),
-            )
+            totals
+                .current_bytes
+                .positive_difference(totals.post_fix_bytes, 0.15)
         })
         .collect();
-    let potential_usd = (!usd_savings.is_empty()).then(|| sum_lognormals(&usd_savings));
-    let potential_bytes = sum_estimate_medians(&byte_savings);
+    let potential_usd = sum_usd(&usd_savings);
+    let potential_bytes = sum_bytes(&byte_savings);
     let post_fix_usd = project_current_usd
         .zip(potential_usd)
-        .map(|(current, savings)| {
-            Estimate::from_point((current.median() - savings.median()).max(0.001), Some(0.15))
-        })
+        .map(|(current, savings)| current.positive_difference(savings, 0.15))
         .or(project_current_usd);
     let post_fix_bytes = project_current_bytes
         .zip(potential_bytes)
-        .map(|(current, savings)| {
-            Estimate::from_point((current.median() - savings.median()).max(0.001), Some(0.01))
-        })
+        .map(|(current, savings)| current.positive_difference(savings, 0.01))
         .or(project_current_bytes);
 
     summary.savings_p10_usd = savings_usd.map(|values| values.0);
@@ -291,13 +284,13 @@ pub fn attribute_findings(
             .map(|c| c.relative_index)
             .sum(),
     );
-    summary.post_fix_cost = CostFigure::from_estimates(
+    summary.post_fix_cost = CostFigure::from_typed(
         post_fix_usd,
         post_fix_bytes,
         ctx.config,
         "post-fix-counterfactual",
     );
-    summary.potential_savings = CostFigure::from_estimates(
+    summary.potential_savings = CostFigure::from_typed(
         potential_usd,
         potential_bytes,
         ctx.config,
@@ -308,10 +301,10 @@ pub fn attribute_findings(
 }
 
 struct PerModelTotals {
-    current_usd: Option<Estimate>,
-    post_fix_usd: Option<Estimate>,
-    current_bytes: Estimate,
-    post_fix_bytes: Estimate,
+    current_usd: Option<UsdPerMonthEstimate>,
+    post_fix_usd: Option<UsdPerMonthEstimate>,
+    current_bytes: BytesPerMonthEstimate,
+    post_fix_bytes: BytesPerMonthEstimate,
 }
 
 fn apply_per_model_caps(pending: &mut [PendingAttribution]) -> Vec<PerModelTotals> {
@@ -329,21 +322,18 @@ fn apply_per_model_caps(pending: &mut [PendingAttribution]) -> Vec<PerModelTotal
         let current_bytes = pending[indices[0]].scan_volume;
         let multipliers: Vec<Estimate> = indices
             .iter()
-            .map(|idx| pending[*idx].rule_multiplier)
+            .map(|idx| pending[*idx].rule_multiplier.raw())
             .collect();
         let combined = combined_multiplier(&multipliers);
         let max_combined = combined.median().max(1.001);
         let capped_combined = max_combined.min(20.0);
-        let divisor = Estimate::from_point(capped_combined, Some(0.15));
-        let post_fix_usd = current_usd.map(|current| current / divisor);
-        let post_fix_bytes = current_bytes / divisor;
-        let total_savings_usd = current_usd.zip(post_fix_usd).map(|(current, post_fix)| {
-            Estimate::from_point((current.median() - post_fix.median()).max(0.001), Some(0.2))
-        });
-        let total_savings_bytes = Estimate::from_point(
-            (current_bytes.median() - post_fix_bytes.median()).max(0.001),
-            Some(0.2),
-        );
+        let divisor = UnitlessEstimate::from_point(capped_combined, 0.15);
+        let post_fix_usd = current_usd.map(|current| current.divided_by(divisor));
+        let post_fix_bytes = current_bytes.divided_by(divisor);
+        let total_savings_usd = current_usd
+            .zip(post_fix_usd)
+            .map(|(current, post_fix)| current.positive_difference(post_fix, 0.2));
+        let total_savings_bytes = current_bytes.positive_difference(post_fix_bytes, 0.2);
         per_model.push(PerModelTotals {
             current_usd,
             post_fix_usd,
@@ -362,10 +352,10 @@ fn apply_per_model_caps(pending: &mut [PendingAttribution]) -> Vec<PerModelTotal
 
         for (idx, weight) in indices.iter().zip(weights) {
             let share = weight / weight_sum;
-            let share_estimate = Estimate::from_point(share, Some(0.2));
+            let share_estimate = UnitlessEstimate::from_point(share, 0.2);
             pending[*idx].raw_savings_usd =
-                total_savings_usd.map(|savings| savings * share_estimate);
-            pending[*idx].raw_savings_bytes = total_savings_bytes * share_estimate;
+                total_savings_usd.map(|savings| savings.scaled_by(share_estimate));
+            pending[*idx].raw_savings_bytes = total_savings_bytes.scaled_by(share_estimate);
             pending[*idx].gb_months_savings = pending[*idx].raw_savings_bytes.median() / 1e9;
         }
     }
@@ -385,15 +375,15 @@ fn downstream_monthly_cost(
     if count == 0 {
         return (0, None);
     }
-    let costs: Vec<Estimate> = ids
+    let costs: Vec<UsdPerMonthEstimate> = ids
         .iter()
         .filter_map(|id| ctx.model_index.models.get(id))
-        .filter_map(|entry| entry.monthly_cost_usd)
+        .filter_map(|entry| entry.monthly_cost_usd.map(UsdPerMonthEstimate::from_raw))
         .collect();
     if costs.is_empty() {
         return (count, None);
     }
-    let total = sum_lognormals(&costs);
+    let total = sum_usd(&costs).expect("costs checked non-empty");
     (count, Some(round_sig2(total.median())))
 }
 
@@ -404,12 +394,15 @@ fn apply_attributions(
 ) -> Option<(f64, f64, f64)> {
     let config = ctx.config;
     let pricing = pricing_label(&config.pricing);
-    let mut savings_estimates = Vec::new();
+    let mut savings_estimates: Vec<UsdPerMonthEstimate> = Vec::new();
 
     for item in pending {
         let savings = item.raw_savings_usd;
-        let combined = combined_multiplier(&[item.rule_multiplier]);
-        let post_fix = item.model_monthly_cost_usd.map(|cost| cost / combined);
+        let combined =
+            UnitlessEstimate::from_raw(combined_multiplier(&[item.rule_multiplier.raw()]));
+        let post_fix = item
+            .model_monthly_cost_usd
+            .map(|cost| cost.divided_by(combined));
 
         let (usd_p10, usd_p50, usd_p90) = if let Some(savings) = savings {
             let (lo, hi) = savings.interval(config.interval);
@@ -484,7 +477,7 @@ fn apply_attributions(
     if savings_estimates.is_empty() {
         return None;
     }
-    let total = sum_lognormals(&savings_estimates);
+    let total = sum_usd(&savings_estimates).expect("savings checked non-empty");
     let (lo, hi) = total.interval(config.interval);
     Some((round_sig2(lo), round_sig2(total.median()), round_sig2(hi)))
 }

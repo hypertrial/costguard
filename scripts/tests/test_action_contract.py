@@ -50,7 +50,11 @@ class ActionContractTest(unittest.TestCase):
         self.assertIn("macos-15-intel", release)
         self.assertIn("x86_64-pc-windows-msvc", release)
         self.assertIn("verify_ci_history.py", release)
-        self.assertIn("--trust-push-ci", release)
+        self.assertIn("--trust-github-qualification", release)
+        self.assertIn("--workflow ci.yml", release)
+        self.assertIn("--workflow benchmark.yml", release)
+        self.assertIn("--event workflow_dispatch", release)
+        self.assertIn("--required-job full-evidence-gate", release)
         self.assertIn("release_consumer_smoke.py", release)
         self.assertIn("timeout-minutes: 5", release)
         build = release.split("  build:", 1)[1].split("  publish:", 1)[0]

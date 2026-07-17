@@ -32,10 +32,11 @@ pub use baseline::{
     validate_finding_baseline, write_finding_baseline, BaselinedFinding, FindingBaseline,
 };
 pub use config::{
-    apply_file_config, load_config, validate_scan_config, AnalysisConfig, AnalysisPolicy,
-    AnalysisSection, DbtSection, FileConfig, GateConfig, GateMode, GateScope, OutputFormat,
-    OutputSection, OwnerValue, OwnersConfig, ScanConfig, ScanRuntimeOverrides, ScanSection,
-    SignedPolicyConfig, SignedPolicySection, Waiver,
+    apply_file_config, load_config, load_resolved_config, validate_scan_config, AnalysisConfig,
+    AnalysisPolicy, AnalysisSection, DbtSection, FileConfig, GateConfig, GateMode, GateScope,
+    OutputFormat, OutputSection, OwnerValue, OwnersConfig, ResolvedScanRequest, ScanConfig,
+    ScanRuntimeOverrides, ScanSection, SignedPolicyConfig, SignedPolicySection, Waiver,
+    DEFAULT_MAX_TOTAL_BASE_BYTES,
 };
 pub use context::{ContextIssue, ContextReport};
 pub use costguard_cost::ProjectCostSummary;
@@ -50,9 +51,9 @@ pub use costguard_sql::Platform;
 pub use costguard_sql::{
     CteFeature, ExpressionFeature, JoinFeature, ParseInput, SqlFeatures, WindowFeature,
 };
-pub use doctor::{doctor, DoctorCheck, DoctorReport, DoctorStatus};
+pub use doctor::{doctor, doctor_resolved, DoctorCheck, DoctorReport, DoctorStatus};
 pub use init::{detect_warehouse, init_project, InitOptions, InitOutcome};
-pub use scan::{explain, rules, scan};
+pub use scan::{explain, rules, scan, scan_resolved};
 pub use state_diff::{classify_findings, FindingDelta};
 
 use costguard_dbt::DbtProject;

@@ -4,7 +4,7 @@ use costguard_diagnostics::Diagnostic;
 
 use crate::{
     append_analysis_text, append_context_text, append_cost_summary, append_pr_cost_impact_text,
-    escape_text, format_diagnostic_meta,
+    escape_text, format_diagnostic_meta, ranked_cost_findings,
 };
 
 pub(crate) fn render_text(result: &ScanResult) -> String {
@@ -114,37 +114,24 @@ pub(crate) fn render_text(result: &ScanResult) -> String {
         }
         output.push('\n');
     }
-    append_top_cost_findings(&mut output, &result.diagnostics);
+    append_top_cost_findings(
+        &mut output,
+        &result.diagnostics,
+        result.cost_summary.as_ref(),
+    );
     append_cost_summary(&mut output, result.cost_summary.as_ref());
     output
 }
 
-pub(crate) fn append_top_cost_findings(output: &mut String, diagnostics: &[Diagnostic]) {
-    let mut ranked: Vec<_> = diagnostics
-        .iter()
-        .filter_map(|d| d.cost_estimate.as_ref().map(|c| (d, c)))
-        .collect();
+pub(crate) fn append_top_cost_findings(
+    output: &mut String,
+    diagnostics: &[Diagnostic],
+    summary: Option<&costguard_cost::ProjectCostSummary>,
+) {
+    let ranked = ranked_cost_findings(diagnostics, summary);
     if ranked.is_empty() {
         return;
     }
-    let rank_by_usd = ranked
-        .iter()
-        .all(|(_, cost)| cost.savings_p50_usd_per_month.is_some());
-    ranked.sort_by(|(_left, left_cost), (_right, right_cost)| {
-        let left = if rank_by_usd {
-            left_cost.savings_p50_usd_per_month.unwrap_or_default()
-        } else {
-            left_cost.relative_index
-        };
-        let right = if rank_by_usd {
-            right_cost.savings_p50_usd_per_month.unwrap_or_default()
-        } else {
-            right_cost.relative_index
-        };
-        right
-            .partial_cmp(&left)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
     output.push_str("\nTop findings by estimated monthly savings:\n");
     for (diagnostic, cost) in ranked.into_iter().take(5) {
         output.push_str(&format!(
@@ -161,7 +148,11 @@ pub(crate) fn render_cost_text(result: &ScanResult) -> String {
     let mut output = String::from("Costguard cost prioritization summary\n\n");
     append_cost_summary(&mut output, result.cost_summary.as_ref());
     if !result.diagnostics.is_empty() {
-        append_top_cost_findings(&mut output, &result.diagnostics);
+        append_top_cost_findings(
+            &mut output,
+            &result.diagnostics,
+            result.cost_summary.as_ref(),
+        );
     }
     output
 }

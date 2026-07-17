@@ -4,10 +4,10 @@
 //! GitHub workflow annotations, markdown, or SARIF.
 
 use anyhow::Result;
-use costguard_core::{OutputFormat, PrSummary, ScanResult};
+use costguard_core::{OutputFormat, PrSummary, ReceiptTrend, ScanResult};
 use costguard_cost::{format_usd_interval, CostFigure, PrCostImpact, ProjectCostSummary};
 use costguard_diagnostics::{Confidence, Diagnostic};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 const OUTPUT_SCHEMA_VERSION: u8 = 4;
 
@@ -28,6 +28,131 @@ struct JsonOutput<'a> {
     pr_summary: Option<&'a PrSummary>,
     #[serde(skip_serializing_if = "Option::is_none")]
     context: Option<&'a costguard_core::ContextReport>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ReceiptV4 {
+    schema_version: u8,
+    diagnostics: Vec<ReceiptDiagnostic>,
+    cost: Option<ReceiptCost>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ReceiptDiagnostic {
+    severity: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ReceiptCost {
+    project_p50_usd: Option<f64>,
+    savings_p50_usd: Option<f64>,
+    savings_gb_months: Option<f64>,
+    coverage: Option<ReceiptCoverage>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ReceiptCoverage {
+    models_total: Option<usize>,
+    models_with_usd: Option<usize>,
+    usd_coverage_fraction: Option<f64>,
+}
+
+/// Compare a JSON schema-v4 receipt with a current scan result.
+pub fn receipt_trend(previous_json: &str, current: &ScanResult) -> Result<ReceiptTrend> {
+    let previous: ReceiptV4 =
+        serde_json::from_str(previous_json).map_err(|error| anyhow::anyhow!(error))?;
+    if previous.schema_version != OUTPUT_SCHEMA_VERSION {
+        anyhow::bail!(
+            "receipt must use JSON schema version {}",
+            OUTPUT_SCHEMA_VERSION
+        );
+    }
+    let previous_high = previous
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| matches!(diagnostic.severity.as_str(), "high" | "critical"))
+        .count();
+    let current_high = current
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.severity >= costguard_diagnostics::Severity::High)
+        .count();
+    let previous_cost = previous.cost.as_ref();
+    let previous_usd_comparable = previous_cost.is_some_and(receipt_has_complete_usd);
+    let current_usd_comparable = current.cost_summary.as_ref().is_some_and(|cost| {
+        cost.coverage.models_total > 0
+            && cost.coverage.models_with_usd == cost.coverage.models_total
+    });
+    let previous_usd = previous_usd_comparable
+        .then(|| previous_cost.and_then(|cost| cost.savings_p50_usd))
+        .flatten();
+    let current_usd = current_usd_comparable
+        .then(|| {
+            current
+                .cost_summary
+                .as_ref()
+                .and_then(|cost| cost.savings_p50_usd)
+        })
+        .flatten();
+    let previous_gb = previous_cost.and_then(|cost| cost.savings_gb_months);
+    let current_gb = current
+        .cost_summary
+        .as_ref()
+        .map(|cost| cost.savings_gb_months);
+    Ok(ReceiptTrend {
+        diagnostics_delta: current.diagnostics.len() as i64 - previous.diagnostics.len() as i64,
+        high_findings_delta: current_high as i64 - previous_high as i64,
+        monthly_savings_delta_usd: previous_usd
+            .zip(current_usd)
+            .map(|(previous, current)| current - previous),
+        monthly_savings_delta_gb: previous_gb
+            .zip(current_gb)
+            .map(|(previous, current)| current - previous),
+    })
+}
+
+fn receipt_has_complete_usd(cost: &ReceiptCost) -> bool {
+    let coverage = cost.coverage.as_ref();
+    match coverage.map(|value| (value.models_total, value.models_with_usd)) {
+        Some((Some(total), Some(with_usd))) => total > 0 && with_usd == total,
+        Some((Some(_), None) | (None, Some(_))) => false,
+        _ => coverage
+            .and_then(|value| value.usd_coverage_fraction)
+            .map(|fraction| fraction == 1.0)
+            .unwrap_or(cost.project_p50_usd.is_some()),
+    }
+}
+
+pub(crate) fn ranked_cost_findings<'a>(
+    diagnostics: &'a [Diagnostic],
+    summary: Option<&ProjectCostSummary>,
+) -> Vec<(&'a Diagnostic, &'a costguard_diagnostics::CostEstimate)> {
+    let mut ranked = diagnostics
+        .iter()
+        .filter_map(|diagnostic| {
+            diagnostic
+                .cost_estimate
+                .as_ref()
+                .map(|cost| (diagnostic, cost))
+        })
+        .collect::<Vec<_>>();
+    let rank_by_usd = summary.is_some_and(has_full_usd_coverage);
+    ranked.sort_by(|(_left, left_cost), (_right, right_cost)| {
+        let left = if rank_by_usd {
+            left_cost.savings_p50_usd_per_month.unwrap_or_default()
+        } else {
+            left_cost.relative_index
+        };
+        let right = if rank_by_usd {
+            right_cost.savings_p50_usd_per_month.unwrap_or_default()
+        } else {
+            right_cost.relative_index
+        };
+        right
+            .partial_cmp(&left)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    ranked
 }
 
 /// Render a scan result in the requested [`OutputFormat`].
@@ -515,7 +640,7 @@ fn covered_cost_label(summary: &ProjectCostSummary, label: &str, figure: &CostFi
     }
 }
 
-fn has_full_usd_coverage(summary: &ProjectCostSummary) -> bool {
+pub(crate) fn has_full_usd_coverage(summary: &ProjectCostSummary) -> bool {
     summary.coverage.models_total > 0
         && summary.coverage.models_with_usd == summary.coverage.models_total
 }
@@ -718,7 +843,9 @@ mod tests {
     use costguard_core::{
         EnforcementPreview, FindingDelta, GateMode, GateResult, GateStatus, ScanMetrics, ScanResult,
     };
-    use costguard_diagnostics::{Confidence, Diagnostic, Severity, SourceProvenance};
+    use costguard_diagnostics::{
+        Confidence, CostEstimate, CostGrade, Diagnostic, Severity, SourceProvenance,
+    };
     use costguard_scanner::ScanCounts;
     use std::collections::BTreeMap;
     use std::path::PathBuf;
@@ -808,6 +935,63 @@ mod tests {
         });
         assert!(!finding_id.is_empty());
         result
+    }
+
+    fn cost_diagnostic(path: &str, relative_index: f64, usd: f64) -> Diagnostic {
+        let mut diagnostic = Diagnostic::new(
+            "SQLCOST001",
+            Severity::Medium,
+            PathBuf::from(path),
+            None,
+            "test",
+        );
+        diagnostic.cost_estimate = Some(CostEstimate {
+            relative_index,
+            grade: CostGrade::B,
+            basis: "test".into(),
+            prior_basis: None,
+            currency: "USD".into(),
+            model_id: None,
+            model_monthly_p50_usd: None,
+            savings_p10_usd_per_month: Some(usd),
+            savings_p50_usd_per_month: Some(usd),
+            savings_p90_usd_per_month: Some(usd),
+            current_cost_p50_usd_per_month: None,
+            post_fix_cost_p50_usd_per_month: None,
+            unestimated_reason: None,
+            downstream_model_count: None,
+            downstream_monthly_p50_usd: None,
+        });
+        diagnostic
+    }
+
+    #[test]
+    fn finding_ranking_uses_usd_only_for_complete_project_coverage() {
+        let diagnostics = vec![
+            cost_diagnostic("high-volume.sql", 100.0, 1.0),
+            cost_diagnostic("high-usd.sql", 10.0, 10.0),
+        ];
+        let mut summary = ProjectCostSummary {
+            coverage: costguard_cost::CoverageMetrics {
+                models_total: 2,
+                models_with_usd: 1,
+                usd_coverage_fraction: 0.5,
+                ..Default::default()
+            },
+            ..ProjectCostSummary::default()
+        };
+
+        assert_eq!(
+            ranked_cost_findings(&diagnostics, Some(&summary))[0].0.path,
+            PathBuf::from("high-volume.sql")
+        );
+
+        summary.coverage.models_with_usd = 2;
+        summary.coverage.usd_coverage_fraction = 1.0;
+        assert_eq!(
+            ranked_cost_findings(&diagnostics, Some(&summary))[0].0.path,
+            PathBuf::from("high-usd.sql")
+        );
     }
 
     #[test]
@@ -950,6 +1134,92 @@ mod tests {
         assert_eq!(value["metrics"]["sql_parse_failures"], 1);
         assert_eq!(value["metrics"]["diagnostics_by_rule"]["SQLCOST005"], 1);
         assert_eq!(value["diagnostics"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn receipt_trend_uses_typed_v4_coverage_rules() {
+        let mut current = sample_result(false);
+        current.cost_summary = Some(ProjectCostSummary {
+            project_p50_usd: Some(120.0),
+            savings_p50_usd: Some(30.0),
+            savings_gb_months: 4.0,
+            coverage: costguard_cost::CoverageMetrics {
+                models_total: 2,
+                models_with_usd: 2,
+                usd_coverage_fraction: 1.0,
+                ..Default::default()
+            },
+            ..ProjectCostSummary::default()
+        });
+        let previous = r#"{
+            "schema_version": 4,
+            "diagnostics": [{"severity": "high"}],
+            "cost": {
+                "project_p50_usd": 100.0,
+                "savings_p50_usd": 20.0,
+                "savings_gb_months": 1.5,
+                "coverage": {
+                    "models_total": 2,
+                    "models_with_usd": 2,
+                    "usd_coverage_fraction": 1.0
+                }
+            },
+            "unknown_future_field": true
+        }"#;
+        let trend = receipt_trend(previous, &current).expect("trend");
+        assert_eq!(trend.high_findings_delta, -1);
+        assert_eq!(trend.monthly_savings_delta_usd, Some(10.0));
+        assert_eq!(trend.monthly_savings_delta_gb, Some(2.5));
+    }
+
+    #[test]
+    fn receipt_trend_suppresses_partial_usd_and_supports_legacy_v4() {
+        let mut current = sample_result(false);
+        current.cost_summary = Some(ProjectCostSummary {
+            project_p50_usd: Some(120.0),
+            savings_p50_usd: Some(30.0),
+            coverage: costguard_cost::CoverageMetrics {
+                models_total: 2,
+                models_with_usd: 2,
+                usd_coverage_fraction: 1.0,
+                ..Default::default()
+            },
+            ..ProjectCostSummary::default()
+        });
+        let partial = r#"{
+            "schema_version": 4,
+            "diagnostics": [],
+            "cost": {
+                "project_p50_usd": 100.0,
+                "savings_p50_usd": 20.0,
+                "coverage": {"usd_coverage_fraction": 0.5}
+            }
+        }"#;
+        assert_eq!(
+            receipt_trend(partial, &current)
+                .expect("partial trend")
+                .monthly_savings_delta_usd,
+            None
+        );
+
+        let legacy = r#"{
+            "schema_version": 4,
+            "diagnostics": [],
+            "cost": {"project_p50_usd": 100.0, "savings_p50_usd": 20.0}
+        }"#;
+        assert_eq!(
+            receipt_trend(legacy, &current)
+                .expect("legacy trend")
+                .monthly_savings_delta_usd,
+            Some(10.0)
+        );
+    }
+
+    #[test]
+    fn receipt_trend_rejects_wrong_schema_and_missing_diagnostics() {
+        let current = sample_result(false);
+        assert!(receipt_trend(r#"{"schema_version":3,"diagnostics":[]}"#, &current).is_err());
+        assert!(receipt_trend(r#"{"schema_version":4}"#, &current).is_err());
     }
 
     #[test]

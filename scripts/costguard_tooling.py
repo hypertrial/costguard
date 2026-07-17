@@ -206,8 +206,7 @@ def measure_costguard_scan(
     cost: bool = False,
 ) -> dict[str, Any]:
     """Run one scan and return its payload plus wall-clock and peak-RSS data."""
-    cmd = [
-        str(costguard_binary()),
+    command = [
         "scan",
         "--warehouse",
         warehouse,
@@ -217,7 +216,7 @@ def measure_costguard_scan(
         "json",
     ]
     if cost:
-        cmd.append("--cost")
+        command.append("--cost")
     if manifest is not None:
         if manifest.is_absolute():
             manifest_arg = (
@@ -225,8 +224,39 @@ def measure_costguard_scan(
             )
         else:
             manifest_arg = manifest
-        cmd.extend(["--manifest", str(manifest_arg)])
-    cmd.extend(scan_paths)
+        command.extend(["--manifest", str(manifest_arg)])
+    command.extend(scan_paths)
+    return measure_costguard_command(workdir, command)
+
+
+def measure_costguard_pr(
+    workdir: Path,
+    *,
+    base: str,
+    warehouse: str,
+    manifest: Path,
+) -> dict[str, Any]:
+    """Run one PR replay and return its payload plus wall-clock and peak-RSS data."""
+    return measure_costguard_command(
+        workdir,
+        [
+            "pr",
+            "--base",
+            base,
+            "--warehouse",
+            warehouse,
+            "--fail-on",
+            "critical",
+            "--format",
+            "json",
+            "--manifest",
+            str(manifest),
+        ],
+    )
+
+
+def measure_costguard_command(workdir: Path, command: list[str]) -> dict[str, Any]:
+    cmd = [str(costguard_binary()), *command]
 
     with tempfile.TemporaryDirectory(prefix="costguard-measure-") as tmp:
         output = Path(tmp) / "stdout.json"

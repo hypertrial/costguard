@@ -28,10 +28,26 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: "3.11"
-      - name: Require successful exact-SHA push CI
+      - name: Require successful exact-SHA push CI and benchmark evidence
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python scripts/verify_ci_history.py --repository "${GITHUB_REPOSITORY}" --sha "$(git rev-parse HEAD)"
+        run: |
+          SHA="$(git rev-parse HEAD)"
+          python scripts/verify_ci_history.py \
+            --repository "${GITHUB_REPOSITORY}" \
+            --sha "${SHA}" \
+            --workflow ci.yml \
+            --event push \
+            --required-job pr-gate \
+            --required-job scale \
+            --required-job spellbook-smoke \
+            --required-job nba-monte-carlo-smoke
+          python scripts/verify_ci_history.py \
+            --repository "${GITHUB_REPOSITORY}" \
+            --sha "${SHA}" \
+            --workflow benchmark.yml \
+            --event workflow_dispatch \
+            --required-job full-evidence-gate
       - name: Verify SSH-signed annotated tag
         env:
           SSH_ALLOWED_SIGNERS: ${{ vars.RELEASE_SSH_ALLOWED_SIGNERS }}
@@ -55,7 +71,7 @@ jobs:
           else
             echo "prerelease=false" >> "${GITHUB_OUTPUT}"
           fi
-      - run: python scripts/release_check.py --version "${{ steps.release.outputs.version }}" --trust-push-ci
+      - run: python scripts/release_check.py --version "${{ steps.release.outputs.version }}" --trust-github-qualification
       - run: python scripts/generate_sbom.py
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:

@@ -8,11 +8,12 @@ The current public docs pin `v2.6.0`. Treat the release PR as the `v2.6.0` relea
 
 1. Merge or directly push the release commit to `main` as Matt. PRs are recommended for reviewability but do not require another approver.
 2. Complete full-history secret/customer-data scanning, then explicitly make the repository public. Enable public security features, the Matt-only bypass, branch rules, the release environment, and `RELEASE_SSH_ALLOWED_SIGNERS` in GitHub repository settings.
-3. Produce one successful push-triggered `ci.yml` run for the exact release commit. The run must complete `pr-gate`, `scale`, `spellbook-smoke`, and `nba-monte-carlo-smoke`; the release workflow enforces this by commit SHA.
-4. Use Matt's existing passphrase-protected `~/.ssh/id_ed25519` key to create signed annotated `v2.6.0`. Do not add another key or change global Git configuration.
-5. Confirm the workflow publishes the exact stable tag and passes Linux, macOS ARM/x86, and Windows packaging and consumer smoke with checksums, SBOMs, and attestations.
-6. Perform a clean-machine installation and one credential-free scan from the published package.
-7. Never replace an exact release. Publish post-GA fixes as `2.6.1` and move `v2` only after verification.
+3. Produce one successful push-triggered `ci.yml` run for the exact release commit. It must complete `pr-gate`, `scale`, `spellbook-smoke`, and `nba-monte-carlo-smoke`.
+4. Dispatch `benchmark.yml` against that same `main` commit and require `full-evidence-gate` to pass. Scheduled benchmark runs cannot substitute for this dispatch.
+5. Use Matt's existing passphrase-protected `~/.ssh/id_ed25519` key to create signed annotated `v2.6.0`. Do not add another key or change global Git configuration. The tag workflow independently verifies both exact-SHA runs before publishing.
+6. Confirm the workflow publishes the exact stable tag and passes Linux, macOS ARM/x86, and Windows packaging and consumer smoke with checksums, SBOMs, and attestations.
+7. Perform a clean-machine installation and one credential-free scan from the published package.
+8. Never replace an exact release. Publish post-GA fixes as `2.6.1` and move `v2` only after verification.
 
 Strict qualification requires a clean worktree, the exact signed tag at `HEAD`, `mdbook`, and `cargo-deny`. Development skip flags cannot create release evidence. Publication remains disabled outside GitHub Actions.
 
@@ -22,7 +23,7 @@ The tracked [allowed-signers file](../../../.github/release_allowed_signers) con
 
 ## GA signing and qualification
 
-After the exact-SHA main push run succeeds, create and verify the stable tag. The tag command prompts to unlock the existing key when necessary:
+After the exact-SHA main push and manually dispatched benchmark runs succeed, create and verify the stable tag. The tag command prompts to unlock the existing key when necessary:
 
 ```bash
 git -c gpg.format=ssh \

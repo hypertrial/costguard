@@ -9,7 +9,7 @@ Costguard validates changes through four benchmark **layers**. See the [Glossary
 | Corpus | Fastest | No | Rule contract regression |
 | Vendored | Fast | No | Production-style snippets offline |
 | External | Slow | Yes | Full public repo stress tests |
-| Synthetic scale | Medium | No | Runtime/memory at 1k–10k models |
+| Synthetic scale | Medium | No | Clean-scan and base-replay runtime/memory at 2k–10k models |
 
 ## Layer 1 — Corpus
 
@@ -48,7 +48,7 @@ python3 scripts/benchmark_external_repo.py --repo ol-data-platform --smoke
 python3 scripts/benchmark_external_repo.py --repo data-infra  # manual observational
 ```
 
-GitHub Actions workflows are optional `workflow_dispatch` mirrors. The local release gate is authoritative and runs the full pinned repositories.
+The independently dispatched `benchmark.yml` workflow is part of release qualification. Scheduled runs remain useful trend evidence but cannot qualify a release.
 
 ### Defaults by context
 
@@ -77,6 +77,9 @@ costguard scan /tmp/costguard-synthetic-5k --warehouse generic --fail-on critica
 
 python3 scripts/generate_synthetic_dbt.py /tmp/costguard-synthetic-10k --models 10000
 costguard scan /tmp/costguard-synthetic-10k --warehouse generic --fail-on critical
+
+# The release scale gate also commits a 10k base/head fixture and measures:
+costguard pr --base HEAD~1
 ```
 
 ## Pass criteria summary
@@ -85,6 +88,7 @@ costguard scan /tmp/costguard-synthetic-10k --warehouse generic --fail-on critic
 | --- | --- |
 | Vendored | Exact rule counts, parse failure ceiling, forbidden rules |
 | External | Crash-free, parse failures ≤ baseline + delta, optional rate cap, `sql_parse_compiled_failures` gate for Spellbook |
+| Synthetic scale | Clean 2k/10k scan budgets plus a 10k PR replay: median ≤30s, max ≤45s, peak RSS ≤1 GiB, committed change, resolved base finding, and base context required |
 
 Details: [Benchmark calibration](../../design/benchmark-calibration.md).
 

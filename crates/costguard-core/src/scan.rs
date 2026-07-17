@@ -6,9 +6,9 @@ use crate::baseline::{
 use crate::branch_scan::{
     finding_delta_diagnostics, run_branch_diagnostics, BranchScanInput, BranchScanRun,
 };
-use crate::config::ScanConfig;
+use crate::config::{ResolvedScanRequest, ScanConfig, DEFAULT_MAX_TOTAL_BASE_BYTES};
 use crate::dbt_graph::enrich_pr_summary;
-use crate::dbt_load::{detect_checksum_mismatches, load_dbt_project};
+use crate::dbt_load::{detect_checksum_mismatches, load_dbt_project, manifest_checksum_counts};
 use crate::gates::evaluate_gates;
 use crate::governance::{load_managed_policy, validate_local_policy_controls, ManagedPolicy};
 use crate::metadata_report::{
@@ -31,10 +31,55 @@ use std::path::{Path, PathBuf};
 /// Run a full project scan and return diagnostics, metrics, and optional cost summary.
 pub fn scan(config: &ScanConfig) -> Result<ScanResult> {
     crate::validate_scan_config(config)?;
-    run_scan(config)
+    Ok(run_scan(config, DEFAULT_MAX_TOTAL_BASE_BYTES)?.result)
 }
 
-fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
+/// Run a scan with project-resolved execution safety limits.
+pub fn scan_resolved(request: &ResolvedScanRequest) -> Result<ScanResult> {
+    crate::validate_scan_config(&request.config)?;
+    let max_total_base_bytes = if request.max_total_base_bytes == 0 {
+        DEFAULT_MAX_TOTAL_BASE_BYTES
+    } else {
+        request.max_total_base_bytes
+    };
+    Ok(run_scan(&request.config, max_total_base_bytes)?.result)
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct ReadinessFacts {
+    pub analyzable_files: usize,
+    pub sql_parse_failures: usize,
+    pub sql_parse_other_failures: usize,
+    pub sql_parse_compiled_failures: usize,
+    pub dbt_project_present: bool,
+    pub manifest_path: Option<PathBuf>,
+    pub manifest_stale: bool,
+    pub manifest_checksum_checked: usize,
+    pub manifest_checksum_mismatches: usize,
+    pub metadata_warning_kinds: Vec<MetadataWarningKind>,
+}
+
+pub(crate) struct ScanExecution {
+    pub result: ScanResult,
+    pub readiness: ReadinessFacts,
+}
+
+pub(crate) fn scan_with_facts(
+    config: &ScanConfig,
+    max_total_base_bytes: u64,
+) -> Result<ScanExecution> {
+    crate::validate_scan_config(config)?;
+    run_scan(
+        config,
+        if max_total_base_bytes == 0 {
+            DEFAULT_MAX_TOTAL_BASE_BYTES
+        } else {
+            max_total_base_bytes
+        },
+    )
+}
+
+fn run_scan(config: &ScanConfig, max_total_base_bytes: u64) -> Result<ScanExecution> {
     let started = std::time::Instant::now();
     let started_at = chrono::Utc::now();
     let root = config
@@ -48,6 +93,7 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
     let plan = build_scan_plan(&root, config, &discovery_options)?;
 
     let loaded = load_project_and_metadata(config, &root, &plan)?;
+    let mut readiness = loaded.readiness.clone();
     let owner_resolver = OwnerResolver::load(&root, &config.owners)?;
 
     let policy_digest = managed_policy
@@ -99,6 +145,7 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
             started_at,
             baseline: baseline.as_ref(),
             policy_digest: &policy_digest,
+            max_total_base_bytes,
         })?
     } else {
         None
@@ -154,6 +201,10 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
     );
     metrics.baselined_findings = baselined_findings;
     metrics.new_findings = diagnostics.len();
+    readiness.analyzable_files = metrics.counts.sql + metrics.counts.yaml + metrics.counts.python;
+    readiness.sql_parse_failures = metrics.sql_parse_failures;
+    readiness.sql_parse_other_failures = metrics.sql_parse_other_failures;
+    readiness.sql_parse_compiled_failures = metrics.sql_parse_compiled_failures;
 
     let context_report = if plan.pr_mode {
         Some(build_context_report(
@@ -191,35 +242,38 @@ fn run_scan(config: &ScanConfig) -> Result<ScanResult> {
         cost_summary: cost_summary.as_ref(),
     });
     let completed_at = chrono::Utc::now();
-    Ok(ScanResult {
-        run: RunMetadata {
-            id: format!(
-                "scan-{}-{}",
-                started_at.timestamp_millis(),
-                std::process::id()
-            ),
-            started_at: started_at.to_rfc3339(),
-            completed_at: completed_at.to_rfc3339(),
-            duration_ms: started.elapsed().as_millis().try_into().unwrap_or(u64::MAX),
-            tool_version: env!("CARGO_PKG_VERSION").to_string(),
+    Ok(ScanExecution {
+        result: ScanResult {
+            run: RunMetadata {
+                id: format!(
+                    "scan-{}-{}",
+                    started_at.timestamp_millis(),
+                    std::process::id()
+                ),
+                started_at: started_at.to_rfc3339(),
+                completed_at: completed_at.to_rfc3339(),
+                duration_ms: started.elapsed().as_millis().try_into().unwrap_or(u64::MAX),
+                tool_version: env!("CARGO_PKG_VERSION").to_string(),
+            },
+            policy: managed_policy
+                .as_ref()
+                .map(ManagedPolicy::metadata)
+                .unwrap_or_else(|| PolicyMetadata {
+                    digest: "local-unmanaged".into(),
+                    version: env!("CARGO_PKG_VERSION").into(),
+                    scope: "local".into(),
+                }),
+            diagnostics,
+            counts: metrics.counts.clone(),
+            metrics,
+            file_parse_status: target_parse_status,
+            pr_summary,
+            context: context_report,
+            cost_summary,
+            analysis,
+            identity_scheme: Some(costguard_protocol::IDENTITY_SCHEME_SEMANTIC_V1.into()),
         },
-        policy: managed_policy
-            .as_ref()
-            .map(ManagedPolicy::metadata)
-            .unwrap_or_else(|| PolicyMetadata {
-                digest: "local-unmanaged".into(),
-                version: env!("CARGO_PKG_VERSION").into(),
-                scope: "local".into(),
-            }),
-        diagnostics,
-        counts: metrics.counts.clone(),
-        metrics,
-        file_parse_status: target_parse_status,
-        pr_summary,
-        context: context_report,
-        cost_summary,
-        analysis,
-        identity_scheme: Some(costguard_protocol::IDENTITY_SCHEME_SEMANTIC_V1.into()),
+        readiness,
     })
 }
 
@@ -233,6 +287,7 @@ struct ProjectLoad {
     yaml_parse_failures: usize,
     dbt_project_parse_failures: usize,
     metadata_warnings_len: usize,
+    readiness: ReadinessFacts,
 }
 
 fn load_project_and_metadata(
@@ -242,6 +297,20 @@ fn load_project_and_metadata(
 ) -> Result<ProjectLoad> {
     let union_files = plan.union_files();
     let dbt_load = load_dbt_project(root, config, &union_files)?;
+    let metadata_warning_kinds = dbt_load
+        .warnings
+        .iter()
+        .map(|warning| warning.kind.clone())
+        .collect::<Vec<_>>();
+    let (manifest_checksum_checked, manifest_checksum_mismatches) = dbt_load
+        .project
+        .as_ref()
+        .map(|project| manifest_checksum_counts(project, &union_files))
+        .unwrap_or_default();
+    let dbt_project_present = crate::dbt_load::scan_roots(root, &config.paths)
+        .iter()
+        .any(|scan_root| scan_root.join("dbt_project.yml").is_file());
+    let manifest_path = dbt_load.manifest_path.clone();
     let mut checksum_warnings = Vec::new();
     if plan.pr_mode {
         if let Some(dbt) = &dbt_load.project {
@@ -297,6 +366,15 @@ fn load_project_and_metadata(
         yaml_parse_failures,
         dbt_project_parse_failures,
         metadata_warnings_len,
+        readiness: ReadinessFacts {
+            dbt_project_present,
+            manifest_path,
+            manifest_stale,
+            manifest_checksum_checked,
+            manifest_checksum_mismatches,
+            metadata_warning_kinds,
+            ..ReadinessFacts::default()
+        },
     })
 }
 

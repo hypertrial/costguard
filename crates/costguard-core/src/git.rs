@@ -8,7 +8,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::error::Error;
 use std::ffi::OsString;
 use std::fmt;
-use std::io::Write;
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
 
@@ -159,42 +159,53 @@ pub fn file_at_ref(root: &Path, base: &str, path: &Path) -> Result<Option<String
     )
 }
 
+#[allow(dead_code)] // compatibility wrapper for callers that only need per-file limits
 pub fn files_at_commit_with_limit(
     root: &Path,
     commit: &str,
     paths: &[(PathBuf, u64)],
 ) -> Result<HashMap<PathBuf, Option<String>>> {
+    files_at_commit_with_total_limit(root, commit, paths, u64::MAX)
+}
+
+pub(crate) fn files_at_commit_with_total_limit(
+    root: &Path,
+    commit: &str,
+    paths: &[(PathBuf, u64)],
+    max_total_bytes: u64,
+) -> Result<HashMap<PathBuf, Option<String>>> {
+    files_at_commit_with_budget(root, commit, paths, 0, max_total_bytes)
+}
+
+pub(crate) fn files_at_commit_with_budget(
+    root: &Path,
+    commit: &str,
+    paths: &[(PathBuf, u64)],
+    initial_total_bytes: u64,
+    max_total_bytes: u64,
+) -> Result<HashMap<PathBuf, Option<String>>> {
     if paths.is_empty() {
         return Ok(HashMap::new());
     }
-    let specs = paths
-        .iter()
-        .map(|(path, _)| format!("{commit}:{}", path.to_string_lossy()))
-        .collect::<Vec<_>>();
-    let mut child = spawn_git(root, &["cat-file", "--batch", "-Z"])?;
-    {
-        let stdin = child
-            .stdin
-            .as_mut()
-            .context("failed to open git cat-file stdin")?;
-        for spec in &specs {
-            stdin.write_all(spec.as_bytes())?;
-            stdin.write_all(&[0])?;
-        }
-    }
+    let specs = object_specs_at_commit(root, commit, paths)?;
+    let mut child = spawn_git(root, &["cat-file", "--batch-check", "-Z"])?;
+    let writer = write_batch_specs_async(&mut child, specs.clone())?;
     let output = child.wait_with_output()?;
+    finish_batch_writer(writer)?;
     if !output.status.success() {
         return Err(GitCommandError::from_output(
-            "git cat-file --batch -Z",
+            "git cat-file --batch-check -Z",
             output.status,
             &output.stderr,
         )
         .into());
     }
 
-    let mut result = HashMap::new();
+    let mut approved = Vec::new();
+    let mut result = HashMap::with_capacity(paths.len());
     let mut offset = 0usize;
-    for (path, limit) in paths {
+    let mut total_bytes = initial_total_bytes;
+    for ((path, limit), spec) in paths.iter().zip(&specs) {
         let header_end = output.stdout[offset..]
             .iter()
             .position(|byte| *byte == 0)
@@ -208,14 +219,7 @@ pub fn files_at_commit_with_limit(
             continue;
         }
 
-        let header = String::from_utf8_lossy(header);
-        let mut fields = header.split_whitespace();
-        let _object_name = fields.next().unwrap_or_default();
-        let object_type = fields.next().unwrap_or_default();
-        let observed = fields
-            .next()
-            .and_then(|value| value.parse::<u64>().ok())
-            .with_context(|| format!("invalid git blob size for {}", path.display()))?;
+        let (object_type, observed) = parse_batch_header(header, path)?;
         if object_type != "blob" {
             anyhow::bail!("git object for {} is not a file", path.display());
         }
@@ -227,37 +231,245 @@ pub fn files_at_commit_with_limit(
                 limit
             );
         }
-        let size = observed as usize;
-        let content_end = offset
-            .checked_add(size)
-            .context("git cat-file content overflow")?;
-        if output.stdout.len() < content_end + 1 {
+        total_bytes = total_bytes
+            .checked_add(observed)
+            .context("base file aggregate size overflow")?;
+        if total_bytes > max_total_bytes {
             anyhow::bail!(
-                "git cat-file truncated content for {} (expected {} bytes)",
-                path.display(),
-                size
+                "base snapshot is {} bytes, exceeding configured aggregate limit of {} bytes",
+                total_bytes,
+                max_total_bytes
             );
         }
-        let content = &output.stdout[offset..content_end];
-        if output.stdout[content_end] != 0 {
-            anyhow::bail!(
-                "git cat-file content for {} is not NUL-terminated",
-                path.display()
-            );
-        }
-        offset = content_end + 1;
-        let text = String::from_utf8(content.to_vec())
-            .with_context(|| format!("base file {} is not valid UTF-8", path.display()))?;
-        result.insert(path.clone(), Some(text));
+        approved.push((path, spec, observed));
     }
     if offset != output.stdout.len() {
         anyhow::bail!(
-            "git cat-file returned {} trailing bytes after {} paths",
+            "git cat-file --batch-check returned {} trailing bytes after {} paths",
             output.stdout.len() - offset,
             paths.len()
         );
     }
+
+    if approved.is_empty() {
+        return Ok(result);
+    }
+    let approved_specs = approved
+        .iter()
+        .map(|(_, spec, _)| (*spec).clone())
+        .collect::<Vec<_>>();
+    let mut child = spawn_git(root, &["cat-file", "--batch", "-Z"])?;
+    let writer = write_batch_specs_async(&mut child, approved_specs)?;
+    let stdout = child
+        .stdout
+        .take()
+        .context("failed to open git cat-file stdout")?;
+    let mut reader = BufReader::new(stdout);
+    let read_result = (|| -> Result<()> {
+        for (path, _, expected_size) in approved {
+            let header = read_nul_field(&mut reader, path)?;
+            let (object_type, observed) = parse_batch_header(&header, path)?;
+            if object_type != "blob" || observed != expected_size {
+                anyhow::bail!(
+                    "git object for {} changed after size preflight",
+                    path.display()
+                );
+            }
+            let size = usize::try_from(observed).context("git blob is too large to read")?;
+            let mut content = vec![0u8; size];
+            reader.read_exact(&mut content).with_context(|| {
+                format!(
+                    "git cat-file truncated content for {} (expected {} bytes)",
+                    path.display(),
+                    size
+                )
+            })?;
+            let mut terminator = [0u8; 1];
+            reader.read_exact(&mut terminator).with_context(|| {
+                format!(
+                    "git cat-file content for {} has no terminator",
+                    path.display()
+                )
+            })?;
+            if terminator[0] != 0 {
+                anyhow::bail!(
+                    "git cat-file content for {} is not NUL-terminated",
+                    path.display()
+                );
+            }
+            let text = String::from_utf8(content)
+                .with_context(|| format!("base file {} is not valid UTF-8", path.display()))?;
+            result.insert(path.clone(), Some(text));
+        }
+        let mut trailing = [0u8; 1];
+        if reader.read(&mut trailing)? != 0 {
+            anyhow::bail!("git cat-file returned trailing bytes after approved paths");
+        }
+        Ok(())
+    })();
+    drop(reader);
+    if read_result.is_err() {
+        let _ = child.kill();
+    }
+    let write_result = finish_batch_writer(writer);
+    let output = child.wait_with_output()?;
+    if !output.status.success() {
+        return Err(GitCommandError::from_output(
+            "git cat-file --batch -Z",
+            output.status,
+            &output.stderr,
+        )
+        .into());
+    }
+    write_result?;
+    read_result?;
     Ok(result)
+}
+
+fn write_batch_specs_async(
+    child: &mut std::process::Child,
+    specs: Vec<OsString>,
+) -> Result<std::thread::JoinHandle<Result<()>>> {
+    let mut stdin = child
+        .stdin
+        .take()
+        .context("failed to open git cat-file stdin")?;
+    Ok(std::thread::spawn(move || {
+        for spec in specs {
+            stdin.write_all(spec.as_os_str().as_encoded_bytes())?;
+            stdin.write_all(&[0])?;
+        }
+        Ok(())
+    }))
+}
+
+fn finish_batch_writer(writer: std::thread::JoinHandle<Result<()>>) -> Result<()> {
+    writer
+        .join()
+        .map_err(|_| anyhow::anyhow!("git cat-file input writer panicked"))?
+}
+
+fn object_specs_at_commit(
+    root: &Path,
+    commit: &str,
+    paths: &[(PathBuf, u64)],
+) -> Result<Vec<OsString>> {
+    const MAX_PATHSPEC_BYTES: usize = 128 * 1024;
+    const MAX_PATHS_PER_QUERY: usize = 512;
+
+    let mut object_ids = HashMap::with_capacity(paths.len());
+    let mut chunk = Vec::new();
+    let mut chunk_bytes = 0usize;
+    for (path, _) in paths {
+        let path_bytes = path.as_os_str().as_encoded_bytes().len();
+        if path.as_os_str().is_empty() || path_bytes > MAX_PATHSPEC_BYTES {
+            continue;
+        }
+        if !chunk.is_empty()
+            && (chunk.len() == MAX_PATHS_PER_QUERY
+                || chunk_bytes.saturating_add(path_bytes) > MAX_PATHSPEC_BYTES)
+        {
+            load_object_ids(root, commit, &chunk, &mut object_ids)?;
+            chunk.clear();
+            chunk_bytes = 0;
+        }
+        chunk.push(path.as_path());
+        chunk_bytes = chunk_bytes.saturating_add(path_bytes);
+    }
+    if !chunk.is_empty() {
+        load_object_ids(root, commit, &chunk, &mut object_ids)?;
+    }
+
+    Ok(paths
+        .iter()
+        .map(|(path, _)| {
+            object_ids
+                .get(path)
+                .cloned()
+                .unwrap_or_else(|| commit_path_spec(commit, path))
+        })
+        .collect())
+}
+
+fn load_object_ids(
+    root: &Path,
+    commit: &str,
+    paths: &[&Path],
+    object_ids: &mut HashMap<PathBuf, OsString>,
+) -> Result<()> {
+    let pathspecs = paths
+        .iter()
+        .map(|path| {
+            let mut pathspec = OsString::from(":(literal)");
+            pathspec.push(path);
+            pathspec
+        })
+        .collect::<Vec<_>>();
+    let output = Command::new("git")
+        .args(["ls-tree", "-z", "--full-tree", commit, "--"])
+        .args(&pathspecs)
+        .current_dir(root)
+        .output()
+        .with_context(|| format!("failed to execute git ls-tree for {commit}"))?;
+    if !output.status.success() {
+        return Err(GitCommandError::from_output(
+            "git ls-tree -z --full-tree",
+            output.status,
+            &output.stderr,
+        )
+        .into());
+    }
+
+    let wanted = paths.iter().copied().collect::<BTreeSet<_>>();
+    for record in output.stdout.split(|byte| *byte == 0) {
+        if record.is_empty() {
+            continue;
+        }
+        let separator = record
+            .iter()
+            .position(|byte| *byte == b'\t')
+            .context("git ls-tree returned a malformed record")?;
+        let metadata = std::str::from_utf8(&record[..separator])
+            .context("git ls-tree returned invalid metadata")?;
+        let object_id = metadata
+            .split_whitespace()
+            .nth(2)
+            .context("git ls-tree record is missing an object ID")?;
+        let path = path_from_git_bytes(&record[separator + 1..]);
+        if wanted.contains(path.as_path()) {
+            object_ids.insert(path, OsString::from(object_id));
+        }
+    }
+    Ok(())
+}
+
+fn commit_path_spec(commit: &str, path: &Path) -> OsString {
+    let mut spec = OsString::from(commit);
+    spec.push(":");
+    spec.push(path);
+    spec
+}
+
+fn read_nul_field(reader: &mut impl BufRead, path: &Path) -> Result<Vec<u8>> {
+    let mut field = Vec::new();
+    let read = reader.read_until(0, &mut field)?;
+    if read == 0 || field.pop() != Some(0) {
+        anyhow::bail!("git cat-file truncated header for {}", path.display());
+    }
+    Ok(field)
+}
+
+fn parse_batch_header<'a>(header: &'a [u8], path: &Path) -> Result<(&'a str, u64)> {
+    let header = std::str::from_utf8(header)
+        .with_context(|| format!("invalid git blob header for {}", path.display()))?;
+    let mut fields = header.split_whitespace();
+    let _object_name = fields.next().unwrap_or_default();
+    let object_type = fields.next().unwrap_or_default();
+    let observed = fields
+        .next()
+        .and_then(|value| value.parse::<u64>().ok())
+        .with_context(|| format!("invalid git blob size for {}", path.display()))?;
+    Ok((object_type, observed))
 }
 
 fn parse_name_status(bytes: &[u8]) -> Result<(BTreeSet<PathBuf>, BTreeSet<PathBuf>)> {
@@ -567,10 +779,172 @@ mod tests {
         GIT_SPAWN_COUNT.with(|count| {
             assert_eq!(
                 count.get(),
-                1,
-                "expected one git subprocess for batch blob load"
+                2,
+                "expected one preflight and one content subprocess"
             );
         });
+    }
+
+    #[test]
+    fn batch_load_drains_output_while_writing_more_than_pipe_capacity() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let root = tempdir.path();
+        fs::write(root.join("model.sql"), "select 1\n").expect("write model");
+        git(root, &["init"]);
+        git(root, &["config", "user.email", "costguard@example.com"]);
+        git(root, &["config", "user.name", "Costguard Test"]);
+        git(root, &["add", "."]);
+        git(root, &["commit", "-m", "initial"]);
+        let commit = resolve_base_commit(root, "HEAD").expect("base commit");
+        let requests = vec![(PathBuf::from("model.sql"), 1024); 5_000];
+
+        let files = files_at_commit_with_total_limit(root, &commit, &requests, 100_000)
+            .expect("batch load");
+
+        assert_eq!(files[Path::new("model.sql")].as_deref(), Some("select 1\n"));
+    }
+
+    #[test]
+    fn aggregate_limit_is_checked_before_content_is_loaded() {
+        GIT_SPAWN_COUNT.with(|count| count.set(0));
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let root = tempdir.path();
+        fs::write(root.join("a.sql"), "123").expect("write a");
+        fs::write(root.join("b.sql"), "456").expect("write b");
+        git(root, &["init"]);
+        git(root, &["config", "user.email", "costguard@example.com"]);
+        git(root, &["config", "user.name", "Costguard Test"]);
+        git(root, &["add", "."]);
+        git(root, &["commit", "-m", "initial"]);
+        let commit = resolve_base_commit(root, "HEAD").expect("base commit");
+
+        GIT_SPAWN_COUNT.with(|count| count.set(0));
+        let error = files_at_commit_with_total_limit(
+            root,
+            &commit,
+            &[(PathBuf::from("a.sql"), 3), (PathBuf::from("b.sql"), 3)],
+            5,
+        )
+        .expect_err("aggregate limit");
+        assert!(error.to_string().contains("aggregate limit"), "{error:#}");
+        GIT_SPAWN_COUNT.with(|count| {
+            assert_eq!(count.get(), 1, "content process must not start");
+        });
+    }
+
+    #[test]
+    fn aggregate_limit_includes_preflighted_local_manifest_bytes() {
+        GIT_SPAWN_COUNT.with(|count| count.set(0));
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let root = tempdir.path();
+        fs::write(root.join("model.sql"), "123").expect("write model");
+        git(root, &["init"]);
+        git(root, &["config", "user.email", "costguard@example.com"]);
+        git(root, &["config", "user.name", "Costguard Test"]);
+        git(root, &["add", "."]);
+        git(root, &["commit", "-m", "initial"]);
+        let commit = resolve_base_commit(root, "HEAD").expect("base commit");
+
+        let error =
+            files_at_commit_with_budget(root, &commit, &[(PathBuf::from("model.sql"), 3)], 3, 5)
+                .expect_err("manifest plus source must exceed aggregate limit");
+
+        assert!(error.to_string().contains("aggregate limit"), "{error:#}");
+        GIT_SPAWN_COUNT.with(|count| {
+            assert_eq!(count.get(), 1, "content process must not start");
+        });
+    }
+
+    #[test]
+    fn batch_load_preserves_missing_and_unusual_paths() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let root = tempdir.path();
+        let unusual = PathBuf::from("new\nline.sql");
+        fs::write(root.join(&unusual), "select 1\n").expect("write unusual path");
+        git(root, &["init"]);
+        git(root, &["config", "user.email", "costguard@example.com"]);
+        git(root, &["config", "user.name", "Costguard Test"]);
+        git(root, &["add", "."]);
+        git(root, &["commit", "-m", "initial"]);
+        let commit = resolve_base_commit(root, "HEAD").expect("base commit");
+
+        let files = files_at_commit_with_total_limit(
+            root,
+            &commit,
+            &[
+                (unusual.clone(), 1024),
+                (PathBuf::from("missing.sql"), 1024),
+            ],
+            1024,
+        )
+        .expect("batch load");
+
+        assert_eq!(files[&unusual].as_deref(), Some("select 1\n"));
+        assert_eq!(files[Path::new("missing.sql")], None);
+    }
+
+    #[test]
+    fn batch_load_treats_git_pathspec_metacharacters_literally() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let root = tempdir.path();
+        let literal = PathBuf::from("models/[a].sql");
+        fs::create_dir_all(root.join("models")).expect("create models");
+        fs::write(root.join(&literal), "select 'literal'\n").expect("write literal path");
+        fs::write(root.join("models/a.sql"), "select 'glob match'\n").expect("write glob path");
+        git(root, &["init"]);
+        git(root, &["config", "user.email", "costguard@example.com"]);
+        git(root, &["config", "user.name", "Costguard Test"]);
+        git(root, &["add", "."]);
+        git(root, &["commit", "-m", "initial"]);
+        let commit = resolve_base_commit(root, "HEAD").expect("base commit");
+
+        let files =
+            files_at_commit_with_total_limit(root, &commit, &[(literal.clone(), 1024)], 1024)
+                .expect("load literal path");
+
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[&literal].as_deref(), Some("select 'literal'\n"));
+    }
+
+    #[test]
+    fn batch_preflight_rejects_non_blob_objects() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let root = tempdir.path();
+        fs::write(root.join("model.sql"), "select 1\n").expect("write model");
+        git(root, &["init"]);
+        git(root, &["config", "user.email", "costguard@example.com"]);
+        git(root, &["config", "user.name", "Costguard Test"]);
+        git(root, &["add", "."]);
+        git(root, &["commit", "-m", "initial"]);
+        let commit = resolve_base_commit(root, "HEAD").expect("base commit");
+
+        let error =
+            files_at_commit_with_total_limit(root, &commit, &[(PathBuf::new(), 1024)], 1024)
+                .expect_err("tree must be rejected");
+
+        assert!(error.to_string().contains("not a file"), "{error:#}");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn batch_load_preserves_non_utf8_paths() {
+        use std::os::unix::ffi::OsStringExt;
+
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let root = tempdir.path();
+        let path = PathBuf::from(OsString::from_vec(b"model-\xff.sql".to_vec()));
+        fs::write(root.join(&path), "select 1\n").expect("write non-UTF-8 path");
+        git(root, &["init"]);
+        git(root, &["config", "user.email", "costguard@example.com"]);
+        git(root, &["config", "user.name", "Costguard Test"]);
+        git(root, &["add", "."]);
+        git(root, &["commit", "-m", "initial"]);
+        let commit = resolve_base_commit(root, "HEAD").expect("base commit");
+
+        let files = files_at_commit_with_total_limit(root, &commit, &[(path.clone(), 1024)], 1024)
+            .expect("load non-UTF-8 path");
+
+        assert_eq!(files[&path].as_deref(), Some("select 1\n"));
     }
 
     fn git(root: &Path, args: &[&str]) {

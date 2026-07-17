@@ -3,7 +3,7 @@ use costguard_cost::format_cost_line;
 use costguard_diagnostics::{Diagnostic, Severity};
 
 use crate::markdown::summary_sentence;
-use crate::{escape_github_message, escape_github_property};
+use crate::{escape_github_message, escape_github_property, has_full_usd_coverage};
 
 pub(crate) fn render_github(result: &ScanResult) -> String {
     let mut output = String::new();
@@ -74,7 +74,7 @@ pub(crate) fn render_github(result: &ScanResult) -> String {
         if let Some(cost) = result.cost_summary.as_ref() {
             if let Some(impact) = cost.pr_impact.as_ref() {
                 if let Some(net) = impact.net.monthly_p50 {
-                    let mapped = if cost.coverage.models_with_usd < cost.coverage.models_total {
+                    let mapped = if !has_full_usd_coverage(cost) {
                         "mapped "
                     } else {
                         ""

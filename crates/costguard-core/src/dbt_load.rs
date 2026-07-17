@@ -14,6 +14,7 @@ pub(crate) struct DbtLoadOutcome {
     pub project: Option<DbtProject>,
     pub warnings: Vec<MetadataWarning>,
     pub metadata_only: bool,
+    pub manifest_path: Option<PathBuf>,
 }
 
 #[derive(Default)]
@@ -265,7 +266,38 @@ pub(crate) fn load_dbt_project(
         project,
         warnings,
         metadata_only,
+        manifest_path,
     })
+}
+
+pub(crate) fn manifest_checksum_counts(
+    project: &DbtProject,
+    files: &[ProjectFile],
+) -> (usize, usize) {
+    let sources = files
+        .iter()
+        .filter(|file| file.kind == FileKind::DbtSqlModel)
+        .map(|file| (&file.root_relative_path, file.text.as_str()))
+        .collect::<HashMap<_, _>>();
+    let mut checked = 0usize;
+    let mut mismatches = 0usize;
+    for model in project.models.values() {
+        if !model_has_sha256_checksum(model) {
+            continue;
+        }
+        let Some(path) = model.path.as_ref() else {
+            continue;
+        };
+        checked += 1;
+        let expected = model.checksum.as_deref().expect("checksum checked");
+        if sources
+            .get(path)
+            .is_none_or(|source| costguard_diagnostics::hex_sha256(source.as_bytes()) != expected)
+        {
+            mismatches += 1;
+        }
+    }
+    (checked, mismatches)
 }
 
 pub(crate) fn enrich_dbt_project_from_files(

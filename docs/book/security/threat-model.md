@@ -10,7 +10,7 @@ Costguard analyzes untrusted repository content locally or in CI without warehou
 | --- | --- | --- |
 | Repository scan | SQL, YAML, Python, manifests, config, baselines | Parsers, size limits, no SQL execution, explicit paths |
 | Filesystem | Symlinks, archive entries, output paths | Workspace-relative operation, safe archive layout validation, data-only extraction |
-| Git | Base refs, changed paths, history | NUL-safe rename-aware discovery, immutable resolved base commit, blob-size preflight, no shell interpolation |
+| Git | Base refs, changed paths, history | NUL-safe rename-aware discovery, immutable resolved base commit, per-blob and aggregate preflight, exact-length streaming, no shell interpolation |
 | Release download | Archives, checksums, attestations | 64 MiB archive and 4 KiB sidecar limits, HTTPS timeout/retry, exact checksum filename, SHA-256, producer-bound attestation |
 | Signed policy | Bundle, trust store, scopes, exceptions | Canonical Ed25519 verification, validity/revocation checks, conflict rejection, fail closed |
 | Offline cost imports | Catalog and query-history files | Local parsing only, advisory output, no warehouse connection |
@@ -20,7 +20,7 @@ Costguard analyzes untrusted repository content locally or in CI without warehou
 
 ### Malicious repository content
 
-Repository files may be crafted to trigger parser failures, excessive work, misleading paths, or diagnostic injection. Costguard treats content as data, escapes CI/Markdown output, records parse failures, applies the 5 MiB default source limit and 512 MiB default manifest limit to head and base content, and uses strict analysis mode to reject incomplete coverage. Manifest reads use metadata and bounded-read checks; base git blobs are size-checked before `git show`. Oversized comparison inputs fail closed without partial deltas. Scale and Spellbook gates bound expected runtime and memory, but deliberately adversarial parser inputs within configured limits remain a residual denial-of-service risk.
+Repository files may be crafted to trigger parser failures, excessive work, misleading paths, or diagnostic injection. Costguard treats content as data, escapes CI/Markdown output, records parse failures, applies the 5 MiB default source limit, 512 MiB manifest limit, and 2 GiB aggregate base-snapshot limit, and uses strict analysis mode to reject incomplete coverage. Base replay resolves only requested paths in bounded literal-path chunks, then uses `git cat-file --batch-check -Z` to validate existence, blob type, individual size, and total size for every requested object. Only an approved request is streamed with exact blob lengths; an explicit local base manifest consumes the same budget. Oversized comparison inputs fail closed without partial deltas. Scale and Spellbook gates bound expected runtime and memory, but deliberately adversarial parser inputs within configured limits remain a residual denial-of-service risk.
 
 ### Filesystem escape and archive traversal
 
@@ -28,7 +28,7 @@ Scans should be rooted in the configured project. Release archives are accepted 
 
 ### Git argument and changed-file manipulation
 
-Git refs and paths are passed as subprocess arguments, not concatenated shell commands. Changed paths and rename pairs are parsed with NUL delimiters. Costguard resolves the merge-base commit once, preflights blob sizes with `git cat-file --batch-check -Z`, and reads content from that immutable commit. CI must check out full history for PR comparison. A malicious base selection can change scan scope, so protected workflows must set the base centrally and prevent untrusted workflow edits.
+Git refs and paths are passed as subprocess arguments, not concatenated shell commands. Changed paths, rename pairs, and batch object requests use NUL delimiters. Costguard resolves the merge-base commit once, approves the complete base snapshot before reading content, and reads only from that immutable commit. CI must check out full history for PR comparison. `doctor` parses workflow YAML and requires one complete Costguard job, so comments and unrelated jobs cannot spoof readiness. A malicious base selection can still change scan scope, so protected workflows must set the base centrally and prevent untrusted workflow edits.
 
 ### Release substitution
 
@@ -50,7 +50,7 @@ Catalog and query-history imports can contain operational metadata. Costguard re
 
 ### CI and supply-chain administration
 
-Compromise of GitHub organization owners, release environments, signing keys, or required-check configuration can bypass repository controls. Mitigations include least-privilege workflow permissions, SHA-pinned Actions, protected release environments, signed annotated tags, private vulnerability reporting, dependency alerts, push protection, branch rules, and full-history secret/customer-data scanning before public launch.
+Compromise of GitHub organization owners, release environments, signing keys, or required-check configuration can bypass repository controls. Mitigations include least-privilege workflow permissions, SHA-pinned Actions, protected release environments, signed annotated tags, exact-SHA push CI plus independently dispatched benchmark qualification, private vulnerability reporting, dependency alerts, push protection, branch rules, and full-history secret/customer-data scanning before public launch.
 
 ## Residual risks
 

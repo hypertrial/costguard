@@ -1,6 +1,7 @@
 use crate::config::CostConfig;
 use crate::import::validate_cost_bundle;
 use crate::pricing::price_per_byte;
+use crate::units::{price_bytes, BytesPerMonthEstimate};
 use crate::Estimate;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
@@ -124,7 +125,16 @@ fn aggregate_model_observations(
         if let Some(price) = price {
             let monthly_bytes = total_bytes / months;
             (
-                Some(Estimate::from_point(monthly_bytes, Some(0.15)) * price),
+                Some(
+                    price_bytes(
+                        BytesPerMonthEstimate::from_raw(Estimate::from_point(
+                            monthly_bytes,
+                            Some(0.15),
+                        )),
+                        price,
+                    )
+                    .raw(),
+                ),
                 "observed-bytes".to_string(),
             )
         } else {

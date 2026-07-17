@@ -16,6 +16,8 @@ Minor releases may add optional JSON fields, configuration keys, commands, flags
 
 The v2.6 correctness repair keeps schema v4 and restores the documented units: `monthly_p*`, `annual_p50`, `project_p*_usd`, and `savings_p*_usd` are monetary only and are `null` when USD is unavailable. Full-project relative volume uses additive `CostFigure.gb_months_p50`; additive coverage fields report the USD-mapped model count and fraction. Unpriced byte values are never serialized as dollars.
 
+The v2.6 hardening remains source-compatible for existing public Rust configuration and cost structs. `ResolvedScanRequest` and `receipt_trend` are additive APIs; legacy `scan`, `doctor`, `load_config`, and configuration structs retain their existing signatures and use the 2 GiB base-replay default. Receipt comparison accepts tolerant schema-v4 JSON, requires `diagnostics`, and ignores unknown fields.
+
 The moving `v2` Action tag may advance only to compatible stable `2.x` releases. Use exact `v2.6.0` when immutable behavior is required.
 
 Preview warehouse dialects may receive parser and rule refinements in minor releases. Production-supported dialects retain the stable contracts above.

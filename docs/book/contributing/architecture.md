@@ -52,18 +52,19 @@ flowchart LR
 
 A typical `costguard pr` run:
 
-1. **Git** — `costguard-core` resolves changed files against the base branch.
-2. **Scanner** — `costguard-scanner` classifies files (SQL, dbt YAML, Python, manifest).
-3. **dbt + SQL** — `costguard-dbt` loads manifest/YAML; `costguard-sql` parses SQL and extracts shape features.
-4. **Rules** — `costguard-rules` evaluates 46 SQLCOST rules against each file's `RuleContext`.
-5. **Policy + baseline** — `costguard-core` applies signed policy and finding baselines.
-6. **Cost** — `costguard-cost` attaches advisory cost estimates when configured.
-7. **Output** — `costguard-output` renders text, JSON, GitHub annotations, markdown, or SARIF.
+1. **Configuration** — one resolver applies defaults, file configuration, command settings, explicit overrides, normalization, and validation.
+2. **Git** — `costguard-core` resolves changed files, preflights every base object and the aggregate budget, then streams approved blobs from the immutable base commit.
+3. **Scanner** — `costguard-scanner` classifies files (SQL, dbt YAML, Python, manifest).
+4. **dbt + SQL** — `costguard-dbt` loads manifest/YAML; `costguard-sql` parses SQL and merges AST/regex features under an explicit per-field policy.
+5. **Rules** — `costguard-rules` evaluates 46 SQLCOST rules against each file's `RuleContext`.
+6. **Policy + baseline** — `costguard-core` applies signed policy and finding baselines.
+7. **Cost** — `costguard-cost` keeps internal USD/month and bytes/month estimates in distinct newtypes and converts to public schema-v4 fields only at compatibility boundaries.
+8. **Output** — `costguard-output` renders text, JSON, GitHub annotations, markdown, or SARIF; typed receipt comparison and shared presentation decisions live here.
 
 ## Crate responsibilities
 
-- **costguard-cli** — Clap CLI: `scan`, `explain`, `pr`, `cost`, `rules`, `baseline`, `policy`.
-- **costguard-core** — Scan orchestration, configuration loading, baseline management, git integration for PR scans, `ScanResult`.
+- **costguard-cli** — Thin binary entry point, separate Clap root, and command dispatch/handlers for `scan`, `explain`, `pr`, `cost`, `rules`, `policy`, `init`, and `doctor`.
+- **costguard-core** — Scan orchestration, configuration resolution, readiness facts, baseline management, budgeted git integration for PR scans, `ScanResult`.
 - **costguard-scanner** — File discovery, classification, and size/ignore filtering.
 - **costguard-sql** — Warehouse enum, sqlparser dialect mapping, Jinja stripping, feature extraction.
 - **costguard-dbt** — Manifest JSON, YAML schema, `dbt_project.yml` folder configs, model graph.

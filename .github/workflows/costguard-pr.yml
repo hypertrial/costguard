@@ -28,5 +28,6 @@ jobs:
           format: github
           install-mode: source
           analysis-policy: standard
+          block-only-new: true
           pr-comment: true
           github-token: ${{ github.token }}

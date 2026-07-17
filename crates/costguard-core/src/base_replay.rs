@@ -29,6 +29,7 @@ pub(crate) struct BaseBranchScanInput<'a> {
     pub started_at: chrono::DateTime<chrono::Utc>,
     pub baseline: Option<&'a crate::FindingBaseline>,
     pub policy_digest: &'a str,
+    pub max_total_base_bytes: u64,
 }
 
 pub(crate) fn run_base_branch_scan(
@@ -43,6 +44,7 @@ pub(crate) fn run_base_branch_scan(
         started_at,
         baseline,
         policy_digest,
+        max_total_base_bytes,
     } = input;
     if !plan.pr_mode {
         return Ok(None);
@@ -51,8 +53,8 @@ pub(crate) fn run_base_branch_scan(
         .base_commit
         .as_deref()
         .context("PR scan plan is missing its resolved base commit")?;
-    let base_dbt = load_base_dbt_project(root, commit, config)?;
-    let base_files = load_base_branch_files(root, commit, plan, config)?;
+    let (base_dbt, base_files) =
+        load_base_snapshot(root, commit, plan, config, max_total_base_bytes)?;
     let mut base_dbt = base_dbt.unwrap_or_default();
     let mut base_metadata_warnings = Vec::new();
     enrich_dbt_project_from_files(
@@ -104,32 +106,97 @@ pub(crate) fn run_base_branch_scan(
     }))
 }
 
-fn load_base_dbt_project(
+fn load_base_snapshot(
     root: &Path,
     commit: &str,
+    plan: &ScanPlan,
     config: &ScanConfig,
-) -> Result<Option<DbtProject>> {
-    if let Some(path) = &config.base_manifest_path {
-        let resolved = if path.is_absolute() {
+    max_total_base_bytes: u64,
+) -> Result<(Option<DbtProject>, BaseBranchFiles)> {
+    let rel_paths = base_context_rel_paths(root, plan, config);
+    let max_file_bytes = costguard_scanner::effective_max_file_bytes(config.max_file_bytes);
+    let mut requests = rel_paths
+        .iter()
+        .cloned()
+        .map(|path| (path, max_file_bytes))
+        .collect::<Vec<_>>();
+
+    let explicit_manifest = config.base_manifest_path.as_ref().map(|path| {
+        if path.is_absolute() {
             path.clone()
         } else {
             root.join(path)
-        };
-        return Ok(Some(parse_manifest_with_limit(
-            &resolved,
-            config.max_manifest_bytes,
-        )?));
+        }
+    });
+    let git_manifest = explicit_manifest
+        .is_none()
+        .then(|| base_manifest_rel_path(root, config));
+    if let Some(path) = &git_manifest {
+        requests.push((path.clone(), config.max_manifest_bytes));
     }
-    let manifest_rel = base_manifest_rel_path(root, config);
-    let mut files = crate::git::files_at_commit_with_limit(
+
+    let local_manifest_bytes = if let Some(path) = &explicit_manifest {
+        let observed = std::fs::metadata(path)
+            .with_context(|| format!("failed to inspect manifest {}", path.display()))?
+            .len();
+        if observed > config.max_manifest_bytes {
+            anyhow::bail!(
+                "manifest {} is {} bytes, exceeding configured limit of {} bytes",
+                path.display(),
+                observed,
+                config.max_manifest_bytes
+            );
+        }
+        if observed > max_total_base_bytes {
+            anyhow::bail!(
+                "base snapshot is {} bytes, exceeding configured aggregate limit of {} bytes",
+                observed,
+                max_total_base_bytes
+            );
+        }
+        observed
+    } else {
+        0
+    };
+    let mut contents = crate::git::files_at_commit_with_budget(
         root,
         commit,
-        &[(manifest_rel.clone(), config.max_manifest_bytes)],
+        &requests,
+        local_manifest_bytes,
+        max_total_base_bytes,
     )?;
-    let Some(text) = files.remove(&manifest_rel).flatten() else {
-        return Ok(None);
+
+    let base_dbt = match (explicit_manifest, git_manifest) {
+        (Some(path), _) => Some(parse_manifest_with_limit(&path, config.max_manifest_bytes)?),
+        (None, Some(path)) => contents
+            .remove(&path)
+            .flatten()
+            .map(|text| parse_manifest_text(&text))
+            .transpose()?,
+        (None, None) => None,
     };
-    Ok(Some(parse_manifest_text(&text)?))
+
+    let mut context = Vec::new();
+    for rel_path in rel_paths {
+        let Some(text) = contents.remove(&rel_path).flatten() else {
+            continue;
+        };
+        let path = root.join(&rel_path);
+        context.push(ProjectFile {
+            kind: costguard_scanner::classify(&path, root),
+            path,
+            root_relative_path: rel_path.clone(),
+            line_index: costguard_diagnostics::LineIndex::new(&text),
+            text,
+        });
+    }
+    context.sort_by(|left, right| left.path.cmp(&right.path));
+    let targets = context
+        .iter()
+        .filter(|file| plan.base_changed_paths.contains(&file.root_relative_path))
+        .cloned()
+        .collect();
+    Ok((base_dbt, BaseBranchFiles { targets, context }))
 }
 
 fn base_manifest_rel_path(root: &Path, config: &ScanConfig) -> PathBuf {
@@ -155,12 +222,11 @@ struct BaseBranchFiles {
     context: Vec<ProjectFile>,
 }
 
-fn load_base_branch_files(
+fn base_context_rel_paths(
     root: &Path,
-    commit: &str,
     plan: &ScanPlan,
     config: &ScanConfig,
-) -> Result<BaseBranchFiles> {
+) -> std::collections::BTreeSet<PathBuf> {
     let mut rel_paths = plan
         .context
         .iter()
@@ -188,34 +254,7 @@ fn load_base_branch_files(
                 | costguard_scanner::FileKind::Python
         )
     });
-    let max_file_bytes = costguard_scanner::effective_max_file_bytes(config.max_file_bytes);
-    let requests = rel_paths
-        .iter()
-        .cloned()
-        .map(|path| (path, max_file_bytes))
-        .collect::<Vec<_>>();
-    let mut contents = crate::git::files_at_commit_with_limit(root, commit, &requests)?;
-    let mut context = Vec::new();
-    for rel_path in rel_paths {
-        let Some(text) = contents.remove(&rel_path).flatten() else {
-            continue;
-        };
-        let path = root.join(&rel_path);
-        context.push(ProjectFile {
-            kind: costguard_scanner::classify(&path, root),
-            path,
-            root_relative_path: rel_path.clone(),
-            line_index: costguard_diagnostics::LineIndex::new(&text),
-            text,
-        });
-    }
-    context.sort_by(|left, right| left.path.cmp(&right.path));
-    let targets = context
-        .iter()
-        .filter(|file| plan.base_changed_paths.contains(&file.root_relative_path))
-        .cloned()
-        .collect();
-    Ok(BaseBranchFiles { targets, context })
+    rel_paths
 }
 
 fn base_path_is_ignored(root: &Path, path: &Path, ignored: &[PathBuf]) -> bool {

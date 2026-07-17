@@ -14,7 +14,11 @@ sys.path.insert(0, str(SCRIPTS))
 from check_docs import check_internal, markdown_files, slug  # noqa: E402
 from costguard_tooling import max_rss_bytes, summarize_measurements  # noqa: E402
 from generate_rule_docs import validate_rule_guides  # noqa: E402
-from scale_check import threshold_violations, write_report  # noqa: E402
+from scale_check import (  # noqa: E402
+    pr_replay_threshold_violations,
+    threshold_violations,
+    write_report,
+)
 
 
 class GateScriptTests(unittest.TestCase):
@@ -134,7 +138,7 @@ class GateScriptTests(unittest.TestCase):
     def test_scale_failure_report_is_written(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "scale.json"
-            report = {"version": 3, "targets": {}}
+            report = {"version": 4, "targets": {}}
             status = write_report(path, report, ["runtime exceeded"])
 
             payload = json.loads(path.read_text(encoding="utf-8"))
@@ -164,6 +168,26 @@ class GateScriptTests(unittest.TestCase):
             self.assertEqual(proc.returncode, 1)
             self.assertEqual(payload["status"], "failed")
             self.assertTrue(payload["violations"])
+
+    def test_pr_replay_thresholds_cover_runtime_rss_and_base_proof(self) -> None:
+        replay = {
+            "runtime_median_ms": 30_001,
+            "runtime_max_ms": 45_001,
+            "max_rss_bytes": 1_001,
+            "violations": ["PR replay did not report the committed model change"],
+        }
+
+        violations = pr_replay_threshold_violations(
+            replay,
+            max_median_ms=30_000,
+            max_runtime_ms=45_000,
+            max_rss_bytes=1_000,
+        )
+
+        self.assertTrue(any("committed model change" in item for item in violations))
+        self.assertTrue(any("median runtime" in item for item in violations))
+        self.assertTrue(any("max runtime" in item for item in violations))
+        self.assertTrue(any("max RSS" in item for item in violations))
 
     def test_markdown_files_includes_readme(self) -> None:
         paths = markdown_files()

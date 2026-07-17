@@ -17,6 +17,7 @@ mod multipliers;
 mod observations;
 mod pricing;
 mod query_history;
+mod units;
 mod volume;
 
 pub use annotate::{
