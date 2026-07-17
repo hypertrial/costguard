@@ -4,7 +4,7 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ## [Unreleased]
 
-## [2.6.0] - 2026-07-05
+## [2.6.0] - 2026-07-17
 
 ### Added
 
