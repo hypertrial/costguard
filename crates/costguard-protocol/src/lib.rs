@@ -17,8 +17,8 @@ pub const POLICY_SCHEMA_VERSION: u8 = 2;
 pub const BASELINE_SCHEMA_VERSION: u8 = 3;
 pub const IDENTITY_SCHEME_SEMANTIC_V1: &str = "semantic-v1";
 
-/// Canonical built-in rule IDs (SQLCOST001..SQLCOST046).
-pub const BUILTIN_RULE_IDS: [&str; 46] = [
+/// Canonical built-in rule IDs (SQLCOST001..SQLCOST047).
+pub const BUILTIN_RULE_IDS: [&str; 47] = [
     "SQLCOST001",
     "SQLCOST002",
     "SQLCOST003",
@@ -65,6 +65,7 @@ pub const BUILTIN_RULE_IDS: [&str; 46] = [
     "SQLCOST044",
     "SQLCOST045",
     "SQLCOST046",
+    "SQLCOST047",
 ];
 
 /// Returns true when `rule_id` is a known built-in SQLCOST rule.

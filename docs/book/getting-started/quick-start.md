@@ -73,7 +73,7 @@ Enterprise strict mode passes only configured governance values:
     policy-repository: acme/warehouse
 ```
 
-The Action does not install or compile dbt. See [Requirements](requirements.md) for manifest, git history, and compile guidance.
+The Action does not install or compile dbt or Rocky. See [Requirements](requirements.md) for manifest, git history, and compile guidance, and [Rocky integration](rocky.md) for sealed head/base artifact workflows.
 
 Pair `fail-on: high` with `min-confidence: high` on macro-heavy dbt projects so PR gates keep AST-confirmed findings and ignore regex-only noise (for example SQLCOST012 comma joins detected without a successful parse).
 

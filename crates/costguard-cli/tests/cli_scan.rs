@@ -77,6 +77,576 @@ fn scan_markdown_outputs_pr_summary_shape() {
 }
 
 #[test]
+fn sealed_rocky_dsl_runs_shared_sql_rules_without_fake_source_location() {
+    let repo = tempfile::tempdir().unwrap();
+    fs::create_dir_all(repo.path().join("models/marts")).unwrap();
+    fs::create_dir_all(repo.path().join("target")).unwrap();
+    fs::write(repo.path().join("rocky.toml"), "version = 1\n").unwrap();
+    fs::write(
+        repo.path().join("models/marts/orders.rocky"),
+        "from raw_orders\nselect *\n",
+    )
+    .unwrap();
+    git(repo.path(), &["init"]);
+    git(repo.path(), &["config", "user.email", "test@example.com"]);
+    git(repo.path(), &["config", "user.name", "Test"]);
+    git(
+        repo.path(),
+        &["add", "rocky.toml", "models/marts/orders.rocky"],
+    );
+    git(repo.path(), &["commit", "-m", "fixture"]);
+    fs::write(
+        repo.path().join("target/rocky-compile.json"),
+        serde_json::to_string(&serde_json::json!({
+            "version": "0.9.0",
+            "command": "compile",
+            "has_errors": false,
+            "models_detail": [{
+                "name": "orders",
+                "strategy": {"type": "view"},
+                "target": {"catalog": "lake", "schema": "mart", "table": "orders"},
+                "depends_on": [],
+                "tags": {"owner": "@finance"}
+            }],
+            "expanded_sql": {"orders": "select * from raw_orders"}
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+
+    let capture = costguard_command()
+        .current_dir(repo.path())
+        .args(["rocky", "capture", "--compile", "target/rocky-compile.json"])
+        .output()
+        .unwrap();
+    assert!(
+        capture.status.success(),
+        "{}",
+        String::from_utf8_lossy(&capture.stderr)
+    );
+
+    let scan = costguard_command()
+        .current_dir(repo.path())
+        .args(["scan", "--format", "json", "--fail-on", "low"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        scan.status.code(),
+        Some(1),
+        "{}",
+        String::from_utf8_lossy(&scan.stdout)
+    );
+    let payload: serde_json::Value = serde_json::from_slice(&scan.stdout).unwrap();
+    assert_eq!(payload["metrics"]["counts"]["sql"], 1);
+    let finding = payload["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|diagnostic| diagnostic["rule_id"] == "SQLCOST001")
+        .unwrap();
+    assert_eq!(finding["path"], "models/marts/orders.rocky");
+    assert_eq!(finding["source_provenance"], "compiled_unmapped");
+    assert_eq!(finding["line"], 1);
+    assert!(finding["compiled_line"].as_u64().is_some());
+
+    let github = costguard_command()
+        .current_dir(repo.path())
+        .args(["scan", "--format", "github", "--fail-on", "low"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&github.stdout);
+    assert!(stdout.contains("compiled SQL location"), "{stdout}");
+    assert!(stdout.contains("models/marts/orders.rocky"), "{stdout}");
+    assert!(
+        !stdout.contains("file=models/marts/orders.rocky"),
+        "{stdout}"
+    );
+}
+
+#[test]
+fn rocky_capture_uses_configured_paths_by_default() {
+    let repo = tempfile::tempdir().unwrap();
+    fs::create_dir_all(repo.path().join("config")).unwrap();
+    fs::create_dir_all(repo.path().join("rocky_models")).unwrap();
+    fs::create_dir_all(repo.path().join("target")).unwrap();
+    fs::write(
+        repo.path().join("costguard.toml"),
+        "[rocky]\nconfig_path = \"config/rocky.toml\"\nmodels_dir = \"rocky_models\"\nartifact_path = \"artifacts/rocky.json\"\n",
+    )
+    .unwrap();
+    fs::write(repo.path().join("config/rocky.toml"), "version = 1\n").unwrap();
+    fs::write(repo.path().join("rocky_models/orders.sql"), "select 1\n").unwrap();
+    git(repo.path(), &["init"]);
+    git(repo.path(), &["config", "user.email", "test@example.com"]);
+    git(repo.path(), &["config", "user.name", "Test"]);
+    git(
+        repo.path(),
+        &[
+            "add",
+            "costguard.toml",
+            "config/rocky.toml",
+            "rocky_models/orders.sql",
+        ],
+    );
+    git(repo.path(), &["commit", "-m", "fixture"]);
+    fs::write(
+        repo.path().join("target/compile.json"),
+        serde_json::to_vec(&serde_json::json!({
+            "version": "0.9.0",
+            "command": "compile",
+            "has_errors": false,
+            "models_detail": [{
+                "name": "orders",
+                "strategy": {"type": "view"},
+                "target": {"catalog": "lake", "schema": "mart", "table": "orders"},
+                "depends_on": [],
+                "tags": {}
+            }],
+            "expanded_sql": {"orders": "select 1"}
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+
+    let output = costguard_command()
+        .current_dir(repo.path())
+        .args(["rocky", "capture", "--compile", "target/compile.json"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(repo.path().join("artifacts/rocky.json").is_file());
+}
+
+#[test]
+fn rocky_sql_fallback_runs_shared_rules_but_skips_dbt_configuration_rules() {
+    let repo = tempfile::tempdir().unwrap();
+    fs::create_dir_all(repo.path().join("models/marts")).unwrap();
+    fs::write(repo.path().join("rocky.toml"), "version = 1\n").unwrap();
+    fs::write(
+        repo.path().join("models/marts/orders.sql"),
+        "{{ config(materialized='incremental') }}\nselect * from raw_orders\n",
+    )
+    .unwrap();
+
+    let output = costguard_command()
+        .current_dir(repo.path())
+        .args(["scan", "--format", "json", "--fail-on", "critical"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let payload: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let rule_ids = payload["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|diagnostic| diagnostic["rule_id"].as_str())
+        .collect::<Vec<_>>();
+    assert!(rule_ids.contains(&"SQLCOST001"), "{rule_ids:?}");
+    assert!(rule_ids.contains(&"SQLCOST047"), "{rule_ids:?}");
+    assert!(!rule_ids.contains(&"SQLCOST004"), "{rule_ids:?}");
+    assert!(!rule_ids.contains(&"SQLCOST005"), "{rule_ids:?}");
+
+    git(repo.path(), &["init"]);
+    git(repo.path(), &["config", "user.email", "test@example.com"]);
+    git(repo.path(), &["config", "user.name", "Test"]);
+    git(
+        repo.path(),
+        &["add", "rocky.toml", "models/marts/orders.sql"],
+    );
+    git(repo.path(), &["commit", "-m", "base"]);
+    let base = std::process::Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+    let base = String::from_utf8(base.stdout).unwrap().trim().to_string();
+    fs::write(
+        repo.path().join("models/marts/orders.sql"),
+        "{{ config(materialized='incremental') }}\nselect * from raw_orders\n-- changed\n",
+    )
+    .unwrap();
+    git(repo.path(), &["add", "models/marts/orders.sql"]);
+    git(repo.path(), &["commit", "-m", "head"]);
+
+    let output = costguard_command()
+        .current_dir(repo.path())
+        .args([
+            "pr",
+            "--base",
+            &base,
+            "--block-only-new=true",
+            "--format",
+            "json",
+            "--fail-on",
+            "low",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let payload: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(
+        payload["pr_summary"]["rocky_artifact_integrity"]["unclassified_head_findings"],
+        1
+    );
+    for status in ["introduced", "regressed", "resolved", "unchanged"] {
+        assert_eq!(payload["pr_summary"]["finding_delta"][status], 0);
+    }
+}
+
+#[test]
+fn incomplete_rocky_comparison_does_not_report_removed_base_findings() {
+    let repo = tempfile::tempdir().unwrap();
+    fs::create_dir_all(repo.path().join("models")).unwrap();
+    fs::write(repo.path().join("rocky.toml"), "version = 1\n").unwrap();
+    fs::write(
+        repo.path().join("models/orders.sql"),
+        "select * from raw_orders\n",
+    )
+    .unwrap();
+    git(repo.path(), &["init"]);
+    git(repo.path(), &["config", "user.email", "test@example.com"]);
+    git(repo.path(), &["config", "user.name", "Test"]);
+    git(repo.path(), &["add", "rocky.toml", "models/orders.sql"]);
+    git(repo.path(), &["commit", "-m", "base"]);
+    let base = std::process::Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+    let base = String::from_utf8(base.stdout).unwrap().trim().to_string();
+    fs::remove_file(repo.path().join("models/orders.sql")).unwrap();
+    git(repo.path(), &["add", "models/orders.sql"]);
+    git(repo.path(), &["commit", "-m", "remove rocky model"]);
+
+    let output = costguard_command()
+        .current_dir(repo.path())
+        .args([
+            "pr",
+            "--base",
+            &base,
+            "--block-only-new=true",
+            "--format",
+            "json",
+            "--fail-on",
+            "low",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let payload: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(
+        payload["pr_summary"]["rocky_artifact_integrity"]["comparison_complete"],
+        false
+    );
+    assert_eq!(payload["pr_summary"]["finding_delta"]["resolved"], 0);
+}
+
+#[test]
+fn mixed_dbt_and_rocky_projects_allow_namespaces_but_reject_source_conflicts() {
+    let repo = tempfile::tempdir().unwrap();
+    fs::create_dir_all(repo.path().join("models/marts")).unwrap();
+    fs::create_dir_all(repo.path().join("rocky_models/marts")).unwrap();
+    fs::create_dir_all(repo.path().join("target")).unwrap();
+    fs::write(
+        repo.path().join("costguard.toml"),
+        "[rocky]\nmodels_dir = \"rocky_models\"\n",
+    )
+    .unwrap();
+    fs::write(repo.path().join("dbt_project.yml"), "name: mixed\n").unwrap();
+    fs::write(repo.path().join("rocky.toml"), "version = 1\n").unwrap();
+    fs::write(
+        repo.path().join("models/marts/orders.sql"),
+        "select * from raw.dbt_orders\n",
+    )
+    .unwrap();
+    fs::write(
+        repo.path().join("rocky_models/marts/orders.rocky"),
+        "from raw_orders\nselect *\n",
+    )
+    .unwrap();
+    git(repo.path(), &["init"]);
+    git(repo.path(), &["config", "user.email", "test@example.com"]);
+    git(repo.path(), &["config", "user.name", "Test"]);
+    git(repo.path(), &["add", "."]);
+    git(repo.path(), &["commit", "-m", "fixture"]);
+    fs::write(
+        repo.path().join("target/rocky-compile.json"),
+        serde_json::to_vec(&serde_json::json!({
+            "version": "0.9.0",
+            "command": "compile",
+            "has_errors": false,
+            "models_detail": [{
+                "name": "orders",
+                "strategy": {"type": "view"},
+                "target": {"catalog": "lake", "schema": "mart", "table": "orders"},
+                "depends_on": [],
+                "tags": {}
+            }],
+            "expanded_sql": {"orders": "select * from raw.rocky_orders"}
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let capture = costguard_command()
+        .current_dir(repo.path())
+        .args([
+            "rocky",
+            "capture",
+            "--compile",
+            "target/rocky-compile.json",
+            "--models-dir",
+            "rocky_models",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        capture.status.success(),
+        "{}",
+        String::from_utf8_lossy(&capture.stderr)
+    );
+
+    let scan = costguard_command()
+        .current_dir(repo.path())
+        .args(["scan", "--format", "json", "--fail-on", "critical"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        scan.status.code(),
+        Some(0),
+        "{}\n{}",
+        String::from_utf8_lossy(&scan.stdout),
+        String::from_utf8_lossy(&scan.stderr)
+    );
+    let payload: serde_json::Value = serde_json::from_slice(&scan.stdout).unwrap();
+    let select_star = payload["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|diagnostic| diagnostic["rule_id"] == "SQLCOST001")
+        .collect::<Vec<_>>();
+    assert_eq!(select_star.len(), 2, "{select_star:?}");
+
+    fs::write(
+        repo.path().join("target/manifest.json"),
+        serde_json::to_vec(&serde_json::json!({
+            "nodes": {
+                "model.pkg.orders": {
+                    "resource_type": "model",
+                    "name": "orders",
+                    "original_file_path": "rocky_models/marts/orders.rocky",
+                    "compiled_code": "select * from raw.rocky_orders"
+                }
+            }
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let conflict = costguard_command()
+        .current_dir(repo.path())
+        .args(["scan", "--format", "json", "--fail-on", "critical"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        conflict.status.code(),
+        Some(2),
+        "{}\n{}",
+        String::from_utf8_lossy(&conflict.stdout),
+        String::from_utf8_lossy(&conflict.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&conflict.stderr)
+            .contains("both claim rocky_models/marts/orders.rocky"),
+        "{}",
+        String::from_utf8_lossy(&conflict.stderr)
+    );
+}
+
+#[test]
+fn rocky_pr_compares_verified_base_and_reports_framework_details() {
+    let repo = tempfile::tempdir().unwrap();
+    fs::create_dir_all(repo.path().join("models/marts")).unwrap();
+    fs::create_dir_all(repo.path().join("target")).unwrap();
+    fs::write(repo.path().join("rocky.toml"), "version = 1\n").unwrap();
+    fs::write(
+        repo.path().join("models/marts/orders.sql"),
+        "select id from raw_orders\n",
+    )
+    .unwrap();
+    git(repo.path(), &["init"]);
+    git(repo.path(), &["config", "user.email", "test@example.com"]);
+    git(repo.path(), &["config", "user.name", "Test"]);
+    git(
+        repo.path(),
+        &["add", "rocky.toml", "models/marts/orders.sql"],
+    );
+    git(repo.path(), &["commit", "-m", "base"]);
+    let base = std::process::Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+    let base = String::from_utf8(base.stdout).unwrap().trim().to_string();
+    write_rocky_compile(repo.path(), "select id from raw_orders");
+    capture_rocky(repo.path());
+    fs::copy(
+        repo.path().join("target/costguard-rocky.json"),
+        repo.path().join("base-rocky.json"),
+    )
+    .unwrap();
+
+    fs::write(
+        repo.path().join("models/marts/orders.sql"),
+        "select * from raw_orders\n",
+    )
+    .unwrap();
+    git(repo.path(), &["add", "models/marts/orders.sql"]);
+    git(repo.path(), &["commit", "-m", "head"]);
+    write_rocky_compile(repo.path(), "select * from raw_orders");
+    capture_rocky(repo.path());
+
+    let output = costguard_command()
+        .current_dir(repo.path())
+        .args([
+            "pr",
+            "--base",
+            &base,
+            "--base-rocky-artifact",
+            "base-rocky.json",
+            "--format",
+            "json",
+            "--fail-on",
+            "low",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let payload: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(
+        payload["pr_summary"]["rocky_artifact_integrity"]["comparison_complete"],
+        true
+    );
+    assert_eq!(
+        payload["pr_summary"]["changed_model_details"][0]["framework"],
+        "rocky"
+    );
+    assert_eq!(payload["pr_summary"]["finding_delta"]["introduced"], 1);
+    assert_eq!(
+        payload["pr_summary"]["recommended_commands"][0]["framework"],
+        "rocky"
+    );
+
+    let incomplete = costguard_command()
+        .current_dir(repo.path())
+        .args([
+            "pr",
+            "--base",
+            &base,
+            "--block-only-new=true",
+            "--format",
+            "json",
+            "--fail-on",
+            "low",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(incomplete.status.code(), Some(0));
+    let payload: serde_json::Value = serde_json::from_slice(&incomplete.stdout).unwrap();
+    assert_eq!(
+        payload["pr_summary"]["rocky_artifact_integrity"]["comparison_complete"],
+        false
+    );
+    assert_eq!(
+        payload["pr_summary"]["rocky_artifact_integrity"]["unclassified_head_findings"],
+        1
+    );
+    assert_eq!(payload["pr_summary"]["finding_delta"]["introduced"], 0);
+    assert_eq!(payload["pr_summary"]["finding_delta"]["regressed"], 0);
+
+    let strict = costguard_command()
+        .current_dir(repo.path())
+        .args([
+            "pr",
+            "--base",
+            &base,
+            "--analysis-policy",
+            "strict",
+            "--format",
+            "json",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(strict.status.code(), Some(1));
+    let payload: serde_json::Value = serde_json::from_slice(&strict.stdout).unwrap();
+    assert!(payload["analysis"]["violations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|violation| violation["code"] == "rocky_artifact_integrity"));
+}
+
+fn write_rocky_compile(root: &std::path::Path, sql: &str) {
+    fs::write(
+        root.join("target/rocky-compile.json"),
+        serde_json::to_string(&serde_json::json!({
+            "version": "0.9.0",
+            "command": "compile",
+            "has_errors": false,
+            "models_detail": [{
+                "name": "orders",
+                "strategy": {"type": "view"},
+                "target": {"catalog": "lake", "schema": "mart", "table": "orders"},
+                "depends_on": [],
+                "tags": {"owner": "@finance"}
+            }],
+            "expanded_sql": {"orders": sql}
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+}
+
+fn capture_rocky(root: &std::path::Path) {
+    let output = costguard_command()
+        .current_dir(root)
+        .args(["rocky", "capture", "--compile", "target/rocky-compile.json"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
 fn pr_mode_scans_changed_files_but_uses_transitive_context() {
     let tempdir = tempfile::tempdir().expect("tempdir");
     let root = tempdir.path();

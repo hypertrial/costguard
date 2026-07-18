@@ -86,7 +86,7 @@ pub(crate) fn render_markdown(result: &ScanResult) -> String {
             output.push('\n');
         }
         output.push_str("## PR Impact\n\n");
-        markdown_list(&mut output, "Changed dbt models", &summary.changed_models);
+        markdown_list(&mut output, "Changed models", &summary.changed_models);
         markdown_list(
             &mut output,
             "Affected downstream",
@@ -143,6 +143,18 @@ pub(crate) fn render_markdown(result: &ScanResult) -> String {
                 integrity.checksum_mismatches
             ));
         }
+        if let Some(integrity) = &summary.rocky_artifact_integrity {
+            output.push_str(&format!(
+                "Rocky artifact integrity: head {:?}, base {:?}; comparison {}.\n\n",
+                integrity.head,
+                integrity.base,
+                if integrity.comparison_complete {
+                    "complete"
+                } else {
+                    "incomplete"
+                }
+            ));
+        }
         if let Some(enforcement) = &summary.enforcement_preview {
             if enforcement.block_only_new {
                 output.push_str("Active enforcement: block_only_new=true.\n\n");
@@ -162,6 +174,16 @@ pub(crate) fn render_markdown(result: &ScanResult) -> String {
             output.push_str(&format!(
                 "Recommended dbt command:\n\n```bash\n{}\n```\n\n",
                 escape_fenced_code(command)
+            ));
+        }
+        for command in summary
+            .recommended_commands
+            .iter()
+            .filter(|command| command.framework == "rocky")
+        {
+            output.push_str(&format!(
+                "Recommended Rocky command:\n\n```bash\n{}\n```\n\n",
+                escape_fenced_code(&command.command)
             ));
         }
     }

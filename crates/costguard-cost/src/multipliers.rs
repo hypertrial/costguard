@@ -72,6 +72,7 @@ pub fn is_infrastructure_rule(rule_id: &str) -> bool {
             | "SQLCOST027"
             | "SQLCOST045"
             | "SQLCOST046"
+            | "SQLCOST047"
     )
 }
 

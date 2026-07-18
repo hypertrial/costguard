@@ -1,27 +1,35 @@
 use crate::branch_scan::{
     finding_delta_diagnostics, run_branch_diagnostics, BranchScanInput, BranchScanRun,
 };
-use crate::config::ScanConfig;
+use crate::config::{RockyConfig, ScanConfig};
 use crate::dbt_load::enrich_dbt_project_from_files;
 use crate::governance::ManagedPolicy;
 use crate::owners::OwnerResolver;
+use crate::rocky::{
+    load_rocky_artifact, verify_rocky_artifact_at_commit, RockyIntegrityState, RockyProject,
+};
 use crate::scan_plan::ScanPlan;
-use crate::Project;
+use crate::{LoadedProject, Project};
 use anyhow::{Context, Result};
 use costguard_dbt::{
     apply_dbt_project_configs_from_files, parse_dbt_project_with_warnings, parse_manifest_text,
     parse_manifest_with_limit, DbtProject,
 };
 use costguard_scanner::ProjectFile;
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 pub(crate) struct BaseBranchScan {
     pub diagnostics: Vec<costguard_diagnostics::Diagnostic>,
     pub cost_summary: Option<costguard_cost::ProjectCostSummary>,
+    pub rocky_state: RockyIntegrityState,
+    pub rocky_messages: Vec<String>,
+    pub rocky_finding_ids: BTreeSet<String>,
 }
 
 pub(crate) struct BaseBranchScanInput<'a> {
     pub config: &'a ScanConfig,
+    pub rocky_config: &'a RockyConfig,
     pub root: &'a Path,
     pub plan: &'a ScanPlan,
     pub owner_resolver: &'a OwnerResolver,
@@ -37,6 +45,7 @@ pub(crate) fn run_base_branch_scan(
 ) -> Result<Option<BaseBranchScan>> {
     let BaseBranchScanInput {
         config,
+        rocky_config,
         root,
         plan,
         owner_resolver,
@@ -55,13 +64,43 @@ pub(crate) fn run_base_branch_scan(
         .context("PR scan plan is missing its resolved base commit")?;
     let (base_dbt, base_files) =
         load_base_snapshot(root, commit, plan, config, max_total_base_bytes)?;
+    let (base_rocky, rocky_state, rocky_messages) =
+        load_base_rocky(root, commit, rocky_config, max_total_base_bytes)?;
     let mut base_dbt = base_dbt.unwrap_or_default();
+    let rocky_owned_paths = base_rocky
+        .as_ref()
+        .map(|rocky| {
+            rocky
+                .source_by_name
+                .values()
+                .cloned()
+                .collect::<BTreeSet<_>>()
+        })
+        .unwrap_or_else(|| fallback_base_rocky_sql_paths(root, rocky_config, &base_files.context));
+    base_dbt.models.retain(|_, model| {
+        model
+            .path
+            .as_ref()
+            .is_none_or(|path| !rocky_owned_paths.contains(path))
+    });
+    let mut base_files = base_files;
+    for file in base_files
+        .context
+        .iter_mut()
+        .chain(base_files.targets.iter_mut())
+    {
+        if rocky_owned_paths.contains(&file.root_relative_path) {
+            file.kind = costguard_scanner::FileKind::Sql;
+        }
+    }
     let mut base_metadata_warnings = Vec::new();
-    enrich_dbt_project_from_files(
-        &mut base_dbt,
-        &base_files.context,
-        &mut base_metadata_warnings,
-    );
+    let dbt_context = base_files
+        .context
+        .iter()
+        .filter(|file| !rocky_owned_paths.contains(&file.root_relative_path))
+        .cloned()
+        .collect::<Vec<_>>();
+    enrich_dbt_project_from_files(&mut base_dbt, &dbt_context, &mut base_metadata_warnings);
     let base_project_files = base_files
         .context
         .iter()
@@ -78,10 +117,37 @@ pub(crate) fn run_base_branch_scan(
         .collect::<Vec<_>>();
     apply_dbt_project_configs_from_files(root, &base_project_files, &mut base_dbt);
     let base_dbt = (!base_dbt.models.is_empty()).then_some(base_dbt);
-    let project = Project {
-        root: root.to_path_buf(),
-        files: base_files.targets,
-        dbt: base_dbt,
+    let mut graph = base_dbt
+        .as_ref()
+        .map(DbtProject::to_project_graph)
+        .unwrap_or_default();
+    let mut compiled_unmapped_paths = Default::default();
+    let mut rocky_inputs = Default::default();
+    if let Some(rocky) = &base_rocky {
+        inject_base_rocky_files(
+            root,
+            commit,
+            plan,
+            rocky,
+            max_total_base_bytes,
+            &mut base_files,
+            &mut compiled_unmapped_paths,
+        )?;
+        graph
+            .merge(rocky.graph.clone())
+            .map_err(|message| anyhow::Error::new(crate::ProjectConfigurationError(message)))?;
+        rocky_inputs = rocky.sealed_inputs.clone();
+    }
+    let project = LoadedProject {
+        project: Project {
+            root: root.to_path_buf(),
+            files: base_files.targets,
+            dbt: base_dbt,
+        },
+        graph,
+        compiled_unmapped_paths,
+        rocky_owned_paths,
+        rocky_inputs,
     };
     let branch = run_branch_diagnostics(
         BranchScanInput {
@@ -100,10 +166,178 @@ pub(crate) fn run_base_branch_scan(
             write_baseline_path: None,
         }),
     )?;
+    let diagnostics = finding_delta_diagnostics(&branch.diagnostics);
+    let rocky_finding_ids = diagnostics
+        .iter()
+        .filter(|diagnostic| is_rocky_diagnostic(&project, diagnostic))
+        .map(|diagnostic| diagnostic.governance.finding_id.clone())
+        .collect();
     Ok(Some(BaseBranchScan {
-        diagnostics: finding_delta_diagnostics(&branch.diagnostics),
+        diagnostics,
         cost_summary: branch.cost_analysis.map(|analysis| analysis.summary),
+        rocky_state,
+        rocky_messages,
+        rocky_finding_ids,
     }))
+}
+
+fn fallback_base_rocky_sql_paths(
+    root: &Path,
+    config: &RockyConfig,
+    files: &[ProjectFile],
+) -> BTreeSet<PathBuf> {
+    if !config.configured {
+        return BTreeSet::new();
+    }
+    let models_dir = config
+        .models_dir
+        .strip_prefix(root)
+        .unwrap_or(&config.models_dir);
+    files
+        .iter()
+        .filter(|file| {
+            file.root_relative_path.starts_with(models_dir)
+                && file
+                    .root_relative_path
+                    .extension()
+                    .and_then(|value| value.to_str())
+                    == Some("sql")
+        })
+        .map(|file| file.root_relative_path.clone())
+        .collect()
+}
+
+fn is_rocky_diagnostic(
+    project: &LoadedProject,
+    diagnostic: &costguard_diagnostics::Diagnostic,
+) -> bool {
+    project
+        .graph
+        .model_for_path(&diagnostic.path)
+        .is_some_and(|model| model.framework == costguard_project::Framework::Rocky)
+        || project.rocky_owned_paths.contains(&diagnostic.path)
+}
+
+fn load_base_rocky(
+    root: &Path,
+    commit: &str,
+    config: &RockyConfig,
+    max_total_base_bytes: u64,
+) -> Result<(Option<RockyProject>, RockyIntegrityState, Vec<String>)> {
+    if !config.configured {
+        return Ok((None, RockyIntegrityState::NotConfigured, Vec::new()));
+    }
+    let Some(path) = &config.base_artifact_path else {
+        return Ok((
+            None,
+            RockyIntegrityState::Missing,
+            vec!["no base Rocky artifact was supplied".into()],
+        ));
+    };
+    let path = if path.is_absolute() {
+        path.clone()
+    } else {
+        root.join(path)
+    };
+    if !path.is_file() {
+        anyhow::bail!(
+            "base Rocky artifact path does not exist: {}",
+            path.display()
+        );
+    }
+    match load_rocky_artifact(&path, config.max_artifact_bytes).and_then(|artifact| {
+        verify_rocky_artifact_at_commit(root, commit, &artifact, max_total_base_bytes)
+    }) {
+        Ok(project) => {
+            let messages = project.unresolved_dependencies.clone();
+            Ok((Some(project), RockyIntegrityState::Verified, messages))
+        }
+        Err(error) => Ok((
+            None,
+            RockyIntegrityState::Invalid,
+            vec![format!("base Rocky artifact is unusable: {error:#}")],
+        )),
+    }
+}
+
+fn inject_base_rocky_files(
+    root: &Path,
+    commit: &str,
+    plan: &ScanPlan,
+    rocky: &RockyProject,
+    max_total_base_bytes: u64,
+    base_files: &mut BaseBranchFiles,
+    compiled_unmapped_paths: &mut std::collections::BTreeSet<PathBuf>,
+) -> Result<()> {
+    let max_file_bytes = costguard_scanner::effective_max_file_bytes(None);
+    let requests = rocky
+        .compiled_by_path
+        .keys()
+        .cloned()
+        .map(|path| (path, max_file_bytes))
+        .collect::<Vec<_>>();
+    let contents =
+        crate::git::files_at_commit_with_budget(root, commit, &requests, 0, max_total_base_bytes)?;
+    let direct = rocky
+        .source_by_name
+        .values()
+        .flat_map(|path| [path.clone(), path.with_extension("toml")])
+        .collect::<std::collections::BTreeSet<_>>();
+    let global_change = plan
+        .base_changed_paths
+        .iter()
+        .any(|path| rocky.sealed_inputs.contains(path) && !direct.contains(path));
+    for (relative, compiled) in &rocky.compiled_by_path {
+        let raw = contents
+            .get(relative)
+            .and_then(|value| value.as_ref())
+            .with_context(|| {
+                format!(
+                    "Rocky source {} is missing at base commit",
+                    relative.display()
+                )
+            })?;
+        let compiled_unmapped = relative.extension().and_then(|value| value.to_str())
+            == Some("rocky")
+            || raw != compiled;
+        let text = if compiled_unmapped {
+            compiled.clone()
+        } else {
+            raw.clone()
+        };
+        let file = ProjectFile {
+            kind: costguard_scanner::FileKind::Sql,
+            path: root.join(relative),
+            root_relative_path: relative.clone(),
+            line_index: costguard_diagnostics::LineIndex::new(&text),
+            text,
+        };
+        base_files
+            .context
+            .retain(|existing| existing.root_relative_path != *relative);
+        base_files.context.push(file.clone());
+        if global_change
+            || plan.base_changed_paths.contains(relative)
+            || plan
+                .base_changed_paths
+                .contains(&relative.with_extension("toml"))
+        {
+            base_files
+                .targets
+                .retain(|existing| existing.root_relative_path != *relative);
+            base_files.targets.push(file);
+            if compiled_unmapped {
+                compiled_unmapped_paths.insert(relative.clone());
+            }
+        }
+    }
+    base_files
+        .context
+        .sort_by(|left, right| left.path.cmp(&right.path));
+    base_files
+        .targets
+        .sort_by(|left, right| left.path.cmp(&right.path));
+    Ok(())
 }
 
 fn load_base_snapshot(

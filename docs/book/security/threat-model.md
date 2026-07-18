@@ -11,6 +11,7 @@ Costguard analyzes untrusted repository content locally or in CI without warehou
 | Repository scan | SQL, YAML, Python, manifests, config, baselines | Parsers, size limits, no SQL execution, explicit paths |
 | Filesystem | Symlinks, archive entries, output paths | Workspace-relative operation, safe archive layout validation, data-only extraction |
 | Git | Base refs, changed paths, history | NUL-safe rename-aware discovery, immutable resolved base commit, per-blob and aggregate preflight, exact-length streaming, no shell interpolation |
+| Rocky artifact | Compile JSON, source map, sealed inputs | Schema and size limits, tracked regular-file inputs, source-map completeness, SHA-256 verification against the working tree and immutable Git commits |
 | Release download | Archives, checksums, attestations | 64 MiB archive and 4 KiB sidecar limits, HTTPS timeout/retry, exact checksum filename, SHA-256, producer-bound attestation |
 | Signed policy | Bundle, trust store, scopes, exceptions | Canonical Ed25519 verification, validity/revocation checks, conflict rejection, fail closed |
 | Offline cost imports | Catalog and query-history files | Local parsing only, advisory output, no warehouse connection |
@@ -21,6 +22,8 @@ Costguard analyzes untrusted repository content locally or in CI without warehou
 ### Malicious repository content
 
 Repository files may be crafted to trigger parser failures, excessive work, misleading paths, or diagnostic injection. Costguard treats content as data, escapes CI/Markdown output, records parse failures, applies the 5 MiB default source limit, 512 MiB manifest limit, and 2 GiB aggregate base-snapshot limit, and uses strict analysis mode to reject incomplete coverage. Base replay resolves only requested paths in bounded literal-path chunks, then uses `git cat-file --batch-check -Z` to validate existence, blob type, individual size, and total size for every requested object. Only an approved request is streamed with exact blob lengths; an explicit local base manifest consumes the same budget. Oversized comparison inputs fail closed without partial deltas. Scale and Spellbook gates bound expected runtime and memory, but deliberately adversarial parser inputs within configured limits remain a residual denial-of-service risk.
+
+Sealed Rocky envelopes are untrusted repository or CI inputs. Capture accepts only tracked, clean regular files inside the project root, rejects traversal and symlink escapes, and maps every compiled model to exactly one sealed source. Analysis uses expanded SQL only after the envelope commit and every input hash match both the current filesystem and immutable Git `HEAD`; base verification reads the same inputs from the resolved comparison commit. Costguard does not establish that the Rocky compiler itself is trustworthy, so CI remains responsible for pinning and securing the Rocky toolchain that produces compile JSON.
 
 ### Filesystem escape and archive traversal
 

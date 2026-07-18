@@ -21,8 +21,8 @@ mod units;
 mod volume;
 
 pub use annotate::{
-    run_cost_analysis, total_p50_usd_per_month, total_savings_gb_months, CostAnalysisResult,
-    CostInputs,
+    run_cost_analysis, run_cost_analysis_for_project, total_p50_usd_per_month,
+    total_savings_gb_months, CostAnalysisResult, CostInputs,
 };
 pub use attribution::{
     build_downstream_counts, build_downstream_ids, build_exposure_counts, summarize_features,

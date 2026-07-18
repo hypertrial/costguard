@@ -18,6 +18,10 @@ The v2.6 correctness repair keeps schema v4 and restores the documented units: `
 
 The v2.6 hardening remains source-compatible for existing public Rust configuration and cost structs. `ResolvedScanRequest` and `receipt_trend` are additive APIs; legacy `scan`, `doctor`, `load_config`, and configuration structs retain their existing signatures and use the 2 GiB base-replay default. Receipt comparison accepts tolerant schema-v4 JSON, requires `diagnostics`, and ignores unknown fields.
 
+First-class Rocky support is additive. JSON remains schema v4 and PR receipts remain version 2: consumers must tolerate optional `changed_model_details[].framework`, `recommended_commands`, and `rocky_artifact_integrity`. Existing `recommended_dbt_command`, `Project.dbt`, dbt public APIs, public cost entry points, and scanner file shapes remain available.
+
+The sealed Rocky envelope sets `schema_version: 1`. Readers tolerate additional Rocky compile fields and unknown future strategies, but reject a different envelope schema, missing expanded SQL, ambiguous source mappings, commit/input mismatches, and oversized artifacts.
+
 The moving `v2` Action tag may advance only to compatible stable `2.x` releases. Use exact `v2.6.0` when immutable behavior is required.
 
 Preview warehouse dialects may receive parser and rule refinements in minor releases. Production-supported dialects retain the stable contracts above.
@@ -30,7 +34,8 @@ Costguard 2.1 uses **semantic finding identity** (`identity_scheme = "semantic-v
 | --- | --- | --- |
 | Finding baseline | v3 | `identity_scheme: "semantic-v1"` |
 | Signed policy document | v2 | `identity_scheme: "semantic-v1"` |
-| JSON scan output | v3 | optional top-level `identity_scheme` |
+| JSON scan output | v4 | optional top-level `identity_scheme` |
+| Sealed Rocky artifact | v1 | `schema_version: 1`, `framework: "rocky"` |
 
 At scan time, Costguard **rejects** baseline v2, policy v1, and any artifact without `identity_scheme: "semantic-v1"`. Deploy the 2.1 binary with baseline v3 and policy v2 together.
 

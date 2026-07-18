@@ -33,10 +33,22 @@ impl ModelIndex {
     }
 
     fn find(&self, path: &Path, name: &str) -> Option<String> {
-        self.by_path.get(path).cloned().or_else(|| {
-            let keys = self.by_name.get(name)?;
-            (keys.len() == 1).then(|| keys.iter().next().expect("one model key").clone())
-        })
+        self.by_path
+            .get(path)
+            .cloned()
+            .or_else(|| {
+                let mut keys = self
+                    .by_path
+                    .iter()
+                    .filter(|(known, _)| path.ends_with(known) || known.ends_with(path))
+                    .map(|(_, key)| key);
+                let first = keys.next()?;
+                keys.next().is_none().then(|| first.clone())
+            })
+            .or_else(|| {
+                let keys = self.by_name.get(name)?;
+                (keys.len() == 1).then(|| keys.iter().next().expect("one model key").clone())
+            })
     }
 
     fn update(
@@ -56,11 +68,13 @@ impl ModelIndex {
                 self.by_path.remove(previous_path);
             }
         }
-        if let Some(previous_name) = previous_name {
-            if let Some(keys) = self.by_name.get_mut(previous_name) {
-                keys.remove(key);
-                if keys.is_empty() {
-                    self.by_name.remove(previous_name);
+        if previous_path.is_none() {
+            if let Some(previous_name) = previous_name {
+                if let Some(keys) = self.by_name.get_mut(previous_name) {
+                    keys.remove(key);
+                    if keys.is_empty() {
+                        self.by_name.remove(previous_name);
+                    }
                 }
             }
         }
@@ -70,6 +84,7 @@ impl ModelIndex {
     fn insert(&mut self, key: &str, path: Option<&Path>, name: &str) {
         if let Some(path) = path {
             self.by_path.insert(path.to_path_buf(), key.to_string());
+            return;
         }
         self.by_name
             .entry(name.to_string())
@@ -454,10 +469,7 @@ mod tests {
     #[test]
     fn model_index_uses_unique_name_fallback() {
         let project = DbtProject {
-            models: HashMap::from([(
-                "model.pkg.orders".into(),
-                model("orders", Some("legacy/orders.sql")),
-            )]),
+            models: HashMap::from([("model.pkg.orders".into(), model("orders", None))]),
             ..DbtProject::default()
         };
         let index = ModelIndex::from_project(&project);
@@ -467,6 +479,37 @@ mod tests {
                 .find(Path::new("models/orders.sql"), "orders")
                 .as_deref(),
             Some("model.pkg.orders")
+        );
+    }
+
+    #[test]
+    fn model_index_does_not_reassign_a_known_different_path_by_name() {
+        let project = DbtProject {
+            models: HashMap::from([(
+                "model.pkg.orders".into(),
+                model("orders", Some("rocky_models/orders.rocky")),
+            )]),
+            ..DbtProject::default()
+        };
+        let index = ModelIndex::from_project(&project);
+
+        assert_eq!(index.find(Path::new("models/orders.sql"), "orders"), None);
+    }
+
+    #[test]
+    fn model_index_matches_a_unique_nested_project_path() {
+        let project = DbtProject {
+            models: HashMap::from([(
+                "model.pkg.orders".into(),
+                model("orders", Some("models/orders.sql")),
+            )]),
+            ..DbtProject::default()
+        };
+        let index = ModelIndex::from_project(&project);
+
+        assert_eq!(
+            index.find(Path::new("warehouse/models/orders.sql"), "orders"),
+            Some("model.pkg.orders".into())
         );
     }
 

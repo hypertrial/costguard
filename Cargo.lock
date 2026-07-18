@@ -190,6 +190,7 @@ dependencies = [
  "costguard-diagnostics",
  "costguard-output",
  "costguard-policy",
+ "costguard-project",
  "costguard-protocol",
  "costguard-rules",
  "costguard-scanner",
@@ -199,6 +200,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "sha2",
  "tempfile",
  "toml",
 ]
@@ -211,6 +213,7 @@ dependencies = [
  "chrono",
  "costguard-dbt",
  "costguard-diagnostics",
+ "costguard-project",
  "costguard-protocol",
  "serde",
  "serde_json",
@@ -222,6 +225,7 @@ name = "costguard-dbt"
 version = "2.6.0"
 dependencies = [
  "anyhow",
+ "costguard-project",
  "regex",
  "serde",
  "serde_json",
@@ -273,6 +277,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "costguard-project"
+version = "2.6.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "costguard-protocol"
 version = "2.6.0"
 dependencies = [
@@ -288,6 +299,7 @@ dependencies = [
  "costguard-dbt",
  "costguard-diagnostics",
  "costguard-policy",
+ "costguard-project",
  "costguard-protocol",
  "costguard-scanner",
  "costguard-sql",

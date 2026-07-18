@@ -38,6 +38,7 @@ python3 scripts/generate_rule_docs.py
 | info | `SQLCOST027` | SQL parse failure | informational | [SQLCOST027](../../rules/SQLCOST027.md) |
 | info | `SQLCOST045` | Stale dbt manifest | informational | [SQLCOST045](../../rules/SQLCOST045.md) |
 | low | `SQLCOST046` | Manifest checksum mismatch | informational | [SQLCOST046](../../rules/SQLCOST046.md) |
+| low | `SQLCOST047` | Rocky artifact integrity issue | informational | [SQLCOST047](../../rules/SQLCOST047.md) |
 | high | `SQLCOST028` | Missing partition or cluster config on large mart model | verified-high | [SQLCOST028](../../rules/SQLCOST028.md) |
 | medium | `SQLCOST029` | Full-refresh-heavy incremental config | verified-high | [SQLCOST029](../../rules/SQLCOST029.md) |
 | high | `SQLCOST030` | Correlated subquery | verified-high | [SQLCOST030](../../rules/SQLCOST030.md) |
@@ -318,6 +319,15 @@ Fix guidance: [SQLCOST045.md](../../rules/SQLCOST045.md)
 Reports when a changed model file's sha256 checksum does not match the loaded manifest.
 
 Fix guidance: [SQLCOST046.md](../../rules/SQLCOST046.md)
+
+### `SQLCOST047` — Rocky artifact integrity issue
+
+**Severity:** low
+**Measured precision tier:** informational
+
+Reports when sealed Rocky compile metadata is missing, stale, or incomplete.
+
+Fix guidance: [SQLCOST047.md](../../rules/SQLCOST047.md)
 
 ### `SQLCOST028` — Missing partition or cluster config on large mart model
 

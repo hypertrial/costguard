@@ -11,6 +11,7 @@ anyhow.workspace = true
 costguard-dbt = { path = "../costguard-dbt" }
 costguard-diagnostics = { path = "../costguard-diagnostics" }
 costguard-policy = { path = "../costguard-policy" }
+costguard-project = { path = "../costguard-project" }
 costguard-scanner = { path = "../costguard-scanner" }
 costguard-sql = { path = "../costguard-sql" }
 regex.workspace = true

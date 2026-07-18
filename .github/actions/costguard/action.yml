@@ -1,5 +1,5 @@
 name: Costguard PR Check
-description: Run costguard pr against changed SQL/dbt files
+description: Run costguard pr against changed SQL, dbt, and Rocky models
 
 inputs:
   base:
@@ -12,6 +12,14 @@ inputs:
     default: generic
   manifest:
     description: Optional explicit dbt manifest path (defaults to target/manifest.json when present)
+    required: false
+    default: ""
+  rocky-artifact:
+    description: Optional sealed Rocky artifact for the current checkout
+    required: false
+    default: ""
+  base-rocky-artifact:
+    description: Optional sealed Rocky artifact for the resolved PR base commit
     required: false
     default: ""
   fail-on:
@@ -39,7 +47,7 @@ inputs:
     required: false
     default: ""
   working-directory:
-    description: Directory containing the dbt project
+    description: Directory containing the analytics project
     required: false
     default: .
   analysis-policy:
@@ -136,6 +144,8 @@ runs:
         BLOCK_ONLY_NEW_INPUT: ${{ inputs.block-only-new }}
         FAIL_ON_PR_COST_INCREASE_INPUT: ${{ inputs.fail-on-pr-cost-increase }}
         MANIFEST_INPUT: ${{ inputs.manifest }}
+        ROCKY_ARTIFACT_INPUT: ${{ inputs.rocky-artifact }}
+        BASE_ROCKY_ARTIFACT_INPUT: ${{ inputs.base-rocky-artifact }}
         WORKING_DIRECTORY_INPUT: ${{ inputs.working-directory }}
         ANALYSIS_POLICY_INPUT: ${{ inputs.analysis-policy }}
         POLICY_BUNDLE_INPUT: ${{ inputs.policy }}

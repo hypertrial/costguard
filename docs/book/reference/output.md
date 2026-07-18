@@ -33,7 +33,7 @@ Structured scan result:
 | `cost` | `[cost]` enabled | Project cost summary: mapped USD and full-project GB-month current/post-fix/potential savings, addressable finding savings, coverage, top models, grade mix, and disclaimer (see [Cost estimates](cost-estimates.md)) |
 | `diagnostics` | Always | Gated findings on changed files in PR mode; full scan findings otherwise. Entries include governance fields (`finding_id`, `evidence_key`, optional `owners` and `exception`), advisory `rule_precision_tier`, and optional cost data including `prior_basis`, downstream count, and savings |
 | `files` | Always | Per-model parse metadata (`parse_input`, `parsed_raw`, `parsed_compiled`, `feature_extraction_used_ast`) |
-| `pr_summary` | PR mode, or receipt comparison | Receipt version `2` adds base-vs-head `finding_delta`, macro/source `indirectly_affected`, `manifest_integrity`, and compatibility field `enforcement_preview`; plus changed model details/owners, gate results, downstream models/exposures, recommended `dbt build --select`, and optional trend deltas |
+| `pr_summary` | PR mode, or receipt comparison | Receipt version `2` includes base-vs-head `finding_delta`, macro/source `indirectly_affected`, `manifest_integrity`, optional `rocky_artifact_integrity`, compatibility field `enforcement_preview`, framework-qualified changed model details, gate results, downstream models/exposures, legacy `recommended_dbt_command`, structured `recommended_commands`, and optional trend deltas |
 | `context` | PR mode | Nonblocking full-project report (see below) |
 
 ### PR `context` report
@@ -56,6 +56,8 @@ Context issues are informational in PR mode. Fix them on the default branch; do 
 
 Both branches use the current invocation's HEAD `costguard.toml`, signed policy, waivers, baseline, confidence, and cost configuration. Historical configuration is not loaded. Baselined findings, signed-policy exceptions, local waivers, and infrastructure/metadata findings do not enter the delta. Head analysis remains the only source of policy/waiver completeness violations and output-metadata diagnostics.
 
+Rocky findings enter the delta only when both sealed artifacts verify against the head and resolved base commits. If the base artifact is missing or invalid in standard mode, head Rocky findings remain visible, `rocky_artifact_integrity.comparison_complete` is `false`, and `unclassified_head_findings` records how many were excluded from delta classification and `block_only_new` enforcement.
+
 Severity increases are `regressed`; deterministic cost increases above floating-point epsilon are also `regressed`; all remaining matched IDs are `unchanged`. Behavioral head diagnostics without semantic identity are excluded from the ID delta but remain blocking in regression-only enforcement so identity failure cannot fail open.
 
 When `block_only_new` is active, introduced/regressed findings participate in severity, confidence, and addressable-savings gates. Unchanged findings remain in JSON and receipts, render with an explicit nonblocking delta label, and become GitHub notices. Resolved findings never block. Required-owner and blast-radius gates continue to evaluate all changed models. JSON remains schema v4 and receipt version 2; `pr_summary.enforcement_preview` is retained for compatibility even though `block_only_new` is active rather than advisory.
@@ -68,7 +70,7 @@ Emits workflow commands for annotations:
 ::error file=path,line=N,title=RULE_ID::message
 ```
 
-Compiled-only unmapped diagnostics annotate the raw model path at line 1 and include the compiled SQL location in the annotation message.
+Compiled-unmapped diagnostics are emitted as repository-level annotations. Their message retains the source model path and compiled SQL line/column; Costguard does not fabricate a source line.
 
 In regression-only mode, unchanged diagnostics are emitted as `notice`; introduced and regressed diagnostics retain the level selected by severity and governance. The PR summary notice includes introduced, regressed, resolved, and unchanged counts plus priced net monthly impact when available.
 
@@ -82,7 +84,7 @@ PR-summary-oriented report with grouped findings, context footer, suppression gu
 
 [SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html) for GitHub Code Scanning, GitLab SAST (`reports: sast`), and Jenkins SARIF plugins.
 
-Includes `tool.driver.rules`, physical locations, and additive governance properties. Each result records the finding ID, evidence key, confidence, enforcement outcome, policy provenance, applied exception, and optional cost estimate. Run properties retain scan, policy, analysis, metrics, `context`, and `identity_scheme` metadata. Severity maps to SARIF levels: `error` (High/Critical), `warning` (Medium), `note` (Low/Info). The JSON output schema remains version 4.
+Includes `tool.driver.rules`, physical locations when source mapping is available, and additive governance properties. Compiled-unmapped results are repository-level and carry `sourcePath`, `compiledLine`, and `compiledColumn` properties instead of a fake physical location. Each result records the finding ID, evidence key, confidence, enforcement outcome, policy provenance, applied exception, and optional cost estimate. Run properties retain scan, policy, analysis, metrics, `context`, and `identity_scheme` metadata. Severity maps to SARIF levels: `error` (High/Critical), `warning` (Medium), `note` (Low/Info). The JSON output schema remains version 4.
 
 ## Finding baselines
 

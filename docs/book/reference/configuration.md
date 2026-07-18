@@ -1,6 +1,6 @@
 # Configuration
 
-Costguard runs with zero configuration. A bare `costguard scan` from a dbt project root uses sensible defaults: scan the whole project, auto-detect `target/manifest.json` when present, and fail on `high`-severity findings.
+Costguard runs with zero configuration. A bare `costguard scan` scans the whole project, auto-detects `target/manifest.json` when present, detects Rocky from `rocky.toml`, and fails on `high`-severity findings.
 
 Optional `costguard.toml` in the project root overrides those defaults. CLI flags override file settings.
 
@@ -26,6 +26,14 @@ fail_on = "high"
 [dbt]
 manifest_path = "target/manifest.json"
 max_manifest_bytes = 536870912
+
+[rocky]
+config_path = "rocky.toml"
+models_dir = "models"
+artifact_path = "target/costguard-rocky.json"
+base_artifact_path = "artifacts/base-costguard-rocky.json"
+max_artifact_bytes = 536870912
+require_artifact_integrity = false
 
 [owners]
 codeowners = true
@@ -84,16 +92,31 @@ Manifest limits are enforced with a metadata preflight and a bounded read. Befor
 
 Effective scan configuration is resolved once in this order: built-in defaults, `costguard.toml`, command-specific path/PR settings, explicit CLI or Action overrides, warehouse/cost normalization, then validation. The execution-only aggregate cap is available through `ResolvedScanRequest`; legacy Rust APIs retain their existing fields and use the 2 GiB default.
 
+## `[rocky]`
+
+Costguard detects Rocky when `rocky.toml` exists. It then auto-detects `target/costguard-rocky.json`; explicit CLI or configuration paths override that default. Base artifacts are never guessed.
+
+| Key | Type | Description |
+| --- | --- | --- |
+| `config_path` | string | Rocky project config path (default `rocky.toml`) |
+| `models_dir` | string | Rocky model source directory (default `models`) |
+| `artifact_path` | string | Sealed head artifact (auto-detected as `target/costguard-rocky.json` for detected Rocky projects) |
+| `base_artifact_path` | string | Sealed artifact for the exact PR comparison commit; never auto-detected |
+| `max_artifact_bytes` | integer | Maximum compile/artifact bytes (default `536870912`, 512 MiB; `0` restores the default) |
+| `require_artifact_integrity` | boolean | Fail analysis when a required Rocky head/base artifact is missing or invalid (default `false`; strict policy also fails closed) |
+
+Explicit artifact paths must exist. Before analysis, Costguard verifies the head envelope against Git `HEAD` and the current filesystem. PR base verification reads every sealed input from immutable Git objects at the resolved comparison commit. See [Rocky integration](../getting-started/rocky.md) for capture and CI workflows.
+
 ## `[owners]`
 
-Owner resolution is additive metadata for diagnostics and PR receipts. Precedence is: dbt model `meta.owner`/`meta.owners`, Costguard tag and path maps, CODEOWNERS, dbt group, then `default`.
+Owner resolution is additive metadata for diagnostics and PR receipts. Precedence is: explicit model owner (dbt `meta.owner`/`meta.owners` or Rocky `tags.owner`), Costguard tag and path maps, CODEOWNERS, framework group, then `default`.
 
 | Key | Type | Description |
 | --- | --- | --- |
 | `default` | string or string array | Fallback owner(s) |
 | `codeowners` | bool | Read the first CODEOWNERS file from `.github/`, repository root, or `docs/`; last matching rule wins |
 | `[owners.paths]` | glob to owner(s) map | Repository-relative model path routing |
-| `[owners.tags]` | tag to owner(s) map | dbt tag routing |
+| `[owners.tags]` | tag to owner(s) map | dbt tags and normalized Rocky `key=value` tags |
 
 ## `[gate]` and `[[gate.scopes]]`
 

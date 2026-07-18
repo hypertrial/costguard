@@ -1,6 +1,6 @@
 use costguard_core::{GateStatus, ScanResult};
 use costguard_cost::format_cost_line;
-use costguard_diagnostics::{Diagnostic, Severity};
+use costguard_diagnostics::{Diagnostic, Severity, SourceProvenance};
 
 use crate::markdown::summary_sentence;
 use crate::{escape_github_message, escape_github_property, has_full_usd_coverage};
@@ -41,15 +41,22 @@ pub(crate) fn render_github(result: &ScanResult) -> String {
                 }
             })
             .unwrap_or_default();
-        output.push_str(&format!(
-            "::{level} file={},line={},col={},title={} {}::{}\n",
-            escape_github_property(&diagnostic.path.display().to_string()),
-            diagnostic.line,
-            diagnostic.column,
+        let title = format!(
+            "{} {}",
             escape_github_property(&diagnostic.rule_id),
-            escape_github_property(diagnostic.severity.label()),
-            escape_github_message(&format!("{}{delta}", github_message(diagnostic)))
-        ));
+            escape_github_property(diagnostic.severity.label())
+        );
+        let message = escape_github_message(&format!("{}{delta}", github_message(diagnostic)));
+        if diagnostic.source_provenance == Some(SourceProvenance::CompiledUnmapped) {
+            output.push_str(&format!("::{level} title={title}::{message}\n"));
+        } else {
+            output.push_str(&format!(
+                "::{level} file={},line={},col={},title={title}::{message}\n",
+                escape_github_property(&diagnostic.path.display().to_string()),
+                diagnostic.line,
+                diagnostic.column,
+            ));
+        }
     }
     if let Some(summary) = &result.pr_summary {
         for gate in &summary.gate_results {
@@ -99,8 +106,9 @@ pub(crate) fn github_message(diagnostic: &Diagnostic) -> String {
         (diagnostic.compiled_line, diagnostic.compiled_column)
     {
         format!(
-            "{} (compiled SQL location: line {line}, column {column})",
-            diagnostic.message
+            "{} (source model: {}; compiled SQL location: line {line}, column {column})",
+            diagnostic.message,
+            costguard_diagnostics::posix_path(&diagnostic.path)
         )
     } else {
         diagnostic.message.clone()

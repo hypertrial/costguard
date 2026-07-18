@@ -44,7 +44,7 @@ pub(crate) fn render_text(result: &ScanResult) -> String {
             }
         }
         if !summary.changed_models.is_empty() {
-            output.push_str("\nChanged dbt models:\n");
+            output.push_str("\nChanged models:\n");
             for model in &summary.changed_models {
                 output.push_str(&format!("  - {}\n", escape_text(model)));
             }
@@ -65,6 +65,28 @@ pub(crate) fn render_text(result: &ScanResult) -> String {
             output.push_str(&format!(
                 "\nRecommended dbt command:\n  {}\n",
                 escape_text(command)
+            ));
+        }
+        for command in summary
+            .recommended_commands
+            .iter()
+            .filter(|command| command.framework == "rocky")
+        {
+            output.push_str(&format!(
+                "\nRecommended Rocky command:\n  {}\n",
+                escape_text(&command.command)
+            ));
+        }
+        if let Some(integrity) = &summary.rocky_artifact_integrity {
+            output.push_str(&format!(
+                "\nRocky artifact: head {:?}, base {:?}, comparison {}\n",
+                integrity.head,
+                integrity.base,
+                if integrity.comparison_complete {
+                    "complete"
+                } else {
+                    "incomplete"
+                }
             ));
         }
         output.push('\n');

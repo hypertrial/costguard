@@ -72,6 +72,18 @@ pub fn parse_manifest_text(text: &str) -> Result<DbtProject> {
                 .or_else(|| node.get("path"))
                 .and_then(Value::as_str)
                 .map(PathBuf::from);
+            let database = node
+                .get("database")
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            let schema = node
+                .get("schema")
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            let alias = node
+                .get("alias")
+                .and_then(Value::as_str)
+                .map(str::to_string);
             let config = node.get("config").unwrap_or(&Value::Null);
             let materialized = config
                 .get("materialized")
@@ -188,6 +200,9 @@ pub fn parse_manifest_text(text: &str) -> Result<DbtProject> {
                     fqn,
                     name,
                     path,
+                    database,
+                    schema,
+                    alias,
                     materialized,
                     unique_key,
                     incremental_strategy,

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use costguard_core::ScanResult;
-use costguard_diagnostics::{posix_path, Severity};
+use costguard_diagnostics::{posix_path, Severity, SourceProvenance};
 
 pub(crate) fn sarif_level(severity: Severity) -> &'static str {
     match severity {
@@ -52,17 +52,6 @@ pub(crate) fn sarif_results(result: &ScanResult) -> Vec<serde_json::Value> {
                 "message": {
                     "text": diagnostic.message
                 },
-                "locations": [{
-                    "physicalLocation": {
-                        "artifactLocation": {
-                            "uri": posix_path(&diagnostic.path)
-                        },
-                        "region": {
-                            "startLine": diagnostic.line,
-                            "startColumn": diagnostic.column
-                        }
-                    }
-                }],
                 "properties": {
                     "findingId": diagnostic.governance.finding_id,
                     "evidenceKey": diagnostic.governance.evidence_key,
@@ -73,6 +62,25 @@ pub(crate) fn sarif_results(result: &ScanResult) -> Vec<serde_json::Value> {
                     ,"owners": diagnostic.governance.owners
                 }
             });
+            if diagnostic.source_provenance != Some(SourceProvenance::CompiledUnmapped) {
+                result["locations"] = serde_json::json!([{
+                    "physicalLocation": {
+                        "artifactLocation": {
+                            "uri": posix_path(&diagnostic.path)
+                        },
+                        "region": {
+                            "startLine": diagnostic.line,
+                            "startColumn": diagnostic.column
+                        }
+                    }
+                }]);
+            } else {
+                result["properties"]["sourcePath"] =
+                    serde_json::json!(posix_path(&diagnostic.path));
+                result["properties"]["compiledLine"] = serde_json::json!(diagnostic.compiled_line);
+                result["properties"]["compiledColumn"] =
+                    serde_json::json!(diagnostic.compiled_column);
+            }
             if let Some(cost) = &diagnostic.cost_estimate {
                 result["properties"]["costEstimate"] = serde_json::json!(cost);
             }

@@ -13,6 +13,7 @@ costguard-cost = { path = "../costguard-cost" }
 costguard-dbt = { path = "../costguard-dbt" }
 costguard-diagnostics = { path = "../costguard-diagnostics" }
 costguard-policy = { path = "../costguard-policy" }
+costguard-project = { path = "../costguard-project" }
 costguard-protocol = { path = "../costguard-protocol" }
 costguard-rules = { path = "../costguard-rules" }
 costguard-scanner = { path = "../costguard-scanner" }
@@ -22,6 +23,8 @@ rayon.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_yaml.workspace = true
+sha2.workspace = true
+tempfile.workspace = true
 toml.workspace = true
 
 [dev-dependencies]

@@ -1,5 +1,5 @@
-use crate::config::{ResolvedScanRequest, DEFAULT_MAX_TOTAL_BASE_BYTES};
-use crate::scan::scan_with_facts;
+use crate::config::{ResolvedScanRequest, RockyConfig, DEFAULT_MAX_TOTAL_BASE_BYTES};
+use crate::scan::{scan_with_facts, scan_with_rocky_facts};
 use crate::{git, ScanConfig};
 use anyhow::Result;
 use costguard_cost::CostConfig;
@@ -39,7 +39,12 @@ impl DoctorReport {
 }
 
 pub fn doctor(config: &ScanConfig, repository_root: &Path) -> Result<DoctorReport> {
-    run_doctor(config, repository_root, DEFAULT_MAX_TOTAL_BASE_BYTES)
+    run_doctor(
+        config,
+        &RockyConfig::default(),
+        repository_root,
+        DEFAULT_MAX_TOTAL_BASE_BYTES,
+    )
 }
 
 /// Run readiness checks with project-resolved execution limits.
@@ -47,8 +52,10 @@ pub fn doctor_resolved(
     request: &ResolvedScanRequest,
     repository_root: &Path,
 ) -> Result<DoctorReport> {
+    crate::validate_resolved_scan_request(request)?;
     run_doctor(
         &request.config,
+        &request.rocky,
         repository_root,
         request.max_total_base_bytes,
     )
@@ -56,6 +63,7 @@ pub fn doctor_resolved(
 
 fn run_doctor(
     config: &ScanConfig,
+    rocky: &RockyConfig,
     repository_root: &Path,
     max_total_base_bytes: u64,
 ) -> Result<DoctorReport> {
@@ -99,9 +107,32 @@ fn run_doctor(
     scan_config.base_branch = None;
     let cost = scan_config.cost.get_or_insert_with(CostConfig::default);
     cost.enabled = true;
-    let execution = scan_with_facts(&scan_config, max_total_base_bytes)?;
+    let execution = if rocky.configured {
+        scan_with_rocky_facts(&scan_config, rocky, max_total_base_bytes)?
+    } else {
+        scan_with_facts(&scan_config, max_total_base_bytes)?
+    };
     let result = execution.result;
     let readiness = execution.readiness;
+    if readiness.rocky_configured {
+        checks.push(check(
+            "Rocky artifact",
+            if readiness.rocky_artifact_verified {
+                DoctorStatus::Pass
+            } else {
+                DoctorStatus::Warn
+            },
+            if readiness.rocky_artifact_verified {
+                "sealed Rocky compile artifact matches committed HEAD".into()
+            } else {
+                readiness
+                    .rocky_messages
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| "Rocky artifact is unavailable".into())
+            },
+        ));
+    }
 
     let analyzable = readiness.analyzable_files;
     checks.push(check(

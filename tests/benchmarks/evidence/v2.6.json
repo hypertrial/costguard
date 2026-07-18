@@ -168,7 +168,7 @@
     "rules_passing_census": 44,
     "rules_total": 44,
     "tier_counts": {
-      "informational": 16,
+      "informational": 17,
       "verified-high": 27,
       "verified-low": 1,
       "verified-medium": 2
@@ -629,6 +629,16 @@
       "examined": null,
       "pass": null,
       "rule_id": "SQLCOST046",
+      "sampled_precision": null,
+      "severity": "low",
+      "tier": "informational",
+      "total": null,
+      "tp": null
+    },
+    {
+      "examined": null,
+      "pass": null,
+      "rule_id": "SQLCOST047",
       "sampled_precision": null,
       "severity": "low",
       "tier": "informational",

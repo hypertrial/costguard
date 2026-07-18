@@ -8,7 +8,7 @@ The full workflow, artifact contracts, bucket taxonomy, decision tree, and censu
 
 **[Manual rule review playbook](../../design/manual-rule-review.md)**
 
-Outcome scoreboard (44/44 PASS as of 2026-06-16, cost-ranked ≤100 sample; `SQLCOST045` and `SQLCOST046` excluded — see census note in linked doc):
+Outcome scoreboard (44/44 PASS as of 2026-06-16, cost-ranked ≤100 sample; `SQLCOST045`–`SQLCOST047` excluded — see census note in linked doc):
 
 **[Rule TP coverage](../../design/rule-tp-coverage.md)**
 

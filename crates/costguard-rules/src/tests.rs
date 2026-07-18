@@ -882,3 +882,21 @@ fn registry_matches_builtin_catalog() {
         );
     }
 }
+
+#[test]
+fn registry_reports_framework_applicability() {
+    let metadata = RuleRegistry::default_rules().metadata();
+    let frameworks = |id| {
+        metadata
+            .iter()
+            .find(|entry| entry.id == id)
+            .unwrap()
+            .frameworks
+    };
+    assert_eq!(frameworks("SQLCOST004"), &["dbt"]);
+    assert_eq!(frameworks("SQLCOST039"), &["dbt"]);
+    assert_eq!(frameworks("SQLCOST042"), &["dbt"]);
+    assert_eq!(frameworks("SQLCOST045"), &["dbt"]);
+    assert_eq!(frameworks("SQLCOST047"), &["rocky"]);
+    assert_eq!(frameworks("SQLCOST001"), &["dbt", "rocky", "sql"]);
+}

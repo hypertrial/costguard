@@ -1,15 +1,15 @@
-# Stop expensive dbt regressions before merge.
+# Stop expensive data-model regressions before merge.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/hypertrial/costguard/ci.yml?branch=main)](https://github.com/hypertrial/costguard/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/hypertrial/costguard)](https://github.com/hypertrial/costguard/releases)
 [![License: MIT](https://img.shields.io/github/license/hypertrial/costguard)](LICENSE)
 [![Docs](https://img.shields.io/badge/docs-mdBook-blue)](docs/book/README.md)
 
-SlowQL finds SQL problems. Costguard governs dbt cost changes.
+SlowQL finds SQL problems. Costguard governs dbt and Rocky cost changes.
 
-Costguard reviews dbt pull requests before merge and gates only cost findings introduced or regressed by the change.
+Costguard reviews analytics pull requests before merge and gates only cost findings introduced or regressed by the change.
 
-It scans changed models against the git base, uses optional dbt manifest and lineage context for downstream impact, and runs without warehouse credentials or live queries.
+It scans changed models against the git base, uses optional dbt manifests and sealed Rocky compile artifacts for framework-qualified lineage, and runs without warehouse credentials or live queries.
 
 One binary and one simple CI Action. `costguard pr` is the main workflow; `costguard scan` is the local debugging path.
 
@@ -33,17 +33,17 @@ See [Installation](docs/book/getting-started/installation.md) for pinned/airgapp
 
 ## Run locally
 
-No config file or flags required. From your dbt project root:
+No config file or flags required. From your project root:
 
 ```bash
 costguard scan
 ```
 
-Add `--warehouse snowflake` (or `bigquery`, `trino`, etc.) for sharper dialect-specific parsing. See [Requirements](docs/book/getting-started/requirements.md) for manifest and compile guidance.
+Add `--warehouse snowflake` (or `bigquery`, `trino`, etc.) for sharper dialect-specific parsing. Rocky projects compile and seal expanded SQL before scanning; see [Rocky integration](docs/book/getting-started/rocky.md).
 
 ## Add to CI
 
-From your dbt project root:
+From your analytics project root:
 
 ```bash
 costguard init
@@ -76,7 +76,7 @@ Pin the exact Action tag `@v2.6.0` or use the moving compatible major tag `@v2`.
 
 ## Requirements
 
-Costguard reads **source files, git history, and (optionally) `target/manifest.json`**. It never connects to your warehouse and never needs credentials. The manifest is auto-detected when present; run `dbt compile` first only if you want compiled-SQL analysis on Jinja-heavy models.
+Costguard reads **source files, git history, and optional dbt/Rocky compile metadata**. It never connects to your warehouse and never needs credentials. dbt manifests and sealed Rocky head artifacts are auto-detected when present; Costguard invokes neither compiler.
 
 Full table: [Requirements](docs/book/getting-started/requirements.md).
 
@@ -102,6 +102,7 @@ mdbook serve
 | --- | --- |
 | Installation | [Installation](docs/book/getting-started/installation.md) |
 | Requirements | [Requirements](docs/book/getting-started/requirements.md) |
+| Rocky | [Rocky integration](docs/book/getting-started/rocky.md) |
 | Local scan | [Local scan and explain](docs/book/getting-started/local-scan.md) |
 | Troubleshooting | [Troubleshooting](docs/book/getting-started/troubleshooting.md) |
 | PR check setup | [Quick start](docs/book/getting-started/quick-start.md) |
@@ -125,7 +126,7 @@ Use `install-mode: source` to build the checked-out Action code instead of downl
     min-confidence: high
 ```
 
-The Action does not install or compile dbt. See [Requirements](docs/book/getting-started/requirements.md) for manifest and git history needs.
+The Action does not install or compile dbt or Rocky. See [Requirements](docs/book/getting-started/requirements.md) for metadata and git history needs.
 
 The Action defaults to regression-only enforcement: unchanged findings remain visible as notices but do not fail the PR. Pair `fail-on: high` with `min-confidence: high` on macro-heavy dbt repos.
 
@@ -155,7 +156,7 @@ Use `--format github` for workflow annotations. Add `--summary-file summary.md` 
 
 ## What it detects
 
-Costguard ships **46 SQLCOST rules** for incremental safety, join risk, warehouse cost patterns, and dbt anti-patterns. Optional **[cost estimates](docs/book/reference/cost-estimates.md)** attach per-finding savings and project-level current/post-fix/potential savings for prioritization—advisory priors from local files, not a bill. Severity and confidence remain the enforcement contract. See the [rule catalog](docs/book/rules/index.md) for severity and fix guidance.
+Costguard ships **47 SQLCOST rules** for incremental safety, join risk, warehouse cost patterns, framework configuration, and metadata integrity. Optional **[cost estimates](docs/book/reference/cost-estimates.md)** attach per-finding savings and project-level current/post-fix/potential savings for prioritization—advisory priors from local files, not a bill. Severity and confidence remain the enforcement contract. See the [rule catalog](docs/book/rules/index.md) for severity and fix guidance.
 
 ## Benchmark smoke tests
 

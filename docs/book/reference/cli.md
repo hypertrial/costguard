@@ -10,6 +10,7 @@ Source: thin entry point in `crates/costguard-cli/src/main.rs`, Clap root in `ar
 | `explain` | Analyze a single SQL/dbt file |
 | `pr` | Scan git-changed files against a base ref |
 | `cost` | Local cost prioritization summary (model-centric totals for ranking) |
+| `rocky` | Capture and seal Rocky compile metadata |
 | `rules` | List registered rules |
 | `init` | Scaffold GitHub workflow and starter `costguard.toml` into a dbt project |
 | `doctor` | Run read-only project and PR-workflow readiness checks |
@@ -24,6 +25,8 @@ Source: thin entry point in `crates/costguard-cli/src/main.rs`, Clap root in `ar
 | `--format` | scan, explain, pr, rules | `text`, `json`, `github`, `markdown`, `sarif` (config also accepts `md`) |
 | `--manifest` | scan, explain, pr | Path to dbt `manifest.json` with `compiled_code` |
 | `--base-manifest` | scan, explain, pr | Optional production/state manifest for PR base-vs-head comparison |
+| `--rocky-artifact` | scan, explain, pr, cost | Sealed Rocky artifact for the current checkout |
+| `--base-rocky-artifact` | scan, explain, pr, cost | Sealed Rocky artifact for the exact PR comparison commit |
 | `--baseline` | scan, pr | Finding baseline JSON (grandfather known findings) |
 | `--write-baseline` | scan | Write current findings to a baseline JSON file |
 | `--cost` | scan, explain, pr | Enable cost estimates (uses `[cost]` in `costguard.toml` when present) |
@@ -79,6 +82,19 @@ Renders a local cost prioritization summary (model totals, top models, optional 
 
 Use `--source pipeline` for local orchestration exports from tools such as dlt, Dagster, DuckDB, and dbt. It accepts common columns including `model_id`, `relation`, `relation_name`, `asset_key`, `dbt_model`, `window_start`, `window_end`, `executions`, `run_count`, `duration_seconds`, `duration_ms`, `bytes_processed`, and `cost_usd`; row-count columns are ignored in v2.6.0.
 
+## `rocky`
+
+```bash
+costguard rocky capture \
+  --compile target/rocky-compile.json \
+  [--rocky-config rocky.toml] \
+  [--models-dir models] \
+  [--input PATH]... \
+  [--output target/costguard-rocky.json]
+```
+
+`capture` validates successful expanded Rocky compile JSON, maps every compiled model to one source, seals all tracked compile inputs at Git `HEAD`, and writes a deterministic artifact atomically. Costguard never invokes Rocky. See [Rocky integration](../getting-started/rocky.md).
+
 ## `pr`
 
 ```bash
@@ -131,7 +147,7 @@ After scaffolding, `init` runs the same read-only report as `doctor`. Readiness 
 costguard doctor [--dbt-dir PATH]
 ```
 
-Checks git history, analyzable files, configured policy, dbt metadata freshness/integrity, parse coverage, warehouse selection, the GitHub workflow contract, and mapped-spend/USD cost coverage. It performs a normal local scan but never runs dbt, connects to a warehouse, or writes files. Workflow validation parses YAML and requires one complete Costguard job with full-history checkout, Action inputs, and effective job/top-level permissions; comments and unrelated jobs do not count. With `--dbt-dir`, project config and models are loaded below that directory while the workflow is checked at the repository root.
+Checks git history, analyzable files, configured policy, dbt metadata freshness/integrity, Rocky artifact integrity, parse coverage, warehouse selection, the GitHub workflow contract, and mapped-spend/USD cost coverage. It performs a normal local scan but never runs dbt or Rocky, connects to a warehouse, or writes files. Workflow validation parses YAML and requires one complete Costguard job with full-history checkout, Action inputs, and effective job/top-level permissions; comments and unrelated jobs do not count. With `--dbt-dir`, project config and models are loaded below that directory while the workflow is checked at the repository root.
 
 ## `policy`
 
@@ -170,6 +186,12 @@ See [Output formats](output.md) for JSON field details.
 When `--manifest` is not passed, Costguard auto-loads `target/manifest.json` when that file exists in the scan root. See [Requirements](../getting-started/requirements.md) for when a manifest is needed.
 
 Explicit `--manifest` paths must exist or the run exits with code `2`.
+
+## Rocky artifact discovery
+
+When `rocky.toml` exists, Costguard looks for `target/costguard-rocky.json`. An explicit `--rocky-artifact` or `[rocky].artifact_path` overrides it. Base Rocky artifacts are never inferred; pass `--base-rocky-artifact` or configure `[rocky].base_artifact_path`.
+
+Explicit artifact paths must exist. Verified expanded SQL is used only when the envelope commit and input hashes match. See [Rocky integration](../getting-started/rocky.md).
 
 ## Related
 

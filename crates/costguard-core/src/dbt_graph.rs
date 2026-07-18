@@ -1,12 +1,22 @@
 use crate::owners::OwnerResolver;
-use crate::{ChangedModelDetail, IndirectImpact, PrSummary, Project};
+use crate::{ChangedModelDetail, IndirectImpact, LoadedProject, PrSummary, RecommendedCommand};
 use costguard_dbt::{DbtModel, DbtProject, DependencyGraph};
+use costguard_project::Framework;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 pub(crate) fn enrich_pr_summary(
+    summary: PrSummary,
+    project: &LoadedProject,
+    owners: &OwnerResolver,
+) -> PrSummary {
+    let summary = enrich_dbt_pr_summary(summary, project, owners);
+    enrich_rocky_pr_summary(summary, project, owners)
+}
+
+fn enrich_dbt_pr_summary(
     mut summary: PrSummary,
-    project: &Project,
+    project: &LoadedProject,
     owners: &OwnerResolver,
 ) -> PrSummary {
     summary.changed_files.sort();
@@ -59,6 +69,7 @@ pub(crate) fn enrich_pr_summary(
                     .label(id)
                     .map(str::to_string)
                     .unwrap_or_else(|| id.clone()),
+                framework: Some("dbt".into()),
                 path,
                 tags,
                 owners: owners.owners_for_model(model),
@@ -104,8 +115,126 @@ pub(crate) fn enrich_pr_summary(
             .collect::<Vec<_>>()
             .join(" ");
         summary.recommended_dbt_command = Some(format!("dbt build --select {selectors}"));
+        summary.recommended_commands.push(RecommendedCommand {
+            framework: "dbt".into(),
+            command: summary.recommended_dbt_command.clone().unwrap_or_default(),
+            scope: "changed_and_downstream".into(),
+        });
     }
     summary
+}
+
+fn enrich_rocky_pr_summary(
+    mut summary: PrSummary,
+    project: &LoadedProject,
+    owners: &OwnerResolver,
+) -> PrSummary {
+    let changed_set = summary
+        .changed_files
+        .iter()
+        .cloned()
+        .collect::<HashSet<_>>();
+    let rocky_models = project
+        .graph
+        .models
+        .values()
+        .filter(|model| model.framework == Framework::Rocky)
+        .collect::<Vec<_>>();
+    if rocky_models.is_empty() {
+        return summary;
+    }
+    let direct_paths = rocky_models
+        .iter()
+        .flat_map(|model| [model.path.clone(), model.path.with_extension("toml")])
+        .collect::<HashSet<_>>();
+    let global_change = changed_set
+        .iter()
+        .any(|path| project.rocky_inputs.contains(path) && !direct_paths.contains(path));
+    let mut direct_ids = rocky_models
+        .iter()
+        .filter(|model| {
+            changed_set.contains(&model.path)
+                || changed_set.contains(&model.path.with_extension("toml"))
+        })
+        .map(|model| model.id.clone())
+        .collect::<Vec<_>>();
+    direct_ids.sort();
+
+    for id in &direct_ids {
+        let Some(model) = project.graph.model(id) else {
+            continue;
+        };
+        let downstream = project
+            .graph
+            .transitive_downstream(std::slice::from_ref(id));
+        let mut downstream_names = downstream
+            .iter()
+            .filter_map(|id| project.graph.model(id).map(|model| model.name.clone()))
+            .collect::<Vec<_>>();
+        downstream_names.sort();
+        let model_owners = owners.owners_for_metadata(model);
+        for owner in &model_owners {
+            *summary.owner_summary.entry(owner.clone()).or_insert(0) += 1;
+        }
+        summary.changed_models.push(model.name.clone());
+        summary.changed_model_details.push(ChangedModelDetail {
+            id: model.id.clone(),
+            name: model.name.clone(),
+            framework: Some("rocky".into()),
+            path: model.path.clone(),
+            tags: model.tags.clone(),
+            owners: model_owners,
+            group: model.group.clone(),
+            affected_downstream: downstream_names,
+            affected_exposures: Vec::new(),
+            affected_exposure_owners: Default::default(),
+        });
+        summary.recommended_commands.push(RecommendedCommand {
+            framework: "rocky".into(),
+            command: format!("rocky run --model {}", shell_word(&model.name)),
+            scope: "direct_model".into(),
+        });
+    }
+
+    let affected_seeds = if global_change {
+        for model in &rocky_models {
+            summary.indirectly_affected.push(IndirectImpact {
+                model: model.name.clone(),
+                reason: "global Rocky compile input changed".into(),
+            });
+        }
+        rocky_models
+            .iter()
+            .map(|model| model.id.clone())
+            .collect::<Vec<_>>()
+    } else {
+        direct_ids
+    };
+    let downstream = project.graph.transitive_downstream(&affected_seeds);
+    summary.affected_downstream.extend(
+        downstream
+            .iter()
+            .filter_map(|id| project.graph.model(id).map(|model| model.name.clone())),
+    );
+    summary.changed_models.sort();
+    summary.changed_models.dedup();
+    summary.affected_downstream.sort();
+    summary.affected_downstream.dedup();
+    summary
+        .changed_model_details
+        .sort_by(|left, right| left.path.cmp(&right.path));
+    summary
+}
+
+fn shell_word(value: &str) -> String {
+    if value
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.'))
+    {
+        value.into()
+    } else {
+        format!("'{}'", value.replace('\'', "'\"'\"'"))
+    }
 }
 
 struct IndirectDiscovery {
@@ -469,10 +598,16 @@ mod tests {
                 owners: Vec::new(),
             },
         );
-        let project = Project {
-            root: PathBuf::from("."),
-            files: Vec::new(),
-            dbt: Some(dbt),
+        let project = LoadedProject {
+            project: crate::Project {
+                root: PathBuf::from("."),
+                files: Vec::new(),
+                dbt: Some(dbt),
+            },
+            graph: Default::default(),
+            compiled_unmapped_paths: Default::default(),
+            rocky_owned_paths: Default::default(),
+            rocky_inputs: Default::default(),
         };
         let owners =
             OwnerResolver::load(PathBuf::from(".").as_path(), &Default::default()).unwrap();
@@ -518,10 +653,16 @@ mod tests {
                 ..DbtModel::default()
             },
         );
-        let project = Project {
-            root: PathBuf::from("."),
-            files: Vec::new(),
-            dbt: Some(dbt),
+        let project = LoadedProject {
+            project: crate::Project {
+                root: PathBuf::from("."),
+                files: Vec::new(),
+                dbt: Some(dbt),
+            },
+            graph: Default::default(),
+            compiled_unmapped_paths: Default::default(),
+            rocky_owned_paths: Default::default(),
+            rocky_inputs: Default::default(),
         };
         let owners =
             OwnerResolver::load(PathBuf::from(".").as_path(), &Default::default()).unwrap();
@@ -571,10 +712,16 @@ mod tests {
             "model.beta.order_rollup".into(),
             vec!["model.beta.orders".into()],
         );
-        let project = Project {
-            root: PathBuf::from("."),
-            files: Vec::new(),
-            dbt: Some(dbt),
+        let project = LoadedProject {
+            project: crate::Project {
+                root: PathBuf::from("."),
+                files: Vec::new(),
+                dbt: Some(dbt),
+            },
+            graph: Default::default(),
+            compiled_unmapped_paths: Default::default(),
+            rocky_owned_paths: Default::default(),
+            rocky_inputs: Default::default(),
         };
         let owners =
             OwnerResolver::load(PathBuf::from(".").as_path(), &Default::default()).unwrap();
@@ -628,10 +775,16 @@ mod tests {
         dbt.graph
             .depends_on
             .insert("model.pkg.b".into(), vec!["model.pkg.a".into()]);
-        let project = Project {
-            root: PathBuf::from("."),
-            files: Vec::new(),
-            dbt: Some(dbt),
+        let project = LoadedProject {
+            project: crate::Project {
+                root: PathBuf::from("."),
+                files: Vec::new(),
+                dbt: Some(dbt),
+            },
+            graph: Default::default(),
+            compiled_unmapped_paths: Default::default(),
+            rocky_owned_paths: Default::default(),
+            rocky_inputs: Default::default(),
         };
         let owners =
             OwnerResolver::load(PathBuf::from(".").as_path(), &Default::default()).unwrap();
@@ -648,5 +801,91 @@ mod tests {
         assert_eq!(summary.indirectly_affected[0].model, "a");
         assert!(summary.indirectly_affected[0].reason.contains("helper"));
         assert_eq!(summary.affected_downstream, vec!["a", "b"]);
+    }
+
+    #[test]
+    fn rocky_changes_include_descendants_commands_and_global_inputs() {
+        let mut graph = costguard_project::ProjectGraph::default();
+        for (id, name, path, depends_on) in [
+            ("rocky.orders", "orders", "rocky/orders.rocky", vec![]),
+            (
+                "rocky.daily_orders",
+                "daily_orders",
+                "rocky/daily_orders.rocky",
+                vec!["rocky.orders".to_string()],
+            ),
+        ] {
+            graph.insert_model(costguard_project::ModelMetadata {
+                id: id.into(),
+                framework: costguard_project::Framework::Rocky,
+                name: name.into(),
+                path: path.into(),
+                materialization: costguard_project::Materialization::View,
+                strategy: Some("view".into()),
+                target: Default::default(),
+                tags: Vec::new(),
+                owners: Vec::new(),
+                group: None,
+                depends_on,
+            });
+        }
+        graph.rebuild_indexes();
+        let owners =
+            OwnerResolver::load(PathBuf::from(".").as_path(), &Default::default()).unwrap();
+        let project = LoadedProject {
+            project: crate::Project {
+                root: PathBuf::from("."),
+                files: Vec::new(),
+                dbt: None,
+            },
+            graph,
+            compiled_unmapped_paths: Default::default(),
+            rocky_owned_paths: [
+                PathBuf::from("rocky/orders.rocky"),
+                PathBuf::from("rocky/daily_orders.rocky"),
+            ]
+            .into_iter()
+            .collect(),
+            rocky_inputs: [
+                PathBuf::from("rocky.toml"),
+                PathBuf::from("rocky/orders.rocky"),
+                PathBuf::from("rocky/daily_orders.rocky"),
+            ]
+            .into_iter()
+            .collect(),
+        };
+
+        let direct = enrich_pr_summary(
+            PrSummary {
+                changed_files: vec![PathBuf::from("rocky/orders.rocky")],
+                ..PrSummary::default()
+            },
+            &project,
+            &owners,
+        );
+        assert_eq!(direct.changed_models, vec!["orders"]);
+        assert_eq!(direct.affected_downstream, vec!["daily_orders"]);
+        assert_eq!(
+            direct.changed_model_details[0].framework.as_deref(),
+            Some("rocky")
+        );
+        assert_eq!(
+            direct.recommended_commands[0].command,
+            "rocky run --model orders"
+        );
+
+        let global = enrich_pr_summary(
+            PrSummary {
+                changed_files: vec![PathBuf::from("rocky.toml")],
+                ..PrSummary::default()
+            },
+            &project,
+            &owners,
+        );
+        assert_eq!(global.indirectly_affected.len(), 2);
+        assert!(global
+            .indirectly_affected
+            .iter()
+            .all(|impact| impact.reason == "global Rocky compile input changed"));
     }
 }

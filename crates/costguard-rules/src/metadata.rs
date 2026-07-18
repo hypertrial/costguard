@@ -8,6 +8,7 @@ pub(crate) struct FileSkippedRule;
 pub(crate) struct SqlParseFailedRule;
 pub(crate) struct StaleManifestRule;
 pub(crate) struct ManifestChecksumMismatchRule;
+pub(crate) struct RockyArtifactIntegrityRule;
 
 impl Rule for MetadataOnlyScanRule {
     fn id(&self) -> &'static str {
@@ -126,6 +127,24 @@ impl Rule for ManifestChecksumMismatchRule {
     }
     fn description(&self) -> &'static str {
         "Reports when a changed model file's sha256 checksum does not match the loaded manifest."
+    }
+    fn default_severity(&self) -> Severity {
+        Severity::Low
+    }
+    fn check(&self, _ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
+        Vec::new()
+    }
+}
+
+impl Rule for RockyArtifactIntegrityRule {
+    fn id(&self) -> &'static str {
+        "SQLCOST047"
+    }
+    fn name(&self) -> &'static str {
+        "Rocky artifact integrity issue"
+    }
+    fn description(&self) -> &'static str {
+        "Reports when sealed Rocky compile metadata is missing, stale, or incomplete."
     }
     fn default_severity(&self) -> Severity {
         Severity::Low

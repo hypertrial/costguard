@@ -135,6 +135,23 @@ pub fn resolve_base_commit(root: &Path, base: &str) -> Result<String> {
     Ok(commit)
 }
 
+pub(crate) fn head_commit(root: &Path) -> Result<String> {
+    let output = run_git(root, &["rev-parse", "--verify", "HEAD"])?;
+    if !output.status.success() {
+        return Err(GitCommandError::from_output(
+            "git rev-parse --verify HEAD",
+            output.status,
+            &output.stderr,
+        )
+        .into());
+    }
+    let commit = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if commit.is_empty() {
+        anyhow::bail!("git rev-parse --verify HEAD returned no commit");
+    }
+    Ok(commit)
+}
+
 /// Returns file contents at `base:path`, or `None` when the path is new on HEAD.
 #[cfg(test)]
 pub fn file_at_ref(root: &Path, base: &str, path: &Path) -> Result<Option<String>> {
@@ -184,6 +201,25 @@ pub(crate) fn files_at_commit_with_budget(
     initial_total_bytes: u64,
     max_total_bytes: u64,
 ) -> Result<HashMap<PathBuf, Option<String>>> {
+    files_at_commit_bytes_with_budget(root, commit, paths, initial_total_bytes, max_total_bytes)?
+        .into_iter()
+        .map(|(path, content)| {
+            let text = content
+                .map(String::from_utf8)
+                .transpose()
+                .with_context(|| format!("base file {} is not valid UTF-8", path.display()))?;
+            Ok((path, text))
+        })
+        .collect()
+}
+
+pub(crate) fn files_at_commit_bytes_with_budget(
+    root: &Path,
+    commit: &str,
+    paths: &[(PathBuf, u64)],
+    initial_total_bytes: u64,
+    max_total_bytes: u64,
+) -> Result<HashMap<PathBuf, Option<Vec<u8>>>> {
     if paths.is_empty() {
         return Ok(HashMap::new());
     }
@@ -297,9 +333,7 @@ pub(crate) fn files_at_commit_with_budget(
                     path.display()
                 );
             }
-            let text = String::from_utf8(content)
-                .with_context(|| format!("base file {} is not valid UTF-8", path.display()))?;
-            result.insert(path.clone(), Some(text));
+            result.insert(path.clone(), Some(content));
         }
         let mut trailing = [0u8; 1];
         if reader.read(&mut trailing)? != 0 {

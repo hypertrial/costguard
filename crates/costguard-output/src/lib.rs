@@ -932,6 +932,7 @@ mod tests {
         summary.enforcement_preview = Some(EnforcementPreview {
             block_only_new: true,
             require_manifest_integrity: false,
+            require_rocky_artifact_integrity: false,
         });
         assert!(!finding_id.is_empty());
         result
@@ -1092,7 +1093,7 @@ mod tests {
     #[test]
     fn render_markdown_includes_pr_impact_sections() {
         let rendered = render_markdown(&sample_result(true));
-        assert!(rendered.contains("Changed dbt models"));
+        assert!(rendered.contains("Changed models"));
         assert!(rendered.contains("Affected downstream"));
         assert!(rendered.contains("Affected exposures"));
         assert!(rendered.contains("- dashboard"));

@@ -292,6 +292,7 @@ mod tests {
         let detail = ChangedModelDetail {
             id: "model.pkg.orders".into(),
             name: "orders".into(),
+            framework: Some("dbt".into()),
             path: diagnostic.path.clone(),
             tags: vec!["critical".into()],
             owners: diagnostic.governance.owners.clone(),
@@ -489,6 +490,7 @@ mod tests {
             changed_model_details: vec![ChangedModelDetail {
                 id: "model.pkg.a".into(),
                 name: "a".into(),
+                framework: Some("dbt".into()),
                 path: PathBuf::from("models/a.sql"),
                 tags: Vec::new(),
                 owners: Vec::new(),

@@ -6,6 +6,7 @@
 
 - [Installation](getting-started/installation.md)
 - [Requirements](getting-started/requirements.md)
+- [Rocky integration](getting-started/rocky.md)
 - [Quick start (PR check)](getting-started/quick-start.md)
 - [Local scan and explain](getting-started/local-scan.md)
 - [Pre-commit hook](getting-started/pre-commit.md)

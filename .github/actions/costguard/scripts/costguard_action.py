@@ -237,6 +237,8 @@ RUN_FLAG_MAPPINGS = [
     ("POLICY_REPOSITORY_INPUT", "--policy-repository", "optional", ""),
     ("RECEIPT_PATH_INPUT", "--receipt-file", "optional", ""),
     ("COMPARE_RECEIPT_INPUT", "--compare-receipt", "optional", ""),
+    ("ROCKY_ARTIFACT_INPUT", "--rocky-artifact", "optional", ""),
+    ("BASE_ROCKY_ARTIFACT_INPUT", "--base-rocky-artifact", "optional", ""),
 ]
 
 

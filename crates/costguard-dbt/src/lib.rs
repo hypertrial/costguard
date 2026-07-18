@@ -77,6 +77,56 @@ impl DbtProject {
         let first = matches.next()?;
         matches.next().is_none().then_some(first)
     }
+
+    pub fn to_project_graph(&self) -> costguard_project::ProjectGraph {
+        let mut graph = costguard_project::ProjectGraph::default();
+        for model in self.models.values() {
+            let Some(path) = model.path.clone() else {
+                continue;
+            };
+            let id = model.identity().to_string();
+            graph.insert_model(costguard_project::ModelMetadata {
+                id: id.clone(),
+                framework: costguard_project::Framework::Dbt,
+                name: model.name.clone(),
+                path,
+                materialization: dbt_materialization(model.materialized.as_deref()),
+                strategy: model.incremental_strategy.clone(),
+                target: costguard_project::Target {
+                    catalog: model.database.clone(),
+                    schema: model.schema.clone(),
+                    object: model.alias.clone().or_else(|| Some(model.name.clone())),
+                },
+                tags: model.tags.clone(),
+                owners: model.owners.clone(),
+                group: model.group.clone(),
+                depends_on: self.graph.depends_on.get(&id).cloned().unwrap_or_default(),
+            });
+        }
+        for exposure in self.exposures.values() {
+            graph.exposures.insert(
+                exposure.name.clone(),
+                costguard_project::ExposureMetadata {
+                    name: exposure.name.clone(),
+                    depends_on: exposure.depends_on.clone(),
+                    owners: exposure.owners.clone(),
+                },
+            );
+        }
+        graph.rebuild_indexes();
+        graph
+    }
+}
+
+fn dbt_materialization(value: Option<&str>) -> costguard_project::Materialization {
+    match value.unwrap_or_default().to_ascii_lowercase().as_str() {
+        "view" => costguard_project::Materialization::View,
+        "materialized_view" => costguard_project::Materialization::MaterializedView,
+        "incremental" => costguard_project::Materialization::Incremental,
+        "ephemeral" => costguard_project::Materialization::Ephemeral,
+        "table" | "" => costguard_project::Materialization::Table,
+        other => costguard_project::Materialization::Other(other.into()),
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -93,6 +143,9 @@ pub struct DbtModel {
     pub fqn: Vec<String>,
     pub name: String,
     pub path: Option<PathBuf>,
+    pub database: Option<String>,
+    pub schema: Option<String>,
+    pub alias: Option<String>,
     pub materialized: Option<String>,
     pub unique_key: Option<String>,
     pub incremental_strategy: Option<String>,
@@ -433,6 +486,9 @@ models:
       "package_name": "pkg",
       "fqn": ["pkg", "marts", "fct_block_time"],
       "original_file_path": "models/marts/fct_block_time.sql",
+      "database": "analytics",
+      "schema": "marts",
+      "alias": "block_time",
       "meta": { "owner": "@manifest-owner" },
       "group": "finance",
       "config": { "materialized": "incremental", "meta": { "owners": ["data@example.com"] } },
@@ -458,6 +514,11 @@ models:
         assert_eq!(compiled.fqn, vec!["pkg", "marts", "fct_block_time"]);
         assert_eq!(compiled.owners, vec!["@manifest-owner", "data@example.com"]);
         assert_eq!(compiled.group.as_deref(), Some("finance"));
+        let graph = project.to_project_graph();
+        let neutral = graph.model("model.pkg.fct_block_time").unwrap();
+        assert_eq!(neutral.target.catalog.as_deref(), Some("analytics"));
+        assert_eq!(neutral.target.schema.as_deref(), Some("marts"));
+        assert_eq!(neutral.target.object.as_deref(), Some("block_time"));
         let legacy = project.model_by_name("legacy_model").unwrap();
         assert_eq!(legacy.compiled_code.as_deref(), Some("select 1 as id"));
 

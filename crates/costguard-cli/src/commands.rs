@@ -6,9 +6,10 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use costguard_core::{
-    doctor_resolved, explain, init_project, load_resolved_config, rules, scan_resolved,
-    validate_scan_config, DoctorReport, DoctorStatus, InitOptions, OutputFormat, PrSummary,
-    ReceiptTrend, ResolvedScanRequest, ScanConfig, ScanRuntimeOverrides,
+    capture_rocky_artifact, doctor_resolved, explain_resolved, init_project, load_resolved_config,
+    rules, scan_resolved, validate_resolved_scan_request, write_rocky_artifact, DoctorReport,
+    DoctorStatus, InitOptions, OutputFormat, PrSummary, ReceiptTrend, ResolvedScanRequest,
+    RockyCaptureOptions, ScanConfig, ScanRuntimeOverrides,
 };
 use costguard_cost::{normalize_cost_export, CostExportFormat, NormalizeCostOptions};
 use costguard_output::{receipt_trend, render, render_rules};
@@ -36,6 +37,8 @@ enum Command {
     Pr(PrArgs),
     /// Report or normalize model cost data.
     Cost(CostArgs),
+    /// Capture and validate Rocky compile metadata.
+    Rocky(RockyArgs),
     /// List the built-in rule catalog.
     Rules(RulesArgs),
     /// Create, sign, verify, and inspect managed policy bundles.
@@ -197,6 +200,34 @@ enum CostCommand {
 }
 
 #[derive(Debug, Parser)]
+struct RockyArgs {
+    #[command(subcommand)]
+    command: RockyCommand,
+}
+
+#[derive(Debug, Subcommand)]
+enum RockyCommand {
+    /// Seal Rocky compile JSON for reproducible Costguard analysis.
+    Capture {
+        /// Rocky `compile --output json --expand-macros` output.
+        #[arg(long = "compile")]
+        compile_path: PathBuf,
+        /// Rocky project configuration.
+        #[arg(long)]
+        rocky_config: Option<PathBuf>,
+        /// Rocky models directory.
+        #[arg(long)]
+        models_dir: Option<PathBuf>,
+        /// Additional compile input file or directory to seal.
+        #[arg(long = "input")]
+        extra_inputs: Vec<PathBuf>,
+        /// Destination for the sealed Costguard artifact.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Parser)]
 struct CostReportArgs {
     /// Files or directories to include; defaults to the configured project.
     paths: Vec<PathBuf>,
@@ -333,6 +364,12 @@ struct CommonScanArgs {
     /// Base-branch manifest used by PR analysis.
     #[arg(long)]
     base_manifest: Option<PathBuf>,
+    /// Sealed Rocky compile artifact for the current checkout.
+    #[arg(long)]
+    rocky_artifact: Option<PathBuf>,
+    /// Sealed Rocky compile artifact for PR base comparison.
+    #[arg(long)]
+    base_rocky_artifact: Option<PathBuf>,
     /// Analysis completeness policy: standard or strict.
     #[arg(long)]
     analysis_policy: Option<String>,
@@ -347,6 +384,8 @@ impl CommonScanArgs {
         overrides.format = self.format.map(Into::into);
         overrides.manifest_path = self.manifest.clone();
         overrides.base_manifest_path = self.base_manifest.clone();
+        overrides.rocky_artifact_path = self.rocky_artifact.clone();
+        overrides.base_rocky_artifact_path = self.base_rocky_artifact.clone();
         overrides.analysis_policy = self.analysis_policy.clone();
         overrides.policy_bundle_path = self.policy.bundle.clone();
         overrides.trust_store_path = self.policy.trust_store.clone();
@@ -418,6 +457,14 @@ impl From<FormatArg> for OutputFormat {
 pub(crate) fn main_entry() -> ExitCode {
     match run() {
         Ok(code) => ExitCode::from(code),
+        Err(err)
+            if err
+                .downcast_ref::<costguard_core::ProjectConfigurationError>()
+                .is_some() =>
+        {
+            eprintln!("error: configuration error: {err:#}");
+            ExitCode::from(2)
+        }
         Err(err) => {
             eprintln!("error: {err:#}");
             ExitCode::from(3)
@@ -440,7 +487,7 @@ fn run() -> Result<u8> {
                 Ok(config) => config,
                 Err(err) => return configuration_error(err),
             };
-            let result = explain(&config.config, &args.path)?;
+            let result = explain_resolved(&config, &args.path)?;
             print!("{}", render(&result, config.config.format)?);
             Ok(if result.analysis.passed { 0 } else { 1 })
         }
@@ -452,6 +499,7 @@ fn run() -> Result<u8> {
             scan_render_exit(&config, &args.receipt)
         }
         Command::Cost(args) => run_cost_command(args.command),
+        Command::Rocky(args) => run_rocky_command(args.command),
         Command::Rules(args) => {
             let format = args
                 .format
@@ -463,6 +511,47 @@ fn run() -> Result<u8> {
         Command::Policy(args) => run_policy_command(args.command),
         Command::Init(args) => run_init_command(args),
         Command::Doctor(args) => run_doctor_command(args),
+    }
+}
+
+fn run_rocky_command(command: RockyCommand) -> Result<u8> {
+    match command {
+        RockyCommand::Capture {
+            compile_path,
+            rocky_config,
+            models_dir,
+            extra_inputs,
+            output,
+        } => {
+            let root = std::env::current_dir().context("failed to resolve current directory")?;
+            let request = load_resolved_config(
+                &root,
+                ScanConfig {
+                    root: root.clone(),
+                    ..ScanConfig::default()
+                },
+            )?;
+            let rocky_config = rocky_config.unwrap_or_else(|| request.rocky.config_path.clone());
+            let models_dir = models_dir.unwrap_or_else(|| request.rocky.models_dir.clone());
+            let output = output
+                .or_else(|| request.rocky.artifact_path.clone())
+                .unwrap_or_else(|| PathBuf::from("target/costguard-rocky.json"));
+            let artifact = capture_rocky_artifact(&RockyCaptureOptions {
+                root,
+                compile_path,
+                rocky_config,
+                models_dir,
+                extra_inputs,
+                max_artifact_bytes: request.rocky.max_artifact_bytes,
+            })?;
+            write_rocky_artifact(&output, &artifact)?;
+            println!(
+                "captured {} Rocky models at {}",
+                artifact.source_map.len(),
+                output.display()
+            );
+            Ok(0)
+        }
     }
 }
 
@@ -891,8 +980,8 @@ fn resolve_scan_request(
         request.config.changed_only = true;
         request.config.base_branch = patch.base_branch;
     }
-    overrides.apply_to(&mut request.config)?;
-    validate_scan_config(&request.config)?;
+    overrides.apply_to_request(&mut request)?;
+    validate_resolved_scan_request(&request)?;
     Ok(request)
 }
 

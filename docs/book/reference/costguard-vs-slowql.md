@@ -9,7 +9,7 @@ This is a product-boundary comparison, not a claim that one tool replaces the ot
 | Dimension | SlowQL 1.6.7 | Costguard |
 | --- | --- | --- |
 | Unit of analysis | SQL files/statements, optional schemas, cross-file context, and query comparison | Git base/head dbt change: changed models plus manifest, macros, sources, lineage, exposures, and project context |
-| Breadth | Broad six-domain SQL analyzer with 282 rules, custom rules, schema validation, safe autofix, and editor support | 46 cost/performance-focused SQLCOST rules; no generic security/compliance analyzer, autofix, or LSP goal |
+| Breadth | Broad six-domain SQL analyzer with 282 rules, custom rules, schema validation, safe autofix, and editor support | 47 cost/performance and metadata-integrity SQLCOST rules; no generic security/compliance analyzer, autofix, or LSP goal |
 | dbt depth | Recognizes dbt model context as one input classification | Treats dbt state as the product core: manifest model identity, materializations, compiled SQL, refs/sources, transitive downstream nodes, exposures, tags, groups, owners, and recommended `dbt build --select` |
 | Cost model | Cost is one analyzer dimension among several | Model-centric current/post-fix cost, introduced/avoided/net PR impact, efficiency/volume split, downstream blast-radius cost, A/B/C provenance, and mapped-spend coverage |
 | Change semantics | Query comparison is available, while normal findings are file/statement diagnostics | Stable semantic finding IDs classify introduced, severity/cost-regressed, resolved, and unchanged findings; regression-only enforcement is a first-class gate |

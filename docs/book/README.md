@@ -1,10 +1,10 @@
-# Stop expensive dbt regressions before merge.
+# Stop expensive data-model regressions before merge.
 
-SlowQL finds SQL problems. Costguard governs dbt cost changes.
+SlowQL finds SQL problems. Costguard governs dbt and Rocky cost changes.
 
-Costguard reviews dbt pull requests before merge and gates only cost findings introduced or regressed by the change.
+Costguard reviews analytics pull requests before merge and gates only cost findings introduced or regressed by the change.
 
-It scans changed models against the git base, uses optional dbt manifest and lineage context for downstream impact, and runs without warehouse credentials or live queries.
+It scans changed models against the git base, uses optional dbt manifests and sealed Rocky compile artifacts for lineage, and runs without warehouse credentials or live queries.
 
 One binary and one simple CI Action. `costguard pr` is the main workflow; `costguard scan` is the local debugging path.
 
@@ -23,7 +23,7 @@ repeated JSON parsing, unbounded joins, blind `SELECT DISTINCT`, missing partiti
 direct raw-source usage, and row-wise Python logic.
 
 ```text
-PR opened -> changed SQL/dbt files scanned -> cost/perf risks annotated -> fail on high-risk findings
+PR opened -> changed SQL/dbt/Rocky models scanned -> cost/perf risks annotated -> fail on high-risk findings
 ```
 
 ## Costguard vs SlowQL
@@ -57,7 +57,7 @@ Costguard can route findings to dbt/CODEOWNERS owners, apply scoped PR gates and
 
 The CLI default for `--base` is `main`. In CI, prefer `origin/main` after `actions/checkout` with `fetch-depth: 0`.
 
-See [Local scan and explain](getting-started/local-scan.md) for the zero-config local workflow, [Quick start (PR check)](getting-started/quick-start.md) for GitHub Action setup, and [CLI reference](reference/cli.md) for all commands.
+See [Local scan and explain](getting-started/local-scan.md) for the zero-config local workflow, [Rocky integration](getting-started/rocky.md) for sealed compile metadata, [Quick start (PR check)](getting-started/quick-start.md) for GitHub Action setup, and [CLI reference](reference/cli.md) for all commands.
 
 ## Documentation map
 

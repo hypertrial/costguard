@@ -12,7 +12,8 @@ These capabilities are production-ready or actively maintained as part of the cu
 | --- | --- |
 | **PR cost regression gate** | Base/head finding classification, regression-only enforcement, and project net-cost gates through `costguard pr`, the composite Action, and `costguard init` |
 | **Local scan and explain** | `costguard scan`, `costguard explain` for developer debugging |
-| **46 SQLCOST rules** | Severity and confidence are the enforcement contract |
+| **Sealed Rocky analysis** | Hash-verified expanded SQL, mixed dbt/Rocky lineage, and exact-base PR comparison without linking or invoking Rocky |
+| **47 SQLCOST rules** | Severity and confidence are the enforcement contract |
 | **Multi-warehouse parsing** | Generic SQL, Snowflake, BigQuery, Trino (GA); Databricks, Redshift, Postgres, DuckDB (preview) |
 | **Advisory cost estimates** | Local priors and offline inputs only — never a live bill |
 | **Offline cost enrichment** | dbt catalog, query-history CSV, and normalized observation bundles; no live warehouse access |

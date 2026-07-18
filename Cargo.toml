@@ -7,6 +7,7 @@ members = [
     "crates/costguard-scanner",
     "crates/costguard-sql",
     "crates/costguard-dbt",
+    "crates/costguard-project",
     "crates/costguard-rules",
     "crates/costguard-diagnostics",
     "crates/costguard-output",

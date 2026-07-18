@@ -178,6 +178,7 @@ impl Default for ScanConfig {
 pub struct ResolvedScanRequest {
     pub config: ScanConfig,
     pub max_total_base_bytes: u64,
+    pub rocky: RockyConfig,
 }
 
 impl From<ScanConfig> for ResolvedScanRequest {
@@ -185,6 +186,34 @@ impl From<ScanConfig> for ResolvedScanRequest {
         Self {
             config,
             max_total_base_bytes: DEFAULT_MAX_TOTAL_BASE_BYTES,
+            rocky: RockyConfig::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RockyConfig {
+    pub configured: bool,
+    pub artifact_explicit: bool,
+    pub config_path: PathBuf,
+    pub models_dir: PathBuf,
+    pub artifact_path: Option<PathBuf>,
+    pub base_artifact_path: Option<PathBuf>,
+    pub max_artifact_bytes: u64,
+    pub require_artifact_integrity: bool,
+}
+
+impl Default for RockyConfig {
+    fn default() -> Self {
+        Self {
+            configured: false,
+            artifact_explicit: false,
+            config_path: PathBuf::from("rocky.toml"),
+            models_dir: PathBuf::from("models"),
+            artifact_path: None,
+            base_artifact_path: None,
+            max_artifact_bytes: DEFAULT_MAX_MANIFEST_BYTES,
+            require_artifact_integrity: false,
         }
     }
 }
@@ -197,6 +226,7 @@ pub struct FileConfig {
     pub scan: Option<ScanSection>,
     pub output: Option<OutputSection>,
     pub dbt: Option<DbtSection>,
+    pub rocky: Option<RockySection>,
     pub rules: Option<RuleOverrides>,
     pub cost: Option<CostSection>,
     pub analysis: Option<AnalysisSection>,
@@ -329,6 +359,17 @@ pub struct DbtSection {
     pub max_manifest_bytes: Option<u64>,
 }
 
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+pub struct RockySection {
+    pub config_path: Option<PathBuf>,
+    pub models_dir: Option<PathBuf>,
+    pub artifact_path: Option<PathBuf>,
+    pub base_artifact_path: Option<PathBuf>,
+    pub max_artifact_bytes: Option<u64>,
+    pub require_artifact_integrity: Option<bool>,
+}
+
 #[derive(Debug, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct AnalysisSection {
@@ -368,11 +409,40 @@ pub fn load_config(root: &Path) -> Result<FileConfig> {
 
 /// Load and apply project configuration, including execution-only limits.
 pub fn load_resolved_config(root: &Path, config: ScanConfig) -> Result<ResolvedScanRequest> {
-    let (file_config, max_total_base_bytes) = load_config_document(root)?;
+    let (mut file_config, max_total_base_bytes) = load_config_document(root)?;
+    let rocky = resolve_rocky_config(root, file_config.rocky.take());
     Ok(ResolvedScanRequest {
         config: apply_file_config(config, file_config)?,
         max_total_base_bytes,
+        rocky,
     })
+}
+
+fn resolve_rocky_config(root: &Path, section: Option<RockySection>) -> RockyConfig {
+    let explicitly_configured = section.is_some();
+    let section = section.unwrap_or_default();
+    let config_path = section
+        .config_path
+        .unwrap_or_else(|| PathBuf::from("rocky.toml"));
+    let detected = root.join(&config_path).is_file();
+    let configured = explicitly_configured || detected;
+    RockyConfig {
+        configured,
+        artifact_explicit: section.artifact_path.is_some(),
+        config_path,
+        models_dir: section
+            .models_dir
+            .unwrap_or_else(|| PathBuf::from("models")),
+        artifact_path: section
+            .artifact_path
+            .or_else(|| configured.then(|| PathBuf::from("target/costguard-rocky.json"))),
+        base_artifact_path: section.base_artifact_path,
+        max_artifact_bytes: match section.max_artifact_bytes {
+            Some(0) | None => DEFAULT_MAX_MANIFEST_BYTES,
+            Some(value) => value,
+        },
+        require_artifact_integrity: section.require_artifact_integrity.unwrap_or(false),
+    }
 }
 
 fn load_config_document(root: &Path) -> Result<(FileConfig, u64)> {
@@ -519,6 +589,8 @@ pub struct ScanRuntimeOverrides {
     pub format: Option<OutputFormat>,
     pub manifest_path: Option<PathBuf>,
     pub base_manifest_path: Option<PathBuf>,
+    pub rocky_artifact_path: Option<PathBuf>,
+    pub base_rocky_artifact_path: Option<PathBuf>,
     pub fail_on: Option<String>,
     pub min_confidence: Option<String>,
     pub min_confidence_filter: Option<bool>,
@@ -626,6 +698,20 @@ impl ScanRuntimeOverrides {
         }
         Ok(())
     }
+
+    pub fn apply_to_request(&self, request: &mut ResolvedScanRequest) -> Result<()> {
+        self.apply_to(&mut request.config)?;
+        if let Some(path) = &self.rocky_artifact_path {
+            request.rocky.configured = true;
+            request.rocky.artifact_explicit = true;
+            request.rocky.artifact_path = Some(path.clone());
+        }
+        if let Some(path) = &self.base_rocky_artifact_path {
+            request.rocky.configured = true;
+            request.rocky.base_artifact_path = Some(path.clone());
+        }
+        Ok(())
+    }
 }
 
 pub fn validate_scan_config(config: &ScanConfig) -> Result<()> {
@@ -704,6 +790,68 @@ pub fn validate_scan_config(config: &ScanConfig) -> Result<()> {
                 anyhow::bail!("{label} does not exist: {}", resolved.display());
             }
         }
+    }
+    Ok(())
+}
+
+pub fn validate_resolved_scan_request(request: &ResolvedScanRequest) -> Result<()> {
+    validate_scan_config(&request.config)?;
+    if request.rocky.configured {
+        validate_configured_rocky_path(
+            &request.config.root,
+            Some(&request.rocky.config_path),
+            "Rocky config",
+            ConfiguredPathKind::File,
+        )?;
+        validate_configured_rocky_path(
+            &request.config.root,
+            Some(&request.rocky.models_dir),
+            "Rocky models directory",
+            ConfiguredPathKind::Directory,
+        )?;
+    }
+    if request.rocky.artifact_explicit {
+        validate_configured_rocky_path(
+            &request.config.root,
+            request.rocky.artifact_path.as_deref(),
+            "Rocky artifact",
+            ConfiguredPathKind::File,
+        )?;
+    }
+    if request.rocky.base_artifact_path.is_some() {
+        validate_configured_rocky_path(
+            &request.config.root,
+            request.rocky.base_artifact_path.as_deref(),
+            "base Rocky artifact",
+            ConfiguredPathKind::File,
+        )?;
+    }
+    Ok(())
+}
+
+enum ConfiguredPathKind {
+    File,
+    Directory,
+}
+
+fn validate_configured_rocky_path(
+    root: &Path,
+    path: Option<&Path>,
+    label: &str,
+    kind: ConfiguredPathKind,
+) -> Result<()> {
+    let path = path.with_context(|| format!("{label} path is not configured"))?;
+    let resolved = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        root.join(path)
+    };
+    let exists = match kind {
+        ConfiguredPathKind::File => resolved.is_file(),
+        ConfiguredPathKind::Directory => resolved.is_dir(),
+    };
+    if !exists {
+        anyhow::bail!("{label} path does not exist: {}", resolved.display());
     }
     Ok(())
 }
@@ -894,6 +1042,73 @@ max_file_bytes = 1024
                 .expect("load default limit")
                 .max_total_base_bytes,
             DEFAULT_MAX_TOTAL_BASE_BYTES
+        );
+    }
+
+    #[test]
+    fn resolved_config_auto_detects_and_overrides_rocky_artifacts() {
+        let root = tempfile::tempdir().expect("tempdir");
+        std::fs::create_dir(root.path().join("models")).unwrap();
+        std::fs::write(root.path().join("rocky.toml"), "version = 1\n").unwrap();
+        let mut request = load_resolved_config(
+            root.path(),
+            ScanConfig {
+                root: root.path().to_path_buf(),
+                ..ScanConfig::default()
+            },
+        )
+        .expect("auto detect");
+        assert!(request.rocky.configured);
+        assert!(!request.rocky.artifact_explicit);
+        assert_eq!(
+            request.rocky.artifact_path,
+            Some(PathBuf::from("target/costguard-rocky.json"))
+        );
+
+        ScanRuntimeOverrides {
+            rocky_artifact_path: Some(PathBuf::from("head.json")),
+            base_rocky_artifact_path: Some(PathBuf::from("base.json")),
+            ..ScanRuntimeOverrides::default()
+        }
+        .apply_to_request(&mut request)
+        .unwrap();
+        assert!(request.rocky.artifact_explicit);
+        assert_eq!(
+            request.rocky.artifact_path,
+            Some(PathBuf::from("head.json"))
+        );
+        assert_eq!(
+            request.rocky.base_artifact_path,
+            Some(PathBuf::from("base.json"))
+        );
+        assert!(validate_resolved_scan_request(&request)
+            .unwrap_err()
+            .to_string()
+            .contains("Rocky artifact path does not exist"));
+    }
+
+    #[test]
+    fn resolved_config_rejects_missing_rocky_project_paths() {
+        let root = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            root.path().join("costguard.toml"),
+            "[rocky]\nconfig_path = \"missing.toml\"\nmodels_dir = \"missing-models\"\n",
+        )
+        .unwrap();
+        let request = load_resolved_config(
+            root.path(),
+            ScanConfig {
+                root: root.path().to_path_buf(),
+                ..ScanConfig::default()
+            },
+        )
+        .expect("load config");
+        let error = validate_resolved_scan_request(&request).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("Rocky config path does not exist"),
+            "{error:#}"
         );
     }
 

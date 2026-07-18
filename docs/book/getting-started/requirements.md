@@ -1,6 +1,6 @@
 # Requirements
 
-Costguard reads **source files, git history, and (optionally) `target/manifest.json`**. It never connects to your warehouse and never needs credentials.
+Costguard reads **source files, git history, and optional dbt/Rocky compile metadata**. It never connects to your warehouse and never needs credentials.
 
 ## What you need
 
@@ -11,6 +11,7 @@ Costguard reads **source files, git history, and (optionally) `target/manifest.j
 | SQL / dbt model files | Yes | Scanned from the project root (or `[scan].paths`) |
 | `target/manifest.json` | Optional | Auto-detected when present; use compiled SQL for Jinja-heavy models; default maximum 512 MiB |
 | `dbt compile` | Optional (your CI step) | Costguard does not run dbt; run compile before the check when you want manifest-backed analysis |
+| Sealed Rocky artifact | Required for `.rocky` DSL analysis | Run Rocky compile with expanded macros, then `costguard rocky capture`; Costguard never invokes Rocky |
 | `--warehouse` / dialect | Optional | Default `generic`; set to your warehouse for sharper parsing |
 | Warehouse credentials | Never | Local-only analysis |
 | Python 3 on CI runner | Yes for GitHub Action | The composite action driver is Python |
@@ -25,6 +26,8 @@ When a manifest is loaded but model SQL files are newer than the manifest file, 
 For Jinja-heavy dbt models, run `dbt compile` in your existing CI job before Costguard so `compiled_code` is available in the manifest.
 
 All explicit, auto-detected, and git-base manifests are limited by `[dbt].max_manifest_bytes` (default `536870912`). Omitted or `0` uses that default. Repositories with a legitimate larger manifest must raise the setting explicitly; oversized inputs fail closed before scan output is produced.
+
+Rocky artifact behavior and exact-base requirements are documented in [Rocky integration](rocky.md).
 
 Maintainer evaluation and judge environments require Python 3.11 or newer. Install their universal hashed locks with standard pip:
 

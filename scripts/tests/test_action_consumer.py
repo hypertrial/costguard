@@ -530,6 +530,8 @@ class ActionConsumerTest(unittest.TestCase):
                     "POLICY_REPOSITORY_INPUT": "acme/warehouse",
                     "BLOCK_ONLY_NEW_INPUT": "false",
                     "FAIL_ON_PR_COST_INCREASE_INPUT": "250",
+                    "ROCKY_ARTIFACT_INPUT": "target/costguard-rocky.json",
+                    "BASE_ROCKY_ARTIFACT_INPUT": "artifacts/base-rocky.json",
                     "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
                 },
             )
@@ -544,6 +546,10 @@ class ActionConsumerTest(unittest.TestCase):
             self.assertIn("--block-only-new=false", arguments)
             self.assertIn("--fail-on-pr-cost-increase", arguments)
             self.assertIn("250", arguments)
+            self.assertIn("--rocky-artifact", arguments)
+            self.assertIn("target/costguard-rocky.json", arguments)
+            self.assertIn("--base-rocky-artifact", arguments)
+            self.assertIn("artifacts/base-rocky.json", arguments)
 
     def test_run_writes_step_summary_and_forwards_receipt_inputs(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -26,7 +26,7 @@ Snapshot: [`tests/benchmarks/evidence/v2.6.json`](../../../tests/benchmarks/evid
 
 ## Precision tiers
 
-- **informational:** 16
+- **informational:** 17
 - **verified-high:** 27
 - **verified-low:** 1
 - **verified-medium:** 2

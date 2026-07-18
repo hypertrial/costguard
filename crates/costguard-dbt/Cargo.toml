@@ -8,6 +8,7 @@ repository.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+costguard-project = { path = "../costguard-project" }
 regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true

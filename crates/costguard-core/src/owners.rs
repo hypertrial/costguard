@@ -1,6 +1,7 @@
 use crate::config::OwnersConfig;
 use costguard_dbt::{DbtModel, DbtProject};
 use costguard_diagnostics::Diagnostic;
+use costguard_project::{ModelMetadata, ProjectGraph};
 use globset::Glob;
 use std::path::Path;
 
@@ -58,6 +59,30 @@ impl OwnerResolver {
         unique(self.config.default.values())
     }
 
+    pub(crate) fn owners_for_metadata(&self, model: &ModelMetadata) -> Vec<String> {
+        if !model.owners.is_empty() {
+            return unique(model.owners.clone());
+        }
+        let mut configured = Vec::new();
+        for tag in &model.tags {
+            if let Some(owners) = self.config.tags.get(tag) {
+                configured.extend(owners.values());
+            }
+        }
+        configured.extend(self.configured_path_owners(&model.path));
+        if !configured.is_empty() {
+            return unique(configured);
+        }
+        let codeowners = self.codeowners_for_path(&model.path);
+        if !codeowners.is_empty() {
+            return codeowners;
+        }
+        if let Some(group) = &model.group {
+            return vec![group.clone()];
+        }
+        unique(self.config.default.values())
+    }
+
     pub(crate) fn owners_for_path(&self, path: &Path, dbt: Option<&DbtProject>) -> Vec<String> {
         if let Some(model) = model_for_path(dbt, path) {
             return self.owners_for_model(model);
@@ -71,6 +96,18 @@ impl OwnerResolver {
             return codeowners;
         }
         unique(self.config.default.values())
+    }
+
+    pub(crate) fn owners_for_project_path(
+        &self,
+        path: &Path,
+        dbt: Option<&DbtProject>,
+        graph: &ProjectGraph,
+    ) -> Vec<String> {
+        if let Some(model) = graph.model_for_path(path) {
+            return self.owners_for_metadata(model);
+        }
+        self.owners_for_path(path, dbt)
     }
 
     fn configured_path_owners(&self, path: &Path) -> Vec<String> {
@@ -100,9 +137,11 @@ pub(crate) fn assign_diagnostic_owners(
     diagnostics: &mut [Diagnostic],
     resolver: &OwnerResolver,
     dbt: Option<&DbtProject>,
+    graph: &ProjectGraph,
 ) {
     for diagnostic in diagnostics {
-        diagnostic.governance.owners = resolver.owners_for_path(&diagnostic.path, dbt);
+        diagnostic.governance.owners =
+            resolver.owners_for_project_path(&diagnostic.path, dbt, graph);
     }
 }
 

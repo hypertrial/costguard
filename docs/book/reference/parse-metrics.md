@@ -33,7 +33,7 @@ When dbt metadata is loaded without a manifest or YAML/dbt_project parsing fails
 | `dbt_project_parse_failures` | `dbt_project.yml` parse or ambiguous `models:` block failures |
 | `metadata_only_scan` | `true` when no manifest was loaded but dbt files were present |
 
-Related diagnostics: `SQLCOST023` (no manifest), `SQLCOST045` (stale manifest), `SQLCOST046` (manifest checksum mismatch on changed models), `SQLCOST024` (YAML parse failure), `SQLCOST025` (`dbt_project.yml` issue), `SQLCOST026` (file skipped because it exceeds `[scan].max_file_bytes`). These are Info/Low severity and do not fail default `--fail-on high` runs.
+Related diagnostics: `SQLCOST023` (no manifest), `SQLCOST045` (stale manifest), `SQLCOST046` (manifest checksum mismatch on changed models), `SQLCOST047` (Rocky artifact integrity), `SQLCOST024` (YAML parse failure), `SQLCOST025` (`dbt_project.yml` issue), and `SQLCOST026` (file skipped because it exceeds `[scan].max_file_bytes`). These are Info/Low severity and do not fail default `--fail-on high` runs.
 
 ## Headline vs compiled parse
 
@@ -64,7 +64,7 @@ When raw Jinja fails but compiled SQL parses, Costguard can extract AST shape fe
 Headline parse success (`parsed`) and AST feature extraction can diverge:
 
 - Compiled parse success alone does **not** enable AST extraction unless raw parse also succeeds, **except** when compiled AST fallback is used for macro-heavy models with manifest `compiled_code`.
-- Findings produced only from compiled AST fallback are marked `compiled_unmapped` in JSON when Costguard cannot map the compiled location back to a raw dbt source line.
+- Findings produced only from compiled AST fallback are marked `compiled_unmapped` in JSON when Costguard cannot map the compiled location back to a raw dbt or Rocky source line.
 - Shape rules such as SQLCOST016–019 set `confidence: low` when AST extraction was not used.
 
 ## Audit gate

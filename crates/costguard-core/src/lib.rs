@@ -21,6 +21,7 @@ mod init;
 mod metadata_report;
 mod owners;
 mod pipeline;
+mod rocky;
 mod scan;
 mod scan_plan;
 mod sql_analysis;
@@ -32,10 +33,11 @@ pub use baseline::{
     validate_finding_baseline, write_finding_baseline, BaselinedFinding, FindingBaseline,
 };
 pub use config::{
-    apply_file_config, load_config, load_resolved_config, validate_scan_config, AnalysisConfig,
-    AnalysisPolicy, AnalysisSection, DbtSection, FileConfig, GateConfig, GateMode, GateScope,
-    OutputFormat, OutputSection, OwnerValue, OwnersConfig, ResolvedScanRequest, ScanConfig,
-    ScanRuntimeOverrides, ScanSection, SignedPolicyConfig, SignedPolicySection, Waiver,
+    apply_file_config, load_config, load_resolved_config, validate_resolved_scan_request,
+    validate_scan_config, AnalysisConfig, AnalysisPolicy, AnalysisSection, DbtSection, FileConfig,
+    GateConfig, GateMode, GateScope, OutputFormat, OutputSection, OwnerValue, OwnersConfig,
+    ResolvedScanRequest, RockyConfig, RockySection, ScanConfig, ScanRuntimeOverrides, ScanSection,
+    SignedPolicyConfig, SignedPolicySection, Waiver, DEFAULT_MAX_MANIFEST_BYTES,
     DEFAULT_MAX_TOTAL_BASE_BYTES,
 };
 pub use context::{ContextIssue, ContextReport};
@@ -53,7 +55,11 @@ pub use costguard_sql::{
 };
 pub use doctor::{doctor, doctor_resolved, DoctorCheck, DoctorReport, DoctorStatus};
 pub use init::{detect_warehouse, init_project, InitOptions, InitOutcome};
-pub use scan::{explain, rules, scan, scan_resolved};
+pub use rocky::{
+    capture_rocky_artifact, load_rocky_artifact, write_rocky_artifact, RockyArtifactEnvelope,
+    RockyCaptureOptions, RockyIntegrity, RockyIntegrityState,
+};
+pub use scan::{explain, explain_resolved, rules, scan, scan_resolved};
 pub use state_diff::{classify_findings, FindingDelta};
 
 use costguard_dbt::DbtProject;
@@ -64,12 +70,40 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+#[derive(Debug)]
+pub struct ProjectConfigurationError(pub String);
+
+impl std::fmt::Display for ProjectConfigurationError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for ProjectConfigurationError {}
+
 /// A discovered project with its classified files and optional dbt metadata.
 #[derive(Debug, Clone)]
 pub struct Project {
     pub root: PathBuf,
     pub files: Vec<ProjectFile>,
     pub dbt: Option<DbtProject>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct LoadedProject {
+    pub project: Project,
+    pub graph: costguard_project::ProjectGraph,
+    pub compiled_unmapped_paths: std::collections::BTreeSet<PathBuf>,
+    pub rocky_owned_paths: std::collections::BTreeSet<PathBuf>,
+    pub rocky_inputs: std::collections::BTreeSet<PathBuf>,
+}
+
+impl std::ops::Deref for LoadedProject {
+    type Target = Project;
+
+    fn deref(&self) -> &Self::Target {
+        &self.project
+    }
 }
 
 /// Parse and scan counters collected during a run.
@@ -149,6 +183,9 @@ impl ScanResult {
     }
 
     pub fn diagnostic_is_blocking(&self, diagnostic: &Diagnostic) -> bool {
+        if diagnostic.rule_id == "SQLCOST047" {
+            return false;
+        }
         if !self.block_only_new() {
             return true;
         }
@@ -163,6 +200,18 @@ impl ScanResult {
 
     pub fn diagnostic_delta_status(&self, diagnostic: &Diagnostic) -> Option<&'static str> {
         if costguard_cost::is_infrastructure_rule(&diagnostic.rule_id) {
+            return None;
+        }
+        if self
+            .pr_summary
+            .as_ref()
+            .and_then(|summary| summary.rocky_artifact_integrity.as_ref())
+            .is_some_and(|integrity| {
+                integrity
+                    .unclassified_finding_ids
+                    .contains(&diagnostic.governance.finding_id)
+            })
+        {
             return None;
         }
         let delta = self.pr_summary.as_ref()?.finding_delta.as_ref()?;
@@ -296,6 +345,8 @@ pub struct PrSummary {
     pub affected_downstream: Vec<String>,
     pub affected_exposures: Vec<String>,
     pub recommended_dbt_command: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub recommended_commands: Vec<RecommendedCommand>,
     pub gate_results: Vec<GateResult>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub trend: Option<ReceiptTrend>,
@@ -305,6 +356,8 @@ pub struct PrSummary {
     pub indirectly_affected: Vec<IndirectImpact>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub manifest_integrity: Option<ManifestIntegrity>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rocky_artifact_integrity: Option<RockyIntegrity>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enforcement_preview: Option<EnforcementPreview>,
 }
@@ -325,6 +378,12 @@ pub struct ManifestIntegrity {
 pub struct EnforcementPreview {
     pub block_only_new: bool,
     pub require_manifest_integrity: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub require_rocky_artifact_integrity: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 impl Default for PrSummary {
@@ -338,11 +397,13 @@ impl Default for PrSummary {
             affected_downstream: Vec::new(),
             affected_exposures: Vec::new(),
             recommended_dbt_command: None,
+            recommended_commands: Vec::new(),
             gate_results: Vec::new(),
             trend: None,
             finding_delta: None,
             indirectly_affected: Vec::new(),
             manifest_integrity: None,
+            rocky_artifact_integrity: None,
             enforcement_preview: None,
         }
     }
@@ -352,6 +413,8 @@ impl Default for PrSummary {
 pub struct ChangedModelDetail {
     pub id: String,
     pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub framework: Option<String>,
     pub path: PathBuf,
     pub tags: Vec<String>,
     pub owners: Vec<String>,
@@ -360,6 +423,13 @@ pub struct ChangedModelDetail {
     pub affected_downstream: Vec<String>,
     pub affected_exposures: Vec<String>,
     pub affected_exposure_owners: BTreeMap<String, Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RecommendedCommand {
+    pub framework: String,
+    pub command: String,
+    pub scope: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -551,6 +621,7 @@ mod tests {
             enforcement_preview: Some(EnforcementPreview {
                 block_only_new: true,
                 require_manifest_integrity: false,
+                require_rocky_artifact_integrity: false,
             }),
             ..PrSummary::default()
         });
@@ -580,6 +651,7 @@ mod tests {
             enforcement_preview: Some(EnforcementPreview {
                 block_only_new: true,
                 require_manifest_integrity: false,
+                require_rocky_artifact_integrity: false,
             }),
             ..PrSummary::default()
         });

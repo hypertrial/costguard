@@ -258,7 +258,7 @@ Requires a cached checkout with `target/manifest.json` from `benchmark_external_
 
 ## `rule_tp_census.py`
 
-Cost-ranked FP-elimination census across benchmark repos. For each behavioral rule, examines up to **100** findings (100% if fewer), ranked by `cost_estimate.savings_p50_usd_per_month`. **PASS** when the examined sample has **0 `fp_bug` and 0 `unknown`** (`tp` and documented `exempt` findings are both acceptable). Infrastructure rules SQLCOST023–027, SQLCOST045, and SQLCOST046 auto-pass.
+Cost-ranked FP-elimination census across benchmark repos. For each behavioral rule, examines up to **100** findings (100% if fewer), ranked by `cost_estimate.savings_p50_usd_per_month`. **PASS** when the examined sample has **0 `fp_bug` and 0 `unknown`** (`tp` and documented `exempt` findings are both acceptable). Infrastructure rules SQLCOST023–027 and SQLCOST045–047 auto-pass.
 
 ```bash
 python3 scripts/rule_tp_census.py --emit-evidence

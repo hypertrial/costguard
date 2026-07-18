@@ -12,11 +12,11 @@ use crate::pipeline::{
 };
 use crate::sql_analysis::{analyze_sql_documents, dbt_models_by_path, parse_failure_diagnostics};
 use crate::waivers::apply_local_waivers;
-use crate::{AnalysisViolation, Project};
+use crate::{AnalysisViolation, LoadedProject};
 use anyhow::Result;
 use costguard_cost::{
-    is_infrastructure_rule, run_cost_analysis, summarize_features, CostAnalysisResult, CostInputs,
-    ModelFeatureSummary,
+    is_infrastructure_rule, run_cost_analysis_for_project, summarize_features, CostAnalysisResult,
+    CostInputs, ModelFeatureSummary,
 };
 use costguard_dbt::compiled_code_by_model_path;
 use costguard_protocol::EnforcementOutcome;
@@ -47,7 +47,7 @@ pub(crate) struct BranchScanInput<'a> {
 }
 
 pub(crate) struct BranchScanRun<'a> {
-    pub project: &'a Project,
+    pub project: &'a LoadedProject,
     pub analysis_files: &'a [ProjectFile],
     pub metadata_diagnostics: Vec<costguard_diagnostics::Diagnostic>,
     pub write_baseline_path: Option<&'a Path>,
@@ -97,7 +97,7 @@ pub(crate) fn run_branch_diagnostics(request: BranchScanRequest<'_>) -> Result<B
     validate_rule_registration(&registry)?;
 
     let mut raw_diagnostics = metadata_diagnostics;
-    let file_texts = file_text_map(&project.files);
+    let file_texts = file_text_map(&project.files, &project.compiled_unmapped_paths);
     let file_scopes = file_scope_map(&project.files);
     for file in &project.files {
         let sql = sql_by_path.get(&file.path).copied();
@@ -116,9 +116,33 @@ pub(crate) fn run_branch_diagnostics(request: BranchScanRequest<'_>) -> Result<B
             project_indexes: &project_indexes,
             overrides: &overrides,
         };
-        let mut file_diagnostics = registry.run(&ctx);
+        let framework = project
+            .graph
+            .model_for_path(&file.root_relative_path)
+            .map(|model| model.framework)
+            .or_else(|| {
+                project
+                    .rocky_owned_paths
+                    .contains(&file.root_relative_path)
+                    .then_some(costguard_project::Framework::Rocky)
+            });
+        let mut file_diagnostics = registry.run_for_framework(&ctx, framework);
         if let Some(policy) = &resolved {
             file_diagnostics.extend(registry.run_declarative(&ctx, &policy.custom_rules)?);
+        }
+        if project
+            .compiled_unmapped_paths
+            .contains(&file.root_relative_path)
+        {
+            for diagnostic in &mut file_diagnostics {
+                diagnostic.compiled_line = Some(diagnostic.line);
+                diagnostic.compiled_column = Some(diagnostic.column);
+                diagnostic.line = 1;
+                diagnostic.column = 1;
+                diagnostic.span = None;
+                diagnostic.source_provenance =
+                    Some(costguard_diagnostics::SourceProvenance::CompiledUnmapped);
+            }
         }
         raw_diagnostics.extend(apply_enabled_and_severity(file_diagnostics, &overrides));
     }
@@ -141,7 +165,12 @@ pub(crate) fn run_branch_diagnostics(request: BranchScanRequest<'_>) -> Result<B
         apply_inline_suppressions(raw_diagnostics, &file_texts, &file_scopes, allow_inline);
     let IdentityResult { mut diagnostics } = assign_semantic_identities(diagnostics)?;
     let policy_violations = apply_managed_governance(&mut diagnostics, managed_policy, started_at)?;
-    assign_diagnostic_owners(&mut diagnostics, owner_resolver, project.dbt.as_ref());
+    assign_diagnostic_owners(
+        &mut diagnostics,
+        owner_resolver,
+        project.dbt.as_ref(),
+        &project.graph,
+    );
     let waiver_violations = apply_local_waivers(&mut diagnostics, &config.waivers, started_at);
 
     if let Some(path) = write_baseline_path {
@@ -227,16 +256,17 @@ fn write_baseline_from_scan(
 fn run_optional_cost(
     config: &ScanConfig,
     root: &Path,
-    project: &Project,
+    project: &LoadedProject,
     diagnostics: &mut [costguard_diagnostics::Diagnostic],
     features_by_path: &HashMap<PathBuf, ModelFeatureSummary>,
 ) -> Result<Option<CostAnalysisResult>> {
     if let Some(cost_config) = &config.cost {
         if cost_config.enabled {
             let inputs = CostInputs::load(root, cost_config)?;
-            return Ok(Some(run_cost_analysis(
+            return Ok(Some(run_cost_analysis_for_project(
                 cost_config,
                 project.dbt.as_ref(),
+                Some(&project.graph),
                 &inputs,
                 diagnostics,
                 features_by_path,
@@ -275,9 +305,13 @@ fn feature_summaries_by_path(documents: &[SqlDocument]) -> HashMap<PathBuf, Mode
         .collect()
 }
 
-fn file_text_map(files: &[ProjectFile]) -> HashMap<PathBuf, String> {
+fn file_text_map(
+    files: &[ProjectFile],
+    compiled_unmapped_paths: &std::collections::BTreeSet<PathBuf>,
+) -> HashMap<PathBuf, String> {
     files
         .iter()
+        .filter(|file| !compiled_unmapped_paths.contains(&file.root_relative_path))
         .map(|file| (file.root_relative_path.clone(), file.text.clone()))
         .collect()
 }

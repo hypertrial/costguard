@@ -229,3 +229,8 @@ notes = "infrastructure or metadata rule"
 id = "SQLCOST046"
 tier = "informational"
 notes = "infrastructure or metadata rule"
+
+[[rule]]
+id = "SQLCOST047"
+tier = "informational"
+notes = "infrastructure or metadata rule"

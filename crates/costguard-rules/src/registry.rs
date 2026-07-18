@@ -1,6 +1,7 @@
 use crate::evidence;
 use costguard_dbt::DbtModel;
 use costguard_diagnostics::{Diagnostic, Severity};
+use costguard_project::Framework;
 use costguard_scanner::ProjectFile;
 use costguard_sql::SqlDocument;
 use serde::{Deserialize, Serialize};
@@ -123,6 +124,34 @@ pub struct RuleMetadata {
     pub name: &'static str,
     pub description: &'static str,
     pub severity: Severity,
+    pub frameworks: &'static [&'static str],
+}
+
+const DBT_ONLY_RULE_IDS: &[&str] = &[
+    "SQLCOST004",
+    "SQLCOST005",
+    "SQLCOST011",
+    "SQLCOST019",
+    "SQLCOST023",
+    "SQLCOST024",
+    "SQLCOST025",
+    "SQLCOST028",
+    "SQLCOST029",
+    "SQLCOST039",
+    "SQLCOST040",
+    "SQLCOST042",
+    "SQLCOST043",
+    "SQLCOST045",
+    "SQLCOST046",
+];
+const ROCKY_ONLY_RULE_IDS: &[&str] = &["SQLCOST047"];
+
+fn rule_supports_framework(rule_id: &str, framework: Option<Framework>) -> bool {
+    match framework {
+        Some(Framework::Dbt) => !ROCKY_ONLY_RULE_IDS.contains(&rule_id),
+        Some(Framework::Rocky) => !DBT_ONLY_RULE_IDS.contains(&rule_id),
+        None => !DBT_ONLY_RULE_IDS.contains(&rule_id) && !ROCKY_ONLY_RULE_IDS.contains(&rule_id),
+    }
 }
 
 /// Registry of all built-in SQLCOST rules.
@@ -163,6 +192,7 @@ impl RuleRegistry {
                 Box::new(crate::metadata::SqlParseFailedRule),
                 Box::new(crate::metadata::StaleManifestRule),
                 Box::new(crate::metadata::ManifestChecksumMismatchRule),
+                Box::new(crate::metadata::RockyArtifactIntegrityRule),
                 Box::new(crate::dbt::MissingPartitionClusterRule),
                 Box::new(crate::dbt::FullRefreshHeavyIncrementalRule),
                 Box::new(crate::cost_patterns::CorrelatedSubqueryRule),
@@ -192,6 +222,13 @@ impl RuleRegistry {
                 name: rule.name(),
                 description: rule.description(),
                 severity: rule.default_severity(),
+                frameworks: if DBT_ONLY_RULE_IDS.contains(&rule.id()) {
+                    &["dbt"]
+                } else if ROCKY_ONLY_RULE_IDS.contains(&rule.id()) {
+                    &["rocky"]
+                } else {
+                    &["dbt", "rocky", "sql"]
+                },
             })
             .collect()
     }
@@ -200,6 +237,19 @@ impl RuleRegistry {
         self.rules
             .iter()
             .filter(|rule| rule.applies_to(ctx.warehouse))
+            .flat_map(|rule| rule.check(ctx))
+            .collect()
+    }
+
+    pub fn run_for_framework(
+        &self,
+        ctx: &RuleContext<'_>,
+        framework: Option<Framework>,
+    ) -> Vec<Diagnostic> {
+        self.rules
+            .iter()
+            .filter(|rule| rule.applies_to(ctx.warehouse))
+            .filter(|rule| rule_supports_framework(rule.id(), framework))
             .flat_map(|rule| rule.check(ctx))
             .collect()
     }
