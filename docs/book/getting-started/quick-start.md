@@ -36,7 +36,7 @@ jobs:
         with:
           fetch-depth: 0
       - run: dbt compile --target dev
-      - uses: hypertrial/costguard/.github/actions/costguard@v2.6.0
+      - uses: hypertrial/costguard/.github/actions/costguard@v2.7.0
         with:
           base: origin/main
           warehouse: snowflake

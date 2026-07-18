@@ -164,7 +164,7 @@ checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 
 [[package]]
 name = "costguard-cli"
-version = "2.6.0"
+version = "2.7.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -181,7 +181,7 @@ dependencies = [
 
 [[package]]
 name = "costguard-core"
-version = "2.6.0"
+version = "2.7.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -207,7 +207,7 @@ dependencies = [
 
 [[package]]
 name = "costguard-cost"
-version = "2.6.0"
+version = "2.7.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -222,7 +222,7 @@ dependencies = [
 
 [[package]]
 name = "costguard-dbt"
-version = "2.6.0"
+version = "2.7.0"
 dependencies = [
  "anyhow",
  "costguard-project",
@@ -235,7 +235,7 @@ dependencies = [
 
 [[package]]
 name = "costguard-diagnostics"
-version = "2.6.0"
+version = "2.7.0"
 dependencies = [
  "costguard-protocol",
  "schemars",
@@ -245,7 +245,7 @@ dependencies = [
 
 [[package]]
 name = "costguard-output"
-version = "2.6.0"
+version = "2.7.0"
 dependencies = [
  "anyhow",
  "costguard-core",
@@ -259,7 +259,7 @@ dependencies = [
 
 [[package]]
 name = "costguard-policy"
-version = "2.6.0"
+version = "2.7.0"
 dependencies = [
  "anyhow",
  "base64",
@@ -278,14 +278,14 @@ dependencies = [
 
 [[package]]
 name = "costguard-project"
-version = "2.6.0"
+version = "2.7.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "costguard-protocol"
-version = "2.6.0"
+version = "2.7.0"
 dependencies = [
  "schemars",
  "serde",
@@ -293,7 +293,7 @@ dependencies = [
 
 [[package]]
 name = "costguard-rules"
-version = "2.6.0"
+version = "2.7.0"
 dependencies = [
  "anyhow",
  "costguard-dbt",
@@ -309,7 +309,7 @@ dependencies = [
 
 [[package]]
 name = "costguard-scanner"
-version = "2.6.0"
+version = "2.7.0"
 dependencies = [
  "anyhow",
  "costguard-diagnostics",
@@ -322,7 +322,7 @@ dependencies = [
 
 [[package]]
 name = "costguard-sql"
-version = "2.6.0"
+version = "2.7.0"
 dependencies = [
  "costguard-dbt",
  "costguard-diagnostics",

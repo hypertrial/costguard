@@ -106,10 +106,10 @@ Install Costguard, then compile and capture Rocky before the Costguard Action. D
 ```yaml
 - run: |
     export COSTGUARD_INSTALL_DIR="$RUNNER_TEMP/costguard-bin"
-    curl -fsSL https://raw.githubusercontent.com/hypertrial/costguard/main/scripts/install.sh | sh -s -- v2.6.0
+    curl -fsSL https://raw.githubusercontent.com/hypertrial/costguard/main/scripts/install.sh | sh -s -- v2.7.0
     rocky compile --output json --expand-macros > target/rocky-compile.json
     "$COSTGUARD_INSTALL_DIR/costguard" rocky capture --compile target/rocky-compile.json
-- uses: hypertrial/costguard/.github/actions/costguard@v2.6.0
+- uses: hypertrial/costguard/.github/actions/costguard@v2.7.0
   with:
     base: origin/main
     rocky-artifact: target/costguard-rocky.json

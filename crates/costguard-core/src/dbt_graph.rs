@@ -136,7 +136,7 @@ fn enrich_rocky_pr_summary(
         .collect::<HashSet<_>>();
     let rocky_models = project
         .graph
-        .models
+        .models()
         .values()
         .filter(|model| model.framework == Framework::Rocky)
         .collect::<Vec<_>>();
@@ -815,21 +815,22 @@ mod tests {
                 vec!["rocky.orders".to_string()],
             ),
         ] {
-            graph.insert_model(costguard_project::ModelMetadata {
-                id: id.into(),
-                framework: costguard_project::Framework::Rocky,
-                name: name.into(),
-                path: path.into(),
-                materialization: costguard_project::Materialization::View,
-                strategy: Some("view".into()),
-                target: Default::default(),
-                tags: Vec::new(),
-                owners: Vec::new(),
-                group: None,
-                depends_on,
-            });
+            graph
+                .insert_model(costguard_project::ModelMetadata {
+                    id: id.into(),
+                    framework: costguard_project::Framework::Rocky,
+                    name: name.into(),
+                    path: path.into(),
+                    materialization: costguard_project::Materialization::View,
+                    strategy: Some("view".into()),
+                    target: Default::default(),
+                    tags: Vec::new(),
+                    owners: Vec::new(),
+                    group: None,
+                    depends_on,
+                })
+                .unwrap();
         }
-        graph.rebuild_indexes();
         let owners =
             OwnerResolver::load(PathBuf::from(".").as_path(), &Default::default()).unwrap();
         let project = LoadedProject {

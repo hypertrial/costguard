@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import tempfile
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
@@ -24,7 +26,6 @@ from llm_judge_lib import (  # noqa: E402
     cache_key,
     load_judge_records,
     load_manifest,
-    utc_now_iso,
 )
 
 MIN_RULE_SAMPLES = 5
@@ -201,7 +202,6 @@ def build_report(records: list[JudgeRecord], manifest: JudgeManifest) -> dict[st
 
     overall_metrics = metrics_block(scorable)
     return {
-        "generated_at": utc_now_iso(),
         "manifest": {
             "judge_name": manifest.judge_name,
             "judge_version": manifest.judge_version,
@@ -227,11 +227,48 @@ def build_report(records: list[JudgeRecord], manifest: JudgeManifest) -> dict[st
     }
 
 
+def render_report(report: dict[str, Any]) -> bytes:
+    return (json.dumps(report, indent=2) + "\n").encode("utf-8")
+
+
+def emit_report(path: Path, content: bytes, *, check: bool) -> bool:
+    if check:
+        try:
+            return path.read_bytes() == content
+        except FileNotFoundError:
+            return False
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            mode="wb",
+            delete=False,
+        ) as temporary:
+            temporary.write(content)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+            temporary_path = Path(temporary.name)
+        os.replace(temporary_path, path)
+        temporary_path = None
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+    return True
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--labels", type=Path, default=DEFAULT_LABELS_JSONL)
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--json-out", type=Path, default=DEFAULT_IRR_REPORT)
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="verify that the committed report is current without writing it",
+    )
     args = parser.parse_args()
 
     manifest = load_manifest(args.manifest)
@@ -243,8 +280,13 @@ def main() -> int:
         return 1
 
     report = build_report(records, manifest)
-    args.json_out.parent.mkdir(parents=True, exist_ok=True)
-    args.json_out.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    if not emit_report(args.json_out, render_report(report), check=args.check):
+        print(
+            f"stale or missing IRR report: {args.json_out}; "
+            "run scripts/eval_irr.py to refresh it",
+            file=sys.stderr,
+        )
+        return 1
 
     overall = report["overall"]
     counts = report["counts"]
@@ -254,7 +296,7 @@ def main() -> int:
         f"fp_recall={overall['registry_fp_recall']} "
         f"coverage={overall['coverage']:.3f} abstain={overall['abstain_rate']:.3f}"
     )
-    print(f"wrote {args.json_out}")
+    print(f"{'verified' if args.check else 'wrote'} {args.json_out}")
     return 0
 
 

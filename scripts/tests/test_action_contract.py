@@ -131,7 +131,7 @@ class ActionContractTest(unittest.TestCase):
             "run python3 scripts/validate_fp_registry.py",
             "run python3 scripts/recall_report.py",
             'run "$EVAL_PY" scripts/eval_metrics.py --split corpus',
-            'run "$EVAL_PY" scripts/eval_irr.py',
+            'run "$EVAL_PY" scripts/eval_irr.py --check',
             "COSTGUARD_BUILD_PROFILE=release run python3 scripts/benchmark_external_repo.py --all-vendored",
             "run python3 scripts/generate_rule_docs.py --check",
             "run python3 scripts/generate_precision_tiers.py --check",
@@ -143,6 +143,16 @@ class ActionContractTest(unittest.TestCase):
         for command in deferred:
             self.assertIn(command, commands)
             self.assertTrue(commands[command], command)
+
+        self.assertIn(
+            'git diff --binary --no-ext-diff HEAD -- > "$TRACKED_DIFF_BEFORE"',
+            script,
+        )
+        self.assertIn("trap check_tracked_diff EXIT", script)
+        self.assertIn(
+            "ERROR: local CI mutated tracked files; newly introduced diff follows",
+            script,
+        )
 
     def test_ci_local_rejects_unknown_modes(self) -> None:
         completed = subprocess.run(

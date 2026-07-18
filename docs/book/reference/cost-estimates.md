@@ -138,7 +138,7 @@ JSON schema version is **4** with an optional top-level `cost` object. Additive 
 ## GitHub Action
 
 ```yaml
-- uses: hypertrial/costguard/.github/actions/costguard@v2.6.0
+- uses: hypertrial/costguard/.github/actions/costguard@v2.7.0
   with:
     cost: "true"
     fail-on-cost-delta: "500"
@@ -161,7 +161,7 @@ costguard cost normalize pipeline_observations.csv costguard-observations.json \
   --model-mapping model-mapping.json
 ```
 
-Minimum columns are a model identifier such as `model_id`, `relation`, or `asset_key`, plus `window_start` and `window_end`. Optional columns include `executions`/`run_count`, `duration_seconds`/`duration_ms`, `bytes_processed`, `credits`, and `cost_usd`; row counts are accepted but ignored by v2.6.0. Point `[cost.inputs].observations` at the generated JSON after reviewing pricing calibration.
+Minimum columns are a model identifier such as `model_id`, `relation`, or `asset_key`, plus `window_start` and `window_end`. Optional columns include `executions`/`run_count`, `duration_seconds`/`duration_ms`, `bytes_processed`, `credits`, and `cost_usd`; row counts are accepted but ignored by v2.7.0. Point `[cost.inputs].observations` at the generated JSON after reviewing pricing calibration.
 
 ## Related
 

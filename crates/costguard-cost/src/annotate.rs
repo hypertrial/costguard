@@ -186,7 +186,7 @@ fn add_rocky_costs(
 ) {
     let price = price_per_byte(config);
     for model in project
-        .models
+        .models()
         .values()
         .filter(|model| model.framework == Framework::Rocky)
     {
@@ -270,7 +270,7 @@ fn project_lookup_keys(model: &ModelMetadata) -> Vec<String> {
 
 fn project_downstream_ids(project: &ProjectGraph) -> HashMap<String, Vec<String>> {
     project
-        .models
+        .models()
         .keys()
         .map(|id| {
             (
@@ -283,7 +283,7 @@ fn project_downstream_ids(project: &ProjectGraph) -> HashMap<String, Vec<String>
 
 fn project_exposure_counts(project: &ProjectGraph) -> HashMap<String, usize> {
     let mut counts = HashMap::new();
-    for exposure in project.exposures.values() {
+    for exposure in project.exposures().values() {
         for dependency in &exposure.depends_on {
             *counts.entry(dependency.clone()).or_insert(0) += 1;
         }
@@ -363,24 +363,25 @@ mod tests {
             ..CostConfig::default()
         };
         let mut graph = ProjectGraph::default();
-        graph.insert_model(ModelMetadata {
-            id: "rocky.orders".into(),
-            framework: Framework::Rocky,
-            name: "orders".into(),
-            path: PathBuf::from("models/orders.rocky"),
-            materialization: Materialization::Incremental,
-            strategy: Some("microbatch".into()),
-            target: Target {
-                catalog: Some("lake".into()),
-                schema: Some("mart".into()),
-                object: Some("orders".into()),
-            },
-            tags: Vec::new(),
-            owners: Vec::new(),
-            group: None,
-            depends_on: Vec::new(),
-        });
-        graph.rebuild_indexes();
+        graph
+            .insert_model(ModelMetadata {
+                id: "rocky.orders".into(),
+                framework: Framework::Rocky,
+                name: "orders".into(),
+                path: PathBuf::from("models/orders.rocky"),
+                materialization: Materialization::Incremental,
+                strategy: Some("microbatch".into()),
+                target: Target {
+                    catalog: Some("lake".into()),
+                    schema: Some("mart".into()),
+                    object: Some("orders".into()),
+                },
+                tags: Vec::new(),
+                owners: Vec::new(),
+                group: None,
+                depends_on: Vec::new(),
+            })
+            .unwrap();
         let mut observations = ObservationStats::default();
         observations.by_model.insert(
             "rocky.orders".into(),

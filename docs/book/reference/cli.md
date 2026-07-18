@@ -80,7 +80,7 @@ costguard cost normalize INPUT OUTPUT --source snowflake|bigquery|databricks|tri
 
 Renders a local cost prioritization summary (model totals, top models, optional finding savings). Cost is always enabled; uses `[cost]` from `costguard.toml` when present.
 
-Use `--source pipeline` for local orchestration exports from tools such as dlt, Dagster, DuckDB, and dbt. It accepts common columns including `model_id`, `relation`, `relation_name`, `asset_key`, `dbt_model`, `window_start`, `window_end`, `executions`, `run_count`, `duration_seconds`, `duration_ms`, `bytes_processed`, and `cost_usd`; row-count columns are ignored in v2.6.0.
+Use `--source pipeline` for local orchestration exports from tools such as dlt, Dagster, DuckDB, and dbt. It accepts common columns including `model_id`, `relation`, `relation_name`, `asset_key`, `dbt_model`, `window_start`, `window_end`, `executions`, `run_count`, `duration_seconds`, `duration_ms`, `bytes_processed`, and `cost_usd`; row-count columns are ignored in v2.7.0.
 
 ## `rocky`
 

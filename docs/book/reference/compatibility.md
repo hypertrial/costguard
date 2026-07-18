@@ -22,7 +22,9 @@ First-class Rocky support is additive. JSON remains schema v4 and PR receipts re
 
 The sealed Rocky envelope sets `schema_version: 1`. Readers tolerate additional Rocky compile fields and unknown future strategies, but reject a different envelope schema, missing expanded SQL, ambiguous source mappings, commit/input mismatches, and oversized artifacts.
 
-The moving `v2` Action tag may advance only to compatible stable `2.x` releases. Use exact `v2.6.0` when immutable behavior is required.
+The v2.7 snapshot hardening keeps those contracts unchanged. Head and base framework projects now use one internal assembly pipeline, and the unreleased `costguard-project` graph API rejects duplicate model IDs, source paths, and exposure names before its first stable publication. The configured 2 GiB base-replay default is now one true unique-byte ceiling across immutable SQL/YAML/Python/config files, Git-backed or explicit manifests, Rocky sealed inputs, and Rocky model sources. Comparisons whose combined unique inputs exceed the aggregate are intentionally rejected even when earlier phase-by-phase reads would each have fit.
+
+The moving `v2` Action tag may advance only to compatible stable `2.x` releases. Use exact `v2.7.0` when immutable behavior is required.
 
 Preview warehouse dialects may receive parser and rule refinements in minor releases. Production-supported dialects retain the stable contracts above.
 

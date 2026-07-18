@@ -50,9 +50,16 @@ from llm_judge_lib import (  # noqa: E402
 )
 
 try:
-    from eval_irr import build_report, validate_records  # noqa: E402
+    from eval_irr import (  # noqa: E402
+        build_report,
+        emit_report,
+        render_report,
+        validate_records,
+    )
 except ImportError:  # pragma: no cover - CI uses .venv-eval
     build_report = None
+    emit_report = None
+    render_report = None
     validate_records = None
 
 EVAL_DEPS = np is not None and build_report is not None
@@ -382,6 +389,28 @@ class EvalIrrTests(unittest.TestCase):
         report = build_report([], manifest)
         self.assertEqual(report["counts"]["total"], 0)
         self.assertIsNone(report["overall"]["kappa_binary_non_abstain"])
+        self.assertNotIn("generated_at", report)
+
+    @unittest.skipIf(not EVAL_DEPS, "eval deps not installed (pip install --require-hashes -r requirements-eval.lock)")
+    def test_report_render_and_check_are_deterministic_and_non_mutating(self) -> None:
+        content = render_report(build_report([], JudgeManifest()))
+        self.assertEqual(content, render_report(build_report([], JudgeManifest())))
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "irr.json"
+            path.write_bytes(b"stale\n")
+            self.assertFalse(emit_report(path, content, check=True))
+            self.assertEqual(path.read_bytes(), b"stale\n")
+            self.assertTrue(emit_report(path, content, check=False))
+            self.assertEqual(path.read_bytes(), content)
+            self.assertTrue(emit_report(path, content, check=True))
+            self.assertEqual(list(path.parent.glob(f".{path.name}.*")), [])
+
+    @unittest.skipIf(not EVAL_DEPS, "eval deps not installed (pip install --require-hashes -r requirements-eval.lock)")
+    def test_check_mode_rejects_missing_output_without_creating_it(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "missing" / "irr.json"
+            self.assertFalse(emit_report(path, b"{}\n", check=True))
+            self.assertFalse(path.parent.exists())
 
     @unittest.skipIf(not EVAL_DEPS, "eval deps not installed (pip install --require-hashes -r requirements-eval.lock)")
     def test_manifest_round_trip(self) -> None:

@@ -78,7 +78,9 @@ impl DbtProject {
         matches.next().is_none().then_some(first)
     }
 
-    pub fn to_project_graph(&self) -> costguard_project::ProjectGraph {
+    pub fn to_project_graph(
+        &self,
+    ) -> Result<costguard_project::ProjectGraph, costguard_project::ProjectGraphError> {
         let mut graph = costguard_project::ProjectGraph::default();
         for model in self.models.values() {
             let Some(path) = model.path.clone() else {
@@ -101,20 +103,16 @@ impl DbtProject {
                 owners: model.owners.clone(),
                 group: model.group.clone(),
                 depends_on: self.graph.depends_on.get(&id).cloned().unwrap_or_default(),
-            });
+            })?;
         }
         for exposure in self.exposures.values() {
-            graph.exposures.insert(
-                exposure.name.clone(),
-                costguard_project::ExposureMetadata {
-                    name: exposure.name.clone(),
-                    depends_on: exposure.depends_on.clone(),
-                    owners: exposure.owners.clone(),
-                },
-            );
+            graph.insert_exposure(costguard_project::ExposureMetadata {
+                name: exposure.name.clone(),
+                depends_on: exposure.depends_on.clone(),
+                owners: exposure.owners.clone(),
+            })?;
         }
-        graph.rebuild_indexes();
-        graph
+        Ok(graph)
     }
 }
 
@@ -514,7 +512,7 @@ models:
         assert_eq!(compiled.fqn, vec!["pkg", "marts", "fct_block_time"]);
         assert_eq!(compiled.owners, vec!["@manifest-owner", "data@example.com"]);
         assert_eq!(compiled.group.as_deref(), Some("finance"));
-        let graph = project.to_project_graph();
+        let graph = project.to_project_graph().unwrap();
         let neutral = graph.model("model.pkg.fct_block_time").unwrap();
         assert_eq!(neutral.target.catalog.as_deref(), Some("analytics"));
         assert_eq!(neutral.target.schema.as_deref(), Some("marts"));

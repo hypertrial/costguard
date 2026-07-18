@@ -454,49 +454,79 @@ impl From<FormatArg> for OutputFormat {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CliErrorKind {
+    Configuration,
+    Runtime,
+}
+
+#[derive(Debug)]
+struct CliError {
+    kind: CliErrorKind,
+    source: anyhow::Error,
+}
+
+impl CliError {
+    fn configuration(source: anyhow::Error) -> Self {
+        Self {
+            kind: CliErrorKind::Configuration,
+            source,
+        }
+    }
+
+    fn runtime(source: anyhow::Error) -> Self {
+        let kind = if source
+            .downcast_ref::<costguard_core::ProjectConfigurationError>()
+            .is_some()
+        {
+            CliErrorKind::Configuration
+        } else {
+            CliErrorKind::Runtime
+        };
+        Self { kind, source }
+    }
+}
+
+type CliResult<T> = std::result::Result<T, CliError>;
+
+fn configuration<T>(result: Result<T>) -> CliResult<T> {
+    result.map_err(CliError::configuration)
+}
+
+fn runtime<T>(result: Result<T>) -> CliResult<T> {
+    result.map_err(CliError::runtime)
+}
+
 pub(crate) fn main_entry() -> ExitCode {
     match run() {
         Ok(code) => ExitCode::from(code),
-        Err(err)
-            if err
-                .downcast_ref::<costguard_core::ProjectConfigurationError>()
-                .is_some() =>
-        {
-            eprintln!("error: configuration error: {err:#}");
+        Err(error) if error.kind == CliErrorKind::Configuration => {
+            eprintln!("error: configuration error: {:#}", error.source);
             ExitCode::from(2)
         }
-        Err(err) => {
-            eprintln!("error: {err:#}");
+        Err(error) => {
+            eprintln!("error: {:#}", error.source);
             ExitCode::from(3)
         }
     }
 }
 
-fn run() -> Result<u8> {
+fn run() -> CliResult<u8> {
     let cli = Cli::parse();
     match cli.command {
         Command::Scan(args) => {
-            let config = match config_from_scan_args(&args).context("configuration error") {
-                Ok(config) => config,
-                Err(err) => return configuration_error(err),
-            };
-            scan_render_exit(&config, &args.receipt)
+            let config = configuration(config_from_scan_args(&args))?;
+            runtime(scan_render_exit(&config, &args.receipt))
         }
         Command::Explain(args) => {
-            let config = match config_from_explain_args(&args).context("configuration error") {
-                Ok(config) => config,
-                Err(err) => return configuration_error(err),
-            };
-            let result = explain_resolved(&config, &args.path)?;
-            print!("{}", render(&result, config.config.format)?);
+            let config = configuration(config_from_explain_args(&args))?;
+            let result = runtime(explain_resolved(&config, &args.path))?;
+            print!("{}", runtime(render(&result, config.config.format))?);
             Ok(if result.analysis.passed { 0 } else { 1 })
         }
         Command::Pr(args) => {
-            let config = match config_from_pr_args(&args).context("configuration error") {
-                Ok(config) => config,
-                Err(err) => return configuration_error(err),
-            };
-            scan_render_exit(&config, &args.receipt)
+            let config = configuration(config_from_pr_args(&args))?;
+            runtime(scan_render_exit(&config, &args.receipt))
         }
         Command::Cost(args) => run_cost_command(args.command),
         Command::Rocky(args) => run_rocky_command(args.command),
@@ -505,16 +535,16 @@ fn run() -> Result<u8> {
                 .format
                 .map(OutputFormat::from)
                 .unwrap_or(OutputFormat::Text);
-            print!("{}", render_rules(&rules(), format)?);
+            print!("{}", runtime(render_rules(&rules(), format))?);
             Ok(0)
         }
-        Command::Policy(args) => run_policy_command(args.command),
-        Command::Init(args) => run_init_command(args),
+        Command::Policy(args) => runtime(run_policy_command(args.command)),
+        Command::Init(args) => runtime(run_init_command(args)),
         Command::Doctor(args) => run_doctor_command(args),
     }
 }
 
-fn run_rocky_command(command: RockyCommand) -> Result<u8> {
+fn run_rocky_command(command: RockyCommand) -> CliResult<u8> {
     match command {
         RockyCommand::Capture {
             compile_path,
@@ -523,28 +553,29 @@ fn run_rocky_command(command: RockyCommand) -> Result<u8> {
             extra_inputs,
             output,
         } => {
-            let root = std::env::current_dir().context("failed to resolve current directory")?;
-            let request = load_resolved_config(
+            let root =
+                runtime(std::env::current_dir().context("failed to resolve current directory"))?;
+            let request = configuration(load_resolved_config(
                 &root,
                 ScanConfig {
                     root: root.clone(),
                     ..ScanConfig::default()
                 },
-            )?;
+            ))?;
             let rocky_config = rocky_config.unwrap_or_else(|| request.rocky.config_path.clone());
             let models_dir = models_dir.unwrap_or_else(|| request.rocky.models_dir.clone());
             let output = output
                 .or_else(|| request.rocky.artifact_path.clone())
                 .unwrap_or_else(|| PathBuf::from("target/costguard-rocky.json"));
-            let artifact = capture_rocky_artifact(&RockyCaptureOptions {
+            let artifact = runtime(capture_rocky_artifact(&RockyCaptureOptions {
                 root,
                 compile_path,
                 rocky_config,
                 models_dir,
                 extra_inputs,
                 max_artifact_bytes: request.rocky.max_artifact_bytes,
-            })?;
-            write_rocky_artifact(&output, &artifact)?;
+            }))?;
+            runtime(write_rocky_artifact(&output, &artifact))?;
             println!(
                 "captured {} Rocky models at {}",
                 artifact.source_map.len(),
@@ -592,14 +623,10 @@ fn run_init_command(args: InitArgs) -> Result<u8> {
     Ok(0)
 }
 
-fn run_doctor_command(args: DoctorArgs) -> Result<u8> {
-    let root = std::env::current_dir().context("failed to resolve current directory")?;
-    let config = match doctor_config(&root, args.dbt_dir.as_deref()).context("configuration error")
-    {
-        Ok(config) => config,
-        Err(error) => return configuration_error(error),
-    };
-    let report = doctor_resolved(&config, &root)?;
+fn run_doctor_command(args: DoctorArgs) -> CliResult<u8> {
+    let root = runtime(std::env::current_dir().context("failed to resolve current directory"))?;
+    let config = configuration(doctor_config(&root, args.dbt_dir.as_deref()))?;
+    let report = runtime(doctor_resolved(&config, &root))?;
     print_doctor_report(&report);
     Ok(if report.has_blockers() { 1 } else { 0 })
 }
@@ -632,17 +659,17 @@ fn print_doctor_report(report: &DoctorReport) {
     }
 }
 
-fn run_cost_command(command: CostCommand) -> Result<u8> {
+fn run_cost_command(command: CostCommand) -> CliResult<u8> {
     match command {
         CostCommand::Report(args) => {
-            let config = match config_from_cost_args(args).context("configuration error") {
-                Ok(config) => config,
-                Err(err) => return configuration_error(err),
-            };
-            let result = scan_resolved(&config)?;
+            let config = configuration(config_from_cost_args(args))?;
+            let result = runtime(scan_resolved(&config))?;
             print!(
                 "{}",
-                costguard_output::render_cost_report(&result, config.config.format)?
+                runtime(costguard_output::render_cost_report(
+                    &result,
+                    config.config.format
+                ))?
             );
             Ok(0)
         }
@@ -656,13 +683,17 @@ fn run_cost_command(command: CostCommand) -> Result<u8> {
             currency,
             model_mapping,
         } => {
-            let text = std::fs::read_to_string(&input)
-                .with_context(|| format!("failed to read cost export {}", input.display()))?;
-            let model_mapping = model_mapping
-                .map(|path| read_json::<BTreeMap<String, String>>(&path, "model mapping"))
-                .transpose()?
-                .unwrap_or_default();
-            let bundle = normalize_cost_export(
+            let text = runtime(
+                std::fs::read_to_string(&input)
+                    .with_context(|| format!("failed to read cost export {}", input.display())),
+            )?;
+            let model_mapping = runtime(
+                model_mapping
+                    .map(|path| read_json::<BTreeMap<String, String>>(&path, "model mapping"))
+                    .transpose(),
+            )?
+            .unwrap_or_default();
+            let bundle = runtime(normalize_cost_export(
                 &text,
                 source.into(),
                 &NormalizeCostOptions {
@@ -672,8 +703,8 @@ fn run_cost_command(command: CostCommand) -> Result<u8> {
                     provenance,
                     model_mapping,
                 },
-            )?;
-            write_json(&output, &bundle)?;
+            ))?;
+            runtime(write_json(&output, &bundle))?;
             println!(
                 "normalized {} model cost observations to {}",
                 bundle.observations.len(),
@@ -947,11 +978,6 @@ fn persist_keygen_temp(temp: tempfile::NamedTempFile, path: &Path, force: bool) 
         .map(|_| ())
         .map_err(|error| error.error)
         .with_context(|| format!("failed to persist {}", path.display()))
-}
-
-fn configuration_error(err: anyhow::Error) -> Result<u8> {
-    eprintln!("error: {err:#}");
-    Ok(2)
 }
 
 #[derive(Default)]

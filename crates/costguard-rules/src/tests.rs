@@ -4,6 +4,7 @@ use costguard_diagnostics::{apply_suppressions, Confidence, LineIndex};
 use costguard_scanner::{FileKind, ProjectFile};
 use costguard_sql::Platform;
 use costguard_sql::{analyze_sql, SqlDocument};
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 fn sql_file(path: &str, text: &str) -> ProjectFile {
@@ -886,17 +887,38 @@ fn registry_matches_builtin_catalog() {
 #[test]
 fn registry_reports_framework_applicability() {
     let metadata = RuleRegistry::default_rules().metadata();
-    let frameworks = |id| {
+    let ids_for = |frameworks: &[&str]| {
         metadata
             .iter()
-            .find(|entry| entry.id == id)
-            .unwrap()
-            .frameworks
+            .filter(|entry| entry.frameworks == frameworks)
+            .map(|entry| entry.id)
+            .collect::<BTreeSet<_>>()
     };
-    assert_eq!(frameworks("SQLCOST004"), &["dbt"]);
-    assert_eq!(frameworks("SQLCOST039"), &["dbt"]);
-    assert_eq!(frameworks("SQLCOST042"), &["dbt"]);
-    assert_eq!(frameworks("SQLCOST045"), &["dbt"]);
-    assert_eq!(frameworks("SQLCOST047"), &["rocky"]);
-    assert_eq!(frameworks("SQLCOST001"), &["dbt", "rocky", "sql"]);
+    assert_eq!(
+        ids_for(&["dbt"]),
+        [
+            "SQLCOST004",
+            "SQLCOST005",
+            "SQLCOST011",
+            "SQLCOST019",
+            "SQLCOST023",
+            "SQLCOST024",
+            "SQLCOST025",
+            "SQLCOST028",
+            "SQLCOST029",
+            "SQLCOST039",
+            "SQLCOST040",
+            "SQLCOST042",
+            "SQLCOST043",
+            "SQLCOST045",
+            "SQLCOST046",
+        ]
+        .into_iter()
+        .collect()
+    );
+    assert_eq!(ids_for(&["rocky"]), ["SQLCOST047"].into_iter().collect());
+    assert_eq!(
+        ids_for(&["dbt", "rocky", "sql"]).len(),
+        costguard_protocol::BUILTIN_RULE_IDS.len() - 16
+    );
 }

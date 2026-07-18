@@ -4,6 +4,28 @@ All notable changes to Costguard are documented here. The project follows [Seman
 
 ## [Unreleased]
 
+## [2.7.0] - 2026-07-18
+
+### Added
+
+- First-class Rocky support through deterministic `costguard rocky capture` envelopes that seal expanded compile JSON, source mappings, tracked compile inputs, Git commit identity, and SHA-256 hashes without linking or invoking Rocky.
+- Framework-qualified dbt/Rocky project metadata in the new `costguard-project` crate, including lineage, owners, targets, materialization strategies, downstream traversal, and mixed-project path ownership validation.
+- Rocky-aware PR enrichment with directly and indirectly affected models, sidecar/global-input change handling, honest per-model run recommendations, and optional artifact-integrity comparison details.
+
+### Changed
+
+- Head and immutable-base analysis now use one framework snapshot assembler for path claims, dbt enrichment, graph merging, analysis SQL selection, compiled-unmapped provenance, and Rocky change selection.
+- Base replay now preflights one deduplicated set of SQL, YAML, Python, manifests, Rocky sealed inputs, and Rocky sources. Each Git blob is charged once under `[scan].max_total_base_bytes`, the strictest applicable per-file limit wins, and content is streamed only after the full aggregate is approved.
+- `costguard-project::ProjectGraph` is valid by construction: maps are private, insertion and merge are transactional and fallible, duplicate IDs/paths/exposures are rejected, and indexes are updated immediately.
+- Rule framework applicability is stored with each of the 47 registrations and drives both public metadata and runtime filtering.
+- CLI configuration/runtime classification is centralized, preserving analysis exit `1`, configuration/usage exit `2`, and runtime exit `3`.
+- IRR evidence is byte-deterministic and checked without mutation in CI. The local CI gate now rejects any tracked-tree mutation while allowing unchanged pre-existing edits.
+
+### Compatibility
+
+- JSON output remains schema v4, PR receipts remain v2, Rocky envelopes remain v1, and baseline v3 and policy v2 are unchanged.
+- Existing dbt APIs, `Project.dbt`, rule IDs, configuration syntax, Action inputs, CLI meanings, and stable 2.x output contracts remain compatible.
+
 ## [2.6.0] - 2026-07-17
 
 ### Added

@@ -10,7 +10,7 @@ One-liner installer for macOS and Linux release binaries. Downloads a release ta
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/hypertrial/costguard/main/scripts/install.sh | sh
-curl -fsSL .../install.sh | sh -s -- v2.6.0
+curl -fsSL .../install.sh | sh -s -- v2.7.0
 COSTGUARD_INSTALL_DIR="$HOME/.local/bin" curl -fsSL .../install.sh | sh
 ```
 
@@ -128,6 +128,8 @@ Full local pre-push and release qualification gate. The required `pr-gate` job i
 ./scripts/ci_local.sh --nba-monte-carlo-smoke
 ./scripts/ci_local.sh --precision
 ```
+
+The gate snapshots the exact tracked diff against `HEAD` before running and fails if any check changes it. Existing local edits are allowed when their bytes remain unchanged.
 
 Fast mode runs offline Python lock verification, workspace dependency validation, `ruff check`, Rust fmt/clippy/release build/test, release-asset smoke, and Python unit tests through the lock/Python-fingerprinted `.venv-eval`. The default full mode additionally runs Rustdoc, fp-registry and recall checks, corpus classification metrics, LLM judge IRR validation, vendored benchmarks, generated rule/evidence checks, internal link validation, mdBook, and `cargo deny`.
 
@@ -388,9 +390,11 @@ python3 scripts/lock_python_deps.py --check
 Validate committed LLM judge labels against the pinned manifest and recompute Cohen's κ, MCC, and class recall/precision (report-only; no κ floor gate). Runs in `./scripts/ci_local.sh` via `.venv-eval`:
 
 ```bash
-.venv-eval/bin/python scripts/eval_irr.py
+.venv-eval/bin/python scripts/eval_irr.py --check
 .venv-eval/bin/python scripts/eval_irr.py --json-out tests/benchmarks/irr_report.json
 ```
+
+`--check` compares deterministic pretty JSON byte-for-byte and never writes. Omit it to refresh the report through a same-directory atomic replacement.
 
 | Flag | Description |
 | --- | --- |

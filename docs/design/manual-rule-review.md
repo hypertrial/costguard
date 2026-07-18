@@ -340,7 +340,7 @@ python3 scripts/recall_report.py
 # Corpus classification (hard gate)
 python3 -m venv .venv-eval && .venv-eval/bin/pip install --require-hashes -r requirements-eval.lock
 .venv-eval/bin/python scripts/eval_metrics.py --split corpus
-.venv-eval/bin/python scripts/eval_irr.py
+.venv-eval/bin/python scripts/eval_irr.py --check
 
 # Full-corpus rule census (manual before merging large triage PRs)
 python3 scripts/rule_tp_census.py --emit-evidence

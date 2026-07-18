@@ -14,6 +14,7 @@ mod context;
 mod dbt_graph;
 mod dbt_load;
 mod doctor;
+mod framework_snapshot;
 mod gates;
 mod git;
 mod governance;

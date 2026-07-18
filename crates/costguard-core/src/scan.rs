@@ -9,6 +9,9 @@ use crate::branch_scan::{
 use crate::config::{ResolvedScanRequest, RockyConfig, ScanConfig, DEFAULT_MAX_TOTAL_BASE_BYTES};
 use crate::dbt_graph::enrich_pr_summary;
 use crate::dbt_load::{detect_checksum_mismatches, load_dbt_project, manifest_checksum_counts};
+use crate::framework_snapshot::{
+    assemble_framework_snapshot, FrameworkSnapshotInput, SnapshotFiles,
+};
 use crate::gates::evaluate_gates;
 use crate::governance::{load_managed_policy, validate_local_policy_controls, ManagedPolicy};
 use crate::metadata_report::{
@@ -23,13 +26,14 @@ use crate::scan_plan::{build_scan_plan, ScanPlan};
 use crate::sql_analysis::{build_file_parse_status, build_scan_metrics};
 use crate::state_diff::classify_findings;
 use crate::{
-    EnforcementPreview, LoadedProject, ManifestIntegrity, PolicyMetadata, PrSummary, Project,
-    RunMetadata, ScanResult,
+    EnforcementPreview, LoadedProject, ManifestIntegrity, PolicyMetadata, PrSummary, RunMetadata,
+    ScanResult,
 };
 use anyhow::{Context, Result};
 use costguard_cost::{compute_blast_radius, compute_pr_impact};
 use costguard_dbt::{MetadataWarning, MetadataWarningKind};
 use costguard_scanner::{DiscoveryOptions, ScanCounts};
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 /// Run a full project scan and return diagnostics, metrics, and optional cost summary.
@@ -201,7 +205,7 @@ fn run_scan(
                     let downstream_ids = loaded
                         .project
                         .graph
-                        .models
+                        .models()
                         .keys()
                         .map(|id| {
                             (
@@ -374,7 +378,7 @@ fn load_project_and_metadata(
     plan: &ScanPlan,
     max_total_base_bytes: u64,
 ) -> Result<ProjectLoad> {
-    let mut union_files = plan.union_files();
+    let union_files = plan.union_files();
     let (rocky_project, rocky_integrity, rocky_messages) =
         load_head_rocky(root, rocky_config, max_total_base_bytes)?;
     let rocky_owned = rocky_project
@@ -451,96 +455,49 @@ fn load_project_and_metadata(
     }
     metadata_warnings_len += rocky_messages.len();
 
-    let mut graph = dbt_load
-        .project
+    let raw_rocky = rocky_project
         .as_ref()
-        .map(costguard_dbt::DbtProject::to_project_graph)
+        .map(|rocky| {
+            rocky
+                .compiled_by_path
+                .keys()
+                .map(|relative| {
+                    std::fs::read_to_string(root.join(relative))
+                        .with_context(|| {
+                            format!("failed to read Rocky source {}", relative.display())
+                        })
+                        .map(|raw| (relative.clone(), raw))
+                })
+                .collect::<Result<BTreeMap<_, _>>>()
+        })
+        .transpose()?
         .unwrap_or_default();
-    let mut project_files = plan
-        .targets
-        .iter()
-        .filter(|file| rocky_project.is_none() || !rocky_owned.contains(&file.root_relative_path))
-        .cloned()
-        .collect::<Vec<_>>();
-    let mut compiled_unmapped_paths = std::collections::BTreeSet::new();
-    let mut rocky_inputs = std::collections::BTreeSet::new();
-    if let Some(rocky) = &rocky_project {
-        graph
-            .merge(rocky.graph.clone())
-            .map_err(|message| anyhow::Error::new(crate::ProjectConfigurationError(message)))?;
-        rocky_inputs = rocky.sealed_inputs.clone();
-        let all_rocky = rocky_global_input_changed(plan, rocky);
-        for (relative, compiled) in &rocky.compiled_by_path {
-            let raw = std::fs::read_to_string(root.join(relative))
-                .with_context(|| format!("failed to read Rocky source {}", relative.display()))?;
-            let compiled_unmapped = relative.extension().and_then(|value| value.to_str())
-                == Some("rocky")
-                || raw != *compiled;
-            let text = if compiled_unmapped {
-                compiled.clone()
-            } else {
-                raw
-            };
-            let file = costguard_scanner::ProjectFile {
-                kind: costguard_scanner::FileKind::Sql,
-                path: root.join(relative),
-                root_relative_path: relative.clone(),
-                line_index: costguard_diagnostics::LineIndex::new(&text),
-                text,
-            };
-            union_files.retain(|existing| existing.root_relative_path != *relative);
-            union_files.push(file.clone());
-            let sidecar = relative.with_extension("toml");
-            let selected = scan_paths_select_rocky_source(config, root, relative);
-            if (!plan.pr_mode && selected)
-                || (plan.pr_mode
-                    && (all_rocky
-                        || plan.changed_paths.contains(relative)
-                        || plan.changed_paths.contains(&sidecar)))
-            {
-                if compiled_unmapped {
-                    compiled_unmapped_paths.insert(relative.clone());
-                }
-                project_files.push(file);
-            }
-        }
-    } else if rocky_config.configured {
-        for file in &mut union_files {
-            if fallback_rocky_path(rocky_config, &file.root_relative_path)
-                && file
-                    .root_relative_path
-                    .extension()
-                    .and_then(|value| value.to_str())
-                    == Some("sql")
-            {
-                file.kind = costguard_scanner::FileKind::Sql;
-            }
-        }
-        for file in &mut project_files {
-            if fallback_rocky_path(rocky_config, &file.root_relative_path)
-                && file
-                    .root_relative_path
-                    .extension()
-                    .and_then(|value| value.to_str())
-                    == Some("sql")
-            {
-                file.kind = costguard_scanner::FileKind::Sql;
-            }
-        }
-    }
-    union_files.sort_by(|left, right| left.path.cmp(&right.path));
-    project_files.sort_by(|left, right| left.path.cmp(&right.path));
-    let project = LoadedProject {
-        project: Project {
-            root: root.to_path_buf(),
-            files: project_files,
-            dbt: dbt_load.project,
-        },
-        graph,
-        compiled_unmapped_paths,
+    let selected_rocky_paths = rocky_project
+        .as_ref()
+        .map(|rocky| {
+            rocky
+                .compiled_by_path
+                .keys()
+                .filter(|path| scan_paths_select_rocky_source(config, root, path))
+                .cloned()
+                .collect::<BTreeSet<_>>()
+        })
+        .unwrap_or_default();
+    let snapshot = assemble_framework_snapshot(FrameworkSnapshotInput {
+        root,
+        dbt: dbt_load.project,
+        rocky: rocky_project,
         rocky_owned_paths: rocky_owned,
-        rocky_inputs,
-    };
+        raw_rocky,
+        files: SnapshotFiles {
+            context: union_files,
+            targets: plan.targets.clone(),
+        },
+        changed_paths: &plan.changed_paths,
+        pr_mode: plan.pr_mode,
+        selected_rocky_paths,
+    })?;
+    let project = snapshot.project;
     let rocky_required_failure = rocky_config.configured
         && (config.analysis.policy == crate::AnalysisPolicy::Strict
             || rocky_config.require_artifact_integrity)
@@ -548,7 +505,7 @@ fn load_project_and_metadata(
             || !rocky_messages.is_empty());
     Ok(ProjectLoad {
         project,
-        analysis_files: union_files,
+        analysis_files: snapshot.analysis_files,
         metadata_diagnostics,
         context_skip_warnings,
         metadata_only,
@@ -680,17 +637,6 @@ fn scan_paths_select_rocky_source(config: &ScanConfig, root: &Path, relative: &P
             source == requested
         }
     })
-}
-
-fn rocky_global_input_changed(plan: &ScanPlan, rocky: &RockyProject) -> bool {
-    let direct = rocky
-        .source_by_name
-        .values()
-        .flat_map(|path| [path.clone(), path.with_extension("toml")])
-        .collect::<std::collections::BTreeSet<_>>();
-    plan.changed_paths
-        .iter()
-        .any(|path| rocky.sealed_inputs.contains(path) && !direct.contains(path))
 }
 
 fn rocky_metadata_diagnostic(

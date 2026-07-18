@@ -3,20 +3,25 @@ use crate::branch_scan::{
 };
 use crate::config::{RockyConfig, ScanConfig};
 use crate::dbt_load::enrich_dbt_project_from_files;
+use crate::framework_snapshot::{
+    assemble_framework_snapshot, FrameworkSnapshotInput, SnapshotFiles,
+};
+use crate::git::BaseObjectStore;
 use crate::governance::ManagedPolicy;
 use crate::owners::OwnerResolver;
 use crate::rocky::{
-    load_rocky_artifact, verify_rocky_artifact_at_commit, RockyIntegrityState, RockyProject,
+    load_rocky_artifact, verify_rocky_artifact_at_commit_with_store, RockyArtifactEnvelope,
+    RockyIntegrityState, RockyProject,
 };
 use crate::scan_plan::ScanPlan;
-use crate::{LoadedProject, Project};
+use crate::LoadedProject;
 use anyhow::{Context, Result};
 use costguard_dbt::{
     apply_dbt_project_configs_from_files, parse_dbt_project_with_warnings, parse_manifest_text,
     parse_manifest_with_limit, DbtProject,
 };
 use costguard_scanner::ProjectFile;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 
 pub(crate) struct BaseBranchScan {
@@ -62,10 +67,27 @@ pub(crate) fn run_base_branch_scan(
         .base_commit
         .as_deref()
         .context("PR scan plan is missing its resolved base commit")?;
-    let (base_dbt, base_files) =
-        load_base_snapshot(root, commit, plan, config, max_total_base_bytes)?;
+    let rocky_artifact = load_base_rocky_artifact(root, commit, rocky_config)?;
+    let snapshot_spec = base_snapshot_spec(root, plan, config)?;
+    let mut requests = snapshot_spec.requests.clone();
+    if let Some(artifact) = &rocky_artifact.artifact {
+        requests.extend(artifact.inputs.iter().map(|input| {
+            (
+                input.path.clone(),
+                costguard_scanner::effective_max_file_bytes(None),
+            )
+        }));
+    }
+    let object_store = BaseObjectStore::load(
+        root,
+        commit,
+        requests,
+        snapshot_spec.local_manifest_bytes,
+        max_total_base_bytes,
+    )?;
+    let (base_dbt, base_files) = load_base_snapshot(root, &snapshot_spec, config, &object_store)?;
     let (base_rocky, rocky_state, rocky_messages) =
-        load_base_rocky(root, commit, rocky_config, max_total_base_bytes)?;
+        finish_base_rocky(commit, rocky_artifact, &object_store);
     let mut base_dbt = base_dbt.unwrap_or_default();
     let rocky_owned_paths = base_rocky
         .as_ref()
@@ -77,21 +99,13 @@ pub(crate) fn run_base_branch_scan(
                 .collect::<BTreeSet<_>>()
         })
         .unwrap_or_else(|| fallback_base_rocky_sql_paths(root, rocky_config, &base_files.context));
-    base_dbt.models.retain(|_, model| {
-        model
-            .path
-            .as_ref()
-            .is_none_or(|path| !rocky_owned_paths.contains(path))
-    });
-    let mut base_files = base_files;
-    for file in base_files
-        .context
-        .iter_mut()
-        .chain(base_files.targets.iter_mut())
-    {
-        if rocky_owned_paths.contains(&file.root_relative_path) {
-            file.kind = costguard_scanner::FileKind::Sql;
-        }
+    if base_rocky.is_none() {
+        base_dbt.models.retain(|_, model| {
+            model
+                .path
+                .as_ref()
+                .is_none_or(|path| !rocky_owned_paths.contains(path))
+        });
     }
     let mut base_metadata_warnings = Vec::new();
     let dbt_context = base_files
@@ -117,38 +131,39 @@ pub(crate) fn run_base_branch_scan(
         .collect::<Vec<_>>();
     apply_dbt_project_configs_from_files(root, &base_project_files, &mut base_dbt);
     let base_dbt = (!base_dbt.models.is_empty()).then_some(base_dbt);
-    let mut graph = base_dbt
+    let raw_rocky = base_rocky
         .as_ref()
-        .map(DbtProject::to_project_graph)
+        .map(|rocky| {
+            rocky
+                .compiled_by_path
+                .keys()
+                .map(|path| {
+                    object_store
+                        .text(path)?
+                        .with_context(|| {
+                            format!("Rocky source {} is missing at base commit", path.display())
+                        })
+                        .map(|text| (path.clone(), text.to_owned()))
+                })
+                .collect::<Result<BTreeMap<_, _>>>()
+        })
+        .transpose()?
         .unwrap_or_default();
-    let mut compiled_unmapped_paths = Default::default();
-    let mut rocky_inputs = Default::default();
-    if let Some(rocky) = &base_rocky {
-        inject_base_rocky_files(
-            root,
-            commit,
-            plan,
-            rocky,
-            max_total_base_bytes,
-            &mut base_files,
-            &mut compiled_unmapped_paths,
-        )?;
-        graph
-            .merge(rocky.graph.clone())
-            .map_err(|message| anyhow::Error::new(crate::ProjectConfigurationError(message)))?;
-        rocky_inputs = rocky.sealed_inputs.clone();
-    }
-    let project = LoadedProject {
-        project: Project {
-            root: root.to_path_buf(),
-            files: base_files.targets,
-            dbt: base_dbt,
-        },
-        graph,
-        compiled_unmapped_paths,
+    let snapshot = assemble_framework_snapshot(FrameworkSnapshotInput {
+        root,
+        dbt: base_dbt,
+        rocky: base_rocky,
         rocky_owned_paths,
-        rocky_inputs,
-    };
+        raw_rocky,
+        files: SnapshotFiles {
+            context: base_files.context,
+            targets: base_files.targets,
+        },
+        changed_paths: &plan.base_changed_paths,
+        pr_mode: true,
+        selected_rocky_paths: BTreeSet::new(),
+    })?;
+    let project = snapshot.project;
     let branch = run_branch_diagnostics(
         BranchScanInput {
             config,
@@ -161,7 +176,7 @@ pub(crate) fn run_base_branch_scan(
         }
         .with_scan(BranchScanRun {
             project: &project,
-            analysis_files: &base_files.context,
+            analysis_files: &snapshot.analysis_files,
             metadata_diagnostics: Vec::new(),
             write_baseline_path: None,
         }),
@@ -218,21 +233,30 @@ fn is_rocky_diagnostic(
         || project.rocky_owned_paths.contains(&diagnostic.path)
 }
 
-fn load_base_rocky(
+struct BaseRockyArtifactLoad {
+    artifact: Option<RockyArtifactEnvelope>,
+    state: RockyIntegrityState,
+    messages: Vec<String>,
+}
+
+fn load_base_rocky_artifact(
     root: &Path,
     commit: &str,
     config: &RockyConfig,
-    max_total_base_bytes: u64,
-) -> Result<(Option<RockyProject>, RockyIntegrityState, Vec<String>)> {
+) -> Result<BaseRockyArtifactLoad> {
     if !config.configured {
-        return Ok((None, RockyIntegrityState::NotConfigured, Vec::new()));
+        return Ok(BaseRockyArtifactLoad {
+            artifact: None,
+            state: RockyIntegrityState::NotConfigured,
+            messages: Vec::new(),
+        });
     }
     let Some(path) = &config.base_artifact_path else {
-        return Ok((
-            None,
-            RockyIntegrityState::Missing,
-            vec!["no base Rocky artifact was supplied".into()],
-        ));
+        return Ok(BaseRockyArtifactLoad {
+            artifact: None,
+            state: RockyIntegrityState::Missing,
+            messages: vec!["no base Rocky artifact was supplied".into()],
+        });
     };
     let path = if path.is_absolute() {
         path.clone()
@@ -245,108 +269,63 @@ fn load_base_rocky(
             path.display()
         );
     }
-    match load_rocky_artifact(&path, config.max_artifact_bytes).and_then(|artifact| {
-        verify_rocky_artifact_at_commit(root, commit, &artifact, max_total_base_bytes)
-    }) {
+    match load_rocky_artifact(&path, config.max_artifact_bytes) {
+        Ok(artifact) if artifact.git_commit == commit => Ok(BaseRockyArtifactLoad {
+            artifact: Some(artifact),
+            state: RockyIntegrityState::Verified,
+            messages: Vec::new(),
+        }),
+        Ok(artifact) => Ok(BaseRockyArtifactLoad {
+            artifact: None,
+            state: RockyIntegrityState::Invalid,
+            messages: vec![format!(
+                "base Rocky artifact is unusable: base Rocky artifact commit {} does not match comparison commit {}",
+                artifact.git_commit, commit
+            )],
+        }),
+        Err(error) => Ok(BaseRockyArtifactLoad {
+            artifact: None,
+            state: RockyIntegrityState::Invalid,
+            messages: vec![format!("base Rocky artifact is unusable: {error:#}")],
+        }),
+    }
+}
+
+fn finish_base_rocky(
+    commit: &str,
+    load: BaseRockyArtifactLoad,
+    contents: &BaseObjectStore,
+) -> (Option<RockyProject>, RockyIntegrityState, Vec<String>) {
+    let Some(artifact) = load.artifact else {
+        return (None, load.state, load.messages);
+    };
+    match verify_rocky_artifact_at_commit_with_store(commit, &artifact, contents) {
         Ok(project) => {
             let messages = project.unresolved_dependencies.clone();
-            Ok((Some(project), RockyIntegrityState::Verified, messages))
+            (Some(project), RockyIntegrityState::Verified, messages)
         }
-        Err(error) => Ok((
+        Err(error) => (
             None,
             RockyIntegrityState::Invalid,
             vec![format!("base Rocky artifact is unusable: {error:#}")],
-        )),
+        ),
     }
 }
 
-fn inject_base_rocky_files(
-    root: &Path,
-    commit: &str,
-    plan: &ScanPlan,
-    rocky: &RockyProject,
-    max_total_base_bytes: u64,
-    base_files: &mut BaseBranchFiles,
-    compiled_unmapped_paths: &mut std::collections::BTreeSet<PathBuf>,
-) -> Result<()> {
-    let max_file_bytes = costguard_scanner::effective_max_file_bytes(None);
-    let requests = rocky
-        .compiled_by_path
-        .keys()
-        .cloned()
-        .map(|path| (path, max_file_bytes))
-        .collect::<Vec<_>>();
-    let contents =
-        crate::git::files_at_commit_with_budget(root, commit, &requests, 0, max_total_base_bytes)?;
-    let direct = rocky
-        .source_by_name
-        .values()
-        .flat_map(|path| [path.clone(), path.with_extension("toml")])
-        .collect::<std::collections::BTreeSet<_>>();
-    let global_change = plan
-        .base_changed_paths
-        .iter()
-        .any(|path| rocky.sealed_inputs.contains(path) && !direct.contains(path));
-    for (relative, compiled) in &rocky.compiled_by_path {
-        let raw = contents
-            .get(relative)
-            .and_then(|value| value.as_ref())
-            .with_context(|| {
-                format!(
-                    "Rocky source {} is missing at base commit",
-                    relative.display()
-                )
-            })?;
-        let compiled_unmapped = relative.extension().and_then(|value| value.to_str())
-            == Some("rocky")
-            || raw != compiled;
-        let text = if compiled_unmapped {
-            compiled.clone()
-        } else {
-            raw.clone()
-        };
-        let file = ProjectFile {
-            kind: costguard_scanner::FileKind::Sql,
-            path: root.join(relative),
-            root_relative_path: relative.clone(),
-            line_index: costguard_diagnostics::LineIndex::new(&text),
-            text,
-        };
-        base_files
-            .context
-            .retain(|existing| existing.root_relative_path != *relative);
-        base_files.context.push(file.clone());
-        if global_change
-            || plan.base_changed_paths.contains(relative)
-            || plan
-                .base_changed_paths
-                .contains(&relative.with_extension("toml"))
-        {
-            base_files
-                .targets
-                .retain(|existing| existing.root_relative_path != *relative);
-            base_files.targets.push(file);
-            if compiled_unmapped {
-                compiled_unmapped_paths.insert(relative.clone());
-            }
-        }
-    }
-    base_files
-        .context
-        .sort_by(|left, right| left.path.cmp(&right.path));
-    base_files
-        .targets
-        .sort_by(|left, right| left.path.cmp(&right.path));
-    Ok(())
+struct BaseSnapshotSpec {
+    rel_paths: BTreeSet<PathBuf>,
+    target_paths: HashSet<PathBuf>,
+    explicit_manifest: Option<PathBuf>,
+    git_manifest: Option<PathBuf>,
+    local_manifest_bytes: u64,
+    requests: Vec<(PathBuf, u64)>,
 }
 
-fn load_base_snapshot(
+fn base_snapshot_spec(
     root: &Path,
-    commit: &str,
     plan: &ScanPlan,
     config: &ScanConfig,
-    max_total_base_bytes: u64,
-) -> Result<(Option<DbtProject>, BaseBranchFiles)> {
+) -> Result<BaseSnapshotSpec> {
     let rel_paths = base_context_rel_paths(root, plan, config);
     let max_file_bytes = costguard_scanner::effective_max_file_bytes(config.max_file_bytes);
     let mut requests = rel_paths
@@ -381,41 +360,39 @@ fn load_base_snapshot(
                 config.max_manifest_bytes
             );
         }
-        if observed > max_total_base_bytes {
-            anyhow::bail!(
-                "base snapshot is {} bytes, exceeding configured aggregate limit of {} bytes",
-                observed,
-                max_total_base_bytes
-            );
-        }
         observed
     } else {
         0
     };
-    let mut contents = crate::git::files_at_commit_with_budget(
-        root,
-        commit,
-        &requests,
+    Ok(BaseSnapshotSpec {
+        rel_paths,
+        target_paths: plan.base_changed_paths.clone(),
+        explicit_manifest,
+        git_manifest,
         local_manifest_bytes,
-        max_total_base_bytes,
-    )?;
+        requests,
+    })
+}
 
-    let base_dbt = match (explicit_manifest, git_manifest) {
-        (Some(path), _) => Some(parse_manifest_with_limit(&path, config.max_manifest_bytes)?),
-        (None, Some(path)) => contents
-            .remove(&path)
-            .flatten()
-            .map(|text| parse_manifest_text(&text))
-            .transpose()?,
+fn load_base_snapshot(
+    root: &Path,
+    spec: &BaseSnapshotSpec,
+    config: &ScanConfig,
+    contents: &BaseObjectStore,
+) -> Result<(Option<DbtProject>, BaseBranchFiles)> {
+    let base_dbt = match (&spec.explicit_manifest, &spec.git_manifest) {
+        (Some(path), _) => Some(parse_manifest_with_limit(path, config.max_manifest_bytes)?),
+        (None, Some(path)) => contents.text(path)?.map(parse_manifest_text).transpose()?,
         (None, None) => None,
     };
 
     let mut context = Vec::new();
-    for rel_path in rel_paths {
-        let Some(text) = contents.remove(&rel_path).flatten() else {
+    for rel_path in &spec.rel_paths {
+        let Some(text) = contents.text(rel_path)? else {
             continue;
         };
-        let path = root.join(&rel_path);
+        let path = root.join(rel_path);
+        let text = text.to_owned();
         context.push(ProjectFile {
             kind: costguard_scanner::classify(&path, root),
             path,
@@ -427,7 +404,7 @@ fn load_base_snapshot(
     context.sort_by(|left, right| left.path.cmp(&right.path));
     let targets = context
         .iter()
-        .filter(|file| plan.base_changed_paths.contains(&file.root_relative_path))
+        .filter(|file| spec.target_paths.contains(&file.root_relative_path))
         .cloned()
         .collect();
     Ok((base_dbt, BaseBranchFiles { targets, context }))

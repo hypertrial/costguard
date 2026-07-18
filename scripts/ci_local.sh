@@ -20,6 +20,25 @@ for arg in "$@"; do
   esac
 done
 
+TRACKED_DIFF_BEFORE="$(mktemp)"
+TRACKED_DIFF_AFTER="$(mktemp)"
+git diff --binary --no-ext-diff HEAD -- > "$TRACKED_DIFF_BEFORE"
+check_tracked_diff() {
+  local status=$?
+  trap - EXIT
+  git diff --binary --no-ext-diff HEAD -- > "$TRACKED_DIFF_AFTER"
+  if ! cmp -s "$TRACKED_DIFF_BEFORE" "$TRACKED_DIFF_AFTER"; then
+    echo "ERROR: local CI mutated tracked files; newly introduced diff follows" >&2
+    if ! diff -u "$TRACKED_DIFF_BEFORE" "$TRACKED_DIFF_AFTER" >&2; then
+      :
+    fi
+    status=1
+  fi
+  rm -f "$TRACKED_DIFF_BEFORE" "$TRACKED_DIFF_AFTER"
+  exit "$status"
+}
+trap check_tracked_diff EXIT
+
 run() {
   echo "+ $*"
   "$@"
@@ -72,7 +91,7 @@ if [ "$FAST_GATE" -eq 0 ]; then
   run python3 scripts/validate_fp_registry.py
   run python3 scripts/recall_report.py
   run "$EVAL_PY" scripts/eval_metrics.py --split corpus
-  run "$EVAL_PY" scripts/eval_irr.py
+  run "$EVAL_PY" scripts/eval_irr.py --check
   COSTGUARD_BUILD_PROFILE=release run python3 scripts/benchmark_external_repo.py --all-vendored
   run python3 scripts/generate_rule_docs.py --check
   run python3 scripts/generate_precision_tiers.py --check

@@ -60,9 +60,9 @@ flowchart LR
 A typical `costguard pr` run:
 
 1. **Configuration** — one resolver applies defaults, file configuration, command settings, explicit overrides, normalization, and validation.
-2. **Git** — `costguard-core` resolves changed files, preflights every base object and the aggregate budget, then streams approved blobs from the immutable base commit.
+2. **Git** — `costguard-core` resolves changed files, builds one deduplicated request across every base consumer, preflights the complete aggregate budget, then streams approved blobs once from the immutable base commit.
 3. **Scanner** — `costguard-scanner` classifies files (SQL, dbt YAML, Python, manifest).
-4. **Framework metadata + SQL** — `costguard-dbt` loads manifest/YAML, `costguard-core` verifies sealed Rocky compile metadata, `costguard-project` merges both into an internal framework-neutral graph, and `costguard-sql` parses analysis SQL under an explicit AST/regex merge policy.
+4. **Framework metadata + SQL** — branch-specific acquisition reads the working tree or shared immutable-base object store. One internal framework snapshot assembler then applies Rocky path claims, dbt enrichment, graph merging, raw-versus-compiled SQL selection, compiled-unmapped provenance, and direct/sidecar/global Rocky change selection identically for head and base. `costguard-project` carries the resulting framework-neutral graph, and `costguard-sql` parses analysis SQL under an explicit AST/regex merge policy.
 5. **Rules** — `costguard-rules` evaluates 47 SQLCOST rules against each file's `RuleContext`.
 6. **Policy + baseline** — `costguard-core` applies signed policy and finding baselines.
 7. **Cost** — `costguard-cost` keeps internal USD/month and bytes/month estimates in distinct newtypes and converts to public schema-v4 fields only at compatibility boundaries.
@@ -71,7 +71,7 @@ A typical `costguard pr` run:
 ## Crate responsibilities
 
 - **costguard-cli** — Thin binary entry point, separate Clap root, and command dispatch/handlers for `scan`, `explain`, `pr`, `rocky`, `cost`, `rules`, `policy`, `init`, and `doctor`.
-- **costguard-core** — Scan orchestration, configuration resolution, readiness facts, baseline management, budgeted git integration for PR scans, `ScanResult`.
+- **costguard-core** — Scan orchestration, shared framework snapshot assembly, configuration resolution, readiness facts, baseline management, deduplicated budgeted git integration for PR scans, `ScanResult`.
 - **costguard-scanner** — File discovery, classification, and size/ignore filtering.
 - **costguard-sql** — Warehouse enum, sqlparser dialect mapping, Jinja stripping, feature extraction.
 - **costguard-dbt** — Manifest JSON, YAML schema, `dbt_project.yml` folder configs, model graph.

@@ -374,20 +374,13 @@ pub(crate) fn verify_rocky_artifact_current(
     project_from_envelope(artifact)
 }
 
+#[cfg(test)]
 pub(crate) fn verify_rocky_artifact_at_commit(
     root: &Path,
     commit: &str,
     artifact: &RockyArtifactEnvelope,
     max_total_bytes: u64,
 ) -> Result<RockyProject> {
-    validate_envelope(artifact)?;
-    if artifact.git_commit != commit {
-        anyhow::bail!(
-            "base Rocky artifact commit {} does not match comparison commit {}",
-            artifact.git_commit,
-            commit
-        );
-    }
     let requests = artifact
         .inputs
         .iter()
@@ -398,18 +391,30 @@ pub(crate) fn verify_rocky_artifact_at_commit(
             )
         })
         .collect::<Vec<_>>();
-    let contents =
-        crate::git::files_at_commit_bytes_with_budget(root, commit, &requests, 0, max_total_bytes)?;
+    let contents = crate::git::BaseObjectStore::load(root, commit, requests, 0, max_total_bytes)?;
+    verify_rocky_artifact_at_commit_with_store(commit, artifact, &contents)
+}
+
+pub(crate) fn verify_rocky_artifact_at_commit_with_store(
+    commit: &str,
+    artifact: &RockyArtifactEnvelope,
+    contents: &crate::git::BaseObjectStore,
+) -> Result<RockyProject> {
+    validate_envelope(artifact)?;
+    if artifact.git_commit != commit {
+        anyhow::bail!(
+            "base Rocky artifact commit {} does not match comparison commit {}",
+            artifact.git_commit,
+            commit
+        );
+    }
     for input in &artifact.inputs {
-        let content = contents
-            .get(&input.path)
-            .and_then(|content| content.as_ref())
-            .with_context(|| {
-                format!(
-                    "sealed Rocky input {} is missing at base commit",
-                    input.path.display()
-                )
-            })?;
+        let content = contents.bytes(&input.path).with_context(|| {
+            format!(
+                "sealed Rocky input {} is missing at base commit",
+                input.path.display()
+            )
+        })?;
         verify_input(input, content)?;
     }
     project_from_envelope(artifact)
@@ -535,22 +540,23 @@ fn project_from_envelope(artifact: &RockyArtifactEnvelope) -> Result<RockyProjec
             })
             .collect();
         let id = format!("rocky.{}", model.name);
-        graph.insert_model(ModelMetadata {
-            id,
-            framework: Framework::Rocky,
-            name: model.name.clone(),
-            path: path.clone(),
-            materialization: rocky_materialization(&model.strategy),
-            strategy: Some(model.strategy),
-            target: model.target,
-            tags,
-            owners,
-            group: None,
-            depends_on,
-        });
+        graph
+            .insert_model(ModelMetadata {
+                id,
+                framework: Framework::Rocky,
+                name: model.name.clone(),
+                path: path.clone(),
+                materialization: rocky_materialization(&model.strategy),
+                strategy: Some(model.strategy),
+                target: model.target,
+                tags,
+                owners,
+                group: None,
+                depends_on,
+            })
+            .map_err(anyhow::Error::new)?;
         compiled_by_path.insert(path, model.expanded_sql);
     }
-    graph.rebuild_indexes();
     Ok(RockyProject {
         graph,
         compiled_by_path,

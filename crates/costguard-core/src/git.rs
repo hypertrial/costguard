@@ -4,7 +4,7 @@
 //! and untracked) for the `costguard pr` workflow.
 
 use anyhow::{Context, Result};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::error::Error;
 use std::ffi::OsString;
 use std::fmt;
@@ -358,6 +358,59 @@ pub(crate) fn files_at_commit_bytes_with_budget(
     write_result?;
     read_result?;
     Ok(result)
+}
+
+#[derive(Debug)]
+pub(crate) struct BaseObjectStore {
+    contents: HashMap<PathBuf, Option<Vec<u8>>>,
+}
+
+impl BaseObjectStore {
+    pub(crate) fn load(
+        root: &Path,
+        commit: &str,
+        paths: impl IntoIterator<Item = (PathBuf, u64)>,
+        initial_total_bytes: u64,
+        max_total_bytes: u64,
+    ) -> Result<Self> {
+        if initial_total_bytes > max_total_bytes {
+            anyhow::bail!(
+                "base snapshot is {} bytes, exceeding configured aggregate limit of {} bytes",
+                initial_total_bytes,
+                max_total_bytes
+            );
+        }
+        let mut limits = BTreeMap::<PathBuf, u64>::new();
+        for (path, limit) in paths {
+            limits
+                .entry(path)
+                .and_modify(|existing| *existing = (*existing).min(limit))
+                .or_insert(limit);
+        }
+        let requests = limits.into_iter().collect::<Vec<_>>();
+        Ok(Self {
+            contents: files_at_commit_bytes_with_budget(
+                root,
+                commit,
+                &requests,
+                initial_total_bytes,
+                max_total_bytes,
+            )?,
+        })
+    }
+
+    pub(crate) fn bytes(&self, path: &Path) -> Option<&[u8]> {
+        self.contents.get(path).and_then(Option::as_deref)
+    }
+
+    pub(crate) fn text(&self, path: &Path) -> Result<Option<&str>> {
+        self.bytes(path)
+            .map(|bytes| {
+                std::str::from_utf8(bytes)
+                    .with_context(|| format!("base file {} is not valid UTF-8", path.display()))
+            })
+            .transpose()
+    }
 }
 
 fn write_batch_specs_async(
@@ -882,6 +935,81 @@ mod tests {
         let error =
             files_at_commit_with_budget(root, &commit, &[(PathBuf::from("model.sql"), 3)], 3, 5)
                 .expect_err("manifest plus source must exceed aggregate limit");
+
+        assert!(error.to_string().contains("aggregate limit"), "{error:#}");
+        GIT_SPAWN_COUNT.with(|count| {
+            assert_eq!(count.get(), 1, "content process must not start");
+        });
+    }
+
+    #[test]
+    fn base_object_store_deduplicates_paths_and_uses_strictest_limit() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let root = tempdir.path();
+        fs::write(root.join("model.sql"), "123").expect("write model");
+        git(root, &["init"]);
+        git(root, &["config", "user.email", "costguard@example.com"]);
+        git(root, &["config", "user.name", "Costguard Test"]);
+        git(root, &["add", "."]);
+        git(root, &["commit", "-m", "initial"]);
+        let commit = resolve_base_commit(root, "HEAD").expect("base commit");
+
+        let store = BaseObjectStore::load(
+            root,
+            &commit,
+            [
+                (PathBuf::from("model.sql"), 3),
+                (PathBuf::from("model.sql"), 4),
+            ],
+            0,
+            3,
+        )
+        .expect("duplicate path counts once");
+        assert_eq!(store.text(Path::new("model.sql")).unwrap(), Some("123"));
+
+        let error = BaseObjectStore::load(
+            root,
+            &commit,
+            [
+                (PathBuf::from("model.sql"), 3),
+                (PathBuf::from("model.sql"), 2),
+            ],
+            0,
+            3,
+        )
+        .expect_err("strictest per-file limit must win");
+        assert!(error.to_string().contains("configured limit of 2"));
+    }
+
+    #[test]
+    fn base_object_store_enforces_one_budget_across_all_consumers() {
+        GIT_SPAWN_COUNT.with(|count| count.set(0));
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let root = tempdir.path();
+        fs::create_dir(root.join("models")).expect("create models");
+        fs::write(root.join("manifest.json"), "123").expect("write manifest");
+        fs::write(root.join("models/orders.sql"), "456").expect("write model");
+        fs::write(root.join("rocky.toml"), "789").expect("write Rocky config");
+        git(root, &["init"]);
+        git(root, &["config", "user.email", "costguard@example.com"]);
+        git(root, &["config", "user.name", "Costguard Test"]);
+        git(root, &["add", "."]);
+        git(root, &["commit", "-m", "initial"]);
+        let commit = resolve_base_commit(root, "HEAD").expect("base commit");
+
+        GIT_SPAWN_COUNT.with(|count| count.set(0));
+        let error = BaseObjectStore::load(
+            root,
+            &commit,
+            [
+                (PathBuf::from("models/orders.sql"), 3),
+                (PathBuf::from("models/orders.sql"), 4),
+                (PathBuf::from("rocky.toml"), 3),
+            ],
+            3,
+            8,
+        )
+        .expect_err("manifest, model, and Rocky inputs share one aggregate budget");
 
         assert!(error.to_string().contains("aggregate limit"), "{error:#}");
         GIT_SPAWN_COUNT.with(|count| {

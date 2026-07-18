@@ -127,89 +127,107 @@ pub struct RuleMetadata {
     pub frameworks: &'static [&'static str],
 }
 
-const DBT_ONLY_RULE_IDS: &[&str] = &[
-    "SQLCOST004",
-    "SQLCOST005",
-    "SQLCOST011",
-    "SQLCOST019",
-    "SQLCOST023",
-    "SQLCOST024",
-    "SQLCOST025",
-    "SQLCOST028",
-    "SQLCOST029",
-    "SQLCOST039",
-    "SQLCOST040",
-    "SQLCOST042",
-    "SQLCOST043",
-    "SQLCOST045",
-    "SQLCOST046",
-];
-const ROCKY_ONLY_RULE_IDS: &[&str] = &["SQLCOST047"];
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RuleApplicability {
+    SharedSql,
+    DbtOnly,
+    RockyOnly,
+}
 
-fn rule_supports_framework(rule_id: &str, framework: Option<Framework>) -> bool {
-    match framework {
-        Some(Framework::Dbt) => !ROCKY_ONLY_RULE_IDS.contains(&rule_id),
-        Some(Framework::Rocky) => !DBT_ONLY_RULE_IDS.contains(&rule_id),
-        None => !DBT_ONLY_RULE_IDS.contains(&rule_id) && !ROCKY_ONLY_RULE_IDS.contains(&rule_id),
+impl RuleApplicability {
+    fn supports(self, framework: Option<Framework>) -> bool {
+        matches!(
+            (self, framework),
+            (Self::SharedSql, _)
+                | (Self::DbtOnly, Some(Framework::Dbt))
+                | (Self::RockyOnly, Some(Framework::Rocky))
+        )
+    }
+
+    fn frameworks(self) -> &'static [&'static str] {
+        match self {
+            Self::SharedSql => &["dbt", "rocky", "sql"],
+            Self::DbtOnly => &["dbt"],
+            Self::RockyOnly => &["rocky"],
+        }
+    }
+}
+
+struct RegisteredRule {
+    rule: Box<dyn Rule>,
+    applicability: RuleApplicability,
+}
+
+fn registered(rule: impl Rule + 'static, applicability: RuleApplicability) -> RegisteredRule {
+    RegisteredRule {
+        rule: Box::new(rule),
+        applicability,
     }
 }
 
 /// Registry of all built-in SQLCOST rules.
 pub struct RuleRegistry {
-    rules: Vec<Box<dyn Rule>>,
+    rules: Vec<RegisteredRule>,
 }
 
 impl RuleRegistry {
     pub fn default_rules() -> Self {
+        use RuleApplicability::{DbtOnly, RockyOnly, SharedSql};
         Self {
             rules: vec![
-                Box::new(crate::sql_shape::SelectStarRule),
-                Box::new(crate::expressions::RepeatedJsonRule),
-                Box::new(crate::expressions::RepeatedRegexRule),
-                Box::new(crate::dbt::IncrementalUniqueKeyRule),
-                Box::new(crate::dbt::IncrementalPredicateRule),
-                Box::new(crate::sql_shape::UnboundedJoinRule),
-                Box::new(crate::sql_shape::OrderByIntermediateRule),
-                Box::new(crate::sql_shape::BlindDistinctRule),
-                Box::new(crate::expressions::RepeatedNormalizationRule),
-                Box::new(crate::python::PythonRowWiseRule),
-                Box::new(crate::dbt::SourceInMartRule),
-                Box::new(crate::sql_shape::CrossJoinRule),
-                Box::new(crate::sql_shape::UnpartitionedWindowRule),
-                Box::new(crate::sql_shape::RepeatedCteRule),
-                Box::new(crate::expressions::RepeatedExpensiveAcrossFilesRule),
-                Box::new(crate::cost_patterns::NonSargablePredicateRule),
-                Box::new(crate::cost_patterns::FunctionWrappedJoinKeyRule),
-                Box::new(crate::cost_patterns::UnionWithoutAllRule),
-                Box::new(crate::dbt::IncrementalSourceBoundRule),
-                Box::new(crate::cost_patterns::CountDistinctRule),
-                Box::new(crate::cost_patterns::WildcardTableScanRule),
-                Box::new(crate::python::PythonLocalCollectionRule),
-                Box::new(crate::metadata::MetadataOnlyScanRule),
-                Box::new(crate::metadata::YamlParseFailedRule),
-                Box::new(crate::metadata::DbtProjectMetadataRule),
-                Box::new(crate::metadata::FileSkippedRule),
-                Box::new(crate::metadata::SqlParseFailedRule),
-                Box::new(crate::metadata::StaleManifestRule),
-                Box::new(crate::metadata::ManifestChecksumMismatchRule),
-                Box::new(crate::metadata::RockyArtifactIntegrityRule),
-                Box::new(crate::dbt::MissingPartitionClusterRule),
-                Box::new(crate::dbt::FullRefreshHeavyIncrementalRule),
-                Box::new(crate::cost_patterns::CorrelatedSubqueryRule),
-                Box::new(crate::cost_patterns::LeadingWildcardLikeRule),
-                Box::new(crate::cost_patterns::OrPartitionPredicateRule),
-                Box::new(crate::cost_patterns::PatternMatchingJoinRule),
-                Box::new(crate::cost_patterns::ScalarSubqueryInSelectRule),
-                Box::new(crate::cost_patterns::CrossCatalogJoinRule),
-                Box::new(crate::cost_patterns::RowExplosionRule),
-                Box::new(crate::cost_patterns::NotInSubqueryRule),
-                Box::new(crate::cross_file::FanOutJoinRule),
-                Box::new(crate::cross_file::UnmaterializedHeavyViewRule),
-                Box::new(crate::dbt::TableShouldBeIncrementalRule),
-                Box::new(crate::cost_patterns::UnboundedWindowFrameRule),
-                Box::new(crate::cost_patterns::BigQueryMissingPartitionFilterRule),
-                Box::new(crate::dbt::MergeWithoutTargetPruningRule),
-                Box::new(crate::sql_shape::RecursiveCteRule),
+                registered(crate::sql_shape::SelectStarRule, SharedSql),
+                registered(crate::expressions::RepeatedJsonRule, SharedSql),
+                registered(crate::expressions::RepeatedRegexRule, SharedSql),
+                registered(crate::dbt::IncrementalUniqueKeyRule, DbtOnly),
+                registered(crate::dbt::IncrementalPredicateRule, DbtOnly),
+                registered(crate::sql_shape::UnboundedJoinRule, SharedSql),
+                registered(crate::sql_shape::OrderByIntermediateRule, SharedSql),
+                registered(crate::sql_shape::BlindDistinctRule, SharedSql),
+                registered(crate::expressions::RepeatedNormalizationRule, SharedSql),
+                registered(crate::python::PythonRowWiseRule, SharedSql),
+                registered(crate::dbt::SourceInMartRule, DbtOnly),
+                registered(crate::sql_shape::CrossJoinRule, SharedSql),
+                registered(crate::sql_shape::UnpartitionedWindowRule, SharedSql),
+                registered(crate::sql_shape::RepeatedCteRule, SharedSql),
+                registered(
+                    crate::expressions::RepeatedExpensiveAcrossFilesRule,
+                    SharedSql,
+                ),
+                registered(crate::cost_patterns::NonSargablePredicateRule, SharedSql),
+                registered(crate::cost_patterns::FunctionWrappedJoinKeyRule, SharedSql),
+                registered(crate::cost_patterns::UnionWithoutAllRule, SharedSql),
+                registered(crate::dbt::IncrementalSourceBoundRule, DbtOnly),
+                registered(crate::cost_patterns::CountDistinctRule, SharedSql),
+                registered(crate::cost_patterns::WildcardTableScanRule, SharedSql),
+                registered(crate::python::PythonLocalCollectionRule, SharedSql),
+                registered(crate::metadata::MetadataOnlyScanRule, DbtOnly),
+                registered(crate::metadata::YamlParseFailedRule, DbtOnly),
+                registered(crate::metadata::DbtProjectMetadataRule, DbtOnly),
+                registered(crate::metadata::FileSkippedRule, SharedSql),
+                registered(crate::metadata::SqlParseFailedRule, SharedSql),
+                registered(crate::metadata::StaleManifestRule, DbtOnly),
+                registered(crate::metadata::ManifestChecksumMismatchRule, DbtOnly),
+                registered(crate::metadata::RockyArtifactIntegrityRule, RockyOnly),
+                registered(crate::dbt::MissingPartitionClusterRule, DbtOnly),
+                registered(crate::dbt::FullRefreshHeavyIncrementalRule, DbtOnly),
+                registered(crate::cost_patterns::CorrelatedSubqueryRule, SharedSql),
+                registered(crate::cost_patterns::LeadingWildcardLikeRule, SharedSql),
+                registered(crate::cost_patterns::OrPartitionPredicateRule, SharedSql),
+                registered(crate::cost_patterns::PatternMatchingJoinRule, SharedSql),
+                registered(crate::cost_patterns::ScalarSubqueryInSelectRule, SharedSql),
+                registered(crate::cost_patterns::CrossCatalogJoinRule, SharedSql),
+                registered(crate::cost_patterns::RowExplosionRule, SharedSql),
+                registered(crate::cost_patterns::NotInSubqueryRule, SharedSql),
+                registered(crate::cross_file::FanOutJoinRule, SharedSql),
+                registered(crate::cross_file::UnmaterializedHeavyViewRule, DbtOnly),
+                registered(crate::dbt::TableShouldBeIncrementalRule, DbtOnly),
+                registered(crate::cost_patterns::UnboundedWindowFrameRule, SharedSql),
+                registered(
+                    crate::cost_patterns::BigQueryMissingPartitionFilterRule,
+                    DbtOnly,
+                ),
+                registered(crate::dbt::MergeWithoutTargetPruningRule, DbtOnly),
+                registered(crate::sql_shape::RecursiveCteRule, SharedSql),
             ],
         }
     }
@@ -217,18 +235,12 @@ impl RuleRegistry {
     pub fn metadata(&self) -> Vec<RuleMetadata> {
         self.rules
             .iter()
-            .map(|rule| RuleMetadata {
-                id: rule.id(),
-                name: rule.name(),
-                description: rule.description(),
-                severity: rule.default_severity(),
-                frameworks: if DBT_ONLY_RULE_IDS.contains(&rule.id()) {
-                    &["dbt"]
-                } else if ROCKY_ONLY_RULE_IDS.contains(&rule.id()) {
-                    &["rocky"]
-                } else {
-                    &["dbt", "rocky", "sql"]
-                },
+            .map(|registered| RuleMetadata {
+                id: registered.rule.id(),
+                name: registered.rule.name(),
+                description: registered.rule.description(),
+                severity: registered.rule.default_severity(),
+                frameworks: registered.applicability.frameworks(),
             })
             .collect()
     }
@@ -236,8 +248,8 @@ impl RuleRegistry {
     pub fn run(&self, ctx: &RuleContext<'_>) -> Vec<Diagnostic> {
         self.rules
             .iter()
-            .filter(|rule| rule.applies_to(ctx.warehouse))
-            .flat_map(|rule| rule.check(ctx))
+            .filter(|registered| registered.rule.applies_to(ctx.warehouse))
+            .flat_map(|registered| registered.rule.check(ctx))
             .collect()
     }
 
@@ -248,9 +260,9 @@ impl RuleRegistry {
     ) -> Vec<Diagnostic> {
         self.rules
             .iter()
-            .filter(|rule| rule.applies_to(ctx.warehouse))
-            .filter(|rule| rule_supports_framework(rule.id(), framework))
-            .flat_map(|rule| rule.check(ctx))
+            .filter(|registered| registered.rule.applies_to(ctx.warehouse))
+            .filter(|registered| registered.applicability.supports(framework))
+            .flat_map(|registered| registered.rule.check(ctx))
             .collect()
     }
 
@@ -442,4 +454,36 @@ fn rule_facts(ctx: &RuleContext<'_>) -> costguard_policy::RuleFactsV1 {
             .insert("sql.parsed".into(), sql.parsed.to_string());
     }
     facts
+}
+
+#[cfg(test)]
+mod registration_tests {
+    use super::*;
+
+    #[test]
+    fn every_registration_has_unique_metadata_and_matching_runtime_applicability() {
+        let registry = RuleRegistry::default_rules();
+        let mut ids = BTreeSet::new();
+        for registered in &registry.rules {
+            let id = registered.rule.id();
+            assert!(ids.insert(id), "duplicate rule registration {id}");
+            let frameworks = registered.applicability.frameworks();
+            assert!(
+                !frameworks.is_empty(),
+                "{id} has no framework applicability"
+            );
+            for (framework, label) in [
+                (Some(Framework::Dbt), "dbt"),
+                (Some(Framework::Rocky), "rocky"),
+                (None, "sql"),
+            ] {
+                assert_eq!(
+                    registered.applicability.supports(framework),
+                    frameworks.contains(&label),
+                    "{id} metadata/runtime applicability differs for {label}"
+                );
+            }
+        }
+        assert_eq!(ids.len(), costguard_protocol::BUILTIN_RULE_IDS.len());
+    }
 }

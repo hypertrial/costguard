@@ -162,8 +162,8 @@ export COSTGUARD_JUDGE_GGUF=/path/to/Qwen3-30B-A3B-Instruct-2507-Q4_K_M.gguf
 # Faster: one JSON call per file
 .venv-judge/bin/python scripts/build_llm_judge_labels.py --model "$COSTGUARD_JUDGE_GGUF" --grouped
 
-# CI-safe validation + κ (uses .venv-eval)
-.venv-eval/bin/python scripts/eval_irr.py
+# CI-safe validation + κ (uses .venv-eval and never writes)
+.venv-eval/bin/python scripts/eval_irr.py --check
 ```
 
 Dry-run candidate enumeration without the model:

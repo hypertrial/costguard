@@ -2,15 +2,15 @@
 
 Public snapshot of Costguard precision/recall evidence from real dbt benchmark repos and the corpus regression suite.
 
-Snapshot: [`tests/benchmarks/evidence/v2.6.json`](../../../tests/benchmarks/evidence/v2.6.json).
+Snapshot: [`tests/benchmarks/evidence/v2.7.json`](../../../tests/benchmarks/evidence/v2.7.json).
 
 <!-- generated:evidence:start -->
 ## Quality ledger
 
 | Evidence | Current value |
 | --- | --- |
-| Release version | `2.6.0` |
-| Evidence snapshot | `tests/benchmarks/evidence/v2.6.json` |
+| Release version | `2.7.0` |
+| Evidence snapshot | `tests/benchmarks/evidence/v2.7.json` |
 | Full benchmark repositories | 7: jaffle-shop, spellbook, nba-monte-carlo, tuva, mattermost-warehouse, data-infra, ol-data-platform |
 | Smoke benchmark repositories | 5: spellbook, nba-monte-carlo, mattermost-warehouse, data-infra, ol-data-platform |
 | False-positive registry | clean; 93 verdicts, 30 documented exemptions, 0 open bugs |
