@@ -3,7 +3,15 @@ use crate::helpers::{diagnostic, is_dbt_macro_path, is_downstream_model, is_stag
 use crate::registry::{Rule, RuleContext};
 use costguard_diagnostics::{Confidence, Diagnostic, Severity};
 use costguard_sql::{is_date_spine_table, CteFeature, JoinFeature, JoinKind};
+use regex::Regex;
 use std::collections::HashMap;
+use std::sync::OnceLock;
+
+fn has_limit_clause(text: &str) -> bool {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"(?i)\blimit\b").expect("valid limit regex"))
+        .is_match(text)
+}
 
 pub(crate) struct SelectStarRule;
 pub(crate) struct UnboundedJoinRule;
@@ -310,9 +318,7 @@ impl Rule for OrderByIntermediateRule {
         let Some(sql) = ctx.sql else {
             return Vec::new();
         };
-        if !is_downstream_model(&ctx.file.root_relative_path)
-            || ctx.file.text.to_ascii_lowercase().contains("limit ")
-        {
+        if !is_downstream_model(&ctx.file.root_relative_path) || has_limit_clause(&ctx.file.text) {
             return Vec::new();
         }
         sql.features

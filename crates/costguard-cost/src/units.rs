@@ -127,10 +127,6 @@ impl UnitlessEstimate {
     pub(crate) fn raw(self) -> Estimate {
         self.0
     }
-
-    pub(crate) fn median(self) -> f64 {
-        self.0.median()
-    }
 }
 
 pub(crate) fn price_bytes(

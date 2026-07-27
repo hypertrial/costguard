@@ -17,7 +17,7 @@ curl -fsSL https://raw.githubusercontent.com/hypertrial/costguard/main/scripts/i
 Install to a custom directory:
 
 ```bash
-COSTGUARD_INSTALL_DIR="$HOME/.local/bin" curl -fsSL .../install.sh | sh
+curl -fsSL .../install.sh | COSTGUARD_INSTALL_DIR="$HOME/.local/bin" sh
 ```
 
 The script downloads a release tarball, verifies its SHA256 checksum, and installs the `costguard` binary.

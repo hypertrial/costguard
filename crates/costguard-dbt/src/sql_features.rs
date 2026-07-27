@@ -28,18 +28,41 @@ pub fn extract_sql_features(text: &str) -> DbtSqlFeatures {
 }
 
 pub fn extract_incremental_block(text: &str) -> Option<String> {
-    incremental_block_regex()
+    let opener = incremental_opener_regex()
         .captures(text)
-        .and_then(|capture| capture.get(1))
-        .map(|matched| matched.as_str().trim().to_string())
-        .filter(|block| !block.is_empty())
+        .and_then(|capture| capture.get(0))?;
+    let body_start = opener.end();
+    let mut depth = 1usize;
+    let mut search_from = body_start;
+    while let Some(m) = jinja_control_regex().find_at(text, search_from) {
+        let tag = m.as_str().to_ascii_lowercase();
+        if tag.contains("endif") {
+            depth -= 1;
+            if depth == 0 {
+                let block = text[body_start..m.start()].trim();
+                return (!block.is_empty()).then(|| block.to_string());
+            }
+        } else if tag.contains("if") && !tag.contains("elif") {
+            // `{% if ... %}` increases depth; `{% elif %}` / `{% else %}` do not.
+            depth += 1;
+        }
+        search_from = m.end();
+    }
+    None
 }
 
-fn incremental_block_regex() -> &'static Regex {
+fn incremental_opener_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r"(?is)\{%\s*(?:if|elif)\s+is_incremental\s*\(\)\s*%\}(.*?)\{%\s*endif\s*%\}")
-            .expect("valid incremental regex")
+        Regex::new(r"(?is)\{%\s*(?:if|elif)\s+is_incremental\s*\(\)\s*%\}")
+            .expect("valid incremental opener regex")
+    })
+}
+
+fn jinja_control_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(r"(?is)\{%\s*(?:if|elif|else|endif)\b.*?%\}").expect("valid jinja control regex")
     })
 }
 

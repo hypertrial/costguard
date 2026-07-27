@@ -917,6 +917,24 @@ fn comment_select_star_is_not_flagged_when_sql_parses() {
 }
 
 #[test]
+fn comment_select_star_is_not_flagged_when_compiled_sql_parses() {
+    let text = "-- select * from hidden\nselect id from {{ ref('stg') }}\n";
+    let compiled = "select id from stg\n";
+    let index = LineIndex::new(text);
+    let doc = analyze_test_sql(
+        PathBuf::from("models/marts/fct.sql"),
+        text,
+        Platform::Generic,
+        &index,
+        Some(compiled),
+        true,
+    );
+    assert!(doc.parsed_compiled);
+    assert!(doc.feature_extraction_used_ast);
+    assert!(doc.features.select_stars.is_empty());
+}
+
+#[test]
 fn string_literal_select_star_is_not_flagged_when_sql_parses() {
     let text = "select 'select *' as note from t";
     let index = LineIndex::new(text);

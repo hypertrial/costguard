@@ -32,13 +32,13 @@ pub(crate) fn compiled_ast_features(
     );
     let mut regex_features = regex_features;
     regex_features.cte_references.clear();
+    let ast_features = mark_compiled_unmapped(ast_features);
+    // Compiled empty SELECT * is authoritative; do not keep comment/string regex hits.
+    if ast_features.select_stars.is_empty() {
+        regex_features.select_stars.clear();
+    }
     (
-        features::merge_shape_features(
-            regex_features,
-            mark_compiled_unmapped(ast_features),
-            true,
-            false,
-        ),
+        features::merge_shape_features(regex_features, ast_features, true, false),
         true,
     )
 }

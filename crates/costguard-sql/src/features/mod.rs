@@ -12,7 +12,7 @@
 //! | --- | --- |
 //! | Regex-only | JSON extraction, regex calls, normalization calls |
 //! | AST-authoritative, including empty | top-level `ORDER BY`, non-sargable predicates |
-//! | AST-authoritative when `trust_empty_ast` | `SELECT *` |
+//! | AST-authoritative when `trust_empty_ast` | `SELECT *` (compiled path also clears regex `SELECT *` when compiled AST is empty) |
 //! | Prefer nonempty AST | grouping, distinct, windows, CTEs/references, unions, count-distinct, wildcard scans, correlated/scalar/not-in subqueries, wildcard likes, partition ORs, row explosions, recursive CTEs |
 //! | Join-specific | AST joins plus regex comma-join evidence, with regex fallback for an empty AST |
 //!

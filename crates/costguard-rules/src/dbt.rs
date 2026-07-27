@@ -140,7 +140,14 @@ impl Rule for IncrementalPredicateRule {
         if materialized != Some("incremental") || !sql.dbt.uses_is_incremental {
             return Vec::new();
         }
-        if has_bounded_incremental_predicate(&ctx.file.text) {
+        let block = sql
+            .dbt
+            .incremental_block
+            .as_deref()
+            .unwrap_or(ctx.file.text.as_str());
+        let lower = ctx.file.text.to_ascii_lowercase();
+        // Config/macro tokens may live outside the incremental block.
+        if has_bounded_incremental_predicate(block) || lower.contains("incremental_predicate") {
             return Vec::new();
         }
         vec![diagnostic(

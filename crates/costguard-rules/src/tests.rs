@@ -734,6 +734,56 @@ where block_time >= date_sub(current_date(), interval 3 day)
 }
 
 #[test]
+fn select_list_date_column_does_not_suppress_sqlcost005() {
+    let file = sql_file(
+        "models/marts/fct_events.sql",
+        "{{ config(materialized='incremental', unique_key='id') }}
+select id, updated_at from t
+{% if is_incremental() %}
+ where id > 1
+{% endif %}",
+    );
+    let doc = analyze(&file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(ids.contains(&"SQLCOST005".to_string()));
+}
+
+#[test]
+fn nested_jinja_in_incremental_block_still_fires_sqlcost019() {
+    let file = sql_file(
+        "models/marts/fct.sql",
+        "{{ config(materialized='incremental', unique_key='id') }}
+with raw as (
+  select * from {{ source('events', 'raw_events') }}
+),
+filtered as (
+  select * from raw
+  {% if is_incremental() %}
+    {% if true %}
+      -- noop
+    {% endif %}
+  where event_date >= current_date - 3
+  {% endif %}
+)
+select * from filtered",
+    );
+    let doc = analyze(&file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(ids.contains(&"SQLCOST019".to_string()));
+}
+
+#[test]
+fn limit_with_newline_does_not_fire_sqlcost007() {
+    let file = sql_file(
+        "models/marts/fct.sql",
+        "select id from t\norder by id\nlimit\n10\n",
+    );
+    let doc = analyze(&file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(!ids.contains(&"SQLCOST007".to_string()));
+}
+
+#[test]
 fn block_time_incremental_predicate_on_source_does_not_fire_sqlcost019() {
     let file = sql_file(
         "models/marts/dex_trades.sql",

@@ -23,16 +23,18 @@ pub fn resolve_policy(
         .collect::<Vec<_>>();
     matching.sort_by_key(|scope| (scope.kind.specificity(), scope.priority));
 
-    for pair in matching.windows(2) {
-        if pair[0].kind == pair[1].kind
-            && pair[0].priority == pair[1].priority
-            && scopes_conflict(pair[0], pair[1])
-        {
-            anyhow::bail!(
-                "matching policy scopes '{}' and '{}' conflict at equal specificity and priority",
-                pair[0].id,
-                pair[1].id
-            );
+    for i in 0..matching.len() {
+        for j in (i + 1)..matching.len() {
+            if matching[i].kind == matching[j].kind
+                && matching[i].priority == matching[j].priority
+                && scopes_conflict(matching[i], matching[j])
+            {
+                anyhow::bail!(
+                    "matching policy scopes '{}' and '{}' conflict at equal specificity and priority",
+                    matching[i].id,
+                    matching[j].id
+                );
+            }
         }
     }
 
@@ -150,6 +152,74 @@ mod tests {
         assert_eq!(
             resolved.rules["SQLCOST001"].severity,
             Some(Severity::Medium)
+        );
+    }
+
+    #[test]
+    fn equal_priority_non_adjacent_scopes_conflict() {
+        let now = Utc::now();
+        let mut document = policy(now);
+        document.scopes = vec![
+            PolicyScope {
+                id: "org-a".into(),
+                kind: ScopeKind::Organization,
+                selector: "acme".into(),
+                priority: 0,
+                enforcement: EnforcementMode::Block,
+                rules: BTreeMap::from([(
+                    "SQLCOST001".into(),
+                    RulePolicy {
+                        severity: Some(Severity::High),
+                        ..RulePolicy::default()
+                    },
+                )]),
+                custom_rules: vec![],
+                exceptions: vec![],
+            },
+            PolicyScope {
+                id: "org-empty".into(),
+                kind: ScopeKind::Organization,
+                selector: "acme".into(),
+                priority: 0,
+                enforcement: EnforcementMode::Block,
+                rules: BTreeMap::new(),
+                custom_rules: vec![],
+                exceptions: vec![],
+            },
+            PolicyScope {
+                id: "org-c".into(),
+                kind: ScopeKind::Organization,
+                selector: "acme".into(),
+                priority: 0,
+                enforcement: EnforcementMode::Block,
+                rules: BTreeMap::from([(
+                    "SQLCOST001".into(),
+                    RulePolicy {
+                        severity: Some(Severity::Medium),
+                        ..RulePolicy::default()
+                    },
+                )]),
+                custom_rules: vec![],
+                exceptions: vec![],
+            },
+        ];
+        let err = resolve_policy(
+            &document,
+            &ResolutionContext {
+                organization: "acme",
+                repository: "acme/warehouse",
+                ..ResolutionContext::default()
+            },
+        )
+        .expect_err("non-adjacent equal-specificity conflicts must fail closed");
+        let message = err.to_string();
+        assert!(
+            message.contains("conflict at equal specificity and priority"),
+            "{message}"
+        );
+        assert!(
+            message.contains("org-a") && message.contains("org-c"),
+            "{message}"
         );
     }
 }

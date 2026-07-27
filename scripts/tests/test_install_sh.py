@@ -115,6 +115,27 @@ class InstallShTest(unittest.TestCase):
             self.assertNotEqual(completed.returncode, 0)
             self.assertIn("checksum mismatch", completed.stderr)
 
+    def test_documented_install_dir_pipe_sets_env_for_sh(self) -> None:
+        """Documented `curl | COSTGUARD_INSTALL_DIR=... sh` must deliver the env to sh."""
+        probe = '#!/bin/sh\nprintf "%s\\n" "${COSTGUARD_INSTALL_DIR-<unset>}"\n'
+        wrong = subprocess.run(
+            ["sh", "-c", 'COSTGUARD_INSTALL_DIR=/custom/bin cat | sh'],
+            input=probe,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(wrong.stdout.strip(), "<unset>", wrong.stderr)
+        documented = subprocess.run(
+            ["sh", "-c", 'cat | COSTGUARD_INSTALL_DIR=/custom/bin sh'],
+            input=probe,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(documented.returncode, 0, documented.stderr)
+        self.assertEqual(documented.stdout.strip(), "/custom/bin")
+
 
 if __name__ == "__main__":
     unittest.main()

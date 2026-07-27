@@ -27,7 +27,6 @@ struct PendingAttribution {
     model_id: String,
     rule_multiplier: UnitlessEstimate,
     prior_basis: String,
-    savings_fraction: UnitlessEstimate,
     raw_savings_usd: Option<UsdPerMonthEstimate>,
     raw_savings_bytes: BytesPerMonthEstimate,
     gb_months_savings: f64,
@@ -218,7 +217,6 @@ pub fn attribute_findings(
             model_id,
             rule_multiplier: multiplier,
             prior_basis,
-            savings_fraction: fraction,
             raw_savings_usd,
             raw_savings_bytes: scan_savings,
             gb_months_savings,
@@ -341,22 +339,42 @@ fn apply_per_model_caps(pending: &mut [PendingAttribution]) -> Vec<PerModelTotal
             post_fix_bytes,
         });
 
-        let weights: Vec<f64> = indices
+        // Keep bottom-up weighted savings (fraction × structure × fan-out); scale only when
+        // their sum exceeds the top-down ~95% model-cost cap.
+        let weighted_usd: f64 = indices
             .iter()
-            .map(|idx| pending[*idx].savings_fraction.median())
-            .collect();
-        let weight_sum: f64 = weights.iter().sum();
-        if weight_sum <= 0.0 {
-            continue;
-        }
-
-        for (idx, weight) in indices.iter().zip(weights) {
-            let share = weight / weight_sum;
-            let share_estimate = UnitlessEstimate::from_point(share, 0.2);
-            pending[*idx].raw_savings_usd =
-                total_savings_usd.map(|savings| savings.scaled_by(share_estimate));
-            pending[*idx].raw_savings_bytes = total_savings_bytes.scaled_by(share_estimate);
-            pending[*idx].gb_months_savings = pending[*idx].raw_savings_bytes.median() / 1e9;
+            .filter_map(|idx| pending[*idx].raw_savings_usd.map(|v| v.median()))
+            .sum();
+        let weighted_bytes: f64 = indices
+            .iter()
+            .map(|idx| pending[*idx].raw_savings_bytes.median())
+            .sum();
+        let cap_usd = total_savings_usd.map(|v| v.median());
+        let cap_bytes = total_savings_bytes.median();
+        let usd_scale = match cap_usd {
+            Some(cap) if weighted_usd > cap && weighted_usd > 0.0 => cap / weighted_usd,
+            _ => 1.0,
+        };
+        let bytes_scale = if weighted_bytes > cap_bytes && weighted_bytes > 0.0 {
+            cap_bytes / weighted_bytes
+        } else {
+            1.0
+        };
+        if usd_scale < 1.0 || bytes_scale < 1.0 {
+            let usd_factor = UnitlessEstimate::from_point(usd_scale, 0.2);
+            let bytes_factor = UnitlessEstimate::from_point(bytes_scale, 0.2);
+            for idx in indices {
+                if let Some(savings) = pending[*idx].raw_savings_usd {
+                    pending[*idx].raw_savings_usd = Some(savings.scaled_by(usd_factor));
+                }
+                pending[*idx].raw_savings_bytes =
+                    pending[*idx].raw_savings_bytes.scaled_by(bytes_factor);
+                pending[*idx].gb_months_savings = pending[*idx].raw_savings_bytes.median() / 1e9;
+            }
+        } else {
+            for idx in indices {
+                pending[*idx].gb_months_savings = pending[*idx].raw_savings_bytes.median() / 1e9;
+            }
         }
     }
     per_model
@@ -653,6 +671,89 @@ mod tests {
             cost_estimate: None,
             rule_precision_tier: None,
         }
+    }
+
+    #[test]
+    fn structure_factor_changes_addressable_savings() {
+        let mut config = CostConfig {
+            enabled: true,
+            ..CostConfig::default()
+        };
+        config.pricing = crate::config::CostPricingSection {
+            model: Some("scan".into()),
+            usd_per_tb: Some(6.25),
+            usd_per_credit: None,
+            tb_per_credit_hour: None,
+        };
+        let mut dbt = DbtProject::default();
+        dbt.models.insert(
+            "m".into(),
+            DbtModel {
+                name: "m".into(),
+                path: Some(PathBuf::from("models/m.sql")),
+                ..DbtModel::default()
+            },
+        );
+        let index = build_model_cost_index(&config, Some(&dbt), &CostInputs::default());
+        let mut features_reduced = HashMap::new();
+        features_reduced.insert(
+            PathBuf::from("models/m.sql"),
+            summarize_features(0, 0, 0, 0, 0),
+        );
+        let mut reduced = vec![sample_diagnostic("SQLCOST012", 1)];
+        let mut summary_reduced = summarize_project_costs(&index, &config);
+        attribute_findings(
+            &mut reduced,
+            &CostAttributionContext {
+                config: &config,
+                model_index: &index,
+                dbt: Some(&dbt),
+                features_by_path: &features_reduced,
+                downstream_counts: &HashMap::new(),
+                downstream_ids: &HashMap::new(),
+                exposure_counts: &HashMap::new(),
+            },
+            &mut summary_reduced,
+        );
+        let mut neutral = vec![sample_diagnostic("SQLCOST012", 1)];
+        let mut summary_neutral = summarize_project_costs(&index, &config);
+        attribute_findings(
+            &mut neutral,
+            &CostAttributionContext {
+                config: &config,
+                model_index: &index,
+                dbt: Some(&dbt),
+                features_by_path: &HashMap::new(),
+                downstream_counts: &HashMap::new(),
+                downstream_ids: &HashMap::new(),
+                exposure_counts: &HashMap::new(),
+            },
+            &mut summary_neutral,
+        );
+        let reduced_p50 = reduced[0]
+            .cost_estimate
+            .as_ref()
+            .and_then(|c| c.savings_p50_usd_per_month)
+            .expect("reduced savings");
+        let neutral_p50 = neutral[0]
+            .cost_estimate
+            .as_ref()
+            .and_then(|c| c.savings_p50_usd_per_month)
+            .expect("neutral savings");
+        assert!(
+            reduced_p50 < neutral_p50,
+            "structure×0.75 should lower addressable savings: reduced={reduced_p50} neutral={neutral_p50}"
+        );
+        assert!(
+            reduced[0]
+                .cost_estimate
+                .as_ref()
+                .unwrap()
+                .basis
+                .contains("structure×0.75"),
+            "{}",
+            reduced[0].cost_estimate.as_ref().unwrap().basis
+        );
     }
 
     #[test]
