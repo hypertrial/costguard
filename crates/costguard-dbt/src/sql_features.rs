@@ -36,15 +36,23 @@ pub fn extract_incremental_block(text: &str) -> Option<String> {
     let mut search_from = body_start;
     while let Some(m) = jinja_control_regex().find_at(text, search_from) {
         let tag = m.as_str().to_ascii_lowercase();
-        if tag.contains("endif") {
-            depth -= 1;
-            if depth == 0 {
-                let block = text[body_start..m.start()].trim();
-                return (!block.is_empty()).then(|| block.to_string());
+        let keyword = tag
+            .trim_start_matches("{%")
+            .trim_start()
+            .split(|c: char| c.is_whitespace() || c == '%' || c == '-')
+            .next()
+            .unwrap_or("");
+        match keyword {
+            "endif" => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    let block = text[body_start..m.start()].trim();
+                    return (!block.is_empty()).then(|| block.to_string());
+                }
             }
-        } else if tag.contains("if") && !tag.contains("elif") {
             // `{% if ... %}` increases depth; `{% elif %}` / `{% else %}` do not.
-            depth += 1;
+            "if" => depth += 1,
+            _ => {}
         }
         search_from = m.end();
     }
