@@ -36,11 +36,12 @@ pub fn extract_incremental_block(text: &str) -> Option<String> {
     let mut search_from = body_start;
     while let Some(m) = jinja_control_regex().find_at(text, search_from) {
         let tag = m.as_str().to_ascii_lowercase();
+        // Skip empty segments so `{%- endif -%}` yields `endif`, not `""`.
         let keyword = tag
             .trim_start_matches("{%")
             .trim_start()
             .split(|c: char| c.is_whitespace() || c == '%' || c == '-')
-            .next()
+            .find(|part| !part.is_empty())
             .unwrap_or("");
         match keyword {
             "endif" => {
@@ -62,7 +63,7 @@ pub fn extract_incremental_block(text: &str) -> Option<String> {
 fn incremental_opener_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r"(?is)\{%\s*(?:if|elif)\s+is_incremental\s*\(\)\s*%\}")
+        Regex::new(r"(?is)\{%-?\s*(?:if|elif)\s+is_incremental\s*\(\)\s*-?%\}")
             .expect("valid incremental opener regex")
     })
 }
@@ -70,7 +71,8 @@ fn incremental_opener_regex() -> &'static Regex {
 fn jinja_control_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r"(?is)\{%\s*(?:if|elif|else|endif)\b.*?%\}").expect("valid jinja control regex")
+        Regex::new(r"(?is)\{%-?\s*(?:if|elif|else|endif)\b.*?-?%\}")
+            .expect("valid jinja control regex")
     })
 }
 

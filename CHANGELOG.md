@@ -9,9 +9,11 @@ All notable changes to Costguard are documented here. The project follows [Seman
 - Policy resolution now rejects equal-specificity conflicts between any matching scopes at the same priority, not only adjacent pairs after sort.
 - SQLCOST005 evaluates bounded incremental predicates inside the `is_incremental()` block (config `incremental_predicate` tokens remain whole-file).
 - Nested Jinja `{% endif %}` inside an incremental block no longer truncates `incremental_block` extraction (SQLCOST019 false negatives).
+- Incremental-block extraction handles Jinja whitespace-control tags (`{%-` / `-%}`), restoring SQLCOST005 block scoping for those models.
 - Compiled AST analysis no longer keeps comment/string regex `SELECT *` hits when compiled SQL has none (SQLCOST001 false positives).
 - Addressable finding savings retain structure and fan-out weights; per-model caps scale those weighted values instead of redistributing by rule fraction alone.
 - SQLCOST007 recognizes `LIMIT` with newline/tab separators, not only `LIMIT` followed by a space.
+- SQLCOST007/008 clause exemptions ignore `limit` / `group by` inside comments and string literals.
 - Install docs place `COSTGUARD_INSTALL_DIR` on the `sh` side of `curl | sh` so the custom directory is actually applied.
 
 ## [2.7.0] - 2026-07-18

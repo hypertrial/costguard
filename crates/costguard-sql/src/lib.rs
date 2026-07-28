@@ -19,6 +19,7 @@ mod trino;
 pub use platform::Platform;
 
 pub use features::join_heuristics::is_date_spine_table;
+pub use features::regex::{mask_comments, mask_string_literals};
 pub use parse::{normalize_for_parse, try_parse_compiled_sql, try_parse_compiled_sql_error};
 
 /// Which SQL representation was used for parsing.

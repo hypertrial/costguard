@@ -23,6 +23,12 @@ expect_rules = ["SQLCOST005"]
 forbid_rules = []
 
 [[case]]
+name = "recall_incremental_select_list_date_dash"
+path = "recall_incremental_select_list_date_dash"
+expect_rules = ["SQLCOST005"]
+forbid_rules = []
+
+[[case]]
 name = "incremental_yaml_config"
 path = "incremental_yaml_config"
 expect_rules = []
@@ -353,6 +359,12 @@ path = "recall_order_by_limit_newline_ok"
 expect_rules = []
 forbid_rules = ["SQLCOST007"]
 
+[[case]]
+name = "recall_order_by_comment_limit"
+path = "recall_order_by_comment_limit"
+expect_rules = ["SQLCOST007"]
+forbid_rules = []
+
 # --- Recall coverage: SQLCOST008 ---
 [[case]]
 name = "recall_distinct_plain"
@@ -371,6 +383,12 @@ name = "recall_distinct_grouped_ok"
 path = "recall_distinct_grouped_ok"
 expect_rules = []
 forbid_rules = ["SQLCOST008"]
+
+[[case]]
+name = "recall_distinct_comment_group_by"
+path = "recall_distinct_comment_group_by"
+expect_rules = ["SQLCOST008"]
+forbid_rules = []
 
 # --- Recall coverage: SQLCOST009 ---
 [[case]]

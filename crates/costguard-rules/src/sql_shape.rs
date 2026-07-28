@@ -2,15 +2,22 @@ use crate::evidence;
 use crate::helpers::{diagnostic, is_dbt_macro_path, is_downstream_model, is_staging_model};
 use crate::registry::{Rule, RuleContext};
 use costguard_diagnostics::{Confidence, Diagnostic, Severity};
-use costguard_sql::{is_date_spine_table, CteFeature, JoinFeature, JoinKind};
+use costguard_sql::{
+    is_date_spine_table, mask_comments, mask_string_literals, CteFeature, JoinFeature, JoinKind,
+};
 use regex::Regex;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
+fn code_text_for_clause_scan(text: &str) -> String {
+    mask_string_literals(&mask_comments(text))
+}
+
 fn has_limit_clause(text: &str) -> bool {
     static RE: OnceLock<Regex> = OnceLock::new();
+    let masked = code_text_for_clause_scan(text);
     RE.get_or_init(|| Regex::new(r"(?i)\blimit\b").expect("valid limit regex"))
-        .is_match(text)
+        .is_match(&masked)
 }
 
 pub(crate) struct SelectStarRule;
@@ -361,7 +368,9 @@ impl Rule for BlindDistinctRule {
             return Vec::new();
         };
         if !sql.features.group_by_clauses.is_empty()
-            || ctx.file.text.to_ascii_lowercase().contains("group by")
+            || code_text_for_clause_scan(&ctx.file.text)
+                .to_ascii_lowercase()
+                .contains("group by")
         {
             return Vec::new();
         }

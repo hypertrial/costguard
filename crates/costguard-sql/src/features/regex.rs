@@ -71,12 +71,16 @@ pub(crate) fn extract_features(
     // ponytail: only expensive-expression regexes see masked text; extend to all regex
     // features if comment FPs surface elsewhere.
     let code_text = mask_comments(text);
+    // Ignore GROUP BY tokens inside comments and string literals (SQLCOST008 exemptions).
+    let group_by_text = mask_string_literals(&code_text);
     let mut features = SqlFeatures::default();
     features.select_stars = matches_as_features(text, line_index, select_star_regex(), normalize);
     features.order_by_clauses =
         matches_as_features(text, line_index, order_by_regex(), |_| "order by".into());
     features.group_by_clauses =
-        matches_as_features(text, line_index, group_by_regex(), |_| "group by".into());
+        matches_as_features(&group_by_text, line_index, group_by_regex(), |_| {
+            "group by".into()
+        });
     features.distincts = matches_as_features(text, line_index, distinct_regex(), |_| {
         "select distinct".into()
     });
@@ -299,7 +303,7 @@ fn cross_join_table_name(after: &str) -> Option<String> {
     Some(name.to_ascii_lowercase())
 }
 
-fn mask_comments(text: &str) -> String {
+pub fn mask_comments(text: &str) -> String {
     let mut output = String::with_capacity(text.len());
     let mut chars = text.chars().peekable();
     let mut in_single = false;
@@ -387,7 +391,7 @@ fn mask_comments(text: &str) -> String {
     output
 }
 
-fn mask_string_literals(text: &str) -> String {
+pub fn mask_string_literals(text: &str) -> String {
     let mut output = String::with_capacity(text.len());
     let mut in_single = false;
     let mut in_double = false;

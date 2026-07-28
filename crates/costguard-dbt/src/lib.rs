@@ -359,6 +359,48 @@ select id from t
     }
 
     #[test]
+    fn extracts_incremental_block_with_whitespace_control_tags() {
+        let text = r#"
+select id from t
+{%- if is_incremental() -%}
+where x > 1
+{%- endif -%}
+"#;
+        let block = extract_incremental_block(text).expect("incremental block");
+        assert_eq!(block, "where x > 1");
+    }
+
+    #[test]
+    fn extracts_incremental_block_with_plain_opener_and_dash_endif() {
+        let text = r#"
+select id from t
+{% if is_incremental() %}
+where x > 1
+{%- endif -%}
+"#;
+        let block = extract_incremental_block(text).expect("incremental block");
+        assert_eq!(block, "where x > 1");
+    }
+
+    #[test]
+    fn extracts_dash_incremental_block_with_nested_endif() {
+        let text = r#"
+select id from t
+{%- if is_incremental() -%}
+  {% if true %}
+      -- noop
+  {% endif %}
+  where event_date >= current_date - 3
+{%- endif -%}
+"#;
+        let block = extract_incremental_block(text).expect("incremental block");
+        assert!(
+            block.contains("where event_date >= current_date - 3"),
+            "block was truncated: {block:?}"
+        );
+    }
+
+    #[test]
     fn parses_yaml_models_sources_and_exposures() {
         let yaml = r#"
 models:

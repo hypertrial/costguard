@@ -784,6 +784,65 @@ fn limit_with_newline_does_not_fire_sqlcost007() {
 }
 
 #[test]
+fn comment_limit_does_not_suppress_sqlcost007() {
+    let file = sql_file(
+        "models/marts/fct.sql",
+        "-- check rate limit policy\nselect id from t\norder by id\n",
+    );
+    let doc = analyze(&file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(ids.contains(&"SQLCOST007".to_string()));
+}
+
+#[test]
+fn string_literal_limit_does_not_suppress_sqlcost007() {
+    let file = sql_file(
+        "models/marts/fct.sql",
+        "select id, 'rate limit' as note from t\norder by id\n",
+    );
+    let doc = analyze(&file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(ids.contains(&"SQLCOST007".to_string()));
+}
+
+#[test]
+fn comment_group_by_does_not_suppress_sqlcost008() {
+    let file = sql_file(
+        "models/marts/fct.sql",
+        "-- later we group by id in BI\nselect distinct id from events\n",
+    );
+    let doc = analyze(&file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(ids.contains(&"SQLCOST008".to_string()));
+}
+
+#[test]
+fn real_group_by_still_suppresses_sqlcost008() {
+    let file = sql_file(
+        "models/marts/fct.sql",
+        "select distinct id from events group by id\n",
+    );
+    let doc = analyze(&file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(!ids.contains(&"SQLCOST008".to_string()));
+}
+
+#[test]
+fn dash_tags_select_list_date_still_fires_sqlcost005() {
+    let file = sql_file(
+        "models/marts/fct_events.sql",
+        "{{ config(materialized='incremental', unique_key='id') }}
+select id, updated_at from t
+{%- if is_incremental() -%}
+ where id > 1
+{%- endif -%}",
+    );
+    let doc = analyze(&file);
+    let ids = run_for_file(&file, &[doc]);
+    assert!(ids.contains(&"SQLCOST005".to_string()));
+}
+
+#[test]
 fn block_time_incremental_predicate_on_source_does_not_fire_sqlcost019() {
     let file = sql_file(
         "models/marts/dex_trades.sql",
