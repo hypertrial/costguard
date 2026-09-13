@@ -6,6 +6,10 @@ This repository uses the Universal Pad specification for non-trivial agentic wor
 
 Read [`PROJECT_AGENT.md`](PROJECT_AGENT.md) before implementation. It holds repository-specific invariants, stack notes, and the native verification commands wrapped by `scripts/verify-fast` and `scripts/verify`.
 
+## GitHub Actions cost policy
+
+GitHub Actions is intentionally cost-constrained for the organization's free tier. Do not add workflows or artifact uploads without explicit owner approval. Keep CI and benchmark artifacts at one day, release artifacts at no more than seven days, and set `retention-days` explicitly on every `upload-artifact` step.
+
 ## Work
 
 Use Pad collections **Work** and **Plans** only.
