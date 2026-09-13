@@ -42,3 +42,4 @@ jobs:
           name: pr-gate-reports
           path: tests/benchmarks/reports
           if-no-files-found: warn
+          retention-days: 1

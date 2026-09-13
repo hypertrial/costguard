@@ -44,3 +44,4 @@ jobs:
           name: full-benchmark-reports
           path: tests/benchmarks/reports
           if-no-files-found: error
+          retention-days: 1

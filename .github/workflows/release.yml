@@ -77,6 +77,7 @@ jobs:
             dist/release/release-check.json
             dist/release/costguard.cdx.json
           if-no-files-found: error
+          retention-days: 7
 
   build:
     needs: qualify
@@ -137,6 +138,7 @@ jobs:
             dist/release/costguard-${{ matrix.target }}.tar.gz.sha256
             dist/release/smoke-${{ matrix.target }}.json
           if-no-files-found: error
+          retention-days: 7
 
   publish:
     needs: [qualify, build]
