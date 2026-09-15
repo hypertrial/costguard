@@ -7,6 +7,6 @@
     "scripts/verify-fast": "b774d1f110f0ea3a92fa2403da542fad3c76e74775bc5d7411b6db2350b7c1bd"
   },
   "repository": "costguard",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "workspace": "costguard-engineering"
 }
