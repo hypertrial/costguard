@@ -2,6 +2,10 @@
 
 Public Rust + Python Costguard tool. Canonical local gates live in `scripts/ci_local.sh`.
 
+## GitHub Actions cost policy
+
+GitHub Actions is intentionally cost-constrained for the organization's free tier. Do not add workflows or artifact uploads without explicit owner approval. Keep CI and benchmark artifacts at one day, release artifacts at no more than seven days, and set `retention-days` explicitly on every `upload-artifact` step.
+
 ## Verification
 
 - Fast: `./scripts/ci_local.sh --fast`
